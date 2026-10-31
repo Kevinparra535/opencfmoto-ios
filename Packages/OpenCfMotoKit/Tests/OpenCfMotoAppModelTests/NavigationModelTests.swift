@@ -280,6 +280,102 @@ final class NavigationModelTests: XCTestCase {
         await LDTest.expect { nav.lastError == env.strings.gpxEmpty }
     }
 
+    @MainActor
+    func testDismissErrorClearsTheLastError() async throws {
+        let env = LDTestEnv()
+        env.cleanUp(after: self)
+        let nav = NavigationModel(core: env.core)
+        let empty = Data("<gpx version=\"1.1\"></gpx>".utf8)
+        nav.loadGpx(data: empty, fileName: "empty.gpx")
+        XCTAssertEqual(nav.lastError, env.strings.gpxEmpty)
+
+        nav.dismissError()
+        XCTAssertNil(nav.lastError)
+        nav.dismissError() // nothing to dismiss: no-op
+        XCTAssertNil(nav.lastError)
+        // The same failure again is shown again (the banner hides by clearing the model, not by text).
+        nav.loadGpx(data: empty, fileName: "empty.gpx")
+        XCTAssertEqual(nav.lastError, env.strings.gpxEmpty)
+    }
+
+    // MARK: Arrive card
+
+    /// OSRM answers a straight 2-point route ≈ 333 m north (to `arriveDest`); no speed limits.
+    static let osrmNorthJSON = """
+    {"code":"Ok","routes":[{"distance":333.6,"duration":40,
+     "geometry":{"type":"LineString","coordinates":[[26.115,44.437],[26.115,44.44]]},"legs":[{"steps":[]}]}]}
+    """
+    static let arriveDest = Place(name: "Destino", lat: 44.44, lon: 26.115, category: "city")
+
+    /// Rides to `dest` from ≈ 333 m south until the arrive card shows. `autoFinish` is off in these
+    /// tests, so the card appears at once.
+    @MainActor
+    private func arrive(_ env: LDTestEnv, _ nav: NavigationModel, at dest: Place) async {
+        let session = env.core.navigation
+        let t0 = LDTest.epochMs("2026-10-31T09:00:00Z")
+        session.updateLocation(LocationFix(lat: dest.lat - 0.003, lon: dest.lon, speedMps: 8, accuracyM: 5, timeMs: t0))
+        nav.navigate(to: dest) // a real arrival, not the silent "Already nearby" (< 200 m)
+        await session.waitUntilIdle()
+        session.updateLocation(LocationFix(lat: dest.lat - 0.0001, lon: dest.lon, speedMps: 2, accuracyM: 5, timeMs: t0 + 40_000))
+        await session.waitUntilIdle()
+        await LDTest.expect("arrive card") { nav.snapshot.arrival != nil }
+    }
+
+    @MainActor
+    func testArriveCardActionsMatchTheDash() async throws {
+        let http = PreviewHTTPClient()
+        http.respond(toPrefix: OsrmRouter.baseURL, with: Self.ok(Self.osrmNorthJSON))
+        http.respond(toPrefix: "https://overpass-api.de/", with: Self.ok(#"{"elements":[]}"#))
+        let env = LDTestEnv(http: http)
+        env.cleanUp(after: self)
+        var prefs = env.core.settings.settings(forBike: nil).map
+        prefs.autoFinish = false
+        env.core.navigation.updatePreferences(prefs)
+        let nav = NavigationModel(core: env.core)
+        let str = navStrings(env)
+        let dest = Self.arriveDest
+
+        // Done: hides the card and announces free ride (the dash's Done).
+        await arrive(env, nav, at: dest)
+        XCTAssertEqual(nav.snapshot.route?.points.count, 2, "the canned OSRM route")
+        XCTAssertEqual(nav.snapshot.arrival?.title, str.arrivalTitle("Destino"))
+        nav.dismissArrival()
+        await LDTest.expect { nav.snapshot.arrival == nil }
+        XCTAssertEqual(nav.snapshot.metrics.status, str.phrase(.freeRide))
+        XCTAssertNil(env.core.navigation.snapshot.arrival, "the dash shows the same session")
+        XCTAssertNil(nav.parked)
+
+        // Find parking: hides the card silently (the screen then runs the Parking chip).
+        nav.endNavigation()
+        await arrive(env, nav, at: dest)
+        let status = nav.snapshot.metrics.status
+        nav.dismissArrival(announce: false)
+        await LDTest.expect { nav.snapshot.arrival == nil }
+        XCTAssertEqual(nav.snapshot.metrics.status, status)
+        XCTAssertNotEqual(nav.snapshot.metrics.status, str.phrase(.freeRide))
+
+        // Park here: parked pin "Marked on arrival" at the rider's fix, card closed.
+        nav.endNavigation()
+        await arrive(env, nav, at: dest)
+        nav.arrivalParkHere()
+        await LDTest.expect { nav.snapshot.arrival == nil }
+        await LDTest.expect { nav.parked != nil }
+        let parked = try XCTUnwrap(nav.parked)
+        XCTAssertEqual(parked.name, str.parkedName)
+        XCTAssertEqual(parked.subtitle, str.markedOnArrivalSubtitle)
+        XCTAssertEqual(parked.category, "parking")
+        XCTAssertEqual(parked.lat, dest.lat - 0.0001, accuracy: 1e-9)
+        XCTAssertEqual(nav.snapshot.metrics.status, str.phrase(.parkingMarked))
+
+        // Unlike the free-ride "Park here", the card's never toggles an existing pin away.
+        nav.endNavigation()
+        await arrive(env, nav, at: dest)
+        nav.arrivalParkHere()
+        await LDTest.expect { nav.snapshot.arrival == nil }
+        await LDTest.settle(0.05)
+        XCTAssertEqual(nav.parked?.subtitle, str.markedOnArrivalSubtitle)
+    }
+
     // MARK: Type on phone
 
     @MainActor

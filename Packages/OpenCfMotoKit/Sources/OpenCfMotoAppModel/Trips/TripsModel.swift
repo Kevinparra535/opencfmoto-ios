@@ -13,7 +13,8 @@
 // - `live` mirrors `tripRecorder.onStats` (main actor). `isRecording` = live.recording.
 // - `startRecording()` / `stopRecording()` = manual recording (`tripRecorder.start()` /
 //   `stopAndSave()`); RideModel's auto-log must not stop a manual recording (keep a flag:
-//   `isManualRecording`).
+//   `isManualRecording`). `discardRecording()` = Android "Reset" (`tripRecorder.discard()`):
+//   the current leg is thrown away, never saved.
 // - `sections`: `core.tripStore.list()` grouped by local day (TripDays), newest day first, titles
 //   via `Trip.dateText(locale:timeZone:)` style formatting; refresh on `onTripSaved` and `reload()`.
 // - `exportGPX(_:)`: `TripGpx.toXML` → `files.exportsDirectory/<TripGpx.suggestedFileName>`
@@ -106,6 +107,18 @@ public final class TripsModel {
         let saved = core.tripRecorder.stopAndSave()
         Log.i(Self.tag, saved == nil ? "recording stopped (leg too short \u{2014} not saved)" : "recording stopped and saved")
         if let saved { insert(saved) }
+        refreshLive()
+    }
+
+    /// Trip computer "Discard" (Android "Reset", `TripRecorder.discard()`): stops the current
+    /// recording — manual or automatic — and throws the leg away. Nothing is ever saved. While the
+    /// automatic log applies (Log trips on, dash streaming), RideModel's next 5 s check starts a
+    /// fresh leg, like Android's Reset of a running log.
+    public func discardRecording() {
+        let wasRecording = core.tripRecorder.isRecording
+        isManualRecording = false
+        core.tripRecorder.discard()
+        Log.i(Self.tag, wasRecording ? "recording discarded (nothing saved)" : "trip computer reset")
         refreshLive()
     }
 

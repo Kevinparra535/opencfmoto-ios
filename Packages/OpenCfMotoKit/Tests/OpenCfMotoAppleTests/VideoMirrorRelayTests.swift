@@ -70,6 +70,15 @@ final class VideoMirrorRelayTests: XCTestCase {
         return try XCTUnwrap(MirrorRelaySocket.path(inDirectory: dir, fileName: "r.sock"))
     }
 
+    private func socketFileExists(_ path: String) -> Bool {
+        FileManager.default.fileExists(atPath: path)
+    }
+
+    /// Longer than the accept loop's 250 ms poll: a stopped server's accept thread has woken up.
+    private func letStoppedAcceptThreadsExit() async {
+        try? await Task.sleep(nanoseconds: 600_000_000)
+    }
+
     private func key(_ seq: UInt64) -> EncodedFrame {
         EncodedFrame(accessUnit: Data([0, 0, 0, 1, 0x67, 0x42, 0, 0, 0, 1, 0x68, 0xCE, 0, 0, 0, 1, 0x65, UInt8(seq & 0xFF)]),
                      isKeyframe: true, presentationTime: Double(seq) / 8, sequence: seq)
@@ -152,32 +161,84 @@ final class VideoMirrorRelayTests: XCTestCase {
     }
 
     func testClientReconnectsWhenTheHostRestarts() async throws {
+        // Generous timeouts: CI machines under load can stall threads for seconds; every wait
+        // returns as soon as its condition holds.
         let path = try socketPath()
         let client = MirrorRelayClient(socketPath: path)
         client.retryInterval = 0.05
+        defer { client.stop() }
         client.start() // host not listening yet: keeps retrying
         try? await Task.sleep(nanoseconds: 150_000_000)
         XCTAssertFalse(client.isConnected)
 
         let first = MirrorRelayServer(socketPath: path)
         try first.start()
-        var ok = await waitUntil { client.isConnected && first.isClientConnected }
+        var ok = await waitUntil(15) { client.isConnected && first.isClientConnected }
         XCTAssertTrue(ok, "first connection")
         first.stop()
-        ok = await waitUntil { !client.isConnected }
+        XCTAssertFalse(socketFileExists(path), "stop() removes its socket file at once")
+        ok = await waitUntil(15) { !client.isConnected }
         XCTAssertTrue(ok, "disconnected")
 
+        // The restarted host binds the same path while the first one's accept thread may still be
+        // waking up (≤ 250 ms): that thread must not delete the new socket file (it used to, and
+        // the extension then could never reconnect).
         let second = MirrorRelayServer(socketPath: path)
+        defer { second.stop() }
         try second.start()
-        ok = await waitUntil { client.isConnected && second.isClientConnected }
+        await letStoppedAcceptThreadsExit()
+        XCTAssertTrue(socketFileExists(path), "the stopped host deleted the new host's socket")
+        ok = await waitUntil(15) { client.isConnected && second.isClientConnected }
         XCTAssertTrue(ok, "reconnected")
         XCTAssertGreaterThanOrEqual(client.stats.connects, 2)
 
         client.send(frame: key(9))
-        let f = await second.nextFrame(timeout: 3)
+        let f = await second.nextFrame(timeout: 10)
         XCTAssertEqual(f?.sequence, 9)
-        client.stop()
-        second.stop()
+    }
+
+    func testStopRemovesOnlyItsOwnSocketFile() async throws {
+        let path = try socketPath()
+        let first = MirrorRelayServer(socketPath: path)
+        try first.start()
+        XCTAssertTrue(socketFileExists(path))
+        first.stop()
+        XCTAssertFalse(socketFileExists(path), "removed synchronously by stop()")
+        first.stop() // idempotent
+        XCTAssertFalse(socketFileExists(path))
+
+        // Another server takes the path over while this one is still running (it replaces the
+        // file): stopping the older one must leave the newer socket in place — now and when its
+        // accept thread exits.
+        let older = MirrorRelayServer(socketPath: path)
+        try older.start()
+        let newer = MirrorRelayServer(socketPath: path)
+        defer { newer.stop() }
+        try newer.start()
+        older.stop()
+        XCTAssertTrue(socketFileExists(path), "stop() removed a socket file it no longer owns")
+        await letStoppedAcceptThreadsExit()
+        XCTAssertTrue(socketFileExists(path), "the accept thread removed a socket file it no longer owns")
+
+        // The extension reaches the live server through that path.
+        let client = MirrorRelayClient(socketPath: path)
+        client.retryInterval = 0.05
+        defer { client.stop() }
+        client.start()
+        let ok = await waitUntil(15) { client.isConnected && newer.isClientConnected }
+        XCTAssertTrue(ok, "connected to the newer server")
+        XCTAssertFalse(older.isClientConnected)
+
+        // A server restarted on the same instance owns the path again; its old accept thread
+        // (previous generation) leaves the new file alone.
+        newer.stop()
+        XCTAssertFalse(socketFileExists(path))
+        try newer.start()
+        XCTAssertTrue(socketFileExists(path))
+        await letStoppedAcceptThreadsExit()
+        XCTAssertTrue(socketFileExists(path), "the previous generation's accept thread removed the new file")
+        newer.stop()
+        XCTAssertFalse(socketFileExists(path))
     }
 
     func testSecondExtensionConnectionReplacesTheFirst() async throws {

@@ -10,7 +10,8 @@
 // - `HandlebarGestureEngine(configuration: .init(settings: current, snappySingles:), presence:)`,
 //   rebuilt when settings change; `services.handlebar.onSignal` → `engine.handle(event, at:, steps:)`;
 //   commands → `DashInput` → RideModel.handleDashInput (and `lastCommand` for the UI tester);
-//   presence changes → SettingsStore presence setters + `settings.reload()`.
+//   presence changes → SettingsStore presence setters + `settings.reload()`; presence taught on
+//   the Controls screen (SettingsModel setters / reset) → `engine.setPresence` (re-arms the probe).
 // - `engine.streamingStarted()/streamingStopped()` follow the link (ConnectionModel calls
 //   `linkStreamingChanged`), `engine.tick()` scheduled at `engine.nextDeadlineMs()`.
 // - Disabled in mirror mode (the dash cannot drive mirrored apps).
@@ -41,6 +42,9 @@ public final class ControlsModel {
     public private(set) var lastCommand: String?
     /// Last raw signal, e.g. "forward" (tester).
     public private(set) var lastRawEvent: String?
+    /// Experimental ▲/▼ path (watch the phone volume): the rider's persisted choice
+    /// (`ios.handlebar_volume_buttons`), mirrored from the handlebar port so views observe it.
+    public private(set) var volumeButtonsEnabled = false
 
     /// KeyValueStore keys of the iOS-only opt-ins.
     static let remoteOptInKey = "ios.handlebar_remote"
@@ -48,6 +52,12 @@ public final class ControlsModel {
 
     @ObservationIgnored let engine: HandlebarGestureEngine
     @ObservationIgnored private var bikeId: String?
+    /// The stored presence the engine was last given (or learned and persisted itself). The engine
+    /// follows the store only when the STORE changes (Teach / Reset / import), so an unrelated
+    /// settings write can never revert a source the engine just learned but has not persisted yet.
+    @ObservationIgnored private var syncedPresence: HandlebarPresence
+    /// The dash is pulling own-UI video (the volume-rocker probe window runs).
+    @ObservationIgnored private var probeStreaming = false
     @ObservationIgnored private var sessionActive = false
     @ObservationIgnored private var mirrorMode = false
     /// The remote was claimed because a session started (released when it ends).
@@ -60,14 +70,17 @@ public final class ControlsModel {
         let store = core.settings
         let bike = core.garage.selected?.id
         bikeId = bike
+        let presence = store.presence(forBike: bike)
+        syncedPresence = presence
         engine = HandlebarGestureEngine(
             configuration: .init(settings: core.currentSettings, snappySingles: store.snappySingles),
-            presence: store.presence(forBike: bike),
+            presence: presence,
             clock: core.services.clock)
         let kv = core.services.keyValueStore
         isRemoteEnabled = kv.bool(forKey: Self.remoteOptInKey) ?? false
         let handlebar = core.services.handlebar
         handlebar.volumeButtonsEnabled = kv.bool(forKey: Self.volumeButtonsKey) ?? false
+        volumeButtonsEnabled = handlebar.volumeButtonsEnabled
         handlebar.onSignal = { [weak self] signal in self?.handle(signal) }
         engine.onPresenceChange = { [weak self] presence in
             Task { @MainActor [weak self] in self?.presenceChanged(presence) }
@@ -101,10 +114,12 @@ public final class ControlsModel {
 
     public func setVolumeButtonsEnabled(_ on: Bool) {
         core.services.keyValueStore.set(on, forKey: Self.volumeButtonsKey)
-        core.services.handlebar.volumeButtonsEnabled = on
+        let handlebar = core.services.handlebar
+        handlebar.volumeButtonsEnabled = on
+        let effective = handlebar.volumeButtonsEnabled // what the port actually does
+        if volumeButtonsEnabled != effective { volumeButtonsEnabled = effective }
+        Log.i("BTN", "[BTN] volume buttons \u{25B2}/\u{25BC} \(effective ? "on" : "off")")
     }
-
-    public var volumeButtonsEnabled: Bool { core.services.handlebar.volumeButtonsEnabled }
 
     // MARK: Model-to-model (internal)
 
@@ -117,7 +132,8 @@ public final class ControlsModel {
             mirrorMode = mirror
             if mirror { releaseForMirror() }
         }
-        if streaming && !mirror {
+        probeStreaming = streaming && !mirror
+        if probeStreaming {
             engine.streamingStarted()
         } else {
             engine.streamingStopped()
@@ -139,6 +155,7 @@ public final class ControlsModel {
                 Log.i("BTN", "[BTN] handlebar capture on for this ride")
             }
         } else {
+            probeStreaming = false
             engine.streamingStopped()
             engine.reset()
             if claimedForSession, handlebar.isEnabled {
@@ -190,6 +207,7 @@ public final class ControlsModel {
 
     private func releaseForMirror() {
         engine.reset()
+        probeStreaming = false
         engine.streamingStopped()
         let handlebar = core.services.handlebar
         if handlebar.isEnabled {
@@ -203,9 +221,24 @@ public final class ControlsModel {
         let store = core.settings
         let bike = core.garage.selected?.id
         engine.configuration = .init(settings: core.currentSettings, snappySingles: store.snappySingles)
+        let stored = store.presence(forBike: bike)
         if bike != bikeId {
             bikeId = bike
-            engine.setPresence(store.presence(forBike: bike))
+            syncedPresence = stored
+            engine.setPresence(stored)
+        } else if stored != syncedPresence {
+            // Taught on the Controls screen (Present / Absent / Unknown, Reset) or imported: the
+            // live engine follows, like Android's refreshVolumePresencePolicy().
+            syncedPresence = stored
+            let wasUnknown = engine.presence.volumeRocker == .unknown
+            engine.setPresence(stored)
+            if stored.volumeRocker == .unknown, !wasUnknown, probeStreaming {
+                // Back to untested while streaming: a fresh ~90 s window to see a ▲/▼ press.
+                engine.streamingStopped()
+                engine.streamingStarted()
+            }
+            Log.i("BTN", "handlebar sources taught: \(stored.summary)")
+            scheduleTick()
         }
     }
 
@@ -213,6 +246,7 @@ public final class ControlsModel {
     private func presenceChanged(_ presence: HandlebarPresence) {
         let store = core.settings
         let bike = core.garage.selected?.id
+        if bike == bikeId { syncedPresence = presence } // the engine already has it: no echo back
         let old = store.presence(forBike: bike)
         guard old != presence else { return }
         if old.volumeRocker != presence.volumeRocker { store.setVolumeRockerPresence(presence.volumeRocker, forBike: bike) }

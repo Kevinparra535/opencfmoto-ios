@@ -134,13 +134,16 @@ enum ControlsLabels {
         }
     }
 
-    // MARK: Presence
+    // MARK: Presence ("Teach my handlebar")
 
-    static func presence(_ value: ButtonPresence) -> String {
+    /// Choices of each source, in Android's dialog order (`▲/▼ works`, `▲/▼ absent`, untested).
+    static let teachChoices: [ButtonPresence] = [.present, .absent, .unknown]
+
+    static func teachChoice(_ value: ButtonPresence) -> Text {
         switch value {
-        case .unknown: return String(localized: "untested")
-        case .present: return String(localized: "works")
-        case .absent: return String(localized: "absent")
+        case .present: return Text("Present")
+        case .absent: return Text("Absent")
+        case .unknown: return Text("Unknown")
         }
     }
 }
