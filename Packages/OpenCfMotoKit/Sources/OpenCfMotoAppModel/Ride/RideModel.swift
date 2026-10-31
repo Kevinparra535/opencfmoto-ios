@@ -416,8 +416,16 @@ public final class RideModel {
         }
     }
 
+    /// Navigation (or an open route preview) needs fixes even when no screen asked for GPS.
+    static func needsGuidanceFixes(_ snap: NavSnapshot) -> Bool {
+        snap.mode.isNavigating || snap.preview != nil
+    }
+
     private func navSnapshotChanged(_ snap: NavSnapshot) {
+        let guidanceChanged = Self.needsGuidanceFixes(snap) != Self.needsGuidanceFixes(navSnapshot)
+            || snap.mode.isNavigating != navSnapshot.mode.isNavigating
         navSnapshot = snap
+        if guidanceChanged { applyLocationPolicy() }
         let key = Self.routeKey(snap.route)
         if key != lastRouteKey {
             lastRouteKey = key
@@ -608,8 +616,10 @@ public final class RideModel {
     private func applyLocationPolicy() {
         let loc = core.services.location
         let recording = core.tripRecorder.isRecording
-        let wanted = sessionActive || previewRequests > 0 || recording
-        let background = sessionActive || recording
+        // Phone-only guidance (no dash yet) keeps GPS too, like any navigation app.
+        let guiding = Self.needsGuidanceFixes(navSnapshot)
+        let wanted = sessionActive || previewRequests > 0 || recording || guiding
+        let background = sessionActive || recording || navSnapshot.mode.isNavigating
         if wanted, loc.permission.isAuthorized {
             if !loc.isUpdating {
                 loc.start(rideActive: background)

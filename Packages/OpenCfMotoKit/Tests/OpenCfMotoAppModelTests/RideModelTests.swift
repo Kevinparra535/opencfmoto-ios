@@ -35,6 +35,27 @@ final class RideModelTests: XCTestCase {
     // MARK: Location
 
     @MainActor
+    func testPhoneOnlyGuidanceKeepsGPSAfterTheMapHubCloses() async {
+        let h = AppTestHarness()
+        // The Map hub holds GPS while visible; the rider starts a free ride from it.
+        h.ride.startLocationPreview()
+        XCTAssertTrue(h.location.isUpdating)
+        h.location.emit(fix(speed: 10, course: 0))
+        h.core.navigation.navigate(to: Place(name: "Dest", lat: 4.70, lon: -74.04))
+        let guiding = await eventually { h.core.navigation.snapshot.mode.isNavigating }
+        XCTAssertTrue(guiding)
+        _ = await eventually { RideModel.needsGuidanceFixes(h.core.navigation.snapshot) }
+        // Leaving the Map hub must not cut the guidance off…
+        h.ride.stopLocationPreview()
+        let stillOn = await eventually { h.location.isUpdating && h.location.isRideActive }
+        XCTAssertTrue(stillOn, "navigation keeps GPS (and background updates) without any screen")
+        // …and ending it turns GPS off.
+        h.core.navigation.endNavigation()
+        let off = await eventually { !h.location.isUpdating }
+        XCTAssertTrue(off)
+    }
+
+    @MainActor
     func testFixFeedsNavigationRecorderAndTheHomeCard() async {
         let h = AppTestHarness()
         XCTAssertFalse(h.location.isUpdating)

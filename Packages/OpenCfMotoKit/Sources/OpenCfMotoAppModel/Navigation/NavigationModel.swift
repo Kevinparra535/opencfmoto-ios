@@ -193,7 +193,8 @@ public final class NavigationModel {
     func requestTypeOnPhone() {
         typeOnPhoneRequested = true
         // Android: highlight the field, vibrate 40 ms and toast the hint (MainActivity.kt:591-612).
-        core.services.system.hapticTap()
+        // The 40 ms buzz (and the voice prompt) belong to RideModel, which knows whether the request
+        // came from the dash (buzz) or from the phone's own dash preview (no buzz).
         showToast(strings.bikeSearchOpen)
     }
 

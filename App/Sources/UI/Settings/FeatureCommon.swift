@@ -141,9 +141,10 @@ enum FeatureFileReader {
 
 // MARK: - GPS while a feature screen is visible
 
-/// Keeps GPS + the navigation session fed while the Map hub or the trip computer is on screen
-/// (`RideModel.startLocationPreview`). The lease only stops what it started itself, and never
-/// while a ride, a recording, a navigation or a route preview still needs fixes.
+/// Keeps GPS + the navigation session fed while the Map hub or the trip computer is on screen.
+/// `RideModel.startLocationPreview()` / `stopLocationPreview()` are reference-counted, so every
+/// screen simply holds one request while visible; RideModel itself keeps GPS on while a dash
+/// session, a recording, a navigation or a route preview still needs fixes.
 @MainActor
 final class FeatureLocationLease {
     /// One lease per feature, shared by every instance of its screen (ownership survives a pop).
@@ -157,24 +158,16 @@ final class FeatureLocationLease {
             model.permissions.requestLocation()
         }
         guard !owned else { return }
-        // Someone else (a ride, the dash preview) already runs GPS: use it, do not take it over.
-        if model.core.services.location.isUpdating { return }
         model.ride.startLocationPreview()
         owned = true
     }
 
-    /// Another screen that needs GPS (the dash preview) took over: do not stop on disappear.
-    func handOff() {
-        owned = false
-    }
+    /// Kept for call sites: the dash preview takes its own reference-counted request, so nothing
+    /// has to be handed over any more.
+    func handOff() {}
 
-    /// Stops the preview GPS if this lease started it and nothing needs fixes any more; otherwise
-    /// keeps the ownership so a later release (the screen shown and left again) can stop it.
     func release(_ model: AppModel) {
         guard owned else { return }
-        let snapshot = model.navigation.snapshot
-        guard !model.ride.isProjecting, !model.ride.isRideModeActive, !model.trips.isRecording,
-              !snapshot.mode.isNavigating, snapshot.preview == nil else { return }
         owned = false
         model.ride.stopLocationPreview()
     }

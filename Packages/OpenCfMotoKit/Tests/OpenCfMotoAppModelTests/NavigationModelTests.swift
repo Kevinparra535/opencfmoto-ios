@@ -290,7 +290,7 @@ final class NavigationModelTests: XCTestCase {
         XCTAssertFalse(nav.typeOnPhoneRequested)
         nav.requestTypeOnPhone()
         XCTAssertTrue(nav.typeOnPhoneRequested)
-        XCTAssertEqual(env.system.hapticCount, 1)
+        XCTAssertEqual(env.system.hapticCount, 0, "RideModel owns the buzz (dash requests only)")
         XCTAssertEqual(nav.toast, env.strings.bikeSearchOpen)
         nav.acknowledgeTypeOnPhone()
         XCTAssertFalse(nav.typeOnPhoneRequested)
