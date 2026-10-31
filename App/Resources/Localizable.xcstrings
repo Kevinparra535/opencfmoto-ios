@@ -1071,6 +1071,16 @@
         }
       }
     },
+    "Compatibility": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compatibilidad"
+          }
+        }
+      }
+    },
     "Connect": {
       "localizations": {
         "es": {
@@ -2147,6 +2157,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ya me he conectado"
+          }
+        }
+      }
+    },
+    "Identify as an Android phone": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Identificarse como teléfono Android"
           }
         }
       }
@@ -4437,6 +4457,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Seleccionada %@"
+          }
+        }
+      }
+    },
+    "Sends an Android phone's brand and model to the dash instead of \"Apple / iPhone\". Everything else is already identical to the Android app. Turn on only if your dash refuses to connect or keeps dropping the link. Applies on the next connect.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envía al tablero la marca y el modelo de un teléfono Android en lugar de «Apple / iPhone». Todo lo demás ya es idéntico a la app de Android. Actívalo solo si tu tablero no se conecta o corta el enlace a menudo. Se aplica en la próxima conexión."
           }
         }
       }

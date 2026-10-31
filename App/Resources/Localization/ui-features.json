@@ -384,5 +384,8 @@
   "★ Save": "★ Guardar",
   "★ moves the focus and ★★ selects. For dashes where only ★ reaches the phone; works best with a long double-tap delay.": "★ mueve el foco y ★★ selecciona. Para tableros en los que solo ★ llega al teléfono; funciona mejor con un retardo de doble pulsación largo.",
   "★ only (one-button dashes)": "Solo ★ (tableros de un botón)",
-  "＋ Marker": "＋ Marcador"
+  "＋ Marker": "＋ Marcador",
+  "Identify as an Android phone": "Identificarse como teléfono Android",
+  "Sends an Android phone's brand and model to the dash instead of \"Apple / iPhone\". Everything else is already identical to the Android app. Turn on only if your dash refuses to connect or keeps dropping the link. Applies on the next connect.": "Envía al tablero la marca y el modelo de un teléfono Android en lugar de «Apple / iPhone». Todo lo demás ya es idéntico a la app de Android. Actívalo solo si tu tablero no se conecta o corta el enlace a menudo. Se aplica en la próxima conexión.",
+  "Compatibility": "Compatibilidad"
 }

@@ -600,7 +600,7 @@ public final class ConnectionModel {
         let config = LinkConfiguration(
             qr: s.qr, profileOverride: st.profileOverride,
             learnedCanvas: core.dashMemory.learnedCanvas(forSSID: s.qr.ssid), forceTouchscreen: st.forceTouch,
-            phone: phone, localHost: info.phoneIPv4, dashHost: nil,
+            phone: phoneIdentity(), localHost: info.phoneIPv4, dashHost: nil,
             connectBackTimeout: tuning.connectBackTimeout,
             stallTimeout: st.autoRecovery ? tuning.stallTimeout : .greatestFiniteMagnitude,
             stallReconnectCooldown: tuning.stallReconnectCooldown, maxReconnectAttempts: tuning.maxReconnectAttempts,
@@ -803,5 +803,21 @@ public final class ConnectionModel {
         if let gw = info.gateway { parts.append("gw=\(gw)") }
         if info.isLocalNetworkDenied { parts.append("localNetworkDenied") }
         return parts.joined(separator: " ")
+    }
+}
+
+extension ConnectionModel {
+    /// Brand/model sent in CLIENT_INFO when "Identify as an Android phone" is on (the values of the
+    /// spec's Android example, control-plane.md §8). The UUID / OS version / Bluetooth name stay the same.
+    static let androidCompatBrand = "samsung"
+    static let androidCompatModel = "SM-G991B"
+
+    /// The phone identity for the next link (per-process UUID, compatibility option applied).
+    func phoneIdentity() -> PhoneIdentity {
+        guard settings.identifyAsAndroidPhone else { return phone }
+        var p = phone
+        p.phoneBrand = Self.androidCompatBrand
+        p.phoneModel = Self.androidCompatModel
+        return p
     }
 }
