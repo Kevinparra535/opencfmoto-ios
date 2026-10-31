@@ -3,9 +3,18 @@
 //
 //   DEVELOPMENT_TEAM = ABCDE12345
 //   BUNDLE_ID_PREFIX = com.yourname
+//   OCM_FLAVOR = free        // only if you use a free Personal Team (no Hotspot / Wi-Fi info entitlements)
 //
 BUNDLE_ID_PREFIX = com.example
 DEVELOPMENT_TEAM =
 APP_GROUP_ID = group.$(BUNDLE_ID_PREFIX).opencfmoto
+
+// Build flavor:
+//   full — paid Apple Developer Program: the app joins the bike Wi-Fi itself (Hotspot Configuration)
+//          and can read the current SSID (Access WiFi Information).
+//   free — free Personal Team: no Hotspot entitlements; the rider joins the bike Wi-Fi in Settings.
+OCM_FLAVOR = full
+OCM_SWIFT_FLAGS_full =
+OCM_SWIFT_FLAGS_free = OCM_NO_HOTSPOT
 
 #include? "Local.xcconfig"
