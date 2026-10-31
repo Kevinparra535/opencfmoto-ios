@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.0" creator="router">
+  <rte>
+    <name>Route Name</name>
+    <rtept lat="44.43" lon="26.10"><name>Start</name></rtept>
+    <rtept lat='44.44' lon='26.10'/>
+    <rtept lat="44.44" lon="26.115"><ele> 85.5 </ele><name>End</name></rtept>
+  </rte>
+</gpx>

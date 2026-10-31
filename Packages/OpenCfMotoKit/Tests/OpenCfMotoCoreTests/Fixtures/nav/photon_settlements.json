@@ -1,0 +1,47 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     25.7372,
+     45.1259
+    ]
+   },
+   "properties": {
+    "extent": [
+     25.68,
+     45.16,
+     25.79,
+     45.09
+    ],
+    "country": "România",
+    "city": "Câmpina",
+    "osm_value": "city",
+    "name": "Câmpina",
+    "county": "Prahova",
+    "importance": 0.45
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     24.9,
+     45.9
+    ]
+   },
+   "properties": {
+    "osm_value": "town",
+    "name": "Câmpeni",
+    "county": "Alba",
+    "state": "Alba",
+    "country": "România",
+    "importance": 0.3
+   }
+  }
+ ]
+}

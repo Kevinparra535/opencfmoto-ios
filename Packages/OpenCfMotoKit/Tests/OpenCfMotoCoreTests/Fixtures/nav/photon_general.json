@@ -1,0 +1,102 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     25.7372,
+     45.1259
+    ]
+   },
+   "properties": {
+    "osm_type": "R",
+    "osm_id": 1,
+    "extent": [
+     25.68,
+     45.16,
+     25.79,
+     45.09
+    ],
+    "country": "România",
+    "osm_key": "place",
+    "city": "Câmpina",
+    "countrycode": "RO",
+    "osm_value": "city",
+    "name": "Câmpina",
+    "county": "Prahova",
+    "type": "city"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     26.0901,
+     44.4392
+    ]
+   },
+   "properties": {
+    "osm_key": "highway",
+    "osm_value": "residential",
+    "name": "Strada Câmpina",
+    "city": "București",
+    "country": "România",
+    "type": "street"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     26.1101,
+     44.4401
+    ]
+   },
+   "properties": {
+    "osm_key": "amenity",
+    "osm_value": "cafe",
+    "name": "Cafe Campina Express",
+    "street": "Strada Exemplu",
+    "city": "București",
+    "state": "București",
+    "country": "România"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -58.1,
+     -34.6
+    ]
+   },
+   "properties": {
+    "osm_value": "village",
+    "name": "Campina",
+    "country": "Argentina",
+    "state": "Buenos Aires"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     26.2001,
+     44.5001
+    ]
+   },
+   "properties": {
+    "osm_value": "",
+    "type": "house",
+    "street": "Aleea Campinei",
+    "country": "România"
+   }
+  }
+ ]
+}

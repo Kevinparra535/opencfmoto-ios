@@ -1,0 +1,67 @@
+{
+ "version": 0.6,
+ "elements": [
+  {
+   "type": "node",
+   "id": 1,
+   "lat": 44.43,
+   "lon": 26.11,
+   "tags": {
+    "amenity": "fuel",
+    "brand": "Petrom",
+    "name": "Petrom Unirii",
+    "addr:street": "Bulevardul Unirii",
+    "addr:housenumber": "12"
+   }
+  },
+  {
+   "type": "way",
+   "id": 2,
+   "center": {
+    "lat": 44.428,
+    "lon": 26.103
+   },
+   "tags": {
+    "amenity": "fuel",
+    "operator": "OMV"
+   }
+  },
+  {
+   "type": "node",
+   "id": 3,
+   "lat": 44.45,
+   "lon": 26.15,
+   "tags": {
+    "amenity": "fuel"
+   }
+  },
+  {
+   "type": "node",
+   "id": 4,
+   "lat": 44.42800001,
+   "lon": 26.10300001,
+   "tags": {
+    "amenity": "fuel",
+    "name": "Duplicate"
+   }
+  },
+  {
+   "type": "node",
+   "id": 5,
+   "lat": 44.429,
+   "lon": 26.104,
+   "tags": {
+    "amenity": "fuel",
+    "brand": "Lukoil",
+    "name": "Lukoil"
+   }
+  },
+  {
+   "type": "relation",
+   "id": 6,
+   "tags": {
+    "amenity": "fuel"
+   }
+  }
+ ]
+}

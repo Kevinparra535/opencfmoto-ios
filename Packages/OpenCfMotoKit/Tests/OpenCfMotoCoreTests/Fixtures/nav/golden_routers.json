@@ -1,0 +1,1633 @@
+{
+ "osrmNoRoute": {
+  "requests": [
+   {
+    "headers": {"Accept": "application/json"},
+    "method": "GET",
+    "body": null,
+    "url": "https://router.project-osrm.org/route/v1/driving/26.1,44.43;26.115,44.44?overview=full&geometries=geojson&steps=true&alternatives=false"
+   },
+   {
+    "headers": {"Accept": "application/json"},
+    "method": "GET",
+    "body": null,
+    "url": "https://router.project-osrm.org/route/v1/driving/26.1,44.43;26.115,44.44?overview=simplified&geometries=geojson&steps=false&alternatives=false"
+   }
+  ],
+  "error": "Impossible route between points"
+ },
+ "orsAltRetry": {
+  "routes": [
+   {
+    "firstLon": 26.1,
+    "lastLon": 26.115,
+    "firstLat": 44.43,
+    "distanceM": 2302.8,
+    "lastLat": 44.44,
+    "label": "",
+    "durationSec": 255.3,
+    "steps": [
+     {
+      "exit": null,
+      "road": "Bulevardul Test",
+      "modifier": null,
+      "distanceM": 1111.9,
+      "lanes": null,
+      "lon": 26.1,
+      "type": "depart",
+      "lat": 44.43
+     },
+     {
+      "exit": null,
+      "road": "",
+      "modifier": "right",
+      "distanceM": 1190.9,
+      "lanes": null,
+      "lon": 26.1,
+      "type": "turn",
+      "lat": 44.44
+     },
+     {
+      "exit": null,
+      "road": "",
+      "modifier": null,
+      "distanceM": 0,
+      "lanes": null,
+      "lon": 26.115,
+      "type": "arrive",
+      "lat": 44.44
+     }
+    ],
+    "points": 21
+   },
+   {
+    "firstLon": 26.1,
+    "lastLon": 26.115,
+    "firstLat": 44.43,
+    "distanceM": 3003,
+    "lastLat": 44.44,
+    "label": "",
+    "durationSec": 600,
+    "steps": [
+     {
+      "exit": null,
+      "road": "Calea Alternativa",
+      "modifier": null,
+      "distanceM": 1191.9,
+      "lanes": null,
+      "lon": 26.1,
+      "type": "depart",
+      "lat": 44.43
+     },
+     {
+      "exit": 3,
+      "road": "Piata",
+      "modifier": null,
+      "distanceM": 50,
+      "lanes": null,
+      "lon": 26.115,
+      "type": "roundabout",
+      "lat": 44.43
+     },
+     {
+      "exit": null,
+      "road": "",
+      "modifier": null,
+      "distanceM": 0,
+      "lanes": null,
+      "lon": 26.115,
+      "type": "arrive",
+      "lat": 44.44
+     }
+    ],
+    "points": 21
+   }
+  ],
+  "requests": [
+   {
+    "headers": {
+     "Authorization": "abc",
+     "Content-Type": "application/json; charset=UTF-8"
+    },
+    "method": "POST",
+    "body": "{\"elevation\":false,\"instructions\":true,\"preference\":\"recommended\",\"coordinates\":[[26.1,44.43],[26.115,44.44]],\"options\":{\"avoid_features\":[\"tollways\"]},\"geometry\":true,\"alternative_routes\":{\"target_count\":3,\"share_factor\":0.8,\"weight_factor\":2}}",
+    "url": "https://api.openrouteservice.org/v2/directions/driving-car/geojson"
+   },
+   {
+    "headers": {
+     "Authorization": "Bearer abc",
+     "Content-Type": "application/json; charset=UTF-8"
+    },
+    "method": "POST",
+    "body": "{\"elevation\":false,\"instructions\":true,\"preference\":\"recommended\",\"coordinates\":[[26.1,44.43],[26.115,44.44]],\"options\":{\"avoid_features\":[\"tollways\"]},\"geometry\":true,\"alternative_routes\":{\"target_count\":3,\"share_factor\":0.8,\"weight_factor\":2}}",
+    "url": "https://api.openrouteservice.org/v2/directions/driving-car/geojson"
+   },
+   {
+    "headers": {
+     "Authorization": "abc",
+     "Content-Type": "application/json; charset=UTF-8"
+    },
+    "method": "POST",
+    "body": "{\"elevation\":false,\"instructions\":true,\"preference\":\"recommended\",\"coordinates\":[[26.1,44.43],[26.115,44.44]],\"options\":{\"avoid_features\":[\"tollways\"]},\"geometry\":true}",
+    "url": "https://api.openrouteservice.org/v2/directions/driving-car/geojson"
+   }
+  ]
+ },
+ "osrmVias": {
+  "routes": [
+   {
+    "firstLon": 26.1,
+    "lastLon": 26.115,
+    "firstLat": 44.43,
+    "distanceM": 2302.8,
+    "lastLat": 44.44,
+    "label": "Alt",
+    "durationSec": 240,
+    "steps": [
+     {
+      "exit": null,
+      "road": "Bulevardul Test",
+      "modifier": null,
+      "distanceM": 1111.9,
+      "lanes": null,
+      "lon": 26.1,
+      "type": "depart",
+      "lat": 44.43
+     },
+     {
+      "exit": null,
+      "road": "Strada Exemplu",
+      "modifier": "right",
+      "distanceM": 1190.9,
+      "lanes": [
+       {
+        "valid": false,
+        "indications": ["left"]
+       },
+       {
+        "valid": true,
+        "indications": ["straight"]
+       },
+       {
+        "valid": true,
+        "indications": [
+         "straight",
+         "right"
+        ]
+       }
+      ],
+      "lon": 26.1,
+      "type": "turn",
+      "lat": 44.44
+     },
+     {
+      "exit": null,
+      "road": "Strada Exemplu",
+      "modifier": null,
+      "distanceM": 0,
+      "lanes": null,
+      "lon": 26.115,
+      "type": "arrive",
+      "lat": 44.44
+     }
+    ],
+    "points": 21
+   },
+   {
+    "firstLon": 26.1,
+    "lastLon": 26.115,
+    "firstLat": 44.43,
+    "distanceM": 2303,
+    "lastLat": 44.44,
+    "label": "Alt",
+    "durationSec": 360,
+    "steps": [
+     {
+      "exit": null,
+      "road": "Calea Alternativa",
+      "modifier": null,
+      "distanceM": 1191.9,
+      "lanes": null,
+      "lon": 26.1,
+      "type": "depart",
+      "lat": 44.43
+     },
+     {
+      "exit": 2,
+      "road": "",
+      "modifier": "left",
+      "distanceM": 1111.1,
+      "lanes": null,
+      "lon": 26.115,
+      "type": "roundabout",
+      "lat": 44.43
+     },
+     {
+      "exit": null,
+      "road": "",
+      "modifier": null,
+      "distanceM": 0,
+      "lanes": null,
+      "lon": 26.115,
+      "type": "arrive",
+      "lat": 44.44
+     }
+    ],
+    "points": 21
+   }
+  ],
+  "requests": [{
+   "headers": {"Accept": "application/json"},
+   "method": "GET",
+   "body": null,
+   "url": "https://router.project-osrm.org/route/v1/driving/26.1,44.43;26.105,44.435;-2.0E-5,1.0E-4;26.115,44.44?overview=full&geometries=geojson&steps=true&alternatives=4"
+  }]
+ },
+ "polyline6": [
+  {
+   "shape": "_brvsAgmdxp@gfuoAneuiH",
+   "points": [
+    [
+     44.4268,
+     26.1025
+    ],
+    [
+     45.7489,
+     21.2087
+    ]
+   ]
+  },
+  {
+   "shape": "_izlhA~rlgdF_{geC~ywl@_kwzCn`{nI",
+   "points": [
+    [
+     38.5,
+     -120.2
+    ],
+    [
+     40.7,
+     -120.95
+    ],
+    [
+     43.252,
+     -126.453
+    ]
+   ]
+  },
+  {
+   "shape": "",
+   "points": []
+  }
+ ],
+ "orsFun": {
+  "routes": [
+   {
+    "firstLon": 26.1,
+    "lastLon": 26.115,
+    "firstLat": 44.43,
+    "distanceM": 2302.8,
+    "lastLat": 44.44,
+    "label": "X",
+    "durationSec": 255.3,
+    "steps": [
+     {
+      "exit": null,
+      "road": "Bulevardul Test",
+      "modifier": null,
+      "distanceM": 1111.9,
+      "lanes": null,
+      "lon": 26.1,
+      "type": "depart",
+      "lat": 44.43
+     },
+     {
+      "exit": null,
+      "road": "",
+      "modifier": "right",
+      "distanceM": 1190.9,
+      "lanes": null,
+      "lon": 26.1,
+      "type": "turn",
+      "lat": 44.44
+     },
+     {
+      "exit": null,
+      "road": "",
+      "modifier": null,
+      "distanceM": 0,
+      "lanes": null,
+      "lon": 26.115,
+      "type": "arrive",
+      "lat": 44.44
+     }
+    ],
+    "points": 21
+   },
+   {
+    "firstLon": 26.1,
+    "lastLon": 26.115,
+    "firstLat": 44.43,
+    "distanceM": 3003,
+    "lastLat": 44.44,
+    "label": "X",
+    "durationSec": 600,
+    "steps": [
+     {
+      "exit": null,
+      "road": "Calea Alternativa",
+      "modifier": null,
+      "distanceM": 1191.9,
+      "lanes": null,
+      "lon": 26.1,
+      "type": "depart",
+      "lat": 44.43
+     },
+     {
+      "exit": 3,
+      "road": "Piata",
+      "modifier": null,
+      "distanceM": 50,
+      "lanes": null,
+      "lon": 26.115,
+      "type": "roundabout",
+      "lat": 44.43
+     },
+     {
+      "exit": null,
+      "road": "",
+      "modifier": null,
+      "distanceM": 0,
+      "lanes": null,
+      "lon": 26.115,
+      "type": "arrive",
+      "lat": 44.44
+     }
+    ],
+    "points": 21
+   }
+  ],
+  "requests": [{
+   "headers": {
+    "Authorization": "abc",
+    "Content-Type": "application/json; charset=UTF-8"
+   },
+   "method": "POST",
+   "body": "{\"elevation\":false,\"instructions\":true,\"preference\":\"shortest\",\"coordinates\":[[26.1,44.43],[26.11,44.435],[26.115,44.44]],\"geometry\":true}",
+   "url": "https://api.openrouteservice.org/v2/directions/driving-car/geojson"
+  }]
+ },
+ "orsBearer": {
+  "routes": [
+   {
+    "firstLon": 26.1,
+    "lastLon": 26.115,
+    "firstLat": 44.43,
+    "distanceM": 2302.8,
+    "lastLat": 44.44,
+    "label": "",
+    "durationSec": 255.3,
+    "steps": [
+     {
+      "exit": null,
+      "road": "Bulevardul Test",
+      "modifier": null,
+      "distanceM": 1111.9,
+      "lanes": null,
+      "lon": 26.1,
+      "type": "depart",
+      "lat": 44.43
+     },
+     {
+      "exit": null,
+      "road": "",
+      "modifier": "right",
+      "distanceM": 1190.9,
+      "lanes": null,
+      "lon": 26.1,
+      "type": "turn",
+      "lat": 44.44
+     },
+     {
+      "exit": null,
+      "road": "",
+      "modifier": null,
+      "distanceM": 0,
+      "lanes": null,
+      "lon": 26.115,
+      "type": "arrive",
+      "lat": 44.44
+     }
+    ],
+    "points": 21
+   },
+   {
+    "firstLon": 26.1,
+    "lastLon": 26.115,
+    "firstLat": 44.43,
+    "distanceM": 3003,
+    "lastLat": 44.44,
+    "label": "",
+    "durationSec": 600,
+    "steps": [
+     {
+      "exit": null,
+      "road": "Calea Alternativa",
+      "modifier": null,
+      "distanceM": 1191.9,
+      "lanes": null,
+      "lon": 26.1,
+      "type": "depart",
+      "lat": 44.43
+     },
+     {
+      "exit": 3,
+      "road": "Piata",
+      "modifier": null,
+      "distanceM": 50,
+      "lanes": null,
+      "lon": 26.115,
+      "type": "roundabout",
+      "lat": 44.43
+     },
+     {
+      "exit": null,
+      "road": "",
+      "modifier": null,
+      "distanceM": 0,
+      "lanes": null,
+      "lon": 26.115,
+      "type": "arrive",
+      "lat": 44.44
+     }
+    ],
+    "points": 21
+   }
+  ],
+  "requests": [
+   {
+    "headers": {
+     "Authorization": "abc",
+     "Content-Type": "application/json; charset=UTF-8"
+    },
+    "method": "POST",
+    "body": "{\"elevation\":false,\"instructions\":true,\"preference\":\"recommended\",\"coordinates\":[[26.1,44.43],[26.115,44.44]],\"geometry\":true,\"alternative_routes\":{\"target_count\":3,\"share_factor\":0.8,\"weight_factor\":2}}",
+    "url": "https://api.openrouteservice.org/v2/directions/driving-car/geojson"
+   },
+   {
+    "headers": {
+     "Authorization": "Bearer abc",
+     "Content-Type": "application/json; charset=UTF-8"
+    },
+    "method": "POST",
+    "body": "{\"elevation\":false,\"instructions\":true,\"preference\":\"recommended\",\"coordinates\":[[26.1,44.43],[26.115,44.44]],\"geometry\":true,\"alternative_routes\":{\"target_count\":3,\"share_factor\":0.8,\"weight_factor\":2}}",
+    "url": "https://api.openrouteservice.org/v2/directions/driving-car/geojson"
+   }
+  ]
+ },
+ "osrm": {
+  "routes": [
+   {
+    "firstLon": 26.1,
+    "lastLon": 26.115,
+    "firstLat": 44.43,
+    "distanceM": 2302.8,
+    "lastLat": 44.44,
+    "label": "",
+    "durationSec": 240,
+    "steps": [
+     {
+      "exit": null,
+      "road": "Bulevardul Test",
+      "modifier": null,
+      "distanceM": 1111.9,
+      "lanes": null,
+      "lon": 26.1,
+      "type": "depart",
+      "lat": 44.43
+     },
+     {
+      "exit": null,
+      "road": "Strada Exemplu",
+      "modifier": "right",
+      "distanceM": 1190.9,
+      "lanes": [
+       {
+        "valid": false,
+        "indications": ["left"]
+       },
+       {
+        "valid": true,
+        "indications": ["straight"]
+       },
+       {
+        "valid": true,
+        "indications": [
+         "straight",
+         "right"
+        ]
+       }
+      ],
+      "lon": 26.1,
+      "type": "turn",
+      "lat": 44.44
+     },
+     {
+      "exit": null,
+      "road": "Strada Exemplu",
+      "modifier": null,
+      "distanceM": 0,
+      "lanes": null,
+      "lon": 26.115,
+      "type": "arrive",
+      "lat": 44.44
+     }
+    ],
+    "points": 21
+   },
+   {
+    "firstLon": 26.1,
+    "lastLon": 26.115,
+    "firstLat": 44.43,
+    "distanceM": 2303,
+    "lastLat": 44.44,
+    "label": "",
+    "durationSec": 360,
+    "steps": [
+     {
+      "exit": null,
+      "road": "Calea Alternativa",
+      "modifier": null,
+      "distanceM": 1191.9,
+      "lanes": null,
+      "lon": 26.1,
+      "type": "depart",
+      "lat": 44.43
+     },
+     {
+      "exit": 2,
+      "road": "",
+      "modifier": "left",
+      "distanceM": 1111.1,
+      "lanes": null,
+      "lon": 26.115,
+      "type": "roundabout",
+      "lat": 44.43
+     },
+     {
+      "exit": null,
+      "road": "",
+      "modifier": null,
+      "distanceM": 0,
+      "lanes": null,
+      "lon": 26.115,
+      "type": "arrive",
+      "lat": 44.44
+     }
+    ],
+    "points": 21
+   }
+  ],
+  "requests": [{
+   "headers": {"Accept": "application/json"},
+   "method": "GET",
+   "body": null,
+   "url": "https://router.project-osrm.org/route/v1/driving/26.1,44.43;26.115,44.44?overview=full&geometries=geojson&steps=true&alternatives=2"
+  }]
+ },
+ "osrmCodeOnly": {
+  "requests": [
+   {
+    "headers": {"Accept": "application/json"},
+    "method": "GET",
+    "body": null,
+    "url": "https://router.project-osrm.org/route/v1/driving/26.1,44.43;26.115,44.44?overview=full&geometries=geojson&steps=true&alternatives=false"
+   },
+   {
+    "headers": {"Accept": "application/json"},
+    "method": "GET",
+    "body": null,
+    "url": "https://router.project-osrm.org/route/v1/driving/26.1,44.43;26.115,44.44?overview=simplified&geometries=geojson&steps=false&alternatives=false"
+   }
+  ],
+  "error": "InvalidQuery"
+ },
+ "orsError": {
+  "requests": [{
+   "headers": {
+    "Authorization": "abc",
+    "Content-Type": "application/json; charset=UTF-8"
+   },
+   "method": "POST",
+   "body": "{\"elevation\":false,\"instructions\":true,\"preference\":\"recommended\",\"coordinates\":[[26.1,44.43],[26.115,44.44]],\"geometry\":true}",
+   "url": "https://api.openrouteservice.org/v2/directions/driving-car/geojson"
+  }],
+  "error": "Could not find routable point within a radius of 350.0 meters"
+ },
+ "ors": {
+  "routes": [
+   {
+    "firstLon": 26.1,
+    "lastLon": 26.115,
+    "firstLat": 44.43,
+    "distanceM": 2302.8,
+    "lastLat": 44.44,
+    "label": "",
+    "durationSec": 255.3,
+    "steps": [
+     {
+      "exit": null,
+      "road": "Bulevardul Test",
+      "modifier": null,
+      "distanceM": 1111.9,
+      "lanes": null,
+      "lon": 26.1,
+      "type": "depart",
+      "lat": 44.43
+     },
+     {
+      "exit": null,
+      "road": "",
+      "modifier": "right",
+      "distanceM": 1190.9,
+      "lanes": null,
+      "lon": 26.1,
+      "type": "turn",
+      "lat": 44.44
+     },
+     {
+      "exit": null,
+      "road": "",
+      "modifier": null,
+      "distanceM": 0,
+      "lanes": null,
+      "lon": 26.115,
+      "type": "arrive",
+      "lat": 44.44
+     }
+    ],
+    "points": 21
+   },
+   {
+    "firstLon": 26.1,
+    "lastLon": 26.115,
+    "firstLat": 44.43,
+    "distanceM": 3003,
+    "lastLat": 44.44,
+    "label": "",
+    "durationSec": 600,
+    "steps": [
+     {
+      "exit": null,
+      "road": "Calea Alternativa",
+      "modifier": null,
+      "distanceM": 1191.9,
+      "lanes": null,
+      "lon": 26.1,
+      "type": "depart",
+      "lat": 44.43
+     },
+     {
+      "exit": 3,
+      "road": "Piata",
+      "modifier": null,
+      "distanceM": 50,
+      "lanes": null,
+      "lon": 26.115,
+      "type": "roundabout",
+      "lat": 44.43
+     },
+     {
+      "exit": null,
+      "road": "",
+      "modifier": null,
+      "distanceM": 0,
+      "lanes": null,
+      "lon": 26.115,
+      "type": "arrive",
+      "lat": 44.44
+     }
+    ],
+    "points": 21
+   }
+  ],
+  "requests": [{
+   "headers": {
+    "Authorization": "abc",
+    "Content-Type": "application/json; charset=UTF-8"
+   },
+   "method": "POST",
+   "body": "{\"elevation\":false,\"instructions\":true,\"preference\":\"recommended\",\"coordinates\":[[26.1,44.43],[26.115,44.44]],\"options\":{\"avoid_features\":[\"highways\",\"tollways\"]},\"geometry\":true,\"alternative_routes\":{\"target_count\":3,\"share_factor\":0.8,\"weight_factor\":2}}",
+   "url": "https://api.openrouteservice.org/v2/directions/driving-car/geojson"
+  }]
+ },
+ "orsBearerKeyFails": {
+  "requests": [
+   {
+    "headers": {
+     "Authorization": "Bearer xyz",
+     "Content-Type": "application/json; charset=UTF-8"
+    },
+    "method": "POST",
+    "body": "{\"elevation\":false,\"instructions\":true,\"preference\":\"recommended\",\"coordinates\":[[26.1,44.43],[26.115,44.44]],\"geometry\":true}",
+    "url": "https://api.openrouteservice.org/v2/directions/driving-car/geojson"
+   },
+   {
+    "headers": {
+     "Authorization": "Bearer xyz",
+     "Content-Type": "application/json; charset=UTF-8"
+    },
+    "method": "POST",
+    "body": "{\"elevation\":false,\"instructions\":true,\"preference\":\"recommended\",\"coordinates\":[[26.1,44.43],[26.115,44.44]],\"geometry\":true}",
+    "url": "https://api.openrouteservice.org/v2/directions/driving-car/geojson"
+   }
+  ],
+  "error": "down"
+ },
+ "valhallaCircuit": {
+  "routes": [{
+   "firstLon": 26.1,
+   "lastLon": 26.1,
+   "firstLat": 44.43,
+   "distanceM": 4606,
+   "lastLat": 44.43,
+   "label": "Circuit",
+   "durationSec": 485,
+   "steps": [
+    {
+     "exit": null,
+     "road": "Bulevardul Test",
+     "modifier": null,
+     "distanceM": 1112,
+     "lanes": null,
+     "lon": 26.1,
+     "type": "depart",
+     "lat": 44.43
+    },
+    {
+     "exit": null,
+     "road": "Strada Exemplu",
+     "modifier": "right",
+     "distanceM": 1192,
+     "lanes": null,
+     "lon": 26.1,
+     "type": "turn",
+     "lat": 44.44
+    },
+    {
+     "exit": null,
+     "road": "",
+     "modifier": null,
+     "distanceM": 0,
+     "lanes": null,
+     "lon": 26.115,
+     "type": "arrive",
+     "lat": 44.44
+    },
+    {
+     "exit": null,
+     "road": "Strada Exemplu",
+     "modifier": null,
+     "distanceM": 1192,
+     "lanes": null,
+     "lon": 26.115,
+     "type": "depart",
+     "lat": 44.44
+    },
+    {
+     "exit": null,
+     "road": "Bulevardul Test",
+     "modifier": "left",
+     "distanceM": 1112,
+     "lanes": null,
+     "lon": 26.1,
+     "type": "turn",
+     "lat": 44.44
+    },
+    {
+     "exit": null,
+     "road": "",
+     "modifier": null,
+     "distanceM": 0,
+     "lanes": null,
+     "lon": 26.1,
+     "type": "arrive",
+     "lat": 44.43
+    }
+   ],
+   "points": 41
+  }],
+  "requests": [{
+   "headers": {"Content-Type": "application/json; charset=UTF-8"},
+   "method": "POST",
+   "body": "{\"costing\":\"auto\",\"directions_options\":{\"units\":\"kilometers\"},\"locations\":[{\"lon\":26.1,\"lat\":44.43},{\"lon\":26.115,\"lat\":44.44},{\"lon\":26.1,\"lat\":44.43}],\"costing_options\":{\"auto\":{\"shortest\":false}}}",
+   "url": "https://valhalla1.openstreetmap.de/route"
+  }]
+ },
+ "osrmFallback": {
+  "routes": [{
+   "firstLon": 26.1013,
+   "lastLon": 26.115,
+   "firstLat": 44.435,
+   "distanceM": 1643.6,
+   "lastLat": 44.44,
+   "label": "",
+   "durationSec": 150,
+   "steps": [
+    {
+     "exit": null,
+     "road": "Strada Paralela",
+     "modifier": null,
+     "distanceM": 556,
+     "lanes": null,
+     "lon": 26.1013,
+     "type": "depart",
+     "lat": 44.435
+    },
+    {
+     "exit": null,
+     "road": "Strada Exemplu",
+     "modifier": "right",
+     "distanceM": 1087.6,
+     "lanes": null,
+     "lon": 26.1013,
+     "type": "end of road",
+     "lat": 44.44
+    },
+    {
+     "exit": null,
+     "road": "Strada Exemplu",
+     "modifier": null,
+     "distanceM": 0,
+     "lanes": null,
+     "lon": 26.115,
+     "type": "arrive",
+     "lat": 44.44
+    }
+   ],
+   "points": 16
+  }],
+  "requests": [
+   {
+    "headers": {"Accept": "application/json"},
+    "method": "GET",
+    "body": null,
+    "url": "https://router.project-osrm.org/route/v1/driving/26.1013,44.435;26.115,44.44?overview=full&geometries=geojson&steps=true&alternatives=2"
+   },
+   {
+    "headers": {"Accept": "application/json"},
+    "method": "GET",
+    "body": null,
+    "url": "https://router.project-osrm.org/route/v1/driving/26.1013,44.435;26.115,44.44?overview=full&geometries=geojson&steps=true&alternatives=false"
+   },
+   {
+    "headers": {"Accept": "application/json"},
+    "method": "GET",
+    "body": null,
+    "url": "https://router.project-osrm.org/route/v1/driving/26.1013,44.435;26.115,44.44?overview=simplified&geometries=geojson&steps=false&alternatives=false"
+   }
+  ]
+ },
+ "osrmTooShort": {
+  "requests": [
+   {
+    "headers": {"Accept": "application/json"},
+    "method": "GET",
+    "body": null,
+    "url": "https://router.project-osrm.org/route/v1/driving/26.1,44.43;26.115,44.44?overview=full&geometries=geojson&steps=true&alternatives=false"
+   },
+   {
+    "headers": {"Accept": "application/json"},
+    "method": "GET",
+    "body": null,
+    "url": "https://router.project-osrm.org/route/v1/driving/26.1,44.43;26.115,44.44?overview=simplified&geometries=geojson&steps=false&alternatives=false"
+   }
+  ],
+  "error": "Route too short"
+ },
+ "valhallaVias": {
+  "routes": [{
+   "firstLon": 26.1,
+   "lastLon": 26.115,
+   "firstLat": 44.43,
+   "distanceM": 2303,
+   "lastLat": 44.44,
+   "label": "Circuit",
+   "durationSec": 250.5,
+   "steps": [
+    {
+     "exit": null,
+     "road": "Bulevardul Test",
+     "modifier": null,
+     "distanceM": 1112,
+     "lanes": null,
+     "lon": 26.1,
+     "type": "depart",
+     "lat": 44.43
+    },
+    {
+     "exit": null,
+     "road": "Strada Exemplu",
+     "modifier": "right",
+     "distanceM": 1192,
+     "lanes": null,
+     "lon": 26.1,
+     "type": "turn",
+     "lat": 44.44
+    },
+    {
+     "exit": null,
+     "road": "",
+     "modifier": null,
+     "distanceM": 0,
+     "lanes": null,
+     "lon": 26.115,
+     "type": "arrive",
+     "lat": 44.44
+    }
+   ],
+   "points": 21
+  }],
+  "requests": [{
+   "headers": {"Content-Type": "application/json; charset=UTF-8"},
+   "method": "POST",
+   "body": "{\"costing\":\"motorcycle\",\"directions_options\":{\"units\":\"kilometers\"},\"locations\":[{\"lon\":26.1,\"lat\":44.43},{\"lon\":26.115,\"lat\":44.44},{\"lon\":26.1,\"lat\":44.43}],\"alternates\":3,\"costing_options\":{\"motorcycle\":{\"shortest\":false,\"exclude_highways\":true}}}",
+   "url": "https://valhalla1.openstreetmap.de/route"
+  }]
+ },
+ "valhalla": {
+  "none": {
+   "routes": [
+    {
+     "firstLon": 26.1,
+     "lastLon": 26.115,
+     "firstLat": 44.43,
+     "distanceM": 2303,
+     "lastLat": 44.44,
+     "label": "Fast",
+     "durationSec": 250.5,
+     "steps": [
+      {
+       "exit": null,
+       "road": "Bulevardul Test",
+       "modifier": null,
+       "distanceM": 1112,
+       "lanes": null,
+       "lon": 26.1,
+       "type": "depart",
+       "lat": 44.43
+      },
+      {
+       "exit": null,
+       "road": "Strada Exemplu",
+       "modifier": "right",
+       "distanceM": 1192,
+       "lanes": null,
+       "lon": 26.1,
+       "type": "turn",
+       "lat": 44.44
+      },
+      {
+       "exit": null,
+       "road": "",
+       "modifier": null,
+       "distanceM": 0,
+       "lanes": null,
+       "lon": 26.115,
+       "type": "arrive",
+       "lat": 44.44
+      }
+     ],
+     "points": 21
+    },
+    {
+     "firstLon": 26.1,
+     "lastLon": 26.115,
+     "firstLat": 44.43,
+     "distanceM": 2903,
+     "lastLat": 44.44,
+     "label": "Alt",
+     "durationSec": 420,
+     "steps": [
+      {
+       "exit": null,
+       "road": "A1",
+       "modifier": null,
+       "distanceM": 1192,
+       "lanes": null,
+       "lon": 26.1,
+       "type": "depart",
+       "lat": 44.43
+      },
+      {
+       "exit": null,
+       "road": "Piata Rotunda",
+       "modifier": null,
+       "distanceM": 100,
+       "lanes": null,
+       "lon": 26.115,
+       "type": "roundabout",
+       "lat": 44.43
+      },
+      {
+       "exit": null,
+       "road": "",
+       "modifier": null,
+       "distanceM": 1000,
+       "lanes": null,
+       "lon": 26.115,
+       "type": "exit roundabout",
+       "lat": 44.431
+      },
+      {
+       "exit": null,
+       "road": "",
+       "modifier": null,
+       "distanceM": 0,
+       "lanes": null,
+       "lon": 26.115,
+       "type": "arrive",
+       "lat": 44.44
+      }
+     ],
+     "points": 21
+    }
+   ],
+   "requests": [{
+    "headers": {"Content-Type": "application/json; charset=UTF-8"},
+    "method": "POST",
+    "body": "{\"costing\":\"auto\",\"directions_options\":{\"units\":\"kilometers\"},\"locations\":[{\"lon\":26.1,\"lat\":44.43},{\"lon\":26.115,\"lat\":44.44}],\"alternates\":2,\"costing_options\":{\"auto\":{\"shortest\":false}}}",
+    "url": "https://valhalla1.openstreetmap.de/route"
+   }]
+  },
+  "hwy": {
+   "routes": [{
+    "firstLon": 26.1,
+    "lastLon": 26.115,
+    "firstLat": 44.43,
+    "distanceM": 2303,
+    "lastLat": 44.44,
+    "label": "No highway",
+    "durationSec": 250.5,
+    "steps": [
+     {
+      "exit": null,
+      "road": "Bulevardul Test",
+      "modifier": null,
+      "distanceM": 1112,
+      "lanes": null,
+      "lon": 26.1,
+      "type": "depart",
+      "lat": 44.43
+     },
+     {
+      "exit": null,
+      "road": "Strada Exemplu",
+      "modifier": "right",
+      "distanceM": 1192,
+      "lanes": null,
+      "lon": 26.1,
+      "type": "turn",
+      "lat": 44.44
+     },
+     {
+      "exit": null,
+      "road": "",
+      "modifier": null,
+      "distanceM": 0,
+      "lanes": null,
+      "lon": 26.115,
+      "type": "arrive",
+      "lat": 44.44
+     }
+    ],
+    "points": 21
+   }],
+   "requests": [{
+    "headers": {"Content-Type": "application/json; charset=UTF-8"},
+    "method": "POST",
+    "body": "{\"costing\":\"motorcycle\",\"directions_options\":{\"units\":\"kilometers\"},\"locations\":[{\"lon\":26.1,\"lat\":44.43},{\"lon\":26.115,\"lat\":44.44}],\"alternates\":2,\"costing_options\":{\"motorcycle\":{\"shortest\":false,\"exclude_highways\":true}}}",
+    "url": "https://valhalla1.openstreetmap.de/route"
+   }]
+  },
+  "toll": {
+   "routes": [{
+    "firstLon": 26.1,
+    "lastLon": 26.115,
+    "firstLat": 44.43,
+    "distanceM": 2303,
+    "lastLat": 44.44,
+    "label": "No toll",
+    "durationSec": 250.5,
+    "steps": [
+     {
+      "exit": null,
+      "road": "Bulevardul Test",
+      "modifier": null,
+      "distanceM": 1112,
+      "lanes": null,
+      "lon": 26.1,
+      "type": "depart",
+      "lat": 44.43
+     },
+     {
+      "exit": null,
+      "road": "Strada Exemplu",
+      "modifier": "right",
+      "distanceM": 1192,
+      "lanes": null,
+      "lon": 26.1,
+      "type": "turn",
+      "lat": 44.44
+     },
+     {
+      "exit": null,
+      "road": "",
+      "modifier": null,
+      "distanceM": 0,
+      "lanes": null,
+      "lon": 26.115,
+      "type": "arrive",
+      "lat": 44.44
+     }
+    ],
+    "points": 21
+   }],
+   "requests": [{
+    "headers": {"Content-Type": "application/json; charset=UTF-8"},
+    "method": "POST",
+    "body": "{\"costing\":\"auto\",\"directions_options\":{\"units\":\"kilometers\"},\"locations\":[{\"lon\":26.1,\"lat\":44.43},{\"lon\":26.115,\"lat\":44.44}],\"alternates\":2,\"costing_options\":{\"auto\":{\"use_tolls\":0,\"toll_booth_penalty\":600,\"shortest\":false}}}",
+    "url": "https://valhalla1.openstreetmap.de/route"
+   }]
+  },
+  "fun": {
+   "routes": [
+    {
+     "firstLon": 26.1,
+     "lastLon": 26.115,
+     "firstLat": 44.43,
+     "distanceM": 2303,
+     "lastLat": 44.44,
+     "label": "Fast",
+     "durationSec": 250.5,
+     "steps": [
+      {
+       "exit": null,
+       "road": "Bulevardul Test",
+       "modifier": null,
+       "distanceM": 1112,
+       "lanes": null,
+       "lon": 26.1,
+       "type": "depart",
+       "lat": 44.43
+      },
+      {
+       "exit": null,
+       "road": "Strada Exemplu",
+       "modifier": "right",
+       "distanceM": 1192,
+       "lanes": null,
+       "lon": 26.1,
+       "type": "turn",
+       "lat": 44.44
+      },
+      {
+       "exit": null,
+       "road": "",
+       "modifier": null,
+       "distanceM": 0,
+       "lanes": null,
+       "lon": 26.115,
+       "type": "arrive",
+       "lat": 44.44
+      }
+     ],
+     "points": 21
+    },
+    {
+     "firstLon": 26.1,
+     "lastLon": 26.115,
+     "firstLat": 44.43,
+     "distanceM": 2903,
+     "lastLat": 44.44,
+     "label": "Alt",
+     "durationSec": 420,
+     "steps": [
+      {
+       "exit": null,
+       "road": "A1",
+       "modifier": null,
+       "distanceM": 1192,
+       "lanes": null,
+       "lon": 26.1,
+       "type": "depart",
+       "lat": 44.43
+      },
+      {
+       "exit": null,
+       "road": "Piata Rotunda",
+       "modifier": null,
+       "distanceM": 100,
+       "lanes": null,
+       "lon": 26.115,
+       "type": "roundabout",
+       "lat": 44.43
+      },
+      {
+       "exit": null,
+       "road": "",
+       "modifier": null,
+       "distanceM": 1000,
+       "lanes": null,
+       "lon": 26.115,
+       "type": "exit roundabout",
+       "lat": 44.431
+      },
+      {
+       "exit": null,
+       "road": "",
+       "modifier": null,
+       "distanceM": 0,
+       "lanes": null,
+       "lon": 26.115,
+       "type": "arrive",
+       "lat": 44.44
+      }
+     ],
+     "points": 21
+    }
+   ],
+   "requests": [{
+    "headers": {"Content-Type": "application/json; charset=UTF-8"},
+    "method": "POST",
+    "body": "{\"costing\":\"auto\",\"directions_options\":{\"units\":\"kilometers\"},\"locations\":[{\"lon\":26.1,\"lat\":44.43},{\"lon\":26.115,\"lat\":44.44}],\"alternates\":2,\"costing_options\":{\"auto\":{\"shortest\":false}}}",
+    "url": "https://valhalla1.openstreetmap.de/route"
+   }]
+  },
+  "both": {
+   "routes": [{
+    "firstLon": 26.1,
+    "lastLon": 26.115,
+    "firstLat": 44.43,
+    "distanceM": 2303,
+    "lastLat": 44.44,
+    "label": "No hwy/toll",
+    "durationSec": 250.5,
+    "steps": [
+     {
+      "exit": null,
+      "road": "Bulevardul Test",
+      "modifier": null,
+      "distanceM": 1112,
+      "lanes": null,
+      "lon": 26.1,
+      "type": "depart",
+      "lat": 44.43
+     },
+     {
+      "exit": null,
+      "road": "Strada Exemplu",
+      "modifier": "right",
+      "distanceM": 1192,
+      "lanes": null,
+      "lon": 26.1,
+      "type": "turn",
+      "lat": 44.44
+     },
+     {
+      "exit": null,
+      "road": "",
+      "modifier": null,
+      "distanceM": 0,
+      "lanes": null,
+      "lon": 26.115,
+      "type": "arrive",
+      "lat": 44.44
+     }
+    ],
+    "points": 21
+   }],
+   "requests": [{
+    "headers": {"Content-Type": "application/json; charset=UTF-8"},
+    "method": "POST",
+    "body": "{\"costing\":\"motorcycle\",\"directions_options\":{\"units\":\"kilometers\"},\"locations\":[{\"lon\":26.1,\"lat\":44.43},{\"lon\":26.115,\"lat\":44.44}],\"alternates\":2,\"costing_options\":{\"motorcycle\":{\"use_tolls\":0,\"toll_booth_penalty\":600,\"shortest\":false,\"exclude_highways\":true}}}",
+    "url": "https://valhalla1.openstreetmap.de/route"
+   }]
+  }
+ },
+ "fun": {
+  "circuit": [
+   [
+    45.07435718009888,
+    25.060804494200394
+   ],
+   [
+    44.925610639508875,
+    25.060646843207532
+   ],
+   [
+    44.999935639432415,
+    24.878549003658698
+   ],
+   [
+    45,
+    25
+   ]
+  ],
+  "viaSets": [
+   {
+    "c": [
+     45,
+     25,
+     46,
+     26
+    ],
+    "alt": [
+     [[
+      45.33853891471144,
+      25.526267290921986
+     ]],
+     [[
+      45.661321173906174,
+      25.473006760951513
+     ]],
+     [[
+      45.40159496913232,
+      25.702253090386854
+     ]]
+    ],
+    "short": [
+     [[
+      45.43567152185877,
+      25.47951303193228
+     ]],
+     [[
+      45.56432086083856,
+      25.520419456901177
+     ]],
+     [[
+      45.33065478361362,
+      25.389768651819683
+     ]]
+    ],
+    "fun": [
+     [[
+      45.35775600357295,
+      25.63946530128492
+     ]],
+     [[
+      45.641929197433996,
+      25.359576031544346
+     ]],
+     [
+      [
+       45.21546253196194,
+       25.41229340726853
+      ],
+      [
+       45.7843832105097,
+       25.586363053244444
+      ]
+     ]
+    ]
+   },
+   {
+    "c": [
+     44.43,
+     26.1,
+     44.44,
+     26.115
+    ],
+    "alt": [
+     [[
+      44.42413985833632,
+      26.118891626147537
+     ]],
+     [[
+      44.445858691090244,
+      26.09610358163565
+     ]],
+     [[
+      44.41922307743358,
+      26.12812486720799
+     ]]
+    ],
+    "short": [
+     [[
+      44.43219942998264,
+      26.109758460899208
+     ]],
+     [[
+      44.4378004910417,
+      26.105241250732803
+     ]],
+     [[
+      44.43039421182372,
+      26.109311296767864
+     ]]
+    ],
+    "fun": [
+     [[
+      44.414778267087634,
+      26.13252912433894
+     ]],
+     [[
+      44.45521593061788,
+      26.082453030680934
+     ]],
+     [
+      [
+       44.4189953958054,
+       26.122246688541313
+      ],
+      [
+       44.45100176107045,
+       26.09274342446187
+      ]
+     ]
+    ]
+   },
+   {
+    "c": [
+     44.4268,
+     26.1025,
+     45.7489,
+     21.2087
+    ],
+    "alt": [
+     [[
+      45.05521243369976,
+      24.20383716599999
+     ]],
+     [[
+      45.12045730133589,
+      23.10729556686541
+     ]],
+     [[
+      45.247151166823535,
+      23.750089080003544
+     ]]
+    ],
+    "short": [
+     [[
+      45.044981268250076,
+      23.914020887725922
+     ]],
+     [[
+      45.130717083988145,
+      23.39715848716836
+     ]],
+     [[
+      44.92090358016254,
+      24.408166622919964
+     ]]
+    ],
+    "fun": [
+     [[
+      45.17109220907067,
+      23.988755148580616
+     ]],
+     [[
+      45.00453969461596,
+      23.322702424214253
+     ]],
+     [
+      [
+       44.901538352870126,
+       24.7938706132392
+      ],
+      [
+       45.27412827932472,
+       22.51692603391021
+      ]
+     ]
+    ]
+   },
+   {
+    "c": [
+     0,
+     0,
+     0,
+     0.001
+    ],
+    "alt": [
+     [[
+      -0.013489824088780957,
+      4.0000000000000165E-4
+     ]],
+     [[
+      0.013489824088780957,
+      6.000000000000001E-4
+     ]],
+     [[
+      -0.021583718542049535,
+      5.000000000000026E-4
+     ]]
+    ],
+    "short": [
+     [[
+      -0.0031476256207155565,
+      4.500000000000004E-4
+     ]],
+     [[
+      0.0031476256207155565,
+      5.5E-4
+     ]],
+     [[
+      -0.004249294587966002,
+      3.5000000000000054E-4
+     ]]
+    ],
+    "fun": [
+     [[
+      -0.026979648177561915,
+      4.5000000000000335E-4
+     ]],
+     [[
+      0.026979648177561915,
+      5.5E-4
+     ]],
+     [
+      [
+       -0.01888575372429334,
+       2.8000000000000236E-4
+      ],
+      [
+       0.01888575372429334,
+       7.199999999999999E-4
+      ]
+     ]
+    ]
+   },
+   {
+    "c": [
+     -33.9,
+     151.2,
+     -33.95,
+     151.25
+    ],
+    "alt": [
+     [[
+      -33.92861095655324,
+      151.2074858125215
+     ]],
+     [[
+      -33.92138777777637,
+      151.2425131263927
+     ]],
+     [[
+      -33.93877692249517,
+      151.2049749096371
+     ]]
+    ],
+    "short": [
+     [[
+      -33.92830638948712,
+      151.2140618842977
+     ]],
+     [[
+      -33.92169303506055,
+      151.23593746063142
+     ]],
+     [[
+      -33.92533848993078,
+      151.20610894071424
+     ]]
+    ],
+    "fun": [
+     [[
+      -33.93972064676931,
+      151.19746835963093
+     ]],
+     [[
+      -33.910274290548905,
+      151.2525229890228
+     ]],
+     [
+      [
+       -33.926054984984795,
+       151.19648066327392
+      ],
+      [
+       -33.9239425343013,
+       151.25351890227913
+      ]
+     ]
+    ]
+   }
+  ],
+  "twist": [
+   8.5,
+   14.25,
+   4.025
+  ]
+ },
+ "valhallaEmpty": {
+  "requests": [{
+   "headers": {"Content-Type": "application/json; charset=UTF-8"},
+   "method": "POST",
+   "body": "{\"costing\":\"auto\",\"directions_options\":{\"units\":\"kilometers\"},\"locations\":[{\"lon\":26.1,\"lat\":44.43},{\"lon\":26.115,\"lat\":44.44}],\"costing_options\":{\"auto\":{\"shortest\":false}}}",
+   "url": "https://valhalla1.openstreetmap.de/route"
+  }],
+  "error": "No Valhalla route"
+ }
+}

@@ -1,0 +1,326 @@
+{
+ "photon": {
+  "places": [
+   {
+    "subtitle": "city · Câmpina, Prahova, România",
+    "name": "Câmpina",
+    "lon": 25.7372,
+    "category": "city",
+    "lat": 45.1259
+   },
+   {
+    "subtitle": "town · Alba, România",
+    "name": "Câmpeni",
+    "lon": 24.9,
+    "category": "town",
+    "lat": 45.9
+   },
+   {
+    "subtitle": "residential · București, România",
+    "name": "Strada Câmpina",
+    "lon": 26.0901,
+    "category": "residential",
+    "lat": 44.4392
+   },
+   {
+    "subtitle": "cafe · București, România",
+    "name": "Cafe Campina Express",
+    "lon": 26.1101,
+    "category": "cafe",
+    "lat": 44.4401
+   },
+   {
+    "subtitle": "România",
+    "name": "Aleea Campinei",
+    "lon": 26.2001,
+    "category": "house",
+    "lat": 44.5001
+   },
+   {
+    "subtitle": "village · Buenos Aires, Argentina",
+    "name": "Campina",
+    "lon": -58.1,
+    "category": "village",
+    "lat": -34.6
+   }
+  ],
+  "requests": [
+   {
+    "headers": {"Accept": "application/json"},
+    "method": "GET",
+    "body": null,
+    "url": "https://photon.komoot.io/api/?q=C%C3%A2mpina&lat=44.4268&lon=26.1025&limit=12&location_bias_scale=0.2&lang=default"
+   },
+   {
+    "headers": {"Accept": "application/json"},
+    "method": "GET",
+    "body": null,
+    "url": "https://photon.komoot.io/api/?q=C%C3%A2mpina&lat=44.4268&lon=26.1025&limit=10&location_bias_scale=0.12&lang=default&osm_tag=place:city&osm_tag=place:town&osm_tag=place:municipality"
+   }
+  ]
+ },
+ "photonDown": {
+  "places": [
+   {
+    "subtitle": "Câmpina, Prahova, România",
+    "name": "Câmpina",
+    "lon": 25.7372,
+    "category": "administrative",
+    "lat": 45.1259
+   },
+   {
+    "subtitle": "Strada Câmpina, Sector 1, București, România",
+    "name": "Strada Câmpina",
+    "lon": 26.0901,
+    "category": "residential",
+    "lat": 44.4392
+   },
+   {
+    "subtitle": "Câmpina, Iași, România",
+    "name": "Câmpina",
+    "lon": 27.6,
+    "category": "village",
+    "lat": 47.2
+   }
+  ],
+  "requests": [
+   {
+    "headers": {"Accept": "application/json"},
+    "method": "GET",
+    "body": null,
+    "url": "https://photon.komoot.io/api/?q=Campina&lat=44.4268&lon=26.1025&limit=12&location_bias_scale=0.2&lang=default"
+   },
+   {
+    "headers": {"Accept": "application/json"},
+    "method": "GET",
+    "body": null,
+    "url": "https://nominatim.openstreetmap.org/search?q=Campina&format=jsonv2&addressdetails=1&limit=20&viewbox=24.502499999999998,46.0268,27.7025,42.8268&bounded=0"
+   }
+  ]
+ },
+ "corridor": {
+  "places": [
+   {
+    "subtitle": "OSM fuel",
+    "name": "Petrom Unirii",
+    "lon": 26.11,
+    "category": "fuel",
+    "lat": 44.43
+   },
+   {
+    "subtitle": "OSM fuel",
+    "name": "Fuel",
+    "lon": 26.15,
+    "category": "fuel",
+    "lat": 44.45
+   },
+   {
+    "subtitle": "OSM fuel",
+    "name": "Duplicate",
+    "lon": 26.10300001,
+    "category": "fuel",
+    "lat": 44.42800001
+   },
+   {
+    "subtitle": "OSM fuel",
+    "name": "Lukoil",
+    "lon": 26.104,
+    "category": "fuel",
+    "lat": 44.429
+   }
+  ],
+  "requests": [{
+   "headers": {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"},
+   "method": "POST",
+   "body": "data=%5Bout%3Ajson%5D%5Btimeout%3A25%5D%3B%0A%28%0A++node%5B%22amenity%22%7E%22fuel%7Cparking%7Ccafe%7Crestaurant%7Chospital%7Catm%22%5D%2844.997%2C24.997%2C45.033%2C25.045%29%3B%0A++node%5B%22tourism%22%7E%22hotel%7Cviewpoint%22%5D%2844.997%2C24.997%2C45.033%2C25.045%29%3B%0A%29%3B%0Aout+body+40%3B",
+   "url": "https://overpass-api.de/api/interpreter"
+  }]
+ },
+ "nominatimNoPos": {
+  "places": [
+   {
+    "subtitle": "Câmpina, Prahova, România",
+    "name": "Câmpina",
+    "lon": 25.7372,
+    "category": "administrative",
+    "lat": 45.1259
+   },
+   {
+    "subtitle": "Strada Câmpina, Sector 1, București, România",
+    "name": "Strada Câmpina",
+    "lon": 26.0901,
+    "category": "residential",
+    "lat": 44.4392
+   },
+   {
+    "subtitle": "Câmpina, Iași, România",
+    "name": "Câmpina",
+    "lon": 27.6,
+    "category": "village",
+    "lat": 47.2
+   }
+  ],
+  "requests": [{
+   "headers": {"Accept": "application/json"},
+   "method": "GET",
+   "body": null,
+   "url": "https://nominatim.openstreetmap.org/search?q=Campina+%7E+%26+co&format=jsonv2&addressdetails=1&limit=20"
+  }]
+ },
+ "fuel": {
+  "places": [
+   {
+    "subtitle": "",
+    "name": "OMV",
+    "lon": 26.103,
+    "category": "fuel",
+    "lat": 44.428
+   },
+   {
+    "subtitle": "",
+    "name": "Lukoil",
+    "lon": 26.104,
+    "category": "fuel",
+    "lat": 44.429
+   },
+   {
+    "subtitle": "Petrom · Bulevardul Unirii 12",
+    "name": "Petrom Unirii",
+    "lon": 26.11,
+    "category": "fuel",
+    "lat": 44.43
+   },
+   {
+    "subtitle": "",
+    "name": "Fuel",
+    "lon": 26.15,
+    "category": "fuel",
+    "lat": 44.45
+   }
+  ],
+  "requests": [{
+   "headers": {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"},
+   "method": "POST",
+   "body": "data=%5Bout%3Ajson%5D%5Btimeout%3A25%5D%3B%0A%28%0A++node%5B%22amenity%22%3D%22fuel%22%5D%28around%3A6000%2C44.4268%2C26.1025%29%3B%0A++way%5B%22amenity%22%3D%22fuel%22%5D%28around%3A6000%2C44.4268%2C26.1025%29%3B%0A%29%3B%0Aout+center+60%3B",
+   "url": "https://overpass-api.de/api/interpreter"
+  }]
+ },
+ "maxspeed": {
+  "kmh": 50,
+  "label": "50",
+  "requests": [{
+   "headers": {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"},
+   "method": "POST",
+   "body": "data=%5Bout%3Ajson%5D%5Btimeout%3A12%5D%3B%0Away%28around%3A25%2C44.4268%2C26.1025%29%5B%22maxspeed%22%5D%3B%0Aout+tags+center+1%3B",
+   "url": "https://overpass-api.de/api/interpreter"
+  }]
+ },
+ "allDown": {
+  "requests": [
+   {
+    "headers": {"Accept": "application/json"},
+    "method": "GET",
+    "body": null,
+    "url": "https://photon.komoot.io/api/?q=Nowhere&lat=44.4268&lon=26.1025&limit=12&location_bias_scale=0.2&lang=default"
+   },
+   {
+    "headers": {"Accept": "application/json"},
+    "method": "GET",
+    "body": null,
+    "url": "https://photon.komoot.io/api/?q=Nowhere&lat=44.4268&lon=26.1025&limit=10&location_bias_scale=0.12&lang=default&osm_tag=place:city&osm_tag=place:town&osm_tag=place:municipality"
+   },
+   {
+    "headers": {"Accept": "application/json"},
+    "method": "GET",
+    "body": null,
+    "url": "https://nominatim.openstreetmap.org/search?q=Nowhere&format=jsonv2&addressdetails=1&limit=20&viewbox=24.502499999999998,46.0268,27.7025,42.8268&bounded=0"
+   }
+  ],
+  "error": "Request failed (HTTP 503)"
+ },
+ "photonCached": {
+  "places": [
+   {
+    "subtitle": "city · Câmpina, Prahova, România",
+    "name": "Câmpina",
+    "lon": 25.7372,
+    "category": "city",
+    "lat": 45.1259
+   },
+   {
+    "subtitle": "town · Alba, România",
+    "name": "Câmpeni",
+    "lon": 24.9,
+    "category": "town",
+    "lat": 45.9
+   },
+   {
+    "subtitle": "residential · București, România",
+    "name": "Strada Câmpina",
+    "lon": 26.0901,
+    "category": "residential",
+    "lat": 44.4392
+   },
+   {
+    "subtitle": "cafe · București, România",
+    "name": "Cafe Campina Express",
+    "lon": 26.1101,
+    "category": "cafe",
+    "lat": 44.4401
+   },
+   {
+    "subtitle": "România",
+    "name": "Aleea Campinei",
+    "lon": 26.2001,
+    "category": "house",
+    "lat": 44.5001
+   },
+   {
+    "subtitle": "village · Buenos Aires, Argentina",
+    "name": "Campina",
+    "lon": -58.1,
+    "category": "village",
+    "lat": -34.6
+   }
+  ],
+  "requests": []
+ },
+ "fuelWiden": {
+  "places": [
+   {
+    "subtitle": "",
+    "name": "OMV",
+    "lon": 26.103,
+    "category": "fuel",
+    "lat": 44.428
+   },
+   {
+    "subtitle": "",
+    "name": "Lukoil",
+    "lon": 26.104,
+    "category": "fuel",
+    "lat": 44.429
+   }
+  ],
+  "requests": [
+   {
+    "headers": {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"},
+    "method": "POST",
+    "body": "data=%5Bout%3Ajson%5D%5Btimeout%3A25%5D%3B%0A%28%0A++node%5B%22amenity%22%3D%22fuel%22%5D%28around%3A6000%2C44.4268%2C26.1025%29%3B%0A++way%5B%22amenity%22%3D%22fuel%22%5D%28around%3A6000%2C44.4268%2C26.1025%29%3B%0A%29%3B%0Aout+center+4%3B",
+    "url": "https://overpass-api.de/api/interpreter"
+   },
+   {
+    "headers": {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"},
+    "method": "POST",
+    "body": "data=%5Bout%3Ajson%5D%5Btimeout%3A25%5D%3B%0A%28%0A++node%5B%22amenity%22%3D%22fuel%22%5D%28around%3A18000%2C44.4268%2C26.1025%29%3B%0A++way%5B%22amenity%22%3D%22fuel%22%5D%28around%3A18000%2C44.4268%2C26.1025%29%3B%0A%29%3B%0Aout+center+4%3B",
+    "url": "https://overpass-api.de/api/interpreter"
+   },
+   {
+    "headers": {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"},
+    "method": "POST",
+    "body": "data=%5Bout%3Ajson%5D%5Btimeout%3A25%5D%3B%0A%28%0A++node%5B%22amenity%22%3D%22fuel%22%5D%28around%3A48000%2C44.4268%2C26.1025%29%3B%0A++way%5B%22amenity%22%3D%22fuel%22%5D%28around%3A48000%2C44.4268%2C26.1025%29%3B%0A%29%3B%0Aout+center+4%3B",
+    "url": "https://overpass-api.de/api/interpreter"
+   }
+  ]
+ }
+}
