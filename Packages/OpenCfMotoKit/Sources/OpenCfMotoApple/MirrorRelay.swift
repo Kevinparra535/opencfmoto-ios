@@ -1,0 +1,735 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// ReplayKit mirror relay transport (docs/spec/ios-platform-facts.md §f, design recommendation 14):
+// the Broadcast Upload Extension (MirrorRelayClient) sends encoded access units to the host app
+// (MirrorRelayServer), which owns the dash link and serves them as a VideoFrameSource. The host
+// sends the negotiated canvas / encoder settings and keyframe requests back. Transport: a Unix
+// domain stream socket inside the App Group container (path ≤ 100 bytes; sun_path holds 104 on
+// Darwin). Framing: OpenCfMotoCore/Video/MirrorRelayProtocol.swift.
+//
+// Plain POSIX sockets on dedicated threads (Darwin; also builds on Glibc so the relay is tested
+// end-to-end on Linux CI).
+
+import Foundation
+import OpenCfMotoCore
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
+
+// MARK: - Socket path
+
+public enum MirrorRelaySocket {
+    /// Longest accepted socket path in bytes (Darwin sun_path = 104 incl. NUL; keep a margin).
+    public static let maxPathBytes = 100
+    /// Info.plist key holding the App Group identifier (app and extension, see project.yml).
+    public static let appGroupInfoKey = "OCMAppGroupIdentifier"
+
+    /// `<directory>/<fileName>` if it fits in a sockaddr_un, else nil.
+    public static func path(inDirectory directory: URL, fileName: String = MirrorRelayProtocol.socketFileName) -> String? {
+        let p = directory.appendingPathComponent(fileName).path
+        return isUsable(path: p) ? p : nil
+    }
+
+    public static func isUsable(path: String) -> Bool {
+        let n = path.utf8.count
+        return n > 0 && n <= maxPathBytes
+    }
+
+#if canImport(Darwin)
+    /// Socket path inside the App Group container shared by the app and the extension.
+    public static func path(appGroupIdentifier: String, fileName: String = MirrorRelayProtocol.socketFileName) -> String? {
+        guard let dir = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else { return nil }
+        return path(inDirectory: dir, fileName: fileName)
+    }
+
+    /// Socket path for the App Group named by `OCMAppGroupIdentifier` in `bundle`'s Info.plist.
+    public static func defaultPath(bundle: Bundle = .main) -> String? {
+        guard let group = bundle.object(forInfoDictionaryKey: appGroupInfoKey) as? String, !group.isEmpty,
+              !group.contains("$(") else { return nil }
+        return path(appGroupIdentifier: group)
+    }
+#endif
+}
+
+// MARK: - Send-side flow control (platform-neutral, unit-tested)
+
+/// Bounded frame sending for the extension (its memory budget is tiny): at most `maxPending`
+/// frames queued for the socket. When full, P-frames are dropped and — because a dropped
+/// P-frame breaks the reference chain — further P-frames too until the next keyframe, which is
+/// requested once.
+struct RelaySendGate: Equatable {
+    enum Verdict: Equatable {
+        case send
+        case drop(requestKeyframe: Bool)
+    }
+
+    let maxPending: Int
+    private(set) var pending = 0
+    private(set) var awaitingKeyframe = false
+    private(set) var dropped = 0
+
+    init(maxPending: Int) { self.maxPending = max(1, maxPending) }
+
+    mutating func offer(isKeyframe: Bool) -> Verdict {
+        if awaitingKeyframe, !isKeyframe {
+            dropped += 1
+            return .drop(requestKeyframe: false)
+        }
+        // A keyframe restarts the GOP: it may use a little headroom.
+        let limit = isKeyframe ? maxPending * 2 : maxPending
+        if pending >= limit {
+            dropped += 1
+            let first = !awaitingKeyframe
+            awaitingKeyframe = true
+            return .drop(requestKeyframe: first)
+        }
+        if isKeyframe { awaitingKeyframe = false }
+        pending += 1
+        return .send
+    }
+
+    mutating func sent() { pending = max(0, pending - 1) }
+
+    /// New connection: nothing pending, start with a keyframe.
+    mutating func reset() {
+        pending = 0
+        awaitingKeyframe = true
+    }
+}
+
+// MARK: - POSIX helpers
+
+#if canImport(Darwin) || canImport(Glibc)
+enum RelaySocketIO {
+    enum Failure: Error, CustomStringConvertible {
+        case pathTooLong(String)
+        case syscall(String, Int32)
+
+        var description: String {
+            switch self {
+            case let .pathTooLong(p): return "socket path too long (\(p.utf8.count) bytes): \(p)"
+            case let .syscall(name, err): return "\(name) failed: errno \(err) (\(String(cString: strerror(err))))"
+            }
+        }
+    }
+
+    private static func address(_ path: String) throws -> sockaddr_un {
+        var addr = sockaddr_un()
+        let bytes = Array(path.utf8)
+        let capacity = MemoryLayout.size(ofValue: addr.sun_path)
+        guard !bytes.isEmpty, bytes.count < capacity, bytes.count <= MirrorRelaySocket.maxPathBytes else {
+            throw Failure.pathTooLong(path)
+        }
+        addr.sun_family = sa_family_t(AF_UNIX)
+#if canImport(Darwin)
+        addr.sun_len = UInt8(MemoryLayout<sockaddr_un>.size)
+#endif
+        withUnsafeMutableBytes(of: &addr.sun_path) { raw in
+            raw.copyBytes(from: bytes)
+            raw[bytes.count] = 0
+        }
+        return addr
+    }
+
+    private static func newSocket() throws -> Int32 {
+#if canImport(Darwin)
+        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+#else
+        let fd = socket(AF_UNIX, Int32(SOCK_STREAM.rawValue), 0)
+#endif
+        guard fd >= 0 else { throw Failure.syscall("socket", errno) }
+        return fd
+    }
+
+    /// Bound + listening socket at `path` (a stale socket file is removed first).
+    static func makeListener(path: String, backlog: Int32 = 4) throws -> Int32 {
+        var addr = try address(path)
+        unlink(path)
+        let fd = try newSocket()
+        let len = socklen_t(MemoryLayout<sockaddr_un>.size)
+        let rc = withUnsafePointer(to: &addr) { p in
+            p.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, len) }
+        }
+        guard rc == 0 else {
+            let e = errno
+            close(fd)
+            throw Failure.syscall("bind", e)
+        }
+        guard listen(fd, backlog) == 0 else {
+            let e = errno
+            close(fd)
+            throw Failure.syscall("listen", e)
+        }
+        return fd
+    }
+
+    static func makeConnection(path: String) throws -> Int32 {
+        var addr = try address(path)
+        let fd = try newSocket()
+        let len = socklen_t(MemoryLayout<sockaddr_un>.size)
+        let rc = withUnsafePointer(to: &addr) { p in
+            p.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(fd, $0, len) }
+        }
+        guard rc == 0 else {
+            let e = errno
+            close(fd)
+            throw Failure.syscall("connect", e)
+        }
+        configure(fd)
+        return fd
+    }
+
+    /// Waits up to `timeoutMs` for a connection; nil on timeout or error.
+    static func acceptClient(_ listenFD: Int32, timeoutMs: Int32) -> Int32? {
+        var pfd = pollfd(fd: listenFD, events: Int16(POLLIN), revents: 0)
+        let r = poll(&pfd, 1, timeoutMs)
+        guard r > 0, (pfd.revents & Int16(POLLIN)) != 0 else { return nil }
+        let fd = accept(listenFD, nil, nil)
+        guard fd >= 0 else { return nil }
+        configure(fd)
+        return fd
+    }
+
+    static func configure(_ fd: Int32) {
+#if canImport(Darwin)
+        var one: Int32 = 1
+        _ = setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, socklen_t(MemoryLayout<Int32>.size))
+#endif
+        var size: Int32 = 1 << 20
+        _ = setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &size, socklen_t(MemoryLayout<Int32>.size))
+        _ = setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &size, socklen_t(MemoryLayout<Int32>.size))
+    }
+
+    /// Blocking write of every byte; false on error (peer gone).
+    static func sendAll(_ fd: Int32, _ data: Data) -> Bool {
+        let count = data.count
+        return data.withUnsafeBytes { (raw: UnsafeRawBufferPointer) -> Bool in
+            guard let base = raw.baseAddress else { return count == 0 }
+            var offset = 0
+            while offset < count {
+#if canImport(Darwin)
+                let n = send(fd, base + offset, count - offset, 0)
+#else
+                let n = send(fd, base + offset, count - offset, Int32(MSG_NOSIGNAL))
+#endif
+                if n > 0 { offset += n; continue }
+                if n < 0, errno == EINTR { continue }
+                return false
+            }
+            return true
+        }
+    }
+
+    /// Bytes read (> 0), 0 at EOF, < 0 on error.
+    static func receiveSome(_ fd: Int32, into buffer: UnsafeMutableRawBufferPointer) -> Int {
+        while true {
+            let n = recv(fd, buffer.baseAddress, buffer.count, 0)
+            if n < 0, errno == EINTR { continue }
+            return n
+        }
+    }
+
+    /// Wakes a blocked reader / writer of `fd` (the owning thread then closes it).
+    static func shutdownBoth(_ fd: Int32) {
+        _ = shutdown(fd, Int32(SHUT_RDWR))
+    }
+
+    static func closeFD(_ fd: Int32) {
+        _ = close(fd)
+    }
+}
+
+/// One accepted / connected socket. Writes are serialized; the fd is closed exactly once, by
+/// the thread that reads it, under the write lock (so no write can hit a reused descriptor).
+final class RelayConnection: @unchecked Sendable {
+    let fd: Int32
+    let id: UInt64
+    private let writeLock = NSLock()
+    private var closed = false
+
+    init(fd: Int32, id: UInt64) {
+        self.fd = fd
+        self.id = id
+    }
+
+    @discardableResult
+    func write(_ data: Data) -> Bool {
+        writeLock.lock()
+        defer { writeLock.unlock() }
+        guard !closed else { return false }
+        return RelaySocketIO.sendAll(fd, data)
+    }
+
+    /// Unblocks the reader (any thread).
+    func shutdown() {
+        RelaySocketIO.shutdownBoth(fd)
+    }
+
+    /// Closes the descriptor (reader thread, after its loop ended).
+    func closeFromReader() {
+        writeLock.lock()
+        if !closed {
+            closed = true
+            RelaySocketIO.shutdownBoth(fd)
+            RelaySocketIO.closeFD(fd)
+        }
+        writeLock.unlock()
+    }
+
+    /// Reads and decodes messages until EOF / error / protocol error.
+    func readMessages(_ handle: (MirrorRelayMessage) -> Void) -> Error? {
+        var decoder = MirrorRelayDecoder()
+        var buffer = [UInt8](repeating: 0, count: 64 * 1024)
+        while true {
+            let n = buffer.withUnsafeMutableBytes { RelaySocketIO.receiveSome(fd, into: $0) }
+            if n <= 0 { return nil }
+            buffer.withUnsafeBytes { raw in decoder.append(UnsafeRawBufferPointer(rebasing: raw[0 ..< n])) }
+            do {
+                while let m = try decoder.nextMessage() { handle(m) }
+            } catch {
+                return error
+            }
+        }
+    }
+}
+
+// MARK: - Host side
+
+public struct MirrorRelayServerStats: Sendable, Equatable {
+    public var connections = 0
+    public var framesReceived = 0
+    public var keyframesReceived = 0
+    public var bytesReceived: Int64 = 0
+    public var keyframeRequestsSent = 0
+    public var fallbackKeyframesServed = 0
+    public var peerAgent: String?
+    public init() {}
+}
+
+/// Host-app end of the mirror relay: listens on the App-Group socket, receives the extension's
+/// access units into a FrameQueue and serves them to the dash link as a `VideoFrameSource`.
+/// Thread-safe.
+public final class MirrorRelayServer: VideoFrameSource, @unchecked Sendable {
+    public let socketPath: String
+    /// Frames from the extension (capacity 3, keyframe gate, GOP-safe overflow).
+    public let frameQueue: FrameQueue
+    private let lock = NSLock()
+    private var running = false
+    private var listenGeneration: UInt64 = 0
+    private var connection: RelayConnection?
+    private var nextConnectionId: UInt64 = 0
+    private var _config: MirrorRelayConfig?
+    private var _fit: ScreenFit = .fit
+    private var _margins: ScreenMargins = .zero
+    private var _stats = MirrorRelayServerStats()
+    private var _onClientChange: (@Sendable (Bool) -> Void)?
+
+    public init(socketPath: String, queueCapacity: Int = 3) {
+        self.socketPath = socketPath
+        frameQueue = FrameQueue(capacity: queueCapacity)
+        frameQueue.onKeyframeNeeded = { [weak self] in self?.sendKeyframeRequest() }
+    }
+
+    deinit { stop() }
+
+    /// Called with true / false when the extension connects / disconnects (socket threads).
+    public var onClientChange: (@Sendable (Bool) -> Void)? {
+        get { lock.lock(); defer { lock.unlock() }; return _onClientChange }
+        set { lock.lock(); _onClientChange = newValue; lock.unlock() }
+    }
+
+    public var isClientConnected: Bool { lock.lock(); defer { lock.unlock() }; return connection != nil }
+    /// `start()` succeeded and `stop()` was not called.
+    public var isRunning: Bool { lock.lock(); defer { lock.unlock() }; return running }
+    public var stats: MirrorRelayServerStats { lock.lock(); defer { lock.unlock() }; return _stats }
+    public var configuration: MirrorRelayConfig? { lock.lock(); defer { lock.unlock() }; return _config }
+
+    /// How the phone screen is fitted into the canvas (mirror default FIT) and the screen
+    /// margins; changes are sent to the extension immediately.
+    public func setFit(_ fit: ScreenFit, margins: ScreenMargins) {
+        lock.lock()
+        _fit = fit
+        _margins = margins
+        _config?.fit = fit
+        _config?.margins = margins
+        let cfg = _config
+        lock.unlock()
+        if let cfg { send(.config(cfg)) }
+    }
+
+    /// Binds the socket and starts accepting the extension.
+    public func start() throws {
+        lock.lock()
+        guard !running else { lock.unlock(); return }
+        lock.unlock()
+        let fd = try RelaySocketIO.makeListener(path: socketPath)
+        frameQueue.reopen()
+        lock.lock()
+        running = true
+        listenGeneration &+= 1
+        let generation = listenGeneration
+        lock.unlock()
+        let thread = Thread { [weak self] in self?.acceptLoop(fd, generation: generation) }
+        thread.name = "ocm.mirror.accept"
+        thread.start()
+        Log.i("MIRROR", "relay listening on \(socketPath.split(separator: "/").last ?? "")")
+    }
+
+    /// Stops accepting, tells the extension, closes everything and wakes pending pulls.
+    public func stop() {
+        lock.lock()
+        let wasRunning = running
+        running = false
+        let conn = connection
+        lock.unlock()
+        if let conn {
+            conn.write(MirrorRelayMessage.stop(reason: "host stopped").encoded())
+            conn.shutdown()
+        }
+        frameQueue.close()
+        if wasRunning { Log.i("MIRROR", "relay stopped") }
+    }
+
+    // MARK: VideoFrameSource
+
+    public func prepare(canvas: VideoCanvas, parameters: EncoderParameters) {
+        lock.lock()
+        let cfg = MirrorRelayConfig(canvas: canvas, parameters: parameters, fit: _fit, margins: _margins)
+        _config = cfg
+        lock.unlock()
+        send(.config(cfg))
+    }
+
+    public func resynchronize() {
+        frameQueue.resynchronize() // → onKeyframeNeeded → keyframe request to the extension
+    }
+
+    public func nextFrame(timeout: TimeInterval) async -> EncodedFrame? {
+        let r = await FramePull.next(from: frameQueue, timeout: timeout) { [weak self] in
+            self?.isRunning == true ? self?.frameQueue.lastKeyframe : nil // a stopped relay serves nothing
+        }
+        if r.usedFallback {
+            lock.withLock { _stats.fallbackKeyframesServed += 1 }
+            Log.shared.throttled("mirror-fallback", interval: 5, .warn, "MIRROR", "no mirror frame in time → re-sent the last IDR")
+        }
+        return r.frame
+    }
+
+    public func mediaStopped() {
+        frameQueue.flush()
+    }
+
+    // MARK: private
+
+    private func sendKeyframeRequest() {
+        if send(.keyframeRequest) {
+            lock.lock(); _stats.keyframeRequestsSent += 1; lock.unlock()
+        }
+    }
+
+    @discardableResult
+    private func send(_ message: MirrorRelayMessage) -> Bool {
+        lock.lock()
+        let conn = connection
+        lock.unlock()
+        guard let conn else { return false }
+        let ok = conn.write(message.encoded())
+        if !ok { conn.shutdown() }
+        return ok
+    }
+
+    private func acceptLoop(_ fd: Int32, generation: UInt64) {
+        while true {
+            lock.lock()
+            let keepGoing = running && generation == listenGeneration
+            lock.unlock()
+            guard keepGoing else { break }
+            guard let client = RelaySocketIO.acceptClient(fd, timeoutMs: 250) else { continue }
+            attach(client)
+        }
+        RelaySocketIO.closeFD(fd)
+        lock.lock()
+        let restarted = running || generation != listenGeneration
+        lock.unlock()
+        if !restarted { unlink(socketPath) } // a newer start() owns the path now
+    }
+
+    private func attach(_ fd: Int32) {
+        lock.lock()
+        nextConnectionId &+= 1
+        let conn = RelayConnection(fd: fd, id: nextConnectionId)
+        let old = connection
+        connection = conn
+        _stats.connections += 1
+        let cfg = _config
+        let handler = _onClientChange
+        lock.unlock()
+        old?.shutdown()
+        Log.i("MIRROR", "extension connected (#\(conn.id))")
+        if let cfg { conn.write(MirrorRelayMessage.config(cfg).encoded()) }
+        // Gate + flush + keyframe request BEFORE reading: the first frame served from the new
+        // extension must be an IDR, and an early one must not be flushed.
+        frameQueue.resynchronize()
+        let reader = Thread { [weak self] in self?.readLoop(conn) }
+        reader.name = "ocm.mirror.read"
+        reader.start()
+        handler?(true)
+    }
+
+    private func readLoop(_ conn: RelayConnection) {
+        let error = conn.readMessages { [weak self] message in self?.handle(message) }
+        conn.closeFromReader()
+        lock.lock()
+        let current = connection?.id == conn.id
+        if current { connection = nil }
+        let handler = _onClientChange
+        lock.unlock()
+        if let error { Log.w("MIRROR", "relay protocol error: \(error)") }
+        if current {
+            Log.i("MIRROR", "extension disconnected (#\(conn.id))")
+            handler?(false)
+        }
+    }
+
+    private func handle(_ message: MirrorRelayMessage) {
+        switch message {
+        case let .frame(f):
+            guard !f.accessUnit.isEmpty else { return }
+            lock.lock()
+            _stats.framesReceived += 1
+            if f.isKeyframe { _stats.keyframesReceived += 1 }
+            _stats.bytesReceived += Int64(f.accessUnit.count)
+            lock.unlock()
+            frameQueue.push(f)
+        case let .hello(version, agent):
+            lock.lock(); _stats.peerAgent = agent; lock.unlock()
+            Log.i("MIRROR", "extension hello v\(version) \(agent)")
+        case let .log(level, tag, text):
+            Log.shared.log(level, "EXT/" + tag, text)
+        case let .stop(reason):
+            Log.i("MIRROR", "extension stopping: \(reason)")
+        case .config, .keyframeRequest:
+            break // host → extension messages; ignore if echoed
+        }
+    }
+}
+
+// MARK: - Extension side
+
+public struct MirrorRelayClientStats: Sendable, Equatable {
+    public var connects = 0
+    public var framesSent = 0
+    public var keyframesSent = 0
+    public var framesDropped = 0
+    public var bytesSent: Int64 = 0
+    public var configsReceived = 0
+    public var keyframeRequestsReceived = 0
+    public init() {}
+}
+
+/// Extension end of the mirror relay: connects to the host (retrying every second until
+/// `stop()`), sends frames with bounded buffering and delivers the host's configuration and
+/// keyframe requests. Thread-safe.
+public final class MirrorRelayClient: @unchecked Sendable {
+    public let socketPath: String
+    public let agent: String
+    private let lock = NSLock()
+    private let writeQueue = DispatchQueue(label: "ocm.mirror.client.write", qos: .userInteractive)
+    private var running = false
+    private var connection: RelayConnection?
+    private var gate: RelaySendGate
+    private var pendingLogs = 0
+    private var logSubscription: UUID?
+    private var _stats = MirrorRelayClientStats()
+    private var _onConfig: (@Sendable (MirrorRelayConfig) -> Void)?
+    private var _onKeyframeRequest: (@Sendable () -> Void)?
+    private var _onStop: (@Sendable (String) -> Void)?
+    private var _onConnectionChange: (@Sendable (Bool) -> Void)?
+
+    /// Reconnect interval while the host is not listening.
+    public var retryInterval: TimeInterval = 1.0
+
+    public init(socketPath: String, agent: String = "OpenCfMotoMirror", maxPendingFrames: Int = 3) {
+        self.socketPath = socketPath
+        self.agent = agent
+        gate = RelaySendGate(maxPending: maxPendingFrames)
+    }
+
+    deinit {
+        if let id = logSubscription { Log.shared.unsubscribe(id) }
+    }
+
+    /// Host configuration (canvas, encoder parameters, fit, margins) — socket thread.
+    public var onConfig: (@Sendable (MirrorRelayConfig) -> Void)? {
+        get { lock.lock(); defer { lock.unlock() }; return _onConfig }
+        set { lock.lock(); _onConfig = newValue; lock.unlock() }
+    }
+
+    /// An IDR is needed: requested by the host, or after frames had to be dropped locally.
+    public var onKeyframeRequest: (@Sendable () -> Void)? {
+        get { lock.lock(); defer { lock.unlock() }; return _onKeyframeRequest }
+        set { lock.lock(); _onKeyframeRequest = newValue; lock.unlock() }
+    }
+
+    /// The host is stopping (e.g. the ride ended) — finish the broadcast.
+    public var onStop: (@Sendable (String) -> Void)? {
+        get { lock.lock(); defer { lock.unlock() }; return _onStop }
+        set { lock.lock(); _onStop = newValue; lock.unlock() }
+    }
+
+    public var onConnectionChange: (@Sendable (Bool) -> Void)? {
+        get { lock.lock(); defer { lock.unlock() }; return _onConnectionChange }
+        set { lock.lock(); _onConnectionChange = newValue; lock.unlock() }
+    }
+
+    public var isConnected: Bool { lock.lock(); defer { lock.unlock() }; return connection != nil }
+    public var stats: MirrorRelayClientStats { lock.lock(); defer { lock.unlock() }; return _stats }
+
+    /// Connects in the background and keeps reconnecting until `stop()`.
+    public func start() {
+        lock.lock()
+        guard !running else { lock.unlock(); return }
+        running = true
+        lock.unlock()
+        let thread = Thread { [weak self] in self?.connectionLoop() }
+        thread.name = "ocm.mirror.client"
+        thread.start()
+    }
+
+    /// Sends STOP (if connected) and closes the connection.
+    public func stop(reason: String = "broadcast finished") {
+        lock.lock()
+        running = false
+        let conn = connection
+        lock.unlock()
+        if let conn {
+            writeQueue.async {
+                conn.write(MirrorRelayMessage.stop(reason: reason).encoded())
+                conn.shutdown()
+            }
+        }
+    }
+
+    /// Queues one access unit for the host (dropped with a keyframe request when the host lags).
+    public func send(frame: EncodedFrame) {
+        guard !frame.accessUnit.isEmpty else { return }
+        lock.lock()
+        guard let conn = connection else { lock.unlock(); return }
+        let verdict = gate.offer(isKeyframe: frame.isKeyframe)
+        if case .drop = verdict { _stats.framesDropped += 1 }
+        let keyHandler = _onKeyframeRequest
+        lock.unlock()
+        switch verdict {
+        case let .drop(requestKeyframe):
+            if requestKeyframe { keyHandler?() }
+        case .send:
+            let data = MirrorRelayMessage.frame(frame).encoded()
+            writeQueue.async { [weak self] in
+                let ok = conn.write(data)
+                guard let self else { return }
+                self.lock.lock()
+                self.gate.sent()
+                if ok {
+                    self._stats.framesSent += 1
+                    if frame.isKeyframe { self._stats.keyframesSent += 1 }
+                    self._stats.bytesSent += Int64(data.count)
+                }
+                self.lock.unlock()
+                if !ok { conn.shutdown() }
+            }
+        }
+    }
+
+    /// Forwards a log line to the host's log (never logs itself; bounded).
+    public func send(log level: LogLevel, tag: String, message: String) {
+        lock.lock()
+        guard let conn = connection, pendingLogs < 64 else { lock.unlock(); return }
+        pendingLogs += 1
+        lock.unlock()
+        let data = MirrorRelayMessage.log(level: level, tag: tag, message: message).encoded()
+        writeQueue.async { [weak self] in
+            conn.write(data)
+            self?.lock.lock()
+            self?.pendingLogs -= 1
+            self?.lock.unlock()
+        }
+    }
+
+    /// Mirrors `Log.shared` lines at or above `minimumLevel` to the host (the extension has no
+    /// log UI of its own).
+    public func forwardLogs(minimumLevel: LogLevel = .info) {
+        lock.lock()
+        let existing = logSubscription
+        lock.unlock()
+        guard existing == nil else { return }
+        let id = Log.shared.subscribe { [weak self] line in
+            guard line.level >= minimumLevel else { return }
+            self?.send(log: line.level, tag: line.tag, message: line.message)
+        }
+        lock.lock(); logSubscription = id; lock.unlock()
+    }
+
+    // MARK: private
+
+    private func connectionLoop() {
+        var lastFailureLogged: Int32 = 0
+        while true {
+            lock.lock()
+            let keepGoing = running
+            lock.unlock()
+            guard keepGoing else { return }
+            let fd: Int32
+            do {
+                fd = try RelaySocketIO.makeConnection(path: socketPath)
+            } catch {
+                if case let RelaySocketIO.Failure.syscall(_, err) = error, err != lastFailureLogged {
+                    lastFailureLogged = err
+                    Log.w("MIRROR", "relay connect: \(error)")
+                }
+                Thread.sleep(forTimeInterval: max(0.05, retryInterval))
+                continue
+            }
+            lastFailureLogged = 0
+            lock.lock()
+            let conn = RelayConnection(fd: fd, id: UInt64(_stats.connects + 1))
+            connection = conn
+            gate.reset()
+            _stats.connects += 1
+            let changeHandler = _onConnectionChange
+            let keyHandler = _onKeyframeRequest
+            lock.unlock()
+            conn.write(MirrorRelayMessage.hello(version: MirrorRelayProtocol.version, agent: agent).encoded())
+            Log.i("MIRROR", "connected to host relay")
+            changeHandler?(true)
+            keyHandler?() // start the stream with an IDR
+            let error = conn.readMessages { [weak self] message in self?.handle(message) }
+            conn.closeFromReader()
+            lock.lock()
+            if connection === conn { connection = nil }
+            let stillRunning = running
+            let changed = _onConnectionChange
+            lock.unlock()
+            if let error { Log.w("MIRROR", "relay protocol error: \(error)") }
+            changed?(false)
+            if stillRunning { Thread.sleep(forTimeInterval: max(0.05, retryInterval)) }
+        }
+    }
+
+    private func handle(_ message: MirrorRelayMessage) {
+        switch message {
+        case let .config(cfg):
+            lock.lock(); _stats.configsReceived += 1; let h = _onConfig; lock.unlock()
+            h?(cfg)
+        case .keyframeRequest:
+            lock.lock(); _stats.keyframeRequestsReceived += 1; let h = _onKeyframeRequest; lock.unlock()
+            h?()
+        case let .stop(reason):
+            lock.lock(); let h = _onStop; lock.unlock()
+            h?(reason)
+        case .hello, .frame, .log:
+            break
+        }
+    }
+}
+#endif
