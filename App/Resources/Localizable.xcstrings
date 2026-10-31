@@ -1,5 +1,5856 @@
 {
   "sourceLanguage": "en",
-  "strings": {},
+  "strings": {
+    "%@ lines": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ líneas"
+          }
+        }
+      }
+    },
+    "%@ places": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ lugares"
+          }
+        }
+      }
+    },
+    "1. Copy the password.\n2. Open Settings, go back to the main list and tap Wi-Fi.\n3. Choose the bike's network and paste the password.\n4. Come back here — OpenCfMoto continues by itself, or tap “I've joined”.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1. Copia la contraseña.\n2. Abre Ajustes, vuelve a la lista principal y toca Wi-Fi.\n3. Elige la red de la moto y pega la contraseña.\n4. Vuelve aquí: OpenCfMoto continúa solo, o toca «Ya me he conectado»."
+          }
+        }
+      }
+    },
+    "1000 ms — slow doubles (long physical press)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1000 ms: dobles lentos (pulsación física larga)"
+          }
+        }
+      }
+    },
+    "1280 × 576 · wide (800MT)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1280 × 576 · panorámico (800MT)"
+          }
+        }
+      }
+    },
+    "200 ms — snappier singles": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "200 ms: pulsaciones simples más rápidas"
+          }
+        }
+      }
+    },
+    "300 ms — balanced (recommended)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "300 ms: equilibrado (recomendado)"
+          }
+        }
+      }
+    },
+    "450 ms — forgiving doubles": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "450 ms: dobles más tolerantes"
+          }
+        }
+      }
+    },
+    "5-way Explore (Fn / ★ / voice)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Explore de 5 vías (Fn / ★ / voz)"
+          }
+        }
+      }
+    },
+    "500 ms — quicker hold": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "500 ms: mantener más rápido"
+          }
+        }
+      }
+    },
+    "544×512 near-square": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "544×512 casi cuadrado"
+          }
+        }
+      }
+    },
+    "600 ms — balanced (recommended)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "600 ms: equilibrado (recomendado)"
+          }
+        }
+      }
+    },
+    "800 ms — deliberate hold": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "800 ms: mantener deliberado"
+          }
+        }
+      }
+    },
+    "800 × 384 · most CFMoto dashes": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "800 × 384 · la mayoría de tableros CFMoto"
+          }
+        }
+      }
+    },
+    "800 × 944 · portrait (1000 MT-X)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "800 × 944 · vertical (1000 MT-X)"
+          }
+        }
+      }
+    },
+    "A gesture navigates to a saved place that is not set yet — add its address below.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un gesto navega a un lugar guardado que aún no está configurado: añade su dirección abajo."
+          }
+        }
+      }
+    },
+    "ATM": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cajero"
+          }
+        }
+      }
+    },
+    "About": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acerca de"
+          }
+        }
+      }
+    },
+    "About & credits": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acerca de y créditos"
+          }
+        }
+      }
+    },
+    "Acquiring GPS…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buscando GPS…"
+          }
+        }
+      }
+    },
+    "Active bike": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moto activa"
+          }
+        }
+      }
+    },
+    "Active bike · tap to edit": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moto activa · toca para editar"
+          }
+        }
+      }
+    },
+    "Active: %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activo: %@"
+          }
+        }
+      }
+    },
+    "Add bike": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añadir moto"
+          }
+        }
+      }
+    },
+    "Add photo": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añadir foto"
+          }
+        }
+      }
+    },
+    "Added %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añadida %@"
+          }
+        }
+      }
+    },
+    "Address or place": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dirección o lugar"
+          }
+        }
+      }
+    },
+    "Advanced (optional). Personal OpenRouteService key if you want one. It is never included in exported files.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avanzado (opcional). Tu clave personal de OpenRouteService, si quieres usar una. Nunca se incluye en los archivos exportados."
+          }
+        }
+      }
+    },
+    "Alexandru (zanderp) — alexandru.rocks": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alexandru (zanderp) — alexandru.rocks"
+          }
+        }
+      }
+    },
+    "All": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todos"
+          }
+        }
+      }
+    },
+    "Allow local network access": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permitir el acceso a la red local"
+          }
+        }
+      }
+    },
+    "Allow location access": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permitir el acceso a la ubicación"
+          }
+        }
+      }
+    },
+    "Allowed": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permitido"
+          }
+        }
+      }
+    },
+    "Also read the dash's ▲/▼ by watching the phone volume. Each press really changes the volume and shows the volume indicator.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lee también los ▲/▼ del tablero vigilando el volumen del teléfono. Cada pulsación cambia de verdad el volumen y muestra el indicador de volumen."
+          }
+        }
+      }
+    },
+    "Altitude": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Altitud"
+          }
+        }
+      }
+    },
+    "Always": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Siempre"
+          }
+        }
+      }
+    },
+    "Another CFMoto / EasyConnect app is using the bike's link ports (10920-10922), so the dash stays blank. Close it from the app switcher, then reconnect.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Otra app de CFMoto/EasyConnect está usando los puertos de enlace de la moto (10920-10922), así que el tablero se queda en blanco. Ciérrala desde el selector de apps y vuelve a conectar."
+          }
+        }
+      }
+    },
+    "Apply preset": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aplicar preajuste"
+          }
+        }
+      }
+    },
+    "Apply preset…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aplicar preajuste…"
+          }
+        }
+      }
+    },
+    "Arrival": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Llegada"
+          }
+        }
+      }
+    },
+    "Assistant (dash search)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Asistente (búsqueda en el tablero)"
+          }
+        }
+      }
+    },
+    "Auto": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto"
+          }
+        }
+      }
+    },
+    "Auto (day / night)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automático (día/noche)"
+          }
+        }
+      }
+    },
+    "Auto switches the dash map to dark at night and light by day. Map settings apply instantly, also while projecting.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto cambia el mapa del tablero a oscuro por la noche y claro durante el día. Los ajustes del mapa se aplican al instante, también mientras proyectas."
+          }
+        }
+      }
+    },
+    "Auto — adapts to heat & signal": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automático: se adapta al calor y la señal"
+          }
+        }
+      }
+    },
+    "Auto-connect on launch": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conexión automática al iniciar"
+          }
+        }
+      }
+    },
+    "Auto-finish on arrive": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finalización automática al llegar"
+          }
+        }
+      }
+    },
+    "Auto-recovery watchdog": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vigilante de recuperación automática"
+          }
+        }
+      }
+    },
+    "Auto-scroll": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desplazamiento automático"
+          }
+        }
+      }
+    },
+    "Automatic trip logging is off (Settings ▸ Startup & recovery). Record rides by hand here.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El registro automático de viajes está desactivado (Ajustes ▸ Inicio y recuperación). Graba tus viajes a mano aquí."
+          }
+        }
+      }
+    },
+    "Avg": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Media"
+          }
+        }
+      }
+    },
+    "Avg speed": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Velocidad media"
+          }
+        }
+      }
+    },
+    "Avoid highways": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Evitar autovías"
+          }
+        }
+      }
+    },
+    "Avoid tolls": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Evitar peajes"
+          }
+        }
+      }
+    },
+    "BACK / SET diamond (limited)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rombo BACK / SET (limitado)"
+          }
+        }
+      }
+    },
+    "Back": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Atrás"
+          }
+        }
+      }
+    },
+    "Backward  ◀ / ▲": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Atrás  ◀ / ▲"
+          }
+        }
+      }
+    },
+    "Backward (hold)  ◀": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Atrás (mantener)  ◀"
+          }
+        }
+      }
+    },
+    "Backward ×2": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Atrás ×2"
+          }
+        }
+      }
+    },
+    "Balanced": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Equilibrado"
+          }
+        }
+      }
+    },
+    "Balanced (recommended)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Equilibrado (recomendado)"
+          }
+        }
+      }
+    },
+    "Balanced — 24 fps (recommended)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Equilibrado: 24 fps (recomendado)"
+          }
+        }
+      }
+    },
+    "Battery & power": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Batería y energía"
+          }
+        }
+      }
+    },
+    "Battery saver — 20 fps (coolest)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ahorro de batería: 20 fps (más frío)"
+          }
+        }
+      }
+    },
+    "Bike": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moto"
+          }
+        }
+      }
+    },
+    "Bike Wi-Fi is up but EasyConn is offline — keep the pairing QR open on the dash, then tap Connect again.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El Wi-Fi de la moto está activo pero EasyConn está desconectado: mantén abierto el QR de emparejamiento en el tablero y vuelve a tocar Conectar."
+          }
+        }
+      }
+    },
+    "Bike dash search": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Búsqueda en el tablero"
+          }
+        }
+      }
+    },
+    "Bike dash search — type here": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Búsqueda en el tablero de la moto: escribe aquí"
+          }
+        }
+      }
+    },
+    "Bike model (e.g. 800NK Advanced)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modelo de moto (p. ej. 800NK Advanced)"
+          }
+        }
+      }
+    },
+    "Bike name": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nombre de la moto"
+          }
+        }
+      }
+    },
+    "Bike name (optional)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nombre de la moto (opcional)"
+          }
+        }
+      }
+    },
+    "Bike out of range — waiting…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moto fuera de alcance - esperando..."
+          }
+        }
+      }
+    },
+    "Bike profile": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Perfil de moto"
+          }
+        }
+      }
+    },
+    "Bike removed": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moto eliminada"
+          }
+        }
+      }
+    },
+    "Bike search open — type here. Results appear on the dash.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Búsqueda de la moto abierta: escribe aquí. Los resultados aparecen en el tablero."
+          }
+        }
+      }
+    },
+    "Bikes": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Motos"
+          }
+        }
+      }
+    },
+    "Black": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Negro"
+          }
+        }
+      }
+    },
+    "Black screen that keeps the dash streaming. Long-press to exit.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pantalla negra que mantiene la transmisión al tablero. Mantén pulsado para salir."
+          }
+        }
+      }
+    },
+    "Bottom": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abajo"
+          }
+        }
+      }
+    },
+    "Builds a shareable report with diagnostics + recent log (secrets redacted unless enabled in Settings).": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crea un informe que puedes compartir con los diagnósticos y el registro reciente (los secretos se ocultan salvo que lo actives en Ajustes)."
+          }
+        }
+      }
+    },
+    "Built on the open-cfmoto community lineage:\n\n• dcoletto / coletz — original QR & EasyConn work\n• BojanJ — Android Auto receiver integration\n• richardbizik — 1000 MT-X support\n• ionutradu252 / open-cflink — handlebar controls, margins, reconnect & polish\n• eugen0309 — Wi-Fi Direct / CL-C450 path\n• Martin Escudero (martinescudero) — Android Auto 17.4+ head unit server path\n• Glifaus — Wi-Fi Direct keep-alive\n• sashop2001 — AA DPI, Bluetooth trigger, Bulgarian\n• Authoritt — vehicle telemetry field notes\n• headunit-revived — Android Auto projection stack (AGPL)\n\nAnd everyone who tested bikes, shared logs, and filed issues.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Construido sobre el linaje de la comunidad open-cfmoto:\n\n• dcoletto / coletz: trabajo original de QR y EasyConn\n• BojanJ: integración del receptor de Android Auto\n• richardbizik: compatibilidad con la 1000 MT-X\n• ionutradu252 / open-cflink: controles del manillar, márgenes, reconexión y pulido\n• eugen0309: vía Wi-Fi Direct / CL-C450\n• Martin Escudero (martinescudero): vía del servidor de unidad central de Android Auto 17.4+\n• Glifaus: mantenimiento de la conexión Wi-Fi Direct\n• sashop2001: DPI de AA, activación por Bluetooth, búlgaro\n• Authoritt: notas de campo sobre la telemetría del vehículo\n• headunit-revived: pila de proyección de Android Auto (AGPL)\n\nY todos los que probaron motos, compartieron registros y abrieron incidencias."
+          }
+        }
+      }
+    },
+    "Button mapping": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Asignación de botones"
+          }
+        }
+      }
+    },
+    "Button tester": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Probador de botones"
+          }
+        }
+      }
+    },
+    "CFDL16 / 450SR-style non-touch": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CFDL16 / no táctil estilo 450SR"
+          }
+        }
+      }
+    },
+    "CFDL16 MotoPlay landscape (800×400)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CFDL16 MotoPlay horizontal (800×400)"
+          }
+        }
+      }
+    },
+    "CFDL26 landscape touch": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CFDL26 táctil horizontal"
+          }
+        }
+      }
+    },
+    "CFDL26 portrait (handlebar-primary)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CFDL26 vertical (manillar como principal)"
+          }
+        }
+      }
+    },
+    "CFDL26 touch 720×712": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CFDL26 táctil 720×712"
+          }
+        }
+      }
+    },
+    "CFMOTO ships a few different left pods. Pick the one that matches your bars — doubles and long-press do not work the same on every cluster.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CFMOTO monta varias piñas izquierdas distintas. Elige la que coincida con tu manillar: las pulsaciones dobles y largas no funcionan igual en todas."
+          }
+        }
+      }
+    },
+    "CRCP / sdk 0.9.23.x non-touch": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CRCP / sdk 0.9.23.x no táctil"
+          }
+        }
+      }
+    },
+    "Cafe": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cafetería"
+          }
+        }
+      }
+    },
+    "Camera access is off": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El acceso a la cámara está desactivado"
+          }
+        }
+      }
+    },
+    "Camera access is restricted": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El acceso a la cámara está restringido"
+          }
+        }
+      }
+    },
+    "Cancel": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelar"
+          }
+        }
+      }
+    },
+    "Canvas": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lienzo"
+          }
+        }
+      }
+    },
+    "Canvas %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lienzo %@"
+          }
+        }
+      }
+    },
+    "Change photo": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambiar foto"
+          }
+        }
+      }
+    },
+    "Choose GPX file…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elegir archivo GPX…"
+          }
+        }
+      }
+    },
+    "Choose what each handlebar gesture does on the dash. Changes apply on the next press — no reconnect needed. ▲/▼ only work with Volume buttons on.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elige qué hace cada gesto del manillar en el tablero. Los cambios se aplican en la siguiente pulsación; no hace falta volver a conectar. ▲/▼ solo funcionan con los botones de volumen activados."
+          }
+        }
+      }
+    },
+    "Circuit": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Circuito"
+          }
+        }
+      }
+    },
+    "Clear": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borrar"
+          }
+        }
+      }
+    },
+    "Clear parked spot": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borrar el aparcamiento guardado"
+          }
+        }
+      }
+    },
+    "Clear preset": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borrar preajuste"
+          }
+        }
+      }
+    },
+    "Clear search": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borrar la búsqueda"
+          }
+        }
+      }
+    },
+    "Clear the log?": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Borrar el registro?"
+          }
+        }
+      }
+    },
+    "Close": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerrar"
+          }
+        }
+      }
+    },
+    "Connect": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conectar"
+          }
+        }
+      }
+    },
+    "Connect for mirroring": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conectar para duplicar"
+          }
+        }
+      }
+    },
+    "Connect to %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conectar con %@"
+          }
+        }
+      }
+    },
+    "Connected — projecting to dash": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conectado: proyectando al tablero"
+          }
+        }
+      }
+    },
+    "Connecting to bike Wi-Fi…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conectándose al Wi-Fi de la moto..."
+          }
+        }
+      }
+    },
+    "Connection problem": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Problema de conexión"
+          }
+        }
+      }
+    },
+    "Continue": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continuar"
+          }
+        }
+      }
+    },
+    "Controls": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Controles"
+          }
+        }
+      }
+    },
+    "Copied": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copiado"
+          }
+        }
+      }
+    },
+    "Copy": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copiar"
+          }
+        }
+      }
+    },
+    "Couldn't join the bike Wi-Fi": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo conectar al Wi-Fi de la moto"
+          }
+        }
+      }
+    },
+    "Couldn't read that image": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo leer esa imagen"
+          }
+        }
+      }
+    },
+    "Couldn't share the report": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo compartir el informe"
+          }
+        }
+      }
+    },
+    "Credits": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Créditos"
+          }
+        }
+      }
+    },
+    "D-pad down": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cruceta abajo"
+          }
+        }
+      }
+    },
+    "D-pad left": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cruceta izquierda"
+          }
+        }
+      }
+    },
+    "D-pad right": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cruceta derecha"
+          }
+        }
+      }
+    },
+    "D-pad up": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cruceta arriba"
+          }
+        }
+      }
+    },
+    "Dark": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oscuro"
+          }
+        }
+      }
+    },
+    "Dash": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tablero"
+          }
+        }
+      }
+    },
+    "Dash chrome": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interfaz del tablero"
+          }
+        }
+      }
+    },
+    "Dash map tiles": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Teselas del mapa del tablero"
+          }
+        }
+      }
+    },
+    "Dash not found": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se encontró el tablero"
+          }
+        }
+      }
+    },
+    "Dash picture": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imagen del tablero"
+          }
+        }
+      }
+    },
+    "Dash profile": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Perfil del tablero"
+          }
+        }
+      }
+    },
+    "Dash view": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vista de tablero"
+          }
+        }
+      }
+    },
+    "Day": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Día"
+          }
+        }
+      }
+    },
+    "Day (light)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Día (claro)"
+          }
+        }
+      }
+    },
+    "Delete": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar"
+          }
+        }
+      }
+    },
+    "Delete trip": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar el viaje"
+          }
+        }
+      }
+    },
+    "Delete trip?": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Eliminar el viaje?"
+          }
+        }
+      }
+    },
+    "Demo mode": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modo demo"
+          }
+        }
+      }
+    },
+    "Denied": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Denegado"
+          }
+        }
+      }
+    },
+    "Detect from the bike (recommended)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detectar desde la moto (recomendado)"
+          }
+        }
+      }
+    },
+    "Disable touchscreen": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desactivar pantalla táctil"
+          }
+        }
+      }
+    },
+    "Disclaimer": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descargo de responsabilidad"
+          }
+        }
+      }
+    },
+    "Dismiss": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descartar"
+          }
+        }
+      }
+    },
+    "Distance": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Distancia"
+          }
+        }
+      }
+    },
+    "Do nothing": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No hacer nada"
+          }
+        }
+      }
+    },
+    "Done": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hecho"
+          }
+        }
+      }
+    },
+    "Done · free ride": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Listo · ruta libre"
+          }
+        }
+      }
+    },
+    "Double-tap delay": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retardo de doble pulsación"
+          }
+        }
+      }
+    },
+    "Double-tap to dismiss": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca dos veces para cerrar"
+          }
+        }
+      }
+    },
+    "Down": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abajo"
+          }
+        }
+      }
+    },
+    "Duration": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duración"
+          }
+        }
+      }
+    },
+    "Each bike keeps its own name, photo, video quality, screen fit, power mode and button mapping. Tap a bike to make it active or edit it.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada moto mantiene su propio nombre, foto, calidad de vídeo, ajuste de pantalla, modo de energía y asignación de botones. Toca una moto para activarla o editarla."
+          }
+        }
+      }
+    },
+    "Empty file": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archivo vacío"
+          }
+        }
+      }
+    },
+    "Encoder": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codificador"
+          }
+        }
+      }
+    },
+    "End navigation": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finalizar navegación"
+          }
+        }
+      }
+    },
+    "Enter Wi-Fi manually": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingresar Wi-Fi manualmente"
+          }
+        }
+      }
+    },
+    "Enter bike Wi-Fi": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Introduce el Wi-Fi de la moto"
+          }
+        }
+      }
+    },
+    "Error — see logs": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Error: ver registros"
+          }
+        }
+      }
+    },
+    "Errors": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Errores"
+          }
+        }
+      }
+    },
+    "Everything on the iPhone screen is sent to the dash, whatever app is open.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todo lo que aparece en la pantalla del iPhone se envía al tablero, sea cual sea la app abierta."
+          }
+        }
+      }
+    },
+    "Exit Ride Mode": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salir del modo ruta"
+          }
+        }
+      }
+    },
+    "Experimental. OpenCfMoto becomes the iPhone's Now Playing app with a silent audio session so the ◀ ▶ ★ buttons the bike sends over Bluetooth reach the dash UI.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental. OpenCfMoto pasa a ser la app que suena en el iPhone (Now Playing) con una sesión de audio silenciosa, para que los botones ◀ ▶ ★ que la moto envía por Bluetooth lleguen a la interfaz del tablero."
+          }
+        }
+      }
+    },
+    "Export GPX": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportar GPX"
+          }
+        }
+      }
+    },
+    "Export bike tuning only — profile, fit, margins, buttons (no passwords, no personal prefs). Share it so others can import it; packs from the Android app import too.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exporta solo el ajuste de la moto: perfil, ajuste de pantalla, márgenes y botones (sin contraseñas ni preferencias personales). Compártelo para que otros lo importen; los paquetes de la app de Android también se importan."
+          }
+        }
+      }
+    },
+    "Export failed": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Error al exportar"
+          }
+        }
+      }
+    },
+    "Export map data…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportar datos de mapa…"
+          }
+        }
+      }
+    },
+    "Fast": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rápido"
+          }
+        }
+      }
+    },
+    "Fast = quickest roads. Fun = twistier. Circuit = go to a place and return home.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rápido = las carreteras más rápidas. Divertido = más revirado. Circuito = ir a un sitio y volver a casa."
+          }
+        }
+      }
+    },
+    "Favorites": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Favoritos"
+          }
+        }
+      }
+    },
+    "Favorites, markers, history, home, parked spot and map preferences, in the same format as the Android app. The routing key is never exported.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Favoritos, marcadores, historial, casa, aparcamiento y preferencias del mapa, en el mismo formato que la app de Android. La clave de enrutamiento nunca se exporta."
+          }
+        }
+      }
+    },
+    "Fill": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rellenar"
+          }
+        }
+      }
+    },
+    "Fill — edge to edge (crops a little)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rellenar: borde a borde (recorta un poco)"
+          }
+        }
+      }
+    },
+    "Find parking": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buscar aparcamiento"
+          }
+        }
+      }
+    },
+    "Finds places of this kind near you": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Busca lugares de este tipo cerca de ti"
+          }
+        }
+      }
+    },
+    "Fit": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustar"
+          }
+        }
+      }
+    },
+    "Fit — no cropping (black bars)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustar: sin recorte (barras negras)"
+          }
+        }
+      }
+    },
+    "Follow phone": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seguir el teléfono"
+          }
+        }
+      }
+    },
+    "Food": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comida"
+          }
+        }
+      }
+    },
+    "For dashes that show SSID + password instead of a QR (e.g. Benelli TRK). Use the exact network name from the bike screen.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Para tableros que muestran SSID y contraseña en lugar de un QR (p. ej. Benelli TRK). Usa el nombre de red exacto de la pantalla de la moto."
+          }
+        }
+      }
+    },
+    "Force touchscreen": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forzar pantalla táctil"
+          }
+        }
+      }
+    },
+    "Forest": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bosque"
+          }
+        }
+      }
+    },
+    "Forward  ▶ / ▼": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adelante  ▶ / ▼"
+          }
+        }
+      }
+    },
+    "Forward (hold)  ▶": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adelante (mantener)  ▶"
+          }
+        }
+      }
+    },
+    "Forward ×2": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adelante ×2"
+          }
+        }
+      }
+    },
+    "Frames sent": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fotogramas enviados"
+          }
+        }
+      }
+    },
+    "Free ride": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ruta libre"
+          }
+        }
+      }
+    },
+    "Free software under the GNU AGPL v3 or later, ported from OpenCfMoto for Android by Alexandru (zanderp).": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Software libre bajo la GNU AGPL v3 o posterior, adaptado de OpenCfMoto para Android de Alexandru (zanderp)."
+          }
+        }
+      }
+    },
+    "Fuel": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gasolina"
+          }
+        }
+      }
+    },
+    "Fun": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Divertido"
+          }
+        }
+      }
+    },
+    "GNU Affero General Public License v3 or later": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Licencia Pública General Affero de GNU v3 o posterior"
+          }
+        }
+      }
+    },
+    "GPS fix": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPS fijado"
+          }
+        }
+      }
+    },
+    "GPS fix ±%@ m": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPS fijado ±%@ m"
+          }
+        }
+      }
+    },
+    "Garage": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Garaje"
+          }
+        }
+      }
+    },
+    "Get started": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empezar"
+          }
+        }
+      }
+    },
+    "Getting route…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calculando la ruta…"
+          }
+        }
+      }
+    },
+    "Go": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ir"
+          }
+        }
+      }
+    },
+    "Go Home": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ir a casa"
+          }
+        }
+      }
+    },
+    "Handlebar buttons": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Botones del manillar"
+          }
+        }
+      }
+    },
+    "Handlebar buttons drive the dash": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los botones del manillar controlan el tablero"
+          }
+        }
+      }
+    },
+    "Handlebar keypad": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mando del manillar"
+          }
+        }
+      }
+    },
+    "Handlebar timing": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tiempos del manillar"
+          }
+        }
+      }
+    },
+    "Hidden": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oculto"
+          }
+        }
+      }
+    },
+    "Hide password": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ocultar contraseña"
+          }
+        }
+      }
+    },
+    "History": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historial"
+          }
+        }
+      }
+    },
+    "Hold delay": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retardo de pulsación larga"
+          }
+        }
+      }
+    },
+    "Hold detection": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detección de pulsación larga"
+          }
+        }
+      }
+    },
+    "Home & parking": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Casa y aparcamiento"
+          }
+        }
+      }
+    },
+    "Home (dash menu)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inicio (menú del tablero)"
+          }
+        }
+      }
+    },
+    "Hospital": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hospital"
+          }
+        }
+      }
+    },
+    "Hotel": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hotel"
+          }
+        }
+      }
+    },
+    "How to join": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cómo conectarse"
+          }
+        }
+      }
+    },
+    "I've joined": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ya me he conectado"
+          }
+        }
+      }
+    },
+    "If the dash drops or projection stalls, reconnect automatically — no Stop/Start.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Si el tablero se cae o la proyección se atasca, se reconecta solo, sin parar y arrancar."
+          }
+        }
+      }
+    },
+    "Ignored while Hold detection is Off": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se ignora mientras la detección de pulsación larga está desactivada"
+          }
+        }
+      }
+    },
+    "Imperial": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imperial"
+          }
+        }
+      }
+    },
+    "Import": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importar"
+          }
+        }
+      }
+    },
+    "Import QR from photo": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importar QR desde una foto"
+          }
+        }
+      }
+    },
+    "Import failed": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Error al importar"
+          }
+        }
+      }
+    },
+    "Import finished": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importación terminada"
+          }
+        }
+      }
+    },
+    "Import map data?": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Importar los datos de mapa?"
+          }
+        }
+      }
+    },
+    "Import map data…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importar datos de mapa…"
+          }
+        }
+      }
+    },
+    "Import settings?": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Importar ajustes?"
+          }
+        }
+      }
+    },
+    "Import the QR from a photo (a screenshot of the dash works) or enter the Wi-Fi manually.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importa el QR desde una foto (sirve una captura del tablero) o introduce el Wi-Fi manualmente."
+          }
+        }
+      }
+    },
+    "Import…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importar…"
+          }
+        }
+      }
+    },
+    "Include secrets": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incluir secretos"
+          }
+        }
+      }
+    },
+    "Include secrets in shared logs": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incluir secretos en registros compartidos"
+          }
+        }
+      }
+    },
+    "Include secrets in shared logs?": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Incluir secretos en los registros compartidos?"
+          }
+        }
+      }
+    },
+    "Info": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Info"
+          }
+        }
+      }
+    },
+    "Inset the dash UI (and the mirrored screen) from each edge of the dash, in dash pixels. On the 800NK Advanced, a top margin keeps MotoPlay's pull-down handle from stealing swipes.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aparta la interfaz del tablero (y la pantalla duplicada) de cada borde, en píxeles del tablero. En la 800NK Advanced, un margen superior evita que la pestaña desplegable de MotoPlay se robe los deslizamientos."
+          }
+        }
+      }
+    },
+    "Invalid QR": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QR no válido"
+          }
+        }
+      }
+    },
+    "Join the bike Wi-Fi": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conéctate al Wi-Fi de la moto"
+          }
+        }
+      }
+    },
+    "Joins the bike Wi-Fi and shows the OpenCfMoto map on the dash": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se conecta al Wi-Fi de la moto y muestra el mapa de OpenCfMoto en el tablero"
+          }
+        }
+      }
+    },
+    "Keep screen on while projecting": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantener la pantalla encendida al proyectar"
+          }
+        }
+      }
+    },
+    "Knob back (previous item)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rueda atrás (elemento anterior)"
+          }
+        }
+      }
+    },
+    "Knob forward (next item)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rueda adelante (elemento siguiente)"
+          }
+        }
+      }
+    },
+    "Landscape": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Horizontal"
+          }
+        }
+      }
+    },
+    "Last button": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Último botón"
+          }
+        }
+      }
+    },
+    "Last command": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Última orden"
+          }
+        }
+      }
+    },
+    "Last error": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Último error"
+          }
+        }
+      }
+    },
+    "Learned canvas": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lienzo aprendido"
+          }
+        }
+      }
+    },
+    "Left": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Izquierda"
+          }
+        }
+      }
+    },
+    "Level": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nivel"
+          }
+        }
+      }
+    },
+    "License": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Licencia"
+          }
+        }
+      }
+    },
+    "Link": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enlace"
+          }
+        }
+      }
+    },
+    "Link diagnostics": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diagnóstico del enlace"
+          }
+        }
+      }
+    },
+    "Link dropped — reconnecting…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enlace caído - reconectando..."
+          }
+        }
+      }
+    },
+    "Linking to dashboard…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vinculando al panel..."
+          }
+        }
+      }
+    },
+    "Live — this is what the dash shows": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En directo: esto es lo que muestra el tablero"
+          }
+        }
+      }
+    },
+    "Local Network": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Red local"
+          }
+        }
+      }
+    },
+    "Local Network access is off": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El acceso a la red local está desactivado"
+          }
+        }
+      }
+    },
+    "Local Network lets OpenCfMoto reach the dash over its Wi-Fi. Location draws the map, guides you and logs your rides.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La red local permite a OpenCfMoto llegar al tablero por su Wi-Fi. La ubicación dibuja el mapa, te guía y registra tus viajes."
+          }
+        }
+      }
+    },
+    "Local network": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Red local"
+          }
+        }
+      }
+    },
+    "Local network access is off": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El acceso a la red local está desactivado"
+          }
+        }
+      }
+    },
+    "Local network allowed": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Red local permitida"
+          }
+        }
+      }
+    },
+    "Location": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ubicación"
+          }
+        }
+      }
+    },
+    "Location access is off. Turn it on to see your position, search nearby and build routes.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El acceso a la ubicación está desactivado. Actívalo para ver tu posición, buscar cerca y calcular rutas."
+          }
+        }
+      }
+    },
+    "Location allowed": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ubicación permitida"
+          }
+        }
+      }
+    },
+    "Location is off for OpenCfMoto": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La ubicación está desactivada para OpenCfMoto"
+          }
+        }
+      }
+    },
+    "Location permission is required for the trip computer": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se necesita el permiso de ubicación para el ordenador de viaje"
+          }
+        }
+      }
+    },
+    "Log trips automatically": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registrar viajes automáticamente"
+          }
+        }
+      }
+    },
+    "Logging automatically": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registrando automáticamente"
+          }
+        }
+      }
+    },
+    "Logs": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registros"
+          }
+        }
+      }
+    },
+    "Long-press to exit": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantén pulsado para salir"
+          }
+        }
+      }
+    },
+    "Lost the bike link": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se perdió el enlace con la moto"
+          }
+        }
+      }
+    },
+    "MAC address": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dirección MAC"
+          }
+        }
+      }
+    },
+    "MODE / ENT cluster": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Piña MODE / ENT"
+          }
+        }
+      }
+    },
+    "Map": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mapa"
+          }
+        }
+      }
+    },
+    "Map & navigation": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mapa y navegación"
+          }
+        }
+      }
+    },
+    "Map a gesture to Navigate to saved place 1–3 and one press starts turn-by-turn there — hands-free.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Asigna un gesto a Navegar al lugar guardado 1–3 y una pulsación arranca ahí la navegación paso a paso, sin soltar el manillar."
+          }
+        }
+      }
+    },
+    "Map data": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datos de mapa"
+          }
+        }
+      }
+    },
+    "Map data © OpenStreetMap contributors (ODbL). Routing and search use public OpenStreetMap-based services.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datos del mapa © colaboradores de OpenStreetMap (ODbL). Las rutas y la búsqueda usan servicios públicos basados en OpenStreetMap."
+          }
+        }
+      }
+    },
+    "Map data © OpenStreetMap contributors (ODbL). tile.openstreetmap.org is a free community server with a strict usage policy (no bulk downloads) — use your own tile server for heavy use. The phone map uses Apple Maps.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datos del mapa © colaboradores de OpenStreetMap (ODbL). tile.openstreetmap.org es un servidor comunitario gratuito con una política de uso estricta (sin descargas masivas): usa tu propio servidor de teselas si haces un uso intensivo. El mapa del teléfono usa Apple Maps."
+          }
+        }
+      }
+    },
+    "Map theme": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tema del mapa"
+          }
+        }
+      }
+    },
+    "Map, search, routes and GPX tracks on the dash": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mapa, búsqueda, rutas y tracks GPX en el tablero"
+          }
+        }
+      }
+    },
+    "Margins apply right away. The profile default follows Settings ▸ Bike profile (Auto uses the dash it detects).": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los márgenes se aplican al instante. El valor del perfil sigue a Ajustes ▸ Perfil de moto (Auto usa el tablero que detecta)."
+          }
+        }
+      }
+    },
+    "Markers": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marcadores"
+          }
+        }
+      }
+    },
+    "Match dash (recommended)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Igual que el tablero (recomendado)"
+          }
+        }
+      }
+    },
+    "Max": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Máx."
+          }
+        }
+      }
+    },
+    "Max speed": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Velocidad máxima"
+          }
+        }
+      }
+    },
+    "Menu": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menú"
+          }
+        }
+      }
+    },
+    "Metric": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Métrico"
+          }
+        }
+      }
+    },
+    "Mirror": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Espejo"
+          }
+        }
+      }
+    },
+    "Mirror mode only: the dash map is always drawn at the dash's exact size.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo en modo espejo: el mapa del tablero siempre se dibuja al tamaño exacto del tablero."
+          }
+        }
+      }
+    },
+    "Mirror orientation": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Orientación del espejo"
+          }
+        }
+      }
+    },
+    "Mirror the whole iPhone screen": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duplicar toda la pantalla del iPhone"
+          }
+        }
+      }
+    },
+    "Mirroring screen to dash": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duplicando la pantalla en el tablero"
+          }
+        }
+      }
+    },
+    "Mirroring stops when the iPhone locks. To ride with the phone in your pocket, use Connect — the OpenCfMoto map.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La duplicación se detiene cuando el iPhone se bloquea. Para ir con el teléfono en el bolsillo, usa Conectar: el mapa de OpenCfMoto."
+          }
+        }
+      }
+    },
+    "Model ID": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ID de modelo"
+          }
+        }
+      }
+    },
+    "More": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Más"
+          }
+        }
+      }
+    },
+    "Moto Morini SoftAP (experimental)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moto Morini SoftAP (experimental)"
+          }
+        }
+      }
+    },
+    "Moving time": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tiempo en movimiento"
+          }
+        }
+      }
+    },
+    "Name (e.g. Home)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nombre (p. ej. Casa)"
+          }
+        }
+      }
+    },
+    "Navigate": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Navegar"
+          }
+        }
+      }
+    },
+    "Navigate to parked bike": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ir a la moto aparcada"
+          }
+        }
+      }
+    },
+    "Navigate to saved place %@ (not set yet)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Navegar al lugar guardado %@ (aún sin configurar)"
+          }
+        }
+      }
+    },
+    "Navigate: %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Navegar: %@"
+          }
+        }
+      }
+    },
+    "Next stop details": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detalles de la próxima parada"
+          }
+        }
+      }
+    },
+    "Next: %@, %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Siguiente: %@, %@"
+          }
+        }
+      }
+    },
+    "Night": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noche"
+          }
+        }
+      }
+    },
+    "Night (dark)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noche (oscuro)"
+          }
+        }
+      }
+    },
+    "No account, no ads, no tracking — your rides stay on this iPhone": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin cuenta, sin anuncios, sin rastreo: tus rutas se quedan en este iPhone"
+          }
+        }
+      }
+    },
+    "No bike paired yet — tap Connect to scan the dash QR": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aún no hay ninguna moto emparejada: toca Conectar para escanear el QR del tablero"
+          }
+        }
+      }
+    },
+    "No bike paired yet — these settings apply to every bike you add.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aún no hay ninguna moto emparejada: estos ajustes se aplican a todas las motos que añadas."
+          }
+        }
+      }
+    },
+    "No bikes yet": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aún no hay motos"
+          }
+        }
+      }
+    },
+    "No camera available": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No hay ninguna cámara disponible"
+          }
+        }
+      }
+    },
+    "No log lines yet.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aún no hay líneas de registro."
+          }
+        }
+      }
+    },
+    "No preset — shipped defaults / your custom map": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin preajuste: valores de fábrica o tu mapa personalizado"
+          }
+        }
+      }
+    },
+    "No results": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin resultados"
+          }
+        }
+      }
+    },
+    "No trips yet": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aún no hay viajes"
+          }
+        }
+      }
+    },
+    "None — the dash UI uses the whole screen": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ninguno: la interfaz usa todo el tablero"
+          }
+        }
+      }
+    },
+    "Not asked yet": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aún no se ha pedido"
+          }
+        }
+      }
+    },
+    "Not available on this device.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No disponible en este dispositivo."
+          }
+        }
+      }
+    },
+    "Not connected yet": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aún sin conectar"
+          }
+        }
+      }
+    },
+    "Not now": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ahora no"
+          }
+        }
+      }
+    },
+    "Notifications appear on the dash too — turn on a Focus (for example Driving) to keep them private.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las notificaciones también aparecen en el tablero: activa un modo de concentración (por ejemplo, Conducción) para mantenerlas en privado."
+          }
+        }
+      }
+    },
+    "OK": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        }
+      }
+    },
+    "Off — every release is a tap / ×2 (use with a long double-tap delay)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desactivado: cada suelta es una pulsación / ×2 (úsalo con un retardo de doble pulsación largo)"
+          }
+        }
+      }
+    },
+    "Off — passwords and serials are redacted (recommended)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desactivado: las contraseñas y los números de serie se ocultan (recomendado)"
+          }
+        }
+      }
+    },
+    "Off — use the bike profile (1000 MT-X stays focus/knob)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desactivado: usa el perfil de la moto (la 1000 MT-X sigue en modo foco/mando)"
+          }
+        }
+      }
+    },
+    "Off — use the bike profile (touch dashes stay touch)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desactivado: usa el perfil de la moto (los tableros táctiles siguen siendo táctiles)"
+          }
+        }
+      }
+    },
+    "Official CFMoto app is in the way": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La aplicación oficial de CFMoto está estorbando"
+          }
+        }
+      }
+    },
+    "On — focus/knob UI so handlebar buttons work": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activado: interfaz de foco/rueda para que funcionen los botones del manillar"
+          }
+        }
+      }
+    },
+    "On — passwords/serials stay in shared logs": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activado: las contraseñas y los números de serie se quedan en los registros compartidos"
+          }
+        }
+      }
+    },
+    "On — press-and-hold can fire hold gestures": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activado: mantener pulsado puede disparar gestos de pulsación larga"
+          }
+        }
+      }
+    },
+    "On — touch UI (tap the dash)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activado: interfaz táctil (toca el tablero)"
+          }
+        }
+      }
+    },
+    "One-tap Connect and automatic reconnects": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conexión con un toque y reconexión automática"
+          }
+        }
+      }
+    },
+    "Only if the dash sends seek (hold) commands — most dashes don't.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo si el tablero envía órdenes de búsqueda (mantener): la mayoría no lo hace."
+          }
+        }
+      }
+    },
+    "Open Settings": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir Ajustes"
+          }
+        }
+      }
+    },
+    "Open network — no password needed": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Red abierta: no hace falta contraseña"
+          }
+        }
+      }
+    },
+    "OpenCfMoto bike tuning": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustes de moto de OpenCfMoto"
+          }
+        }
+      }
+    },
+    "OpenCfMoto for Android (original project)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenCfMoto para Android (proyecto original)"
+          }
+        }
+      }
+    },
+    "OpenCfMoto for iOS (this app)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenCfMoto para iOS (esta app)"
+          }
+        }
+      }
+    },
+    "OpenCfMoto for iOS is a port of OpenCfMoto for Android by Alexandru Popa (zanderp). The dash protocol, bike profiles, navigation, trip logging and settings formats come from that project and its community.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenCfMoto para iOS es una adaptación de OpenCfMoto para Android de Alexandru Popa (zanderp). El protocolo del tablero, los perfiles de moto, la navegación, el registro de viajes y los formatos de ajustes proceden de ese proyecto y de su comunidad."
+          }
+        }
+      }
+    },
+    "OpenCfMoto has no account and sends nothing by itself: rides, logs and settings stay on this iPhone until you share them.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenCfMoto no tiene cuentas y no envía nada por su cuenta: viajes, registros y ajustes se quedan en este iPhone hasta que los compartas."
+          }
+        }
+      }
+    },
+    "OpenCfMoto is an independent community project. It is not affiliated with, endorsed by, or sponsored by CFMOTO, Carbit, Apple, Google or any motorcycle brand that licenses EasyConnect-style dashes. CFMOTO, MotoPlay, EasyConn, Carbit and related marks are trademarks of their respective owners.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenCfMoto es un proyecto comunitario independiente. No está afiliado, respaldado ni patrocinado por CFMOTO, Carbit, Apple, Google ni ninguna marca de motos que licencie tableros de tipo EasyConnect. CFMOTO, MotoPlay, EasyConn, Carbit y las marcas relacionadas son marcas comerciales de sus respectivos propietarios."
+          }
+        }
+      }
+    },
+    "OpenCfMoto is free software: the complete source of this app is public, and so is the Android app it was ported from.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenCfMoto es software libre: el código fuente completo de esta app es público, igual que el de la app de Android de la que procede."
+          }
+        }
+      }
+    },
+    "OpenCfMoto joins the bike over Wi-Fi, but your phone's Wi-Fi is off.\n\nTurn it on in Control Center, then tap Connect again.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenCfMoto se conecta a la moto por Wi-Fi, pero el Wi-Fi del teléfono está apagado.\n\nActívalo en el Centro de control y vuelve a tocar Conectar."
+          }
+        }
+      }
+    },
+    "OpenCfMoto learns which buttons this bike sends: ◀/▶/★ track keys and, with Volume buttons on, ▲/▼. After about 90 s of streaming with no ▲/▼ the rocker is marked absent automatically.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenCfMoto aprende qué botones envía esta moto: las teclas de pista ◀/▶/★ y, con los botones de volumen activados, ▲/▼. Tras unos 90 s proyectando sin ▲/▼, el balancín se marca como ausente automáticamente."
+          }
+        }
+      }
+    },
+    "OpenCfMoto log": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registro de OpenCfMoto"
+          }
+        }
+      }
+    },
+    "OpenCfMoto map data": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datos de mapa de OpenCfMoto"
+          }
+        }
+      }
+    },
+    "OpenCfMoto needs Local Network access to talk to the dash over the bike Wi-Fi. Turn it on in Settings ▸ OpenCfMoto ▸ Local Network, then tap Connect again.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenCfMoto necesita acceso a la red local para hablar con el tablero por el Wi-Fi de la moto. Actívalo en Ajustes ▸ OpenCfMoto ▸ Red local y vuelve a tocar Conectar."
+          }
+        }
+      }
+    },
+    "OpenCfMoto problem report": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Informe de problema de OpenCfMoto"
+          }
+        }
+      }
+    },
+    "OpenCfMoto shows its own map and turn-by-turn guidance on your motorcycle's dash, over the bike's Wi-Fi. It works with CFMoto MotoPlay and other Carbit / EasyConnect dashes that show a pairing QR.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenCfMoto muestra su propio mapa y la navegación giro a giro en el tablero de tu moto, a través del Wi-Fi de la moto. Funciona con CFMoto MotoPlay y otros tableros Carbit/EasyConnect que muestran un QR de emparejamiento."
+          }
+        }
+      }
+    },
+    "OpenCfMoto uses the camera only to scan the pairing QR on your dash; frames are never stored. Allow it in Settings, or import the QR from a photo or enter the Wi-Fi manually.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenCfMoto usa la cámara solo para escanear el QR de emparejamiento del tablero; las imágenes nunca se guardan. Permítelo en Ajustes, o importa el QR desde una foto o introduce el Wi-Fi manualmente."
+          }
+        }
+      }
+    },
+    "OpenCfMoto will play silent audio to become the iPhone's Now Playing app, so the bike's ◀ ▶ ★ buttons reach the dash. Music from other apps pauses while this is on. Experimental: not every dash sends these buttons.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenCfMoto reproducirá audio silencioso para ser la app que suena en el iPhone (Now Playing); así los botones ◀ ▶ ★ de la moto llegan al tablero. La música de otras apps se pausa mientras esté activado. Experimental: no todos los tableros envían estos botones."
+          }
+        }
+      }
+    },
+    "OpenCfMoto, version %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenCfMoto, versión %@"
+          }
+        }
+      }
+    },
+    "OpenRouteService API key": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clave API de OpenRouteService"
+          }
+        }
+      }
+    },
+    "OpenStreetMap copyright": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Derechos de autor de OpenStreetMap"
+          }
+        }
+      }
+    },
+    "Pair your bike": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empareja tu moto"
+          }
+        }
+      }
+    },
+    "Paired: %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Emparejada: %@"
+          }
+        }
+      }
+    },
+    "Paired: %@ — tap Connect to reconnect": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Emparejada: %@ — toca Conectar para volver a conectar"
+          }
+        }
+      }
+    },
+    "Park here": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aparca aquí"
+          }
+        }
+      }
+    },
+    "Parking": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aparcamiento"
+          }
+        }
+      }
+    },
+    "Password": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contraseña"
+          }
+        }
+      }
+    },
+    "Password copied — it stays on this iPhone for 2 minutes": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contraseña copiada: se queda en este iPhone durante 2 minutos"
+          }
+        }
+      }
+    },
+    "Password copied — paste it in Settings": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contraseña copiada: pégala en Ajustes"
+          }
+        }
+      }
+    },
+    "Per-bike settings are saved for %@.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los ajustes por moto se guardan para %@."
+          }
+        }
+      }
+    },
+    "Permissions": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permisos"
+          }
+        }
+      }
+    },
+    "Phone media remote": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mando multimedia del teléfono"
+          }
+        }
+      }
+    },
+    "Place actions": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acciones del lugar"
+          }
+        }
+      }
+    },
+    "Point the camera at the bike's MotoPlay QR\n\nIf it won't scan — try the iOS / CarPlay QR, or enter Wi-Fi manually (TRK).": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apunta la cámara al QR de MotoPlay de la moto\n\nSi no escanea, prueba con el QR de iOS/CarPlay o introduce el Wi-Fi manualmente (TRK)."
+          }
+        }
+      }
+    },
+    "Portrait": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vertical"
+          }
+        }
+      }
+    },
+    "Power mode": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modo de energía"
+          }
+        }
+      }
+    },
+    "Precise Location is off — turn it on for turn-by-turn guidance.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La ubicación exacta está desactivada: actívala para la navegación paso a paso."
+          }
+        }
+      }
+    },
+    "Precise Location is off — turn it on in Settings for accurate turn-by-turn guidance.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La ubicación exacta está desactivada: actívala en Ajustes para una navegación giro a giro precisa."
+          }
+        }
+      }
+    },
+    "Press a handlebar button: the raw event and the command it triggers show up here.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pulsa un botón del manillar: aquí aparecen el evento recibido y la orden que dispara."
+          }
+        }
+      }
+    },
+    "Preview": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vista previa"
+          }
+        }
+      }
+    },
+    "Preview canvas": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lienzo de la vista previa"
+          }
+        }
+      }
+    },
+    "Preview — no dash connected": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vista previa: no hay ningún tablero conectado"
+          }
+        }
+      }
+    },
+    "Privacy & logs": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Privacidad y registros"
+          }
+        }
+      }
+    },
+    "Profile": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Perfil"
+          }
+        }
+      }
+    },
+    "Profile default": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valor del perfil"
+          }
+        }
+      }
+    },
+    "QR photo failed": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo leer el QR de la foto"
+          }
+        }
+      }
+    },
+    "Reading the photo…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leyendo la foto…"
+          }
+        }
+      }
+    },
+    "Ready": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Listo"
+          }
+        }
+      }
+    },
+    "Recenter / Recalc": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recentrar/Recalcular"
+          }
+        }
+      }
+    },
+    "Reconnect": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconectar"
+          }
+        }
+      }
+    },
+    "Record each ride's route and stats from GPS while the dash shows the map. View them under Trips.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registra la ruta y las estadísticas de cada viaje desde el GPS mientras el tablero muestra el mapa. Los verás en Viajes."
+          }
+        }
+      }
+    },
+    "Recording": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grabando"
+          }
+        }
+      }
+    },
+    "Remaining": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restante"
+          }
+        }
+      }
+    },
+    "Remove": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar"
+          }
+        }
+      }
+    },
+    "Remove %@?": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Eliminar %@?"
+          }
+        }
+      }
+    },
+    "Remove bike": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar moto"
+          }
+        }
+      }
+    },
+    "Remove photo": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quitar foto"
+          }
+        }
+      }
+    },
+    "Removes every line shown here. Share it first if you need it.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elimina todas las líneas mostradas. Compártelo antes si lo necesitas."
+          }
+        }
+      }
+    },
+    "Rename": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renombrar"
+          }
+        }
+      }
+    },
+    "Rename bike": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renombrar moto"
+          }
+        }
+      }
+    },
+    "Replace the bike tuning of the active bike — profile, video quality, fit, power, margins, handlebar buttons and touch settings?\n\nPersonal prefs (map theme, saved places, auto-connect…) are left alone. Wi-Fi passwords are never imported.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Sustituir el ajuste de la moto activa (perfil, calidad de vídeo, ajuste de pantalla, energía, márgenes, botones del manillar y opciones táctiles)?\n\nLas preferencias personales (tema del mapa, lugares guardados, conexión automática…) no se tocan. Las contraseñas Wi-Fi nunca se importan."
+          }
+        }
+      }
+    },
+    "Replace the current mapping for this bike? Saved places are kept.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Sustituir la asignación actual de esta moto? Los lugares guardados se conservan."
+          }
+        }
+      }
+    },
+    "Replace your favorites, markers, history, home and parked spot, and apply the map preferences in the file?": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Sustituir tus favoritos, marcadores, historial, casa y aparcamiento, y aplicar las preferencias de mapa del archivo?"
+          }
+        }
+      }
+    },
+    "Report a problem": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Informar de un problema"
+          }
+        }
+      }
+    },
+    "Reset to OpenStreetMap": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restablecer OpenStreetMap"
+          }
+        }
+      }
+    },
+    "Reset to defaults": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restablecer los valores predeterminados"
+          }
+        }
+      }
+    },
+    "Reset to profile default": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restablecer al valor del perfil"
+          }
+        }
+      }
+    },
+    "Reset to untested": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volver a sin probar"
+          }
+        }
+      }
+    },
+    "Restricted": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restringido"
+          }
+        }
+      }
+    },
+    "Results appear on the dash.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los resultados aparecen en el tablero."
+          }
+        }
+      }
+    },
+    "Retry": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reintentar"
+          }
+        }
+      }
+    },
+    "Ride Mode": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modo ruta"
+          }
+        }
+      }
+    },
+    "Rider tips": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consejos para moteros"
+          }
+        }
+      }
+    },
+    "Rides are logged automatically while the dash shows the map (Settings ▸ Startup & recovery).": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los viajes se registran solos mientras el tablero muestra el mapa (Ajustes ▸ Inicio y recuperación)."
+          }
+        }
+      }
+    },
+    "Rides log automatically while the dash shows the map — or record one with Start recording above.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los viajes se registran solos mientras el tablero muestra el mapa, o graba uno con Empezar a grabar, arriba."
+          }
+        }
+      }
+    },
+    "Right": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Derecha"
+          }
+        }
+      }
+    },
+    "Route mode": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modo de ruta"
+          }
+        }
+      }
+    },
+    "Route preview": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vista previa de la ruta"
+          }
+        }
+      }
+    },
+    "Routing": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enrutamiento"
+          }
+        }
+      }
+    },
+    "Running on simulated services: no bike, no real GPS": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Funciona con servicios simulados: sin moto y sin GPS real"
+          }
+        }
+      }
+    },
+    "SSID and password are required": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El SSID y la contraseña son obligatorios"
+          }
+        }
+      }
+    },
+    "Same as 5-way: ◀/▶ move · ◀◀ / ▶▶ = group / menu · ★★ = Back. Singles are snappy; a second tap in the window still fires ×2.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Igual que la de 5 vías: ◀/▶ mueven · ◀◀ / ▶▶ = grupo / menú · ★★ = Atrás. Las pulsaciones simples son inmediatas; un segundo toque dentro del margen sigue disparando ×2."
+          }
+        }
+      }
+    },
+    "Save": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardar"
+          }
+        }
+      }
+    },
+    "Save routing key": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardar clave de enrutamiento"
+          }
+        }
+      }
+    },
+    "Saved place %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lugar guardado %@"
+          }
+        }
+      }
+    },
+    "Saved places": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lugares guardados"
+          }
+        }
+      }
+    },
+    "Saver": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ahorrador"
+          }
+        }
+      }
+    },
+    "Scan": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escanear"
+          }
+        }
+      }
+    },
+    "Scan another bike": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escanear otra moto"
+          }
+        }
+      }
+    },
+    "Scan new bike": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escanear una moto nueva"
+          }
+        }
+      }
+    },
+    "Scan the dash QR": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escanear el QR del tablero"
+          }
+        }
+      }
+    },
+    "Scan the pairing QR on the dash, then connect": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escanea el QR de emparejamiento del tablero y conecta"
+          }
+        }
+      }
+    },
+    "Scan your dash QR, or enter Wi-Fi name + password (TRK).": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escanea el QR del tablero o introduce el nombre de Wi-Fi y la contraseña (TRK)."
+          }
+        }
+      }
+    },
+    "Screen & display": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pantalla y visualización"
+          }
+        }
+      }
+    },
+    "Screen broadcast is running": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La transmisión de pantalla está en marcha"
+          }
+        }
+      }
+    },
+    "Screen broadcast needs a real iPhone — it is not available in demo mode or the Simulator.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La transmisión de pantalla necesita un iPhone real: no está disponible en el modo demo ni en el Simulador."
+          }
+        }
+      }
+    },
+    "Screen broadcast not started yet": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La transmisión de pantalla aún no ha empezado"
+          }
+        }
+      }
+    },
+    "Screen fit": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajuste de pantalla"
+          }
+        }
+      }
+    },
+    "Screen margins": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Márgenes de la pantalla"
+          }
+        }
+      }
+    },
+    "Screen margins…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Márgenes de la pantalla…"
+          }
+        }
+      }
+    },
+    "Search": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buscar"
+          }
+        }
+      }
+    },
+    "Search a place or address…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buscar un lugar o dirección…"
+          }
+        }
+      }
+    },
+    "Search for a place or tap a category": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Busca un lugar o toca una categoría"
+          }
+        }
+      }
+    },
+    "Search places, plan a route or load a GPX track": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Busca lugares, planifica una ruta o carga un track GPX"
+          }
+        }
+      }
+    },
+    "Searches the map for this place": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Busca este lugar en el mapa"
+          }
+        }
+      }
+    },
+    "Searching \"%@\" on the dash": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buscando «%@» en el tablero"
+          }
+        }
+      }
+    },
+    "Searching…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buscando…"
+          }
+        }
+      }
+    },
+    "Security": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seguridad"
+          }
+        }
+      }
+    },
+    "Select  Enter / ★": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seleccionar  Enter / ★"
+          }
+        }
+      }
+    },
+    "Select (hold)  Enter / ★": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seleccionar (mantener)  Enter / ★"
+          }
+        }
+      }
+    },
+    "Select / OK": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seleccionar / OK"
+          }
+        }
+      }
+    },
+    "Select ×2": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seleccionar ×2"
+          }
+        }
+      }
+    },
+    "Selected %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seleccionada %@"
+          }
+        }
+      }
+    },
+    "Set Home here": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fijar aquí mi casa"
+          }
+        }
+      }
+    },
+    "Set as home": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fijar como casa"
+          }
+        }
+      }
+    },
+    "Set your route before you ride and never interact with the phone or the dash while riding.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fija la ruta antes de salir y no toques nunca el teléfono ni el tablero mientras conduces."
+          }
+        }
+      }
+    },
+    "Setup": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configuración"
+          }
+        }
+      }
+    },
+    "Setup & settings": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configuración y ajustes"
+          }
+        }
+      }
+    },
+    "Share": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compartir"
+          }
+        }
+      }
+    },
+    "Share JSON": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compartir JSON"
+          }
+        }
+      }
+    },
+    "Share problem report": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compartir el informe del problema"
+          }
+        }
+      }
+    },
+    "Share settings": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compartir configuración"
+          }
+        }
+      }
+    },
+    "Shared logs and reports hide Wi-Fi passwords and serial numbers. Nothing leaves the phone until you share it.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los registros e informes compartidos ocultan las contraseñas Wi-Fi y los números de serie. Nada sale del teléfono hasta que lo compartes."
+          }
+        }
+      }
+    },
+    "Shared logs include passwords and serials (Settings ▸ Privacy & logs). Turn it off before posting publicly.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los registros compartidos incluyen contraseñas y números de serie (Ajustes ▸ Privacidad y registros). Desactívalo antes de publicarlos."
+          }
+        }
+      }
+    },
+    "Shared logs will include secrets — turn off before posting publicly": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los registros compartidos incluirán secretos: desactívalo antes de publicarlos"
+          }
+        }
+      }
+    },
+    "Sharper": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Más nítido"
+          }
+        }
+      }
+    },
+    "Sharper — more data": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Más nítido: más datos"
+          }
+        }
+      }
+    },
+    "Show dash": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver el tablero"
+          }
+        }
+      }
+    },
+    "Show onboarding again": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar de nuevo la introducción"
+          }
+        }
+      }
+    },
+    "Show password": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar contraseña"
+          }
+        }
+      }
+    },
+    "Show the whole iPhone screen on the dash": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muestra toda la pantalla del iPhone en el tablero"
+          }
+        }
+      }
+    },
+    "Shows About & credits": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muestra Acerca de y créditos"
+          }
+        }
+      }
+    },
+    "Shows the dash. Tap or drag it like the dash touchscreen; the keypad works with VoiceOver.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muestra el tablero. Tócalo o arrástralo como la pantalla táctil del tablero; el mando funciona con VoiceOver."
+          }
+        }
+      }
+    },
+    "Shows the route preview": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muestra la vista previa de la ruta"
+          }
+        }
+      }
+    },
+    "Skip for now": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Omitir por ahora"
+          }
+        }
+      }
+    },
+    "Slate": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pizarra"
+          }
+        }
+      }
+    },
+    "Smooth": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fluido"
+          }
+        }
+      }
+    },
+    "Smooth — 30 fps (most battery)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fluido: 30 fps (más consumo de batería)"
+          }
+        }
+      }
+    },
+    "Smoother": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Más suave"
+          }
+        }
+      }
+    },
+    "Smoother — less data/latency": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Más fluido: menos datos/latencia"
+          }
+        }
+      }
+    },
+    "Snappy singles. Discrete hold / Select ×2 usually don't exist; ▲/▼ only work with Volume buttons on (a hard ▲▲ / ▼▼ flick = Back / menu). Dash touch and the phone cover the rest.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pulsaciones simples inmediatas. Mantener / Seleccionar ×2 no suelen existir; ▲/▼ solo funcionan con los botones de volumen activados (un ▲▲ / ▼▼ rápido = Atrás / menú). El táctil del tablero y el teléfono cubren el resto."
+          }
+        }
+      }
+    },
+    "Source code": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Código fuente"
+          }
+        }
+      }
+    },
+    "Speed": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Velocidad"
+          }
+        }
+      }
+    },
+    "Speed and distance come from the phone's GPS (the bike doesn't share telemetry over the dash link). Keep a clear view of the sky for best accuracy.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La velocidad y la distancia salen del GPS del teléfono (la moto no comparte telemetría por el enlace del tablero). Para más precisión, deja el teléfono con el cielo despejado a la vista."
+          }
+        }
+      }
+    },
+    "Speed limit %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Límite de velocidad %@"
+          }
+        }
+      }
+    },
+    "Start recording": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empezar a grabar"
+          }
+        }
+      }
+    },
+    "Start riding": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empezar a rodar"
+          }
+        }
+      }
+    },
+    "Start screen broadcast": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iniciar la transmisión de pantalla"
+          }
+        }
+      }
+    },
+    "Startup & recovery": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inicio y recuperación"
+          }
+        }
+      }
+    },
+    "Step %lld of %lld": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paso %lld de %lld"
+          }
+        }
+      }
+    },
+    "Step 1 · Connect the bike": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paso 1 · Conecta la moto"
+          }
+        }
+      }
+    },
+    "Step 2 · Start the screen broadcast": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paso 2 · Inicia la transmisión de pantalla"
+          }
+        }
+      }
+    },
+    "Stop": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detener"
+          }
+        }
+      }
+    },
+    "Stop & save": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detener y guardar"
+          }
+        }
+      }
+    },
+    "Stopped": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detenido"
+          }
+        }
+      }
+    },
+    "Stops the dash link and everything it projects": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detiene el enlace con el tablero y todo lo que proyecta"
+          }
+        }
+      }
+    },
+    "Stops the iPhone from auto-locking while the dash is linked, so the map keeps streaming at full quality.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Evita que el iPhone se bloquee solo mientras el tablero está vinculado, así el mapa sigue llegando a plena calidad."
+          }
+        }
+      }
+    },
+    "Stretch": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estirar"
+          }
+        }
+      }
+    },
+    "Stretch — fills, slight distortion": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estirar: llena la pantalla con algo de distorsión"
+          }
+        }
+      }
+    },
+    "Switch the dash to Mirror": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambiar el tablero a Espejo"
+          }
+        }
+      }
+    },
+    "Tap the button, choose OpenCfMoto Mirror, then Start Broadcast.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca el botón, elige OpenCfMoto Mirror y luego Iniciar transmisión."
+          }
+        }
+      }
+    },
+    "Tap, drag and long-press the picture like the dash touchscreen. The keypad works like the handlebar buttons.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca, arrastra y mantén pulsada la imagen como la pantalla táctil del tablero. El mando funciona como los botones del manillar."
+          }
+        }
+      }
+    },
+    "Teach my handlebar": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enseñar mi manillar"
+          }
+        }
+      }
+    },
+    "That file is not a text file.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ese archivo no es de texto."
+          }
+        }
+      }
+    },
+    "That file is too large.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ese archivo es demasiado grande."
+          }
+        }
+      }
+    },
+    "The canvas is the picture size this dash asked for on the last connection.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El lienzo es el tamaño de imagen que pidió este tablero en la última conexión."
+          }
+        }
+      }
+    },
+    "The dash can't control the iPhone: touches and handlebar buttons don't reach mirrored apps.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El tablero no puede controlar el iPhone: los toques y los botones del manillar no llegan a las apps duplicadas."
+          }
+        }
+      }
+    },
+    "The dash stopped answering after 20 reconnect attempts. Check that the bike is on and the dash shows MotoPlay, then tap Connect.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El tablero dejó de responder tras 20 intentos de reconexión. Comprueba que la moto está encendida y que el tablero muestra MotoPlay, y toca Conectar."
+          }
+        }
+      }
+    },
+    "The dash talks to your iPhone over the bike's Wi-Fi, so iOS asks for Local Network access. The prompt can also appear the first time OpenCfMoto connects — tap Allow when it does.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El tablero habla con tu iPhone por el Wi-Fi de la moto, así que iOS pide acceso a la red local. El aviso también puede aparecer la primera vez que OpenCfMoto se conecta: toca Permitir cuando salga."
+          }
+        }
+      }
+    },
+    "The report includes the app version, the active bike profile, the link state and the recent log.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El informe incluye la versión de la app, el perfil de la moto activa, el estado del enlace y el registro reciente."
+          }
+        }
+      }
+    },
+    "The template needs {z}, {x} and {y} and must start with https://": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La plantilla necesita {z}, {x} y {y} y debe empezar por https://"
+          }
+        }
+      }
+    },
+    "Then start the screen broadcast in step 2.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Después inicia la transmisión de pantalla en el paso 2."
+          }
+        }
+      }
+    },
+    "This app renders and encodes live video — it always draws power and warms the phone. Keep it on the bike's USB charger and use Ride Mode while riding (the dash keeps streaming). Auto lowers the frame rate when the phone gets hot.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta app dibuja y codifica vídeo en directo: siempre consume energía y calienta el teléfono. Tenlo en el cargador USB de la moto y usa el Modo ruta mientras conduces (el tablero sigue recibiendo imagen). Auto baja los fps cuando el teléfono se calienta."
+          }
+        }
+      }
+    },
+    "This bike is no longer in the garage.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta moto ya no está en el garaje."
+          }
+        }
+      }
+    },
+    "This build can't join Wi-Fi networks by itself. When you connect, OpenCfMoto shows the bike's Wi-Fi name and password so you can join it in Settings ▸ Wi-Fi.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta versión no puede conectarse sola a redes Wi-Fi. Al conectar, OpenCfMoto muestra el nombre y la contraseña del Wi-Fi de la moto para que te conectes en Ajustes ▸ Wi-Fi."
+          }
+        }
+      }
+    },
+    "This forgets its pairing, photo and settings. You can re-scan the dash QR or enter Wi-Fi again later.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se olvidan su emparejamiento, su foto y sus ajustes. Puedes volver a escanear el QR o introducir el Wi-Fi más tarde."
+          }
+        }
+      }
+    },
+    "This iPhone does not allow camera access (Screen Time or a profile). Import the QR from a photo or enter the Wi-Fi manually.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este iPhone no permite el acceso a la cámara (Tiempo de uso o un perfil). Importa el QR desde una foto o introduce el Wi-Fi manualmente."
+          }
+        }
+      }
+    },
+    "Tile URL template": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plantilla de URL de teselas"
+          }
+        }
+      }
+    },
+    "Time": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tiempo"
+          }
+        }
+      }
+    },
+    "Timing is shared by all bikes and applies on the next press.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los tiempos son comunes a todas las motos y se aplican en la siguiente pulsación."
+          }
+        }
+      }
+    },
+    "To end the screen broadcast, tap the red indicator in the status bar or use Control Center.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Para terminar la transmisión de pantalla, toca el indicador rojo de la barra de estado o usa el Centro de control."
+          }
+        }
+      }
+    },
+    "Top": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arriba"
+          }
+        }
+      }
+    },
+    "Top %@ · bottom %@ · left %@ · right %@ px": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arriba %@ · abajo %@ · izquierda %@ · derecha %@ px"
+          }
+        }
+      }
+    },
+    "Top %@ · bottom %@ · left %@ · right %@ px (profile default)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arriba %@ · abajo %@ · izquierda %@ · derecha %@ px (valor del perfil)"
+          }
+        }
+      }
+    },
+    "Touch dashes (800NK Advanced, 800MT): just tap the dash. Handlebar control is meant for non-touch dashes such as the 450SR.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tableros táctiles (800NK Advanced, 800MT): toca el tablero. El control por manillar está pensado para tableros no táctiles como la 450SR."
+          }
+        }
+      }
+    },
+    "Trip computer": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ordenador de viaje"
+          }
+        }
+      }
+    },
+    "Trip end": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fin del viaje"
+          }
+        }
+      }
+    },
+    "Trip has no GPS points": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El viaje no tiene puntos GPS"
+          }
+        }
+      }
+    },
+    "Trip start": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inicio del viaje"
+          }
+        }
+      }
+    },
+    "Trips": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Viajes"
+          }
+        }
+      }
+    },
+    "Turn it on in Settings ▸ OpenCfMoto ▸ Local Network, or the dash can't be reached.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actívalo en Ajustes ▸ OpenCfMoto ▸ Red local; si no, no se puede llegar al tablero."
+          }
+        }
+      }
+    },
+    "Turn it on in Settings ▸ OpenCfMoto ▸ Location (While Using the App, Precise Location on).": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actívala en Ajustes ▸ OpenCfMoto ▸ Ubicación («Cuando se use la app», con Ubicación exacta activada)."
+          }
+        }
+      }
+    },
+    "Turn on": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activar"
+          }
+        }
+      }
+    },
+    "Turn on Disable touchscreen if handlebar buttons do nothing: the dash UI then runs in focus/knob mode. Force touchscreen is for a touch panel on a focus/knob profile (e.g. 1000 MT-X; unlock the bike's own touch lock if needed). Video, fit and touch settings apply on the next connect — Stop first if you're already projecting.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activa Desactivar pantalla táctil si los botones del manillar no hacen nada: la interfaz del tablero pasa a modo foco/mando. Forzar pantalla táctil es para un panel táctil con un perfil de foco/mando (p. ej. la 1000 MT-X; desbloquea el bloqueo táctil de la moto si hace falta). El vídeo, el ajuste de pantalla y las opciones táctiles se aplican en la próxima conexión: detén la proyección primero si ya está en marcha."
+          }
+        }
+      }
+    },
+    "Turn on Wi-Fi": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activa el Wi-Fi"
+          }
+        }
+      }
+    },
+    "Turn on the phone media remote to test the buttons.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activa el mando multimedia del teléfono para probar los botones."
+          }
+        }
+      }
+    },
+    "Turn the bike on and open MotoPlay / EasyConnect on the dash so it shows the pairing QR, then scan it. Bikes without a QR (e.g. Benelli TRK): enter the Wi-Fi name and password instead.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enciende la moto y abre MotoPlay/EasyConnect en el tablero para que muestre el QR de emparejamiento, y escanéalo. Motos sin QR (p. ej. Benelli TRK): introduce el nombre del Wi-Fi y la contraseña."
+          }
+        }
+      }
+    },
+    "Turn the bike on, then tap Connect on the home screen. During a ride keep OpenCfMoto open: Ride Mode keeps the iPhone screen dark while the dash keeps streaming.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enciende la moto y toca Conectar en la pantalla de inicio. Durante la ruta mantén OpenCfMoto abierta: el modo ruta deja la pantalla del iPhone en negro mientras el tablero sigue recibiendo la imagen."
+          }
+        }
+      }
+    },
+    "Type a place name": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escribe el nombre de un lugar"
+          }
+        }
+      }
+    },
+    "Type a place to search on the map": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escribe un lugar para buscar en el mapa."
+          }
+        }
+      }
+    },
+    "Units": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unidades"
+          }
+        }
+      }
+    },
+    "Unknown": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desconocido"
+          }
+        }
+      }
+    },
+    "Up": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arriba"
+          }
+        }
+      }
+    },
+    "Use Legacy for CFDL16 / 450SR-style non-touch dashes if Auto picks the wrong bike. 800NK Adv = CFDL26 touch 720×712. Applies on the next connect (Stop first if projecting).": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usa Legacy para tableros no táctiles estilo CFDL16/450SR si Auto elige la moto equivocada. 800NK Adv = CFDL26 táctil 720×712. Se aplica en la próxima conexión (detén la proyección primero si está en marcha)."
+          }
+        }
+      }
+    },
+    "Use at your own risk. Set your route before you ride and never interact with the phone or the dash while riding.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Úsalo bajo tu propia responsabilidad. Fija la ruta antes de salir y no toques nunca el teléfono ni el tablero mientras conduces."
+          }
+        }
+      }
+    },
+    "Use the phone media remote": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usar el mando multimedia del teléfono"
+          }
+        }
+      }
+    },
+    "Use the phone media remote?": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Usar el mando multimedia del teléfono?"
+          }
+        }
+      }
+    },
+    "Use this bike": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usar esta moto"
+          }
+        }
+      }
+    },
+    "Version %@  ·  build %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versión %@  ·  compilación %@"
+          }
+        }
+      }
+    },
+    "Video quality": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calidad de vídeo"
+          }
+        }
+      }
+    },
+    "Video quality, fit, power, bike profile and button mapping are kept per bike; everything else is shared by all bikes.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La calidad de vídeo, el ajuste de pantalla, la energía, el perfil y los botones se guardan por moto; el resto es común a todas."
+          }
+        }
+      }
+    },
+    "View LICENSE & NOTICE": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver LICENSE y NOTICE"
+          }
+        }
+      }
+    },
+    "Viewpoint": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mirador"
+          }
+        }
+      }
+    },
+    "Voice prompts": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indicaciones de voz"
+          }
+        }
+      }
+    },
+    "Volume buttons ▲/▼ (experimental)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Botones de volumen ▲/▼ (experimental)"
+          }
+        }
+      }
+    },
+    "Waiting for GPS…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esperando al GPS…"
+          }
+        }
+      }
+    },
+    "Warnings": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avisos"
+          }
+        }
+      }
+    },
+    "Welcome to OpenCfMoto": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Te damos la bienvenida a OpenCfMoto"
+          }
+        }
+      }
+    },
+    "What went wrong?": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué ha fallado?"
+          }
+        }
+      }
+    },
+    "When the app opens, connect to the active bike automatically. iOS can't scan for Wi-Fi, so it simply tries once.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Al abrir la app, conecta automáticamente con la moto activa. iOS no puede buscar redes Wi-Fi, así que simplemente lo intenta una vez."
+          }
+        }
+      }
+    },
+    "While mirroring, hold the phone this way so the dash fills. Match dash follows the dash's shape (wide screen → landscape). iOS can't rotate the phone for you.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mientras duplicas, sujeta el teléfono así para que el tablero se llene. Igual que el tablero sigue su forma (pantalla ancha → horizontal). iOS no puede girar el teléfono por ti."
+          }
+        }
+      }
+    },
+    "While on, the bike's ◀ ▶ ★ buttons move the focus, select and open the menu of the dash UI. Turn it off if you want them to control your music again.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mientras esté activado, los botones ◀ ▶ ★ de la moto mueven el foco, seleccionan y abren el menú del tablero. Desactívalo si quieres que vuelvan a controlar tu música."
+          }
+        }
+      }
+    },
+    "While using the app": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mientras se usa la app"
+          }
+        }
+      }
+    },
+    "Wi-Fi": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wi-Fi"
+          }
+        }
+      }
+    },
+    "Wi-Fi name (SSID)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nombre de Wi-Fi (SSID)"
+          }
+        }
+      }
+    },
+    "Wi-Fi name copied": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nombre de Wi-Fi copiado"
+          }
+        }
+      }
+    },
+    "Wi-Fi passwords and serial numbers will appear in shared logs and problem reports. Only turn this on for a private debugging session.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las contraseñas Wi-Fi y los números de serie aparecerán en los registros e informes compartidos. Actívalo solo para una sesión de depuración privada."
+          }
+        }
+      }
+    },
+    "Year (optional)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Año (opcional)"
+          }
+        }
+      }
+    },
+    "You may use, study, share, and modify this app under the AGPL. If you redistribute a modified version (including as a network service), you must offer the complete corresponding source under the same license.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puedes usar, estudiar, compartir y modificar esta aplicación según la AGPL. Si redistribuyes una versión modificada (incluso como servicio de red), debes ofrecer el código fuente correspondiente completo bajo la misma licencia."
+          }
+        }
+      }
+    },
+    "You're all set": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todo listo"
+          }
+        }
+      }
+    },
+    "Your left switch cluster": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu piña de mandos izquierda"
+          }
+        }
+      }
+    },
+    "Your location draws the map and the turn-by-turn guidance on the dash and logs your rides on this iPhone. OpenCfMoto asks for “While Using the App”; during a ride it keeps working with the screen locked and iOS shows the location indicator.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu ubicación dibuja el mapa y la navegación giro a giro en el tablero y registra tus rutas en este iPhone. OpenCfMoto pide «Cuando se use la app»; durante una ruta sigue funcionando con la pantalla bloqueada e iOS muestra el indicador de ubicación."
+          }
+        }
+      }
+    },
+    "Your own map and turn-by-turn guidance on Carbit / EasyConnect dashes (CFMoto MotoPlay and siblings).": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu propio mapa y navegación giro a giro en tableros Carbit/EasyConnect (CFMoto MotoPlay y hermanos)."
+          }
+        }
+      }
+    },
+    "Your position": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu posición"
+          }
+        }
+      }
+    },
+    "Zoom %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoom %@"
+          }
+        }
+      }
+    },
+    "a quick tap of the OK / ★ start button": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "un toque rápido del botón OK / ★"
+          }
+        }
+      }
+    },
+    "absent": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ausente"
+          }
+        }
+      }
+    },
+    "double-tap backward within a short window": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "doble toque hacia atrás en un margen corto"
+          }
+        }
+      }
+    },
+    "double-tap forward within a short window": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "doble toque hacia adelante en un margen corto"
+          }
+        }
+      }
+    },
+    "double-tap the OK / ★ button": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "doble toque en el botón OK / ★"
+          }
+        }
+      }
+    },
+    "iOS can't see how long ★ is held, so this gesture never fires.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS no puede ver cuánto tiempo se mantiene ★, así que este gesto nunca se dispara."
+          }
+        }
+      }
+    },
+    "iOS gives these buttons to one app at a time: while this is on, music from other apps pauses (press ★ in the music app, or turn this off, to get it back). Pair the phone with the bike over Bluetooth first. Off in mirror mode. May not be accepted in App Store builds.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS da estos botones a una sola app a la vez: mientras esté activado, la música de otras apps se pausa (pulsa ★ en la app de música o desactiva esto para recuperarla). Empareja antes el teléfono con la moto por Bluetooth. Desactivado en modo espejo. Puede que no se acepte en las versiones de la App Store."
+          }
+        }
+      }
+    },
+    "iOS will ask when you first connect": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS lo pedirá la primera vez que te conectes"
+          }
+        }
+      }
+    },
+    "press and hold the OK / ★ button": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mantén pulsado el botón OK / ★"
+          }
+        }
+      }
+    },
+    "press and hold ▶ (track-key dashes only)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mantén pulsado ▶ (solo tableros con teclas de pista)"
+          }
+        }
+      }
+    },
+    "press and hold ◀ (track-key dashes only)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mantén pulsado ◀ (solo tableros con teclas de pista)"
+          }
+        }
+      }
+    },
+    "untested": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sin probar"
+          }
+        }
+      }
+    },
+    "works": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "funciona"
+          }
+        }
+      }
+    },
+    "© 2026 the OpenCfMoto for iOS contributors · OpenCfMoto © 2026 Alexandru": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "© 2026 los colaboradores de OpenCfMoto para iOS · OpenCfMoto © 2026 Alexandru"
+          }
+        }
+      }
+    },
+    "• Connect — joins the bike Wi-Fi and shows the OpenCfMoto map on the dash (becomes Stop while linked).\n• Map — search places, plan routes and load GPX tracks; the dash follows.\n• Mirror — shows the whole iPhone screen on the dash (no touch back).\n• Dash view & Controls — the live dash picture on the phone and the handlebar pad.\n• Ride Mode — a black screen that keeps the dash streaming with the iPhone unlocked.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• Conectar: se une al Wi-Fi de la moto y muestra el mapa de OpenCfMoto en el tablero (se convierte en Detener mientras está vinculado).\n• Mapa: busca lugares, planifica rutas y carga tracks GPX; el tablero lo sigue.\n• Espejo: muestra toda la pantalla del iPhone en el tablero (sin control táctil).\n• Vista de tablero y Controles: la imagen del tablero en directo en el teléfono y el mando del manillar.\n• Modo ruta: una pantalla negra que mantiene la transmisión al tablero con el iPhone desbloqueado."
+          }
+        }
+      }
+    },
+    "▲/▼ %@ · ◀/▶ %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "▲/▼ %@ · ◀/▶ %@"
+          }
+        }
+      }
+    },
+    "▶ right, or the ▼ volume press on non-touch dashes": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "▶ derecha, o la pulsación de volumen ▼ en tableros no táctiles"
+          }
+        }
+      }
+    },
+    "◀ left, or the ▲ volume press on non-touch dashes": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "◀ izquierda, o la pulsación de volumen ▲ en tableros no táctiles"
+          }
+        }
+      }
+    },
+    "◀/▶ = move the focus · ◀◀ = previous group · ▶▶ = menu · ★ = Select · ★★ = Back. Singles fire immediately (no lag waiting for ×2).": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "◀/▶ = mover el foco · ◀◀ = grupo anterior · ▶▶ = menú · ★ = Seleccionar · ★★ = Atrás. Las pulsaciones simples se disparan al instante (sin esperar al ×2)."
+          }
+        }
+      }
+    },
+    "★ Save": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "★ Guardar"
+          }
+        }
+      }
+    },
+    "★ moves the focus and ★★ selects. For dashes where only ★ reaches the phone; works best with a long double-tap delay.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "★ mueve el foco y ★★ selecciona. Para tableros en los que solo ★ llega al teléfono; funciona mejor con un retardo de doble pulsación largo."
+          }
+        }
+      }
+    },
+    "★ only (one-button dashes)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo ★ (tableros de un botón)"
+          }
+        }
+      }
+    },
+    "＋ Marker": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "＋ Marcador"
+          }
+        }
+      }
+    }
+  },
   "version": "1.0"
 }
