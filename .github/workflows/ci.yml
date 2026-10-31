@@ -91,13 +91,13 @@ jobs:
       HOMEBREW_NO_ENV_HINTS: "1"
     steps:
       - uses: actions/checkout@v4
-      - name: Prepare (XcodeGen, ffmpeg in the background, pick + boot an iPhone simulator)
+      - name: Prepare (XcodeGen; ffmpeg + pngquant in the background; pick + boot an iPhone simulator)
         id: sim
         run: |
           mkdir -p "$OUT"
           t0=$(date +%s)
           brew install xcodegen
-          nohup bash -c 'brew install ffmpeg > "$OUT/brew-ffmpeg.log" 2>&1; echo $? > "$OUT/brew-ffmpeg.rc"' < /dev/null > /dev/null 2>&1 &
+          nohup bash -c 'brew install ffmpeg pngquant > "$OUT/brew-ffmpeg.log" 2>&1; echo $? > "$OUT/brew-ffmpeg.rc"' < /dev/null > /dev/null 2>&1 &
           python3 tools/ci/e2e/simctl_pick.py > "$OUT/sim.txt"
           cat "$OUT/sim.txt" | tee -a "$GITHUB_OUTPUT"
           UDID=$(grep '^udid=' "$OUT/sim.txt" | cut -d= -f2)

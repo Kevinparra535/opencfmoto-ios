@@ -128,6 +128,11 @@ def scenario_section(out, art, d, md, annotations):
         copy(os.path.join(d, s), os.path.join(dst, s))
     frames = sorted(os.path.basename(p) for p in glob.glob(os.path.join(d, "frames", "*.png"))
                     + glob.glob(os.path.join(d, "frames", "*.jpg")))
+    same_first = False
+    a, b = os.path.join(d, "frames", "app_first.png"), os.path.join(d, "frames", "dash_first.png")
+    if os.path.isfile(a) and os.path.isfile(b) and open(a, "rb").read() == open(b, "rb").read():
+        same_first = True
+        frames = [fr for fr in frames if fr != "app_first.png"]
     for fr in frames:
         copy(os.path.join(d, "frames", fr), os.path.join(dst, "frames", fr))
     for extra in ("ffprobe-dash.json", "ffprobe-app.json", "ffprobe-dash.err", "ffprobe-app.err", "ffmpeg.log"):
@@ -227,6 +232,9 @@ def scenario_section(out, art, d, md, annotations):
     if frames:
         md.append("")
         md.append("Decoded frames: " + ", ".join("[%s](%s/frames/%s)" % (f, os.path.basename(d), f) for f in frames))
+    if same_first:
+        md.append("")
+        md.append("The app-side wire dump (`e2e-app.h264`) decodes to the very same first picture as the dash side.")
     md.append("")
     log_tail = tail_lines(os.path.join(d, "app-log.txt"), 25)
     if log_tail:
@@ -355,13 +363,39 @@ def main():
         md.append("")
         annotations.append(("error", "Crash reports", "%d app crash report(s): %s" % (len(crashes), ", ".join(os.path.basename(c) for c in crashes[:5]))))
 
-    # Size budget: drop decoded frames from the end first, then screenshots, until under budget.
-    size = tree_size(art)
-    if size > BUDGET_BYTES:
-        victims = sorted(glob.glob(os.path.join(art, "e2e-*", "frames", "dash_*.jpg")), reverse=True)
-        while victims and tree_size(art) > BUDGET_BYTES:
-            os.remove(victims.pop(0))
-        md.append("(artifacts trimmed to stay under %d MB)" % (BUDGET_BYTES // (1024 * 1024)))
+    # Size budget: quantize PNGs (pngquant, lossy palette, still PNG) when available, then drop
+    # optional files — extra decoded pictures and screenshots of the non-required scenarios first.
+    pngs = [os.path.join(dp, f) for dp, _, fs in os.walk(art) for f in fs if f.endswith(".png")]
+    if pngs and shutil.which("pngquant"):
+        before = tree_size(art)
+        for i in range(0, len(pngs), 40):
+            subprocess.call(["pngquant", "--force", "--skip-if-larger", "--strip", "--quality=60-92",
+                             "--ext", ".png"] + pngs[i:i + 40], stderr=subprocess.DEVNULL)
+        md.append("PNGs quantized with pngquant: %.1f MB → %.1f MB." % (before / 1048576.0, tree_size(art) / 1048576.0))
+        md.append("")
+    if tree_size(art) > BUDGET_BYTES:
+        def frames_of(name):
+            return sorted(glob.glob(os.path.join(art, "e2e-" + name, "frames", "dash_*.jpg")))
+        optional = [os.path.basename(x)[4:] for x in glob.glob(os.path.join(art, "e2e-*"))
+                    if os.path.basename(x)[4:] not in required]
+        victims = []
+        for name in optional:
+            victims += frames_of(name)[4::2]          # every other picture after the first four
+        for name in optional:
+            victims += glob.glob(os.path.join(art, "e2e-" + name, "app_streaming_2.png"))
+            victims += glob.glob(os.path.join(art, "e2e-" + name, "app_after.png"))
+        for name in required:
+            victims += frames_of(name)[6::2]
+        for name in optional + required:
+            victims += frames_of(name)[::-1]
+        removed = 0
+        for v in victims:
+            if tree_size(art) <= BUDGET_BYTES:
+                break
+            if os.path.exists(v):
+                os.remove(v)
+                removed += 1
+        md.append("(%d optional file(s) dropped to stay under %d MB)" % (removed, BUDGET_BYTES // (1024 * 1024)))
     md.append("")
     md.append("Total artifact size: %.1f MB" % (tree_size(art) / 1048576.0))
     with open(os.path.join(art, "RUN.md"), "w", encoding="utf-8") as f:
