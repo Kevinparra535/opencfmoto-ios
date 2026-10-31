@@ -15,6 +15,10 @@
 //   LocalNetworkPermission), files = Application Support/Caches folders.
 // Demo mode (launch argument `-demo`, or the simulator when no real services make sense): use
 // `AppServices.preview()` plus a demo GPS route player so the dash preview moves.
+//
+// Demo mode keeps the REAL dash renderer (CoreGraphics + CoreText metrics + map tiles) and the real
+// internet client (routing / search / tiles work in the Simulator); only the bike side (Wi-Fi,
+// sockets, GPS, speech, handlebar, mirror) is simulated, with a GPS loop replayed at 45 km/h.
 
 import Foundation
 import OpenCfMotoCore
@@ -40,13 +44,97 @@ final class AppPlatform {
     func now() -> TimeInterval { clock.now() }
 
     private let clock: MonotonicClock
+    private let projection: ProjectionAdapter
+    private let demoPlayer: DemoRoutePlayer?
 
     private init() {
-        // TODO(logic-session): real services + demo mode; keep these members.
-        clock = SystemMonotonicClock()
-        isDemoMode = ProcessInfo.processInfo.arguments.contains("-demo")
-        dashRenderer = DashRenderer()
-        broadcastExtensionBundleID = (Bundle.main.bundleIdentifier ?? "com.example.opencfmoto") + ".mirror"
-        model = AppModel(services: .preview(clock: clock))
+        let clock = SystemMonotonicClock()
+        self.clock = clock
+        let bundle = Bundle.main
+        broadcastExtensionBundleID = (bundle.bundleIdentifier ?? "com.example.opencfmoto") + ".mirror"
+        AppHTTPIdentity.appVersion = bundle.infoDictionary?["CFBundleShortVersionString"] as? String ?? AppHTTPIdentity.appVersion
+        #if DEBUG
+        Log.shared.echoToConsole = true
+        #endif
+
+        #if targetEnvironment(simulator)
+        let demo = true
+        #else
+        let demo = ProcessInfo.processInfo.arguments.contains("-demo")
+        #endif
+        isDemoMode = demo
+
+        #if OCM_NO_HOTSPOT
+        let flavor = BuildFlavor.free
+        #else
+        let flavor = BuildFlavor.full
+        #endif
+
+        let http = SmartHTTPClient(preferCellular: false)
+        let projection = ProjectionAdapter(http: http, tileURLTemplate: BikeSettings().tileURLTemplate, clock: clock)
+        self.projection = projection
+        dashRenderer = projection.renderer
+
+        if demo {
+            var services = AppServices.preview(flavor: flavor, clock: clock)
+            let location = PreviewLocation()
+            services.location = location
+            services.projection = projection
+            services.http = http
+            services.setPreferCellular = { [http] on in http.preferCellular = on }
+            model = AppModel(services: services)
+            let player = DemoRoutePlayer(location: location, now: services.now)
+            player.start()
+            demoPlayer = player
+            Log.i("APP", "demo mode: simulated bike, Wi-Fi and GPS (route loop at 45 km/h)")
+        } else {
+            model = AppModel(services: Self.realServices(flavor: flavor, clock: clock, http: http, projection: projection))
+            demoPlayer = nil
+        }
+    }
+
+    private static func realServices(flavor: BuildFlavor, clock: MonotonicClock, http: SmartHTTPClient,
+                                     projection: ProjectionAdapter) -> AppServices {
+        let store = UserDefaultsKeyValueStore.appGroup()
+        return AppServices(
+            keyValueStore: store,
+            secretStore: KeychainSecretStore(thisDeviceOnly: true),
+            http: http,
+            setPreferCellular: { [http] on in http.preferCellular = on },
+            network: NWNetworkProvider(options: .bikeWiFi),
+            discovery: BonjourDashDiscovery(),
+            makeSigner: {
+                do {
+                    return try await SecKeyHuidSigner.generate()
+                } catch {
+                    Log.w("APP", "SecKey RSA unavailable (\(error)) \u{2014} using the pure-Swift signer")
+                    return PureSwiftHuidSigner.generate()
+                }
+            },
+            wifi: WifiAdapter(flavor: flavor),
+            location: LocationAdapter(clock: clock),
+            speech: SpeechAdapter(),
+            handlebar: HandlebarAdapter(clock: clock),
+            projection: projection,
+            mirror: MirrorAdapter(),
+            system: IOSSystem(flavor: flavor, store: store),
+            files: fileLocations(),
+            clock: clock)
+    }
+
+    /// Trips and bike photos in Application Support (backed up), share-sheet exports in Caches.
+    private static func fileLocations() -> AppFileLocations {
+        let fm = FileManager.default
+        let support = (try? fm.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true))
+            ?? fm.temporaryDirectory
+        let caches = (try? fm.url(for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: true))
+            ?? fm.temporaryDirectory
+        let files = AppFileLocations(tripsDirectory: support.appendingPathComponent("trips", isDirectory: true),
+                                     photosDirectory: support.appendingPathComponent("photos", isDirectory: true),
+                                     exportsDirectory: caches.appendingPathComponent("exports", isDirectory: true))
+        for dir in [files.tripsDirectory, files.photosDirectory, files.exportsDirectory] {
+            try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        return files
     }
 }
