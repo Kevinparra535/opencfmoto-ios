@@ -16,6 +16,9 @@
 // - `handleOpenURL`: `.gpx` files → `navigation.loadGpx`; opencfmoto pairing URLs / Wi-Fi URLs
 //   → `garage.pair(rawQR:)`; settings packs (`.json` with format "opencfmoto.settings") →
 //   `settings.importSettings`. Returns a localized message for a toast.
+//
+// Ported from OpenCfMoto (Android) OpenCfMotoApp.kt (process start) and MainActivity.kt
+// (onCreate / onResume / intent handling).
 
 import Foundation
 import Observation
@@ -43,6 +46,11 @@ public final class AppModel {
     public var appVersion: String { core.services.system.appVersion }
     public var buildNumber: String { core.services.system.buildNumber }
 
+    /// How long `banner` stays visible.
+    @ObservationIgnored var bannerDuration: TimeInterval = 3.5
+    @ObservationIgnored private var started = false
+    @ObservationIgnored private var bannerTask: Task<Void, Never>?
+
     public init(services: AppServices) {
         let core = AppCore(services: services)
         self.core = core
@@ -56,19 +64,165 @@ public final class AppModel {
         ride = RideModel(core: core, settings: settings, navigation: navigation, trips: trips)
         connection = ConnectionModel(core: core, garage: garage, settings: settings, ride: ride,
                                      controls: controls)
+        wire()
     }
 
     /// Call once when the app launches.
-    public func start() { /* TODO(logic-session) */ }
+    public func start() {
+        guard !started else { return }
+        started = true
+        let system = core.services.system
+        LogRedactor.install(on: .shared, includeSecrets: core.currentSettings.includeSecretsInLogs)
+        Log.i("APP", "OpenCfMoto iOS \(system.appVersion) (\(system.buildNumber)) \u{00B7} \(system.deviceModel) \(system.systemVersion) \u{00B7} \(system.flavor.rawValue) build \u{00B7} lang=\(core.language.rawValue)")
+        let core = self.core
+        Task.detached(priority: .utility) {
+            do {
+                _ = try await core.signer()
+                Log.d("APP", "RSA identity ready")
+            } catch {
+                Log.w("APP", "RSA identity not ready yet: \(error)")
+            }
+        }
+        Task { [weak self] in await self?.permissions.refresh() }
+        Log.i("APP", "Ready. Tap Connect to project the map to your dash.")
+        if permissions.hasCompletedOnboarding { connection.maybeAutoConnect() }
+    }
 
-    public func scenePhaseChanged(_ phase: AppScenePhase) { /* TODO(logic-session) */ }
+    public func scenePhaseChanged(_ phase: AppScenePhase) {
+        ride.scenePhaseChanged(phase)
+        connection.scenePhaseChanged(phase)
+        guard phase == .active else { return }
+        Task { [weak self] in await self?.permissions.refresh() }
+        if started, permissions.hasCompletedOnboarding { connection.maybeAutoConnect() }
+    }
 
     /// Files / URLs opened with the app. Returns a localized message for the banner (or nil).
     @discardableResult
     public func handleOpenURL(_ url: URL) -> String? {
-        nil // TODO(logic-session)
+        let message = openURLMessage(url)
+        if let message { showBanner(message) }
+        return message
     }
 
-    public func showBanner(_ text: String) { banner = text /* TODO(logic-session): auto-clear */ }
-    public func dismissBanner() { banner = nil }
+    public func showBanner(_ text: String) {
+        banner = text
+        bannerTask?.cancel()
+        let duration = bannerDuration
+        bannerTask = Task { [weak self] in
+            await sleepSeconds(duration)
+            guard !Task.isCancelled, let self, self.banner == text else { return }
+            self.banner = nil
+        }
+    }
+
+    public func dismissBanner() {
+        bannerTask?.cancel()
+        bannerTask = nil
+        banner = nil
+    }
+
+    // MARK: - Wiring
+
+    private func wire() {
+        controls.inputSink = { [weak ride] input in ride?.handleDashInput(input) }
+        permissions.onLocationPermissionChange = { [weak ride] p in ride?.locationPermissionChanged(p) }
+        permissions.onOnboardingCompleted = { [weak connection] in connection?.maybeAutoConnect() }
+        logs.diagnostics = { [weak self] in self?.problemDiagnostics() ?? [:] }
+    }
+
+    // MARK: - Opened files
+
+    private func openURLMessage(_ url: URL) -> String? {
+        let l = core.language
+        guard url.isFileURL else {
+            // opencfmoto / Carbit pairing URLs and Wi-Fi QR payloads.
+            return pairingMessage(url.absoluteString)
+        }
+        let ext = url.pathExtension.lowercased()
+        guard let data = Self.readFile(url) else {
+            Log.w("APP", "open: cannot read \(url.lastPathComponent)")
+            return SessionText.cannotReadFile(l)
+        }
+        if ext == "gpx" || Self.looksLikeGPX(data) {
+            let errorBefore = navigation.lastError
+            navigation.loadGpx(data: data, fileName: url.lastPathComponent)
+            if let err = navigation.lastError, err != errorBefore { return err }
+            Log.i("APP", "open: GPX \(url.lastPathComponent)")
+            return SessionText.gpxLoaded(url.deletingPathExtension().lastPathComponent, l)
+        }
+        let text = String(decoding: data, as: UTF8.self)
+        if text.contains("opencfmoto.settings") {
+            let result = settings.importSettings(text)
+            Log.i("APP", "open: settings pack \(result.ok ? "imported" : "rejected")")
+            return result.message.isEmpty ? nil : result.message
+        }
+        if text.contains("opencfmoto.map") {
+            let result = settings.importMapData(text)
+            Log.i("APP", "open: map data \(result.ok ? "imported" : "rejected")")
+            return result.message.isEmpty ? nil : result.message
+        }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if ext == "txt", !trimmed.isEmpty, trimmed.count < 2048, !trimmed.contains("\n") {
+            return pairingMessage(trimmed) // a QR payload saved as text
+        }
+        Log.w("APP", "open: unsupported file \(url.lastPathComponent)")
+        return SessionText.cannotOpenFile(l)
+    }
+
+    private func pairingMessage(_ raw: String) -> String? {
+        switch garage.pair(rawQR: raw) {
+        case let .paired(bike):
+            return SessionText.bikeAdded(bike.name, core.language)
+        case let .invalid(hint):
+            return hint
+        }
+    }
+
+    private static func readFile(_ url: URL) -> Data? {
+        #if canImport(Darwin)
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        #endif
+        return try? Data(contentsOf: url)
+    }
+
+    private static func looksLikeGPX(_ data: Data) -> Bool {
+        let head = String(decoding: data.prefix(512), as: UTF8.self)
+        return head.contains("<gpx")
+    }
+
+    // MARK: - Problem report diagnostics
+
+    /// For LogsModel's problem report: `phase` / `detail` / `profile` / `ssid` fill the Android SETUP
+    /// block (LogsModel computes the settings lines itself); every other key is an extra
+    /// `key=value` line (link, projection, permissions, power).
+    private func problemDiagnostics() -> [String: String] {
+        let st = core.currentSettings
+        let system = core.services.system
+        let diag = connection.diagnostics
+        var d: [String: String] = [
+            "phase": SessionText.phaseAndroidName(connection.phase),
+            "detail": connection.detail,
+            "mode": connection.mode.rawValue,
+            "linkState": diag.state.description,
+            "framesSent": String(diag.stats.framesSent),
+            "keyframesSent": String(diag.stats.keyframesSent),
+            "missedPulls": String(diag.stats.missedPulls),
+            "projection": diag.projection.mode,
+            "location": permissions.location.rawValue + (permissions.isPreciseLocation ? "" : " (approximate)"),
+            "localNetwork": permissions.localNetwork.rawValue,
+            "powerMode": st.powerMode.rawValue,
+            "videoQuality": st.videoQuality.rawValue,
+            "thermal": system.thermalLevel.androidName,
+            "lowPowerMode": String(system.isLowPowerModeEnabled),
+        ]
+        if let name = diag.profileName { d["profile"] = name }
+        if let ssid = connection.session?.qr.ssid ?? core.garage.selected?.ssid { d["ssid"] = ssid }
+        if let bike = core.garage.selected { d["bike"] = bike.name }
+        if let info = diag.dashInfo {
+            d["dash"] = "\(info.huName) sdk=\(info.sdkVersion) ver=\(info.versionName) touch=\(info.supportsScreenTouch)"
+        }
+        if let c = diag.canvas { d["canvas"] = c.description }
+        return d
+    }
 }
