@@ -186,16 +186,32 @@ final class ControlsModelTests: XCTestCase {
         synced = await eventually { engine.presence == HandlebarPresence() }
         XCTAssertTrue(synced, "reset")
 
+        // Taught while the engine's own learning is still being persisted (both hops queued):
+        // the engine, the store and the screen end up agreeing.
+        settings.setVolumeRockerPresence(.absent)
+        signal(h, .volumeDown, steps: 3)
+        await settle(0.1)
+        let agreed = h.core.settings.presence(forBike: bike.id)
+        XCTAssertEqual(engine.presence, agreed)
+        XCTAssertEqual(settings.presence, agreed)
+
         // What the engine learns by itself is persisted, never "taught" back to it.
-        let taughtLines = { Log.shared.lines().filter { $0.message.contains("handlebar sources taught") }.count }
-        let before = taughtLines()
+        settings.setVolumeRockerPresence(.absent)
+        synced = await eventually { engine.presence.volumeRocker == .absent }
+        XCTAssertTrue(synced, "absent again")
+        await settle()
+        let echoed = Locked(false)
+        let subscription = Log.shared.subscribe { line in
+            if line.message.contains("handlebar sources taught") { echoed.withLock { $0 = true } }
+        }
+        defer { Log.shared.unsubscribe(subscription) }
         signal(h, .volumeDown, steps: 3)
         let learned = await eventually { h.core.settings.presence(forBike: bike.id).volumeRocker == .present }
         XCTAssertTrue(learned)
         await settle()
         XCTAssertEqual(engine.presence.volumeRocker, .present)
         XCTAssertEqual(settings.presence.volumeRocker, .present)
-        XCTAssertEqual(taughtLines(), before)
+        XCTAssertFalse(echoed.current, "the learned value was sent back to the engine as if taught")
         h.controls.sessionChanged(active: false, mirror: false)
     }
 

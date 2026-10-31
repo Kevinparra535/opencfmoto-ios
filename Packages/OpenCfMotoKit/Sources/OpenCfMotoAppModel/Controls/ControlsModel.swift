@@ -82,8 +82,8 @@ public final class ControlsModel {
         handlebar.volumeButtonsEnabled = kv.bool(forKey: Self.volumeButtonsKey) ?? false
         volumeButtonsEnabled = handlebar.volumeButtonsEnabled
         handlebar.onSignal = { [weak self] signal in self?.handle(signal) }
-        engine.onPresenceChange = { [weak self] presence in
-            Task { @MainActor [weak self] in self?.presenceChanged(presence) }
+        engine.onPresenceChange = { [weak self] _ in
+            Task { @MainActor [weak self] in self?.presenceChanged() }
         }
         settings.observe { [weak self] _ in self?.reloadConfiguration() }
         store.subscribe { [weak self] in
@@ -242,16 +242,20 @@ public final class ControlsModel {
         }
     }
 
-    /// The engine learned a handlebar source (or marked the rocker absent): persist it per bike.
-    private func presenceChanged(_ presence: HandlebarPresence) {
+    /// The engine learned a handlebar source (or marked the rocker absent): persist it for the bike
+    /// whose presence the engine holds. The engine's CURRENT presence is stored, not the notified
+    /// snapshot, so a value taught (or re-loaded) in between is never overwritten by an older
+    /// notification and the engine, the store and the screen always end up agreeing.
+    private func presenceChanged() {
         let store = core.settings
-        let bike = core.garage.selected?.id
-        if bike == bikeId { syncedPresence = presence } // the engine already has it: no echo back
+        let bike = bikeId
+        let current = engine.presence
+        syncedPresence = current // the engine already has it: no echo back
         let old = store.presence(forBike: bike)
-        guard old != presence else { return }
-        if old.volumeRocker != presence.volumeRocker { store.setVolumeRockerPresence(presence.volumeRocker, forBike: bike) }
-        if old.trackKeys != presence.trackKeys { store.setTrackKeysPresence(presence.trackKeys, forBike: bike) }
-        Log.i("BTN", "handlebar sources: \(presence.summary)")
+        guard old != current else { return }
+        if old.volumeRocker != current.volumeRocker { store.setVolumeRockerPresence(current.volumeRocker, forBike: bike) }
+        if old.trackKeys != current.trackKeys { store.setTrackKeysPresence(current.trackKeys, forBike: bike) }
+        Log.i("BTN", "handlebar sources: \(current.summary)")
         settings.reload()
     }
 }
