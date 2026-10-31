@@ -168,6 +168,7 @@ final class QRCaptureCoordinator: NSObject, AVCaptureMetadataOutputObjectsDelega
     private let session = AVCaptureSession()
     private let sessionQueue = DispatchQueue(label: "opencfmoto.qr-capture")
     private var device: AVCaptureDevice?
+    private var metadataOutput: AVCaptureMetadataOutput?
     private var wantsRunning = false
     private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
     private var rotationObservation: NSKeyValueObservation?
@@ -199,6 +200,7 @@ final class QRCaptureCoordinator: NSObject, AVCaptureMetadataOutputObjectsDelega
             if output.availableMetadataObjectTypes.contains(.qr) {
                 output.metadataObjectTypes = [.qr]
             }
+            metadataOutput = output
         }
         session.commitConfiguration()
 
@@ -246,11 +248,22 @@ final class QRCaptureCoordinator: NSObject, AVCaptureMetadataOutputObjectsDelega
         }
     }
 
+    /// Stops the camera and breaks the session → output → delegate reference chain.
     func shutDown() {
         rotationObservation?.invalidate()
         rotationObservation = nil
         rotationCoordinator = nil
-        setRunning(false)
+        metadataOutput?.setMetadataObjectsDelegate(nil, queue: nil)
+        metadataOutput = nil
+        wantsRunning = false
+        let session = self.session
+        sessionQueue.async {
+            if session.isRunning { session.stopRunning() }
+            session.beginConfiguration()
+            session.inputs.forEach { session.removeInput($0) }
+            session.outputs.forEach { session.removeOutput($0) }
+            session.commitConfiguration()
+        }
     }
 
     func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject],

@@ -32,8 +32,11 @@ struct ScanScreen: View {
     @State private var finished = false
     @State private var photoItem: PhotosPickerItem?
     @State private var isImportingPhoto = false
+    @State private var importTask: Task<Void, Never>?
     @State private var showsManualEntry = false
     @State private var manuallyPairedBike: GarageBike?
+    /// Results that arrive after the scanner left the screen are ignored.
+    @State private var isVisible = false
 
     /// - Parameters:
     ///   - showsCancelButton: true when presented modally (a sheet) rather than pushed.
@@ -74,6 +77,12 @@ struct ScanScreen: View {
         }
         .task { @MainActor in
             await resolveCamera()
+        }
+        .onAppear { isVisible = true }
+        .onDisappear {
+            isVisible = false
+            importTask?.cancel()
+            importTask = nil
         }
         .onChange(of: scenePhase) { _, phase in
             // Back from Settings (camera allowed there): re-check.
@@ -269,8 +278,9 @@ struct ScanScreen: View {
     }
 
     private func importQR(from item: PhotosPickerItem) {
+        importTask?.cancel()
         isImportingPhoto = true
-        Task { @MainActor in
+        importTask = Task { @MainActor in
             defer { isImportingPhoto = false }
             do {
                 guard let data = try await item.loadTransferable(type: Data.self) else {
@@ -280,6 +290,7 @@ struct ScanScreen: View {
                 let text = await Task.detached(priority: .userInitiated) {
                     QRPhotoDecoder.firstQRCode(in: data)
                 }.value
+                guard !Task.isCancelled else { return }
                 if let text {
                     handle(text, fromPhoto: true)
                 } else {
@@ -287,14 +298,14 @@ struct ScanScreen: View {
                     UINotificationFeedbackGenerator().notificationOccurred(.warning)
                 }
             } catch {
-                hint = String(localized: "QR photo failed")
+                if !Task.isCancelled { hint = String(localized: "QR photo failed") }
             }
         }
     }
 
     /// One decoded QR text (camera or photo) → pairing.
     private func handle(_ raw: String, fromPhoto: Bool) {
-        guard !finished, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard isVisible, !finished, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         // The camera reports the same rejected code many times per second: hint once.
         if !fromPhoto, let rejected = lastRejected, rejected.raw == raw,
            Date().timeIntervalSince(rejected.at) < 3 {

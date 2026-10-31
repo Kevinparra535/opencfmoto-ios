@@ -51,7 +51,13 @@ struct DashPreviewScreen: View {
         .navigationTitle("Dash view")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                // Android "Hub": the phone map (search, routes, GPX) drives the same session.
+                NavigationLink {
+                    NavigateScreen()
+                } label: {
+                    Label("Map", systemImage: "map")
+                }
                 Button {
                     MainRideMode.enter(model.ride)
                 } label: {

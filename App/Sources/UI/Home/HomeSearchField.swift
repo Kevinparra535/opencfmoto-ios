@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Ported from OpenCfMoto (Android) MainActivity.kt:580-631 (home search row, app-features §7.5.7):
-// "Search a place or address…" + Go. The text is the shared `NavigationModel.query` (debounced
-// live suggestions, 350 ms, ≥ 2 characters), so results show both in the Map hub and — when the
-// dash search sheet is open — on the dash. "Type on phone" from the dash highlights this field for
-// 2.5 s with the hint "Bike dash search — type here", a light haptic and a banner.
+// "Search a place or address…" + Go. Go hands the text to the shared `NavigationModel` and opens
+// the Map hub (one navigation session: a place previewed there shows on the dash too). Empty →
+// "Type a place to search on the map". "Type on phone" from the dash search highlights this field
+// for 2.5 s with the hint "Bike dash search — type here", a light haptic and a banner; while the
+// rider types for the dash, every edit goes to `NavigationModel.query` (its 350 ms / ≥ 2 characters
+// debounce feeds the dash suggestions) and Go stays on Home ("Searching "<q>" on the dash").
 
 import SwiftUI
 import UIKit
@@ -14,18 +16,18 @@ struct HomeSearchField: View {
     @Environment(\.mainRouter) private var router
     @Environment(\.scenePhase) private var scenePhase
     @FocusState private var focused: Bool
-    /// The dash asked to type here: Go keeps the rider on Home (results appear on the dash).
+    @State private var text = ""
+    /// The dash asked to type here: live suggestions, Go keeps the rider on Home.
     @State private var typingForDash = false
     @State private var highlighted = false
 
     var body: some View {
-        @Bindable var navigation = model.navigation
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(highlighted ? Theme.brand : Theme.textSecondary)
                 .accessibilityHidden(true)
-            TextField(text: $navigation.query,
-                      prompt: highlighted ? Text("Bike dash search — type here") : Text("Search a place or address…")) {
+            TextField(text: $text,
+                      prompt: typingForDash ? Text("Bike dash search — type here") : Text("Search a place or address…")) {
                 Text("Search a place or address…")
             }
             .focused($focused)
@@ -52,6 +54,9 @@ struct HomeSearchField: View {
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
             .strokeBorder(highlighted ? Theme.brand : Theme.outline, lineWidth: highlighted ? 2 : 1))
+        .onChange(of: text) { _, newValue in
+            if typingForDash, model.navigation.query != newValue { model.navigation.query = newValue }
+        }
         .onChange(of: model.navigation.typeOnPhoneRequested, initial: true) { _, requested in
             if requested { handleTypeOnPhone() }
         }
@@ -69,11 +74,12 @@ struct HomeSearchField: View {
     }
 
     private func go() {
-        let query = model.navigation.query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let query = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else {
             model.showBanner(String(localized: "Type a place to search on the map"))
             return
         }
+        model.navigation.query = query
         model.navigation.searchNow()
         focused = false
         if typingForDash {
@@ -91,6 +97,7 @@ struct HomeSearchField: View {
         typingForDash = true
         highlighted = true
         focused = true
+        text = model.navigation.query
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         model.showBanner(String(localized: "Bike search open — type here. Results appear on the dash."))
     }

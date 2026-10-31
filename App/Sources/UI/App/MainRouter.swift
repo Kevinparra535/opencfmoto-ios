@@ -51,6 +51,7 @@ final class MainRouter {
 
     func scan(then followUp: MainScanFollowUp) {
         guard scanRequest == nil else { return }
+        pendingFollowUp = .none
         scanRequest = MainScanRequest(followUp: followUp)
     }
 }
