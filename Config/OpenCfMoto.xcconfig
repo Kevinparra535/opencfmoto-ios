@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Shared build settings. Do NOT put your team ID here — create Config/Local.xcconfig (git-ignored):
+//
+//   DEVELOPMENT_TEAM = ABCDE12345
+//   BUNDLE_ID_PREFIX = com.yourname
+//
+BUNDLE_ID_PREFIX = com.example
+DEVELOPMENT_TEAM =
+APP_GROUP_ID = group.$(BUNDLE_ID_PREFIX).opencfmoto
+
+#include? "Local.xcconfig"

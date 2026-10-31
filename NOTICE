@@ -1,0 +1,52 @@
+OpenCfMoto for iOS
+==================
+
+An iOS port of OpenCfMoto: streams a navigation dash UI from an iPhone to
+Carbit / EasyConnect motorcycle dashboards (CFMoto MotoPlay and siblings).
+
+Copyright (C) 2026 the OpenCfMoto for iOS contributors.
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version. See the LICENSE file for the full text.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
+
+--------------------------------------------------------------------------------
+Derived work
+--------------------------------------------------------------------------------
+
+This project is a derivative of OpenCfMoto (Android), licensed AGPL-3.0:
+
+  OpenCfMoto — Copyright (C) 2026 Alexandru <https://alexandru.rocks> and the
+  OpenCfMoto contributors. https://github.com/zanderp/open-cfmoto
+
+The PXC / EasyConnect protocol implementation, bike profiles, navigation logic,
+GPX handling, trip logging and settings formats were ported from that project's
+Kotlin sources and reverse-engineering documentation. Because it is a derived
+work, it is distributed under the same license (AGPL-3.0-or-later), and anyone
+who redistributes it must make the complete corresponding source available
+under the same terms and keep this notice.
+
+No code from the Android Auto receiver (headunit-revived lineage) is included:
+the iOS app does not implement Android Auto.
+
+--------------------------------------------------------------------------------
+Not affiliated
+--------------------------------------------------------------------------------
+
+Community project. Not affiliated with, endorsed by or sponsored by CFMoto,
+Carbit, Apple, Google or any motorcycle brand. All trademarks belong to their
+owners. Do not rely on it for critical navigation; use at your own risk.
+
+--------------------------------------------------------------------------------
+Map data and services
+--------------------------------------------------------------------------------
+
+Map tiles and geodata (c) OpenStreetMap contributors, ODbL
+(https://www.openstreetmap.org/copyright). Routing and search may use public
+OpenStreetMap-based services (Valhalla/FOSSGIS, OSRM, Photon, Nominatim,
+Overpass) subject to their usage policies.

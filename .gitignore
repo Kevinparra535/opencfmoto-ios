@@ -1,0 +1,20 @@
+# Xcode
+*.xcodeproj/
+!*.xcodeproj/project.xcworkspace/
+xcuserdata/
+DerivedData/
+*.xcworkspace/xcuserdata/
+build/
+# SwiftPM
+.build/
+.build-*/
+.swiftpm/
+Packages/OpenCfMotoKit/.build/
+Package.resolved
+# Local signing overrides
+Config/Local.xcconfig
+# macOS
+.DS_Store
+# Gradle (golden-vector tool)
+tools/kotlin-golden/.gradle/
+tools/kotlin-golden/build/
