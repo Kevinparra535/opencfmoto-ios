@@ -43,6 +43,9 @@ Packages/OpenCfMotoKit/         Swift package
     Settings/  SettingsTypes, SettingsStore (scoped keys), SettingsBackup (opencfmoto.settings v1)
     Storage/   KeyValueStore / SecretStore contracts + in-memory impls
     Trips/     trip model, recorder, store, stats, GPX export, thumbnail geometry
+  Sources/OpenCfMotoAppModel/   The app's @Observable model layer (Observation + Core only). Talks to the
+                                platform through the ports in Contract/AppPorts.swift → builds and
+                                is unit-tested on Linux with the fakes in Testing/PreviewServices.swift.
   Sources/OpenCfMotoApple/      Apple-framework adapters. EVERY file wrapped in `#if canImport(<framework>)`
                                 so the target compiles (empty) on Linux. Compiled for real on macOS CI.
   Tests/OpenCfMotoCoreTests/    XCTest, runs on Linux + macOS (+ Fixtures/)
@@ -107,8 +110,17 @@ Contract files: `Util/*` (ByteIO, Log, OrderedJSON, Async), `Link/Transport.swif
 | **core-dash** | `Core/Dash/**` (except contracts + Handlebar*), tests `Dash*` | `DashUIController` (DashModel + DashInput → DashDisplayList + `DashIntent`s), `DashLayout`, `DashPalette`, `DashIcons`, `MapProjection`, `DashSVGExporter` |
 | **apple-platform** | `Apple/` files: `NWNetworkProvider`, `BonjourDashDiscovery`, `WiFiInfo`, `WifiJoiner`, `CellularHTTPClient`, `SecKeyHuidSigner`, `UserDefaultsKeyValueStore`, `KeychainSecretStore`, `LocationService`, `SpeechAnnouncer`, `HandlebarRemote`, `AppGroup` | adapters implementing the contracts |
 | **apple-video** | `Apple/` files: `H264Encoder`, `DashRenderer`, `CoreTextMeasurer`, `TileImageCache`, `DashProjectionEngine`, `MirrorFrameSource`, `ThermalMonitor` | `DashProjectionEngine: VideoFrameSource`, `MirrorFrameSource: VideoFrameSource` |
-| **app-logic** (wave 2) | `App/Sources/Model/**`, `App/Sources/Services/**`, `MirrorExtension/**` | `AppModel`, `SessionController`, `RideCoordinator` |
-| **app-ui** (wave 2) | `App/Sources/UI/**`, `App/Resources/**`, `README.md` | SwiftUI screens, String Catalog EN/ES, assets |
+| **logic-session** (wave 2) | `AppModel/{App,Connection,Ride,Controls}/**`, new files in `AppModel/Testing/**`, `App/Sources/Services/**`, `MirrorExtension/**`, tests `Tests/OpenCfMotoAppModelTests/{App,Connection,Ride,Controls}*` | `AppModel`, `ConnectionModel`, `RideModel`, `ControlsModel`, `PermissionsModel`, iOS port adapters, `AppPlatform`, `SampleHandler` |
+| **logic-data** (wave 2) | `AppModel/{Garage,Settings,Navigation,Trips,Logs}/**`, tests `Tests/OpenCfMotoAppModelTests/{Garage,Settings,Navigation,Trips,Logs}*` | `GarageModel`, `SettingsModel`, `NavigationModel`, `TripsModel`, `LogsModel` |
+| **ui-main** (wave 2) | `App/Sources/UI/{App,Home,Dash,Ride,Mirror,Scan,Garage,Onboarding,About}/**`, `App/Resources/Localization/ui-main.json` | `@main` app, home, dash preview, Ride Mode, mirror, QR scanner, garage, onboarding, about |
+| **ui-features** (wave 2) | `App/Sources/UI/{Navigate,Trips,Settings,Controls,Logs}/**`, `App/Resources/Localization/ui-features.json`, `README.md` | map hub/search, trips, settings, handlebar controls, logs/problem report, README |
+
+Wave-2 contract files (frozen): `AppModel/Contract/*`, `AppModel/AppCore.swift`,
+`AppModel/Testing/PreviewServices.swift`, `App/Sources/UI/Common/Theme.swift`; the public surface of
+every skeleton model and of `App/Sources/Services/AppPlatform.swift` (bodies are implemented by
+the owner, signatures are frozen). Spanish strings: each UI agent writes its own
+`App/Resources/Localization/<agent>.json`; `tools/l10n/build_strings.py` merges them into
+`App/Resources/Localizable.xcstrings`.
 
 ## 5. Key runtime rules (from the specs — do not "simplify" them away)
 

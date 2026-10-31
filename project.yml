@@ -29,11 +29,15 @@ targets:
     sources:
       - path: App/Sources
       - path: App/Resources
+        excludes:
+          - "Localization/**"
     dependencies:
       - package: OpenCfMotoKit
         product: OpenCfMotoCore
       - package: OpenCfMotoKit
         product: OpenCfMotoApple
+      - package: OpenCfMotoKit
+        product: OpenCfMotoAppModel
       - target: OpenCfMotoMirror
         embed: true
         codeSign: true
@@ -43,6 +47,8 @@ targets:
         CFBundleDisplayName: OpenCfMoto
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations: [en, es]
         LSRequiresIPhoneOS: true
         UILaunchScreen: {}
         UIApplicationSupportsIndirectInputEvents: true
