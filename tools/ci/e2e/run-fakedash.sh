@@ -5,11 +5,11 @@
 # stack, so the app's probe to 127.0.0.1:10930 reaches the fake dash, which calls back to the app's
 # listeners on 127.0.0.1:10922/10921/10920 and pulls H.264 at 20 fps.
 #
-# usage: run-fakedash.sh <udid> <bundle id> <scenario> <dash model> <seconds> <out dir> [extra app args…]
-# Writes <out>/e2e-<scenario>/: fakedash.log, summary.json, transcript.jsonl, dash.h264 (removed by
-# the report step), app_*.png screenshots, app-log.txt / app-status.json (the app's Documents
-# dumps), app-stdout.log, frames/dash_NN.png (decoded from what the fake dash received),
-# frames/app_first.png (decoded from the app-side wire dump) and result.env.
+# usage: [FAKEDASH_ARGS="--cycles 2"] run-fakedash.sh <udid> <bundle id> <scenario> <dash model> <seconds> <out dir> [extra app args…]
+# Writes <out>/e2e-<scenario>/: fakedash.log, summary.json, transcript.jsonl, dash.h264, app_*.png
+# screenshots, app-log.txt / app-status.json / app.h264 (the app's Documents dumps), app-std*.log,
+# frames/dash_first.png + dash_NN.jpg (evenly spaced) + dash_last.png (decoded from what the fake
+# dash received), frames/app_first.png (decoded from the app-side wire dump) and result.env.
 
 UDID=$1
 BUNDLE=$2
@@ -26,14 +26,16 @@ ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 xcrun simctl terminate "$UDID" "$BUNDLE" > /dev/null 2>&1 || true
 sleep 1
 
-DECODE=()
-if command -v ffprobe > /dev/null && command -v ffmpeg > /dev/null; then DECODE=(--decode); fi
+EXTRA=()
+if command -v ffprobe > /dev/null && command -v ffmpeg > /dev/null; then EXTRA=(--decode); fi
+# shellcheck disable=SC2206
+[ -n "${FAKEDASH_ARGS:-}" ] && EXTRA+=($FAKEDASH_ARGS)
 
 t0=$(date +%s)
 python3 "$ROOT/tools/fakedash/fakedash.py" --bind 127.0.0.1 --scenario "$SCENARIO" --dash "$DASH" \
-  --seconds "$SECONDS_STREAM" --probe-wait 90 --max-runtime $((SECONDS_STREAM + 160)) \
+  --seconds "$SECONDS_STREAM" --probe-wait 90 --max-runtime $((SECONDS_STREAM * 3 + 160)) \
   --out-h264 "$D/dash.h264" --transcript "$D/transcript.jsonl" --summary-json "$D/summary.json" \
-  ${DECODE[@]+"${DECODE[@]}"} > "$D/fakedash.log" 2>&1 &
+  ${EXTRA[@]+"${EXTRA[@]}"} > "$D/fakedash.log" 2>&1 &
 FAKEDASH=$!
 sleep 1.5
 if ! kill -0 "$FAKEDASH" 2>/dev/null; then
@@ -47,17 +49,19 @@ launch_rc=$?
 echo "launch: $launch (rc $launch_rc)"
 APP_PID=${launch##*: }
 
-# Screenshots while streaming (the session starts ~3 s after launch).
-sleep 15
+# Screenshots while streaming (the session starts ~3 s after launch): at 1/3 and 2/3 of the stream.
+shot1=$(( SECONDS_STREAM / 3 + 6 ))
+shot2=$(( SECONDS_STREAM * 2 / 3 + 6 ))
+sleep "$shot1"
 xcrun simctl io "$UDID" screenshot --type=png "$D/app_streaming_1.png" > /dev/null 2>&1
-sleep 15
+sleep $(( shot2 - shot1 ))
 xcrun simctl io "$UDID" screenshot --type=png "$D/app_streaming_2.png" > /dev/null 2>&1
 
-# Wait for the fake dash (one complete session, or its own timeouts).
-limit=$((SECONDS_STREAM + 200))
+# Wait for the fake dash (its scenario goal, or its own timeouts).
+limit=$(( SECONDS_STREAM * 3 + 200 ))
 while kill -0 "$FAKEDASH" 2>/dev/null; do
   if [ $(( $(date +%s) - t0 )) -gt $limit ]; then
-    echo "::warning title=e2e $SCENARIO::fakedash still running after ${limit}s — interrupting it"
+    echo "::warning title=e2e $SCENARIO::fakedash still running after ${limit}s, interrupting it"
     kill -INT "$FAKEDASH" 2>/dev/null
     sleep 5
     kill -9 "$FAKEDASH" 2>/dev/null
@@ -83,15 +87,25 @@ else
 fi
 xcrun simctl terminate "$UDID" "$BUNDLE" > /dev/null 2>&1 || true
 
-# Decode sample frames of what the fake dash received (every 60th frame ≈ every 3 s at 20 fps).
+# Decode what the fake dash received: the first and last picture (PNG) and up to 10 pictures evenly
+# spread over the stream (JPEG, to keep the artifact branch small).
 frames=0
 if command -v ffmpeg > /dev/null && [ -s "$D/dash.h264" ]; then
-  ffmpeg -hide_banner -loglevel error -f h264 -i "$D/dash.h264" -vf "select=not(mod(n\,60))" -fps_mode vfr \
-    -frames:v 24 "$D/frames/dash_%02d.png" > "$D/frames/ffmpeg.log" 2>&1
-  frames=$(ls "$D"/frames/dash_*.png 2>/dev/null | wc -l | tr -d ' ')
   ffprobe -v error -f h264 -count_frames -select_streams v:0 \
     -show_entries stream=codec_name,profile,level,width,height,pix_fmt,nb_read_frames -of json "$D/dash.h264" \
     > "$D/frames/ffprobe-dash.json" 2> "$D/frames/ffprobe-dash.err"
+  total=$(python3 -c "import json,sys; s=json.load(open(sys.argv[1]))['streams'][0]; print(int(s.get('nb_read_frames') or 0))" \
+          "$D/frames/ffprobe-dash.json" 2>/dev/null || echo 0)
+  step=$(( total / 10 )); [ "$step" -lt 1 ] && step=1
+  ffmpeg -hide_banner -loglevel error -f h264 -i "$D/dash.h264" -frames:v 1 "$D/frames/dash_first.png" > "$D/frames/ffmpeg.log" 2>&1
+  ffmpeg -hide_banner -loglevel error -f h264 -i "$D/dash.h264" -vf "select=not(mod(n\,$step))" -fps_mode vfr \
+    -q:v 3 -frames:v 12 "$D/frames/dash_%02d.jpg" >> "$D/frames/ffmpeg.log" 2>&1
+  if [ "$total" -gt 1 ]; then
+    ffmpeg -hide_banner -loglevel error -f h264 -i "$D/dash.h264" -vf "select=eq(n\,$(( total - 1 )))" -fps_mode vfr \
+      -frames:v 1 "$D/frames/dash_last.png" >> "$D/frames/ffmpeg.log" 2>&1
+  fi
+  frames=$(ls "$D"/frames/dash_* 2>/dev/null | wc -l | tr -d ' ')
+  echo "decoded: $total frames in the stream, $frames pictures written (every ${step}th)"
 fi
 if command -v ffmpeg > /dev/null && [ -s "$D/app.h264" ]; then
   ffmpeg -hide_banner -loglevel error -f h264 -i "$D/app.h264" -frames:v 1 "$D/frames/app_first.png" > /dev/null 2>&1
@@ -105,11 +119,13 @@ cat > "$D/result.env" <<EOF
 scenario=$SCENARIO
 dash=$DASH
 seconds=$SECONDS_STREAM
+fakedash_args=${FAKEDASH_ARGS:-}
+app_args=$*
 fakedash_rc=$dash_rc
 launch_rc=$launch_rc
 app_alive_after=$app_alive
 duration_s=$((t1 - t0))
-decoded_pngs=$frames
+decoded_pictures=$frames
 EOF
 cat "$D/result.env"
 tail -n 45 "$D/fakedash.log"

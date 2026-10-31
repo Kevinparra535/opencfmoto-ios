@@ -86,17 +86,20 @@ struct RootView: View {
         try? await Task.sleep(for: .milliseconds(400))
         if launchLandscape { RootLaunchOrientation.applyLandscape() }
         guard let screen = launchScreen else { return }
-        Log.i("UI", "-uiScreen \(screen)")
         switch screen {
         case .home:
-            break
+            Log.i("UI", "-uiScreen home")
         case let .route(route):
+            Log.i("UI", "-uiScreen \(route)")
             router.path = [route]
         case .onboarding:
+            Log.i("UI", "-uiScreen onboarding")
             model.permissions.resetOnboarding()
         case .scan:
+            Log.i("UI", "-uiScreen scan")
             router.scan(then: .none)
         case .ride:
+            Log.i("UI", "-uiScreen ride")
             MainRideMode.enter(model.ride)
         }
     }

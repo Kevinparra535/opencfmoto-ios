@@ -171,12 +171,30 @@ jobs:
           t0=$(date +%s)
           bash tools/ci/e2e/run-fakedash.sh "${{ steps.sim.outputs.udid }}" "$BUNDLE_ID" cfdl26 cfdl26 30 "$OUT" -uiScreen dash
           printf "e2e cfdl26\t%s\tdone\n" $(( $(date +%s) - t0 )) >> "$OUT/timings.tsv"
-      - name: Report (RUN.md + annotations)
+      - name: E2E reconnect (the dash drops every socket, twice)
+        if: steps.install.outcome == 'success'
+        run: |
+          t0=$(date +%s)
+          FAKEDASH_ARGS="--cycles 2" bash tools/ci/e2e/run-fakedash.sh "${{ steps.sim.outputs.udid }}" "$BUNDLE_ID" reconnect cfdl16 10 "$OUT"
+          printf "e2e reconnect\t%s\tdone\n" $(( $(date +%s) - t0 )) >> "$OUT/timings.tsv"
+      - name: E2E stall (the dash stops pulling for 12 s; phone watchdog)
+        if: steps.install.outcome == 'success'
+        run: |
+          t0=$(date +%s)
+          FAKEDASH_ARGS="--stall-seconds 12" bash tools/ci/e2e/run-fakedash.sh "${{ steps.sim.outputs.udid }}" "$BUNDLE_ID" stall cfdl16 6 "$OUT"
+          printf "e2e stall\t%s\tdone\n" $(( $(date +%s) - t0 )) >> "$OUT/timings.tsv"
+      - name: E2E touch (800MT 1280x576 touch dash, injected taps / drags / pinch)
+        if: steps.install.outcome == 'success'
+        run: |
+          t0=$(date +%s)
+          bash tools/ci/e2e/run-fakedash.sh "${{ steps.sim.outputs.udid }}" "$BUNDLE_ID" touch mt800 15 "$OUT" -uiScreen dash
+          printf "e2e touch\t%s\tdone\n" $(( $(date +%s) - t0 )) >> "$OUT/timings.tsv"
+      - name: Report (RUN.md + annotations; fails when a required scenario failed)
         if: always()
         run: |
           mkdir -p "$OUT/crash"
           cp ~/Library/Logs/DiagnosticReports/OpenCfMoto*.ips "$OUT/crash/" 2>/dev/null || true
-          python3 tools/ci/e2e/assemble.py "$OUT" "$RUNNER_TEMP/ci-artifacts"
+          python3 tools/ci/e2e/assemble.py "$OUT" "$RUNNER_TEMP/ci-artifacts" --strict --require=cfdl16,cfdl26
       - name: Publish to the ci-artifacts branch
         if: always()
         env:

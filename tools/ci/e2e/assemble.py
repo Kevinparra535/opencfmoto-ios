@@ -126,7 +126,8 @@ def scenario_section(out, art, d, md, annotations):
     shots = sorted(os.path.basename(p) for p in glob.glob(os.path.join(d, "*.png")))
     for s in shots:
         copy(os.path.join(d, s), os.path.join(dst, s))
-    frames = sorted(os.path.basename(p) for p in glob.glob(os.path.join(d, "frames", "*.png")))
+    frames = sorted(os.path.basename(p) for p in glob.glob(os.path.join(d, "frames", "*.png"))
+                    + glob.glob(os.path.join(d, "frames", "*.jpg")))
     for fr in frames:
         copy(os.path.join(d, "frames", fr), os.path.join(dst, "frames", fr))
     for extra in ("ffprobe-dash.json", "ffprobe-app.json", "ffprobe-dash.err", "ffprobe-app.err", "ffmpeg.log"):
@@ -155,8 +156,18 @@ def scenario_section(out, art, d, md, annotations):
                   % (summary.get("result"), summary.get("goal_reached"), summary.get("violations"), summary.get("warnings")))
         md.append("| probes / sessions | %d / %d |" % (len(summary.get("probes") or []), len(sessions)))
         md.append("| session 1 | end: %s, handshake %s s, canvas %s |" % (s0.get("end_reason"), s0.get("handshake_s"), s0.get("canvas")))
-        md.append("| frames | %s total, %s keyframes, avg %s B, first frame %s s after 113 |"
-                  % (summary.get("frames_total"), s0.get("keyframes"), s0.get("avg_frame_bytes"), s0.get("first_frame_after_113_s")))
+        kf, fr = s0.get("keyframes") or 0, s0.get("frames") or 0
+        md.append("| frames | %s total, %s keyframes (%s%% of session 1), avg %s B, first frame %s s after 113 |"
+                  % (summary.get("frames_total"), kf, (100 * kf // fr) if fr else "-", s0.get("avg_frame_bytes"),
+                     s0.get("first_frame_after_113_s")))
+        for extra in sessions[1:]:
+            md.append("| session %s | end: %s, handshake %s s, canvas %s, %s frames (%s keyframes)%s |"
+                      % (extra.get("cycle"), extra.get("end_reason"), extra.get("handshake_s"), extra.get("canvas"),
+                         extra.get("frames"), extra.get("keyframes"),
+                         "" if extra.get("probe_t") is None else ", probe at %s s" % extra.get("probe_t")))
+        for p in (summary.get("probes") or [])[1:]:
+            if "after_previous_session_s" in p:
+                md.append("| re-probe | %s s after the previous session ended (%s) |" % (p.get("after_previous_session_s"), p.get("result")))
         md.append("| pulls | %s; 114→frame p50 %s ms, p95 %s ms, max %s ms |" % (fps or "-", lat.get("p50"), lat.get("p95"), lat.get("max")))
         sps = s0.get("sps") or {}
         if sps:
@@ -196,7 +207,7 @@ def scenario_section(out, art, d, md, annotations):
             if f.get("severity") == "violation":
                 annotations.append(("error", "fakedash %s [%s]" % (name, f.get("rule")), f.get("message")))
     if not frames or not any(fr.startswith("dash_") for fr in frames):
-        reasons.append("no decoded dash frame PNG")
+        reasons.append("no decoded dash picture")
     if status:
         md.append("App status (`app-status.json`, last write): phase **%s** (%s), link %s, ever streaming: %s, frames sent %s "
                   "(max %s), keyframes %s, missed pulls %s, profile %s, canvas %s, dash %s; projection %s; engine %s"
@@ -242,6 +253,10 @@ def scenario_section(out, art, d, md, annotations):
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     strict = "--strict" in sys.argv
+    required = []
+    for a in sys.argv[1:]:
+        if a.startswith("--require="):
+            required = [x for x in a.split("=", 1)[1].split(",") if x]
     if len(args) < 2:
         print(__doc__)
         return 2
@@ -311,14 +326,24 @@ def main():
             annotations.append(("notice", "Screenshots", "%d screens captured" % len(pngs)))
 
     all_ok = True
-    scen_dirs = sorted(glob.glob(os.path.join(out, "e2e-*")))
+    order = {name: i for i, name in enumerate(required)}
+    scen_dirs = sorted(glob.glob(os.path.join(out, "e2e-*")),
+                       key=lambda d: (order.get(os.path.basename(d)[4:], len(order)), d))
+    results = {}
     for d in scen_dirs:
         if os.path.isdir(d):
-            all_ok = scenario_section(out, art, d, md, annotations) and all_ok
+            results[os.path.basename(d)[4:]] = scenario_section(out, art, d, md, annotations)
+    for name in required:
+        if not results.get(name):
+            all_ok = False
     if not scen_dirs:
         md.append("## E2E: not run")
         md.append("")
         all_ok = False
+    if results:
+        summary_line = "E2E results: " + ", ".join("%s %s%s" % (k, "PASS" if v else "FAIL", " (required)" if k in required else "")
+                                                   for k, v in results.items())
+        md.insert(md.index("## Build: %s" % build_status), summary_line + "\n")
 
     crashes = sorted(glob.glob(os.path.join(out, "crash", "*")))
     if crashes:
@@ -333,7 +358,7 @@ def main():
     # Size budget: drop decoded frames from the end first, then screenshots, until under budget.
     size = tree_size(art)
     if size > BUDGET_BYTES:
-        victims = sorted(glob.glob(os.path.join(art, "e2e-*", "frames", "dash_*.png")), reverse=True)
+        victims = sorted(glob.glob(os.path.join(art, "e2e-*", "frames", "dash_*.jpg")), reverse=True)
         while victims and tree_size(art) > BUDGET_BYTES:
             os.remove(victims.pop(0))
         md.append("(artifacts trimmed to stay under %d MB)" % (BUDGET_BYTES // (1024 * 1024)))

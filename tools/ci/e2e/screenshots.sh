@@ -54,10 +54,10 @@ shoot es_settings 5 "${DEMO[@]}" -uiScreen settings -AppleLanguages "(es)" -Appl
 shoot es_dash 9 "${DEMO[@]}" -uiScreen dash -AppleLanguages "(es)" -AppleLocale es_ES
 xcrun simctl terminate "$UDID" "$BUNDLE" > /dev/null 2>&1 || true
 
-# The Simulator framebuffer stays portrait: rotate the landscape shot back (both ways, one is right).
+# The Simulator framebuffer stays portrait: the landscape-right interface is drawn rotated 90°
+# clockwise, so rotate the shot back by 270°.
 if [ -f "$DIR/dash_landscape_raw.png" ]; then
-  cp "$DIR/dash_landscape_raw.png" "$DIR/dash_landscape_cw.png" && sips -r 90 "$DIR/dash_landscape_cw.png" > /dev/null
-  cp "$DIR/dash_landscape_raw.png" "$DIR/dash_landscape_ccw.png" && sips -r 270 "$DIR/dash_landscape_ccw.png" > /dev/null
+  mv "$DIR/dash_landscape_raw.png" "$DIR/dash_landscape.png" && sips -r 270 "$DIR/dash_landscape.png" > /dev/null
 fi
 
 # Keep the artifact branch small: long side 1400 px.
