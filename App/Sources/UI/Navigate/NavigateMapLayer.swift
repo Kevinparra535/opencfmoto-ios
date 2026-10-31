@@ -16,6 +16,8 @@ struct NavigateMapLayer: View {
     let snapshot: NavSnapshot
     /// Search results to show as markers (empty when the result list is closed).
     let results: [Place]
+    /// Home and the parked bike (always pinned).
+    let saved: [Place]
     @Binding var camera: MapCameraPosition
     @Binding var selection: Place?
 
@@ -60,7 +62,7 @@ struct NavigateMapLayer: View {
                     .tag(destination)
             }
 
-            ForEach(NavigateGeometry.pins(snapshot), id: \.self) { place in
+            ForEach(NavigateGeometry.pins(snapshot, extra: saved), id: \.self) { place in
                 Marker(place.name, systemImage: NavigateIcons.place(place.category),
                        coordinate: NavigateGeometry.coordinate(place))
                     .tint(Theme.idle)

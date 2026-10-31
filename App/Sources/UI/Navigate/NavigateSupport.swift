@@ -95,11 +95,13 @@ enum NavigateGeometry {
         return NavFormat.formatDistance(meters, units: units, decimalSeparator: separator)
     }
 
-    /// Places worth drawing as pins: not at (0,0), no duplicates, not the destination / previewed place.
-    static func pins(_ snapshot: NavSnapshot) -> [Place] {
+    /// Places worth drawing as pins (the session's pins plus home / parked): not at (0,0), no
+    /// duplicates, not the destination / previewed place.
+    static func pins(_ snapshot: NavSnapshot, extra: [Place] = []) -> [Place] {
         var seen = Set<Place>()
         var out: [Place] = []
-        for place in snapshot.pins where !(place.lat == 0 && place.lon == 0) {
+        for place in extra + snapshot.pins where !(place.lat == 0 && place.lon == 0) {
+            if out.contains(where: { $0.isSameLocation(as: place) && $0.name == place.name }) { continue }
             if let destination = snapshot.destination, destination.isSameLocation(as: place) { continue }
             if let previewed = snapshot.preview?.place, previewed.isSameLocation(as: place) { continue }
             if seen.insert(place).inserted { out.append(place) }

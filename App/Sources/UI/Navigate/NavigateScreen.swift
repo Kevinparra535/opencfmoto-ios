@@ -41,6 +41,7 @@ struct NavigateScreen: View {
         let snapshot = navigation.snapshot
         NavigateMapLayer(snapshot: snapshot,
                          results: panelVisible ? navigation.results : [],
+                         saved: [navigation.home, navigation.parked].compactMap { $0 },
                          camera: $camera,
                          selection: $selectedPlace)
             .safeAreaInset(edge: .top, spacing: 0) { header }
@@ -126,7 +127,8 @@ struct NavigateScreen: View {
             if panelVisible {
                 NavigateSearchPanel(showingNearby: showingNearby,
                                     onChosen: { closePanel(clearQuery: false) },
-                                    onChip: { searchChip($0) })
+                                    onChip: { searchChip($0) },
+                                    maxHeight: searchFocused ? 260 : 400)
             } else {
                 NavigatePoiChips(chips: navigation.poiChips, onTap: { searchChip($0) })
             }

@@ -20,6 +20,8 @@ struct NavigateSearchPanel: View {
     /// A row was chosen (preview / navigate): the screen closes the panel.
     let onChosen: () -> Void
     let onChip: (PlaceSearch.PoiChip) -> Void
+    /// Smaller while the keyboard is up.
+    var maxHeight: CGFloat = 400
 
     var body: some View {
         let navigation = model.navigation
@@ -56,7 +58,7 @@ struct NavigateSearchPanel: View {
         .scrollContentBackground(.hidden)
         .scrollDismissesKeyboard(.immediately)
         .environment(\.defaultMinListRowHeight, 44)
-        .frame(maxHeight: 400)
+        .frame(maxHeight: maxHeight)
         .background(Theme.surface.opacity(0.98), in: RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
             .strokeBorder(Theme.outline, lineWidth: 1))

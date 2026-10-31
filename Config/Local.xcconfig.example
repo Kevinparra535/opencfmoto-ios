@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copy this file to Config/Local.xcconfig (git-ignored) and fill in your own values:
+//
+//   cp Config/Local.xcconfig.example Config/Local.xcconfig
+//
+// Config/OpenCfMoto.xcconfig includes Local.xcconfig last, so everything here overrides it.
+
+// Your Apple Developer team ID (Xcode ▸ Settings ▸ Accounts, or developer.apple.com ▸ Membership).
+DEVELOPMENT_TEAM = ABCDE12345
+
+// A reverse-DNS prefix you own. Bundle ids become <prefix>.opencfmoto and <prefix>.opencfmoto.mirror,
+// the App Group becomes group.<prefix>.opencfmoto.
+BUNDLE_ID_PREFIX = com.yourname
+
+// full — paid Apple Developer Program: the app joins the bike Wi-Fi itself (Hotspot Configuration)
+//        and can read the current SSID (Access WiFi Information).
+// free — free Personal Team: no Hotspot / Wi-Fi Information entitlements; you join the bike Wi-Fi
+//        in iOS Settings when the app asks (it shows the network name and copies the password).
+OCM_FLAVOR = full
