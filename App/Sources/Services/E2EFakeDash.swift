@@ -261,6 +261,10 @@ final class E2EFakeDashHarness {
             "avg_encode_ms": (e.averageEncodeMs * 10).rounded() / 10,
             "pool_exhausted": e.poolExhausted,
             "queue_overflows": e.queueOverflows,
+            "gated_drops": e.gatedDrops,
+            "hold_frames_served": e.holdFramesServed,
+            "pull_rate": (e.pullRate * 10).rounded() / 10,
+            "output_fps": (e.outputFPS * 10).rounded() / 10,
         ] as [String: Any]
         guard let data = try? JSONSerialization.data(withJSONObject: status, options: [.prettyPrinted, .sortedKeys]) else { return }
         try? data.write(to: Self.documentsDirectory.appendingPathComponent("e2e-status.json"), options: .atomic)
