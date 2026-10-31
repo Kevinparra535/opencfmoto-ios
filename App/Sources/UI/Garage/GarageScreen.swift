@@ -103,6 +103,10 @@ struct GarageScreen: View {
         .scrollContentBackground(.hidden)
         .background(Theme.background.ignoresSafeArea())
         .navigationTitle("Garage")
+        .onAppear {
+            // Android refreshes the garage on resume.
+            model.garage.reload()
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {

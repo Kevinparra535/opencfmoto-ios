@@ -6,7 +6,7 @@
 import SwiftUI
 import OpenCfMotoCore
 
-struct DashKeypad: View {
+struct DashPreviewKeypad: View {
     var send: (HandlebarKey) -> Void
     @ScaledMetric(relativeTo: .title3) private var keySize: CGFloat = 56
 

@@ -53,6 +53,10 @@ struct RootView: View {
             RideModeOverlay()
                 .connectionIssueAlert(isActive: true)
         }
+        .onChange(of: model.permissions.hasCompletedOnboarding) { _, completed in
+            // Settings ▸ "Show onboarding again": show it right away instead of under the stack.
+            if !completed { router.path.removeAll() }
+        }
         .onChange(of: model.connection.issue, initial: true) { _, issue in
             // Android: Connect without a saved bike opens the QR scanner (§7.5.4).
             guard issue == .noBikePaired else { return }

@@ -159,7 +159,7 @@ struct DashPreviewScreen: View {
 
             HStack {
                 Spacer(minLength: 0)
-                DashKeypad { key in
+                DashPreviewKeypad { key in
                     model.ride.sendPreviewInput(.key(key))
                 }
                 Spacer(minLength: 0)
