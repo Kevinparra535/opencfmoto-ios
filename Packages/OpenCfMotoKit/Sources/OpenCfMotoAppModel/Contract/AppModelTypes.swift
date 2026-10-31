@@ -208,3 +208,23 @@ public enum OnboardingStep: String, Sendable, Equatable, CaseIterable {
     case pairBike
     case done
 }
+
+// MARK: - Opened files waiting for confirmation
+
+/// A settings or map-data pack opened from another app (Files, AirDrop, Mail…).
+public struct PendingImport: Sendable, Equatable, Identifiable {
+    public enum Kind: String, Sendable, Equatable { case settings, mapData }
+    public var id: String { fileName }
+    public var kind: Kind
+    /// Display name of the opened file.
+    public var fileName: String
+    /// The pack's JSON text (applied only after confirmation).
+    public var text: String
+
+    public init(kind: Kind, fileName: String, text: String) {
+        self.kind = kind
+        self.fileName = fileName
+        self.text = text
+    }
+}
+

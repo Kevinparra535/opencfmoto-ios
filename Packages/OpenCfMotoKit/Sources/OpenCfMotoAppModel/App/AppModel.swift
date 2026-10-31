@@ -41,6 +41,9 @@ public final class AppModel {
 
     /// One-line transient message for the whole app (imports, errors); auto-cleared.
     public private(set) var banner: String?
+    /// A settings / map-data pack opened from another app, waiting for the rider's confirmation
+    /// before it overwrites anything (app-features §3.5). The UI shows a confirmation dialog.
+    public private(set) var pendingImport: PendingImport?
 
     public var flavor: BuildFlavor { core.services.system.flavor }
     public var appVersion: String { core.services.system.appVersion }
@@ -114,6 +117,20 @@ public final class AppModel {
             self.banner = nil
         }
     }
+
+    /// Applies `pendingImport` (the rider confirmed). Shows the result as the banner.
+    public func confirmPendingImport() {
+        guard let pending = pendingImport else { return }
+        pendingImport = nil
+        let result = pending.kind == .settings ? settings.importSettings(pending.text) : settings.importMapData(pending.text)
+        if !result.message.isEmpty { showBanner(result.message) }
+    }
+
+    /// Drops `pendingImport` without changing anything.
+    public func cancelPendingImport() { pendingImport = nil }
+
+    /// Holds an opened pack until the rider confirms (used by `handleOpenURL`).
+    func requestImportConfirmation(_ pending: PendingImport) { pendingImport = pending }
 
     public func dismissBanner() {
         bannerTask?.cancel()

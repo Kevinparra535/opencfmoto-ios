@@ -110,6 +110,10 @@ public final class ConnectionModel {
     public private(set) var diagnostics = LinkDiagnostics()
     /// True once the ReplayKit extension connected to the relay socket.
     public private(set) var isMirrorExtensionConnected = false
+    /// A Connect / Mirror session exists (joining, linking, streaming, reconnecting, parked, or an
+    /// .error phase whose link keeps re-arming). The big button must offer Stop whenever this is true,
+    /// not only when `phase.showsStop` (review finding CL-1).
+    public private(set) var isSessionActive = false
 
     // MARK: Internal state
 
@@ -186,7 +190,7 @@ public final class ConnectionModel {
 
     /// Connect if idle/stopped/error, stop otherwise (the big button).
     public func toggle() {
-        if phase.showsStop { stop() } else { connect() }
+        if isSessionActive || phase.showsStop { stop() } else { connect() }
     }
 
     /// The rider says they joined the bike Wi-Fi in Settings.
@@ -306,6 +310,7 @@ public final class ConnectionModel {
         diagnostics = LinkDiagnostics()
         mode = newMode
         session = ConnectionSession(bike: bike, qr: qr, mode: newMode, trigger: trigger)
+        isSessionActive = true
         Log.i("APP", "→ \(newMode == .mirror ? "Mirror" : "Connect")\(trigger == .auto ? " (auto)" : ""): '\(bike.name)'")
         ride.sessionChanged(active: true, mirror: newMode == .mirror)
         controls.sessionChanged(active: true, mirror: newMode == .mirror)
@@ -329,6 +334,7 @@ public final class ConnectionModel {
         isParked = false
         guard let s = session else { return }
         session = nil
+        isSessionActive = false
         switch s.mode {
         case .mirror:
             core.services.mirror.stop()
