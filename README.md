@@ -98,10 +98,12 @@ xcodegen generate
 open OpenCfMoto.xcodeproj
 ```
 
-En Xcode elige el esquema **OpenCfMoto**, tu iPhone como destino y pulsa **Run**. La primera vez
-iOS pedirá confiar en el desarrollador (Ajustes ▸ General ▸ VPN y gestión de dispositivos) y, al
-conectar con la moto, permiso de **red local** y de **ubicación**: acéptalos, sin ellos la app no
-puede hablar con el tablero ni dibujar el mapa. `Config/Local.xcconfig` no se sube al repositorio.
+En Xcode elige el esquema **OpenCfMoto**, tu iPhone como destino y pulsa **Run** (en el iPhone
+activa antes el **Modo de desarrollador**: Ajustes ▸ Privacidad y seguridad ▸ Modo de
+desarrollador). La primera vez iOS pedirá confiar en el desarrollador (Ajustes ▸ General ▸ VPN y
+gestión de dispositivos) y, al conectar con la moto, permiso de **red local** y de **ubicación**:
+acéptalos, sin ellos la app no puede hablar con el tablero ni dibujar el mapa.
+`Config/Local.xcconfig` no se sube al repositorio.
 
 ### Modo demostración
 
@@ -290,10 +292,11 @@ xcodegen generate
 open OpenCfMoto.xcodeproj
 ```
 
-In Xcode pick the **OpenCfMoto** scheme and your iPhone, then **Run**. The first time, iOS asks you
-to trust the developer (Settings ▸ General ▸ VPN & Device Management) and, when connecting to the
-bike, for **Local Network** and **Location** access: allow both, the app cannot talk to the dash or
-draw the map without them. `Config/Local.xcconfig` is git-ignored.
+In Xcode pick the **OpenCfMoto** scheme and your iPhone, then **Run** (turn on **Developer Mode** on
+the iPhone first: Settings ▸ Privacy & Security ▸ Developer Mode). The first time, iOS asks you to
+trust the developer (Settings ▸ General ▸ VPN & Device Management) and, when connecting to the bike,
+for **Local Network** and **Location** access: allow both, the app cannot talk to the dash or draw
+the map without them. `Config/Local.xcconfig` is git-ignored.
 
 ### Demo mode
 
