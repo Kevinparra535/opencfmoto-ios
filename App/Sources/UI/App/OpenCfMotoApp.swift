@@ -20,7 +20,8 @@ struct OpenCfMotoApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView()
+            RootView(launchScreen: RootLaunchScreen(name: AppPlatform.shared.launchOptions.uiScreen),
+                     launchLandscape: AppPlatform.shared.launchOptions.landscape)
                 .environment(AppPlatform.shared.model)
                 .preferredColorScheme(.dark)
                 .tint(Theme.brand)

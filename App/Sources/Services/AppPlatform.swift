@@ -19,6 +19,10 @@
 // Demo mode keeps the REAL dash renderer (CoreGraphics + CoreText metrics + map tiles) and the real
 // internet client (routing / search / tiles work in the Simulator); only the bike side (Wi-Fi,
 // sockets, GPS, speech, handlebar, mirror) is simulated, with a GPS loop replayed at 45 km/h.
+//
+// Test launch arguments (AppLaunchOptions.swift; the CI simulator job uses them): `-demoSeed` seeds
+// demo content (DemoSeed.swift), `-e2eFakeDash` runs the REAL link stack against the Python fake
+// dash on 127.0.0.1 (E2EFakeDash.swift), `-uiScreen` / `-uiOrientation` are applied by RootView.
 
 import Foundation
 import OpenCfMotoCore
@@ -39,6 +43,8 @@ final class AppPlatform {
     let broadcastExtensionBundleID: String
     /// Running on fake services (no Wi-Fi / dash / real GPS).
     let isDemoMode: Bool
+    /// Test / demo launch arguments (`-demoSeed`, `-e2eFakeDash`, `-uiScreen`, …).
+    let launchOptions: AppLaunchOptions
 
     /// Monotonic seconds on the model's clock (pass to `RideModel.displayList(now:)` and DashTouch).
     func now() -> TimeInterval { clock.now() }
@@ -46,6 +52,7 @@ final class AppPlatform {
     private let clock: MonotonicClock
     private let projection: ProjectionAdapter
     private let demoPlayer: DemoRoutePlayer?
+    private let e2eHarness: E2EFakeDashHarness?
 
     private init() {
         let clock = SystemMonotonicClock()
@@ -57,10 +64,16 @@ final class AppPlatform {
         Log.shared.echoToConsole = true
         #endif
 
+        let options = AppLaunchOptions.current
+        launchOptions = options
+        if !options.logDescription.isEmpty {
+            Log.i("APP", "launch arguments: \(options.logDescription)")
+        }
+
         #if targetEnvironment(simulator)
-        let demo = true
+        let demo = !options.e2eFakeDash
         #else
-        let demo = ProcessInfo.processInfo.arguments.contains("-demo")
+        let demo = options.demo && !options.e2eFakeDash
         #endif
         isDemoMode = demo
 
@@ -75,21 +88,32 @@ final class AppPlatform {
         self.projection = projection
         dashRenderer = projection.renderer
 
-        if demo {
+        if options.e2eFakeDash {
+            let harness = E2EFakeDashHarness(options: options, flavor: flavor, clock: clock, http: http,
+                                             projection: projection)
+            let e2eModel = AppModel(services: harness.services)
+            harness.attach(to: e2eModel)
+            model = e2eModel
+            e2eHarness = harness
+            demoPlayer = nil
+        } else if demo {
             var services = AppServices.preview(flavor: flavor, clock: clock)
             let location = PreviewLocation()
             services.location = location
             services.projection = projection
             services.http = http
             services.setPreferCellular = { [http] on in http.preferCellular = on }
+            if options.demoSeed { DemoSeed.apply(to: services) }
             model = AppModel(services: services)
             let player = DemoRoutePlayer(location: location, now: services.now)
             player.start()
             demoPlayer = player
+            e2eHarness = nil
             Log.i("APP", "demo mode: simulated bike, Wi-Fi and GPS (route loop at 45 km/h)")
         } else {
             model = AppModel(services: Self.realServices(flavor: flavor, clock: clock, http: http, projection: projection))
             demoPlayer = nil
+            e2eHarness = nil
         }
     }
 

@@ -18,6 +18,15 @@ import OpenCfMotoCore
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @State private var router = MainRouter()
+    /// `-uiScreen` / `-uiOrientation` launch arguments (CI screenshots); nil / false in normal use.
+    private let launchScreen: RootLaunchScreen?
+    private let launchLandscape: Bool
+    @State private var launchApplied = false
+
+    init(launchScreen: RootLaunchScreen? = nil, launchLandscape: Bool = false) {
+        self.launchScreen = launchScreen
+        self.launchLandscape = launchLandscape
+    }
 
     var body: some View {
         NavigationStack(path: $router.path) {
@@ -64,6 +73,34 @@ struct RootView: View {
             if model.permissions.hasCompletedOnboarding {
                 router.scan(then: .connect)
             }
+        }
+        .task { await applyLaunchOptions() }
+    }
+
+    // MARK: - Launch arguments (CI screenshots)
+
+    /// Opens the `-uiScreen` destination once, after the first layout pass.
+    private func applyLaunchOptions() async {
+        guard !launchApplied, launchScreen != nil || launchLandscape else { return }
+        launchApplied = true
+        try? await Task.sleep(for: .milliseconds(400))
+        if launchLandscape { RootLaunchOrientation.applyLandscape() }
+        guard let screen = launchScreen else { return }
+        switch screen {
+        case .home:
+            Log.i("UI", "-uiScreen home")
+        case let .route(route):
+            Log.i("UI", "-uiScreen \(route)")
+            router.path = [route]
+        case .onboarding:
+            Log.i("UI", "-uiScreen onboarding")
+            model.permissions.resetOnboarding()
+        case .scan:
+            Log.i("UI", "-uiScreen scan")
+            router.scan(then: .none)
+        case .ride:
+            Log.i("UI", "-uiScreen ride")
+            MainRideMode.enter(model.ride)
         }
     }
 
