@@ -71,6 +71,12 @@ final class SettingsModelTests: XCTestCase {
         XCTAssertEqual(settings.presence.volumeRocker, .absent)
         XCTAssertEqual(observed.last, settings.current)
 
+        // Renaming the selected bike keeps the scope: no re-scope notification.
+        let count = observed.count
+        garage.rename(a.id, to: "Renamed")
+        XCTAssertEqual(settings.bikeId, a.id)
+        XCTAssertEqual(observed.count, count)
+
         garage.remove(a.id)
         XCTAssertEqual(settings.bikeId, b.id)
         garage.remove(b.id)

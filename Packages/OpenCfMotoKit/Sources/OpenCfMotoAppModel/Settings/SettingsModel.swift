@@ -356,13 +356,17 @@ public final class SettingsModel {
         Log.i(Self.tag, text)
     }
 
-    /// Follows the garage selection: per-bike values, presence and the handlers' view change.
+    /// Follows the garage selection: per-bike values, presence and the handlers' view change. The
+    /// handlers run on every change of scope (another bike) even when the values are equal; a
+    /// selection update of the same bike (rename, photo) only notifies when `current` changed.
     private func rescope(to id: String?) {
+        let scopeChanged = id != bikeId
         bikeId = id
         refreshSecondary()
         let fresh = core.settings.settings(forBike: id)
-        if fresh != current { current = fresh }
-        notifyHandlers()
+        let valuesChanged = fresh != current
+        if valuesChanged { current = fresh }
+        if valuesChanged || scopeChanged { notifyHandlers() }
     }
 
     /// Re-reads `current`; notifies the handlers when it changed.

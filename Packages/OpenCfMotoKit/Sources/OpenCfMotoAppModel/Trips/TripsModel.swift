@@ -75,7 +75,10 @@ public final class TripsModel {
         let store = core.tripStore
         isListing = true
         let task = Task { [weak self] in
-            let listed = await Task.detached(priority: .utility) { store.list() }.value
+            // Blocking file I/O: on a GCD worker, not on a cooperative-pool thread.
+            let listed: [Trip] = await withCheckedContinuation { continuation in
+                DispatchQueue.global(qos: .utility).async { continuation.resume(returning: store.list()) }
+            }
             guard !Task.isCancelled, let self, self.listGeneration == generation else { return }
             self.isListing = false
             self.trips = listed
