@@ -322,6 +322,28 @@ final class ConnectionModelTests: XCTestCase {
         XCTAssertTrue(released)
     }
 
+    @MainActor
+    func testAFailedSessionForgetsItsBikeWifiOnStopOrWhenTheAppLeaves() async {
+        let net = LinkMemoryNetwork(phoneHost: "192.168.0.2")
+        net.blockPort(10921)
+        let h = AppTestHarness(network: net)
+        let (_, qr) = h.addBike()
+        h.connection.connect()
+        _ = await eventually { h.connection.issue == .portsInUse }
+        XCTAssertTrue(h.wifi.forgottenSSIDs.isEmpty) // kept for a quick retry
+        XCTAssertEqual(h.connection.lingeringWifiSSID, qr.ssid)
+        h.connection.scenePhaseChanged(.background)
+        XCTAssertEqual(h.wifi.forgottenSSIDs, [qr.ssid])
+        XCTAssertNil(h.connection.lingeringWifiSSID)
+
+        // Same after Stop.
+        h.connection.connect()
+        _ = await eventually { h.connection.issue == .portsInUse && h.connection.session == nil }
+        XCTAssertEqual(h.connection.lingeringWifiSSID, qr.ssid)
+        h.connection.stop()
+        XCTAssertEqual(h.wifi.forgottenSSIDs, [qr.ssid, qr.ssid])
+    }
+
     // MARK: Wi-Fi supervision (180 s grace → waiting for bike → resume)
 
     @MainActor

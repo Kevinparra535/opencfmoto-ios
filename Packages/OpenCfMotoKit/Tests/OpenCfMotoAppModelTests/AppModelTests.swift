@@ -57,6 +57,37 @@ final class AppModelTests: XCTestCase {
         h.connection.stop()
     }
 
+    // MARK: Lifetime
+
+    /// No retain cycle keeps the model graph (and its timers / link tasks) alive.
+    @MainActor
+    func testTheModelGraphIsReleasedAfterUse() async {
+        weak var weakModel: AppModel?
+        weak var weakRide: RideModel?
+        weak var weakConnection: ConnectionModel?
+        weak var weakControls: ControlsModel?
+        do {
+            let h = AppTestHarness()
+            h.addBike()
+            h.ride.startLocationPreview()
+            h.ride.enterRideMode()
+            h.controls.setRemoteEnabled(true)
+            h.connection.connect()
+            _ = await eventually { h.connection.link != nil }
+            h.location.emit(LocationFix(lat: 4.65, lon: -74.09, speedMps: 5, timeMs: 1_790_000_000_000))
+            await settle(0.1)
+            h.connection.stop()
+            weakModel = h.model
+            weakRide = h.ride
+            weakConnection = h.connection
+            weakControls = h.controls
+        }
+        let released = await eventually(timeout: 3) {
+            weakModel == nil && weakRide == nil && weakConnection == nil && weakControls == nil
+        }
+        XCTAssertTrue(released, "model=\(weakModel != nil) ride=\(weakRide != nil) connection=\(weakConnection != nil) controls=\(weakControls != nil)")
+    }
+
     // MARK: Opened files
 
     private func tempFile(_ name: String, _ text: String) throws -> URL {

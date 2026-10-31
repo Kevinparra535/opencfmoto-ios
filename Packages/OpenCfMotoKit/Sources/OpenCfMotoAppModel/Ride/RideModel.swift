@@ -138,6 +138,7 @@ public final class RideModel {
     @ObservationIgnored private var chipSearchTask: Task<Void, Never>?
     @ObservationIgnored private var placesListener: UUID?
     @ObservationIgnored private let tileRefreshPending = Locked(false)
+    @ObservationIgnored private var scenePhase: AppScenePhase = .active
 
     public init(core: AppCore, settings: SettingsModel, navigation: NavigationModel, trips: TripsModel) {
         self.core = core
@@ -304,9 +305,13 @@ public final class RideModel {
 
     func scenePhaseChanged(_ phase: AppScenePhase) {
         let projection = core.services.projection
+        let previous = scenePhase
+        scenePhase = phase
         switch phase {
         case .inactive:
-            if isProjecting { projection.prepareHoldPicture() }
+            // Leaving the foreground (not coming back from the background): pre-encode the hold
+            // picture while the hardware encoder is still available.
+            if previous == .active, isProjecting { projection.prepareHoldPicture() }
         case .background:
             projection.enterBackground()
         case .active:

@@ -131,6 +131,9 @@ public final class ConnectionModel {
     @ObservationIgnored private var lastFrameSentAt: TimeInterval?
     @ObservationIgnored private(set) var autoConnectLatched = false
     @ObservationIgnored private var loggedAutoConnectIdle = false
+    /// Bike Wi-Fi configuration kept after a failed session (Android keeps the network until Stop);
+    /// forgotten by Stop, by a session to another bike, or when the app leaves the foreground idle.
+    @ObservationIgnored private(set) var lingeringWifiSSID: String?
 
     public init(core: AppCore, garage: GarageModel, settings: SettingsModel, ride: RideModel,
                 controls: ControlsModel) {
@@ -171,6 +174,7 @@ public final class ConnectionModel {
         cancelAutoConnect(unlatch: false)
         let had = session != nil
         teardownSession(keepWifi: false)
+        forgetLingeringWifi(except: nil)
         ride.sessionChanged(active: false, mirror: false)
         controls.sessionChanged(active: false, mirror: false)
         core.services.setPreferCellular(false)
@@ -238,6 +242,8 @@ public final class ConnectionModel {
         case .background:
             // Android unlatches when the activity died before the delayed connect ran.
             cancelAutoConnect(unlatch: true)
+            // A failed session's bike Wi-Fi must not keep auto-joining once the rider left the app.
+            if session == nil { forgetLingeringWifi(except: nil) }
         case .active:
             // Back from Settings ▸ Wi-Fi: re-check the network at once.
             if manualJoin != nil, let signal = manualJoinSignal {
@@ -265,6 +271,7 @@ public final class ConnectionModel {
         }
         // Hard switch: the previous projection and link die first; the Wi-Fi association stays.
         teardownSession(keepWifi: true)
+        forgetLingeringWifi(except: qr.ssid)
         if newMode == .mirror {
             do {
                 try core.services.mirror.start()
@@ -337,6 +344,7 @@ public final class ConnectionModel {
 
     /// A terminal failure: the session ends (Wi-Fi stays associated until Stop, like Android).
     private func endSession(_ newPhase: ConnectionPhase, detail newDetail: String, issue newIssue: ConnectionIssue?) {
+        if let s = session, core.services.wifi.supportsAutomaticJoin { lingeringWifiSSID = s.qr.ssid }
         teardownSession(keepWifi: true)
         ride.sessionChanged(active: false, mirror: false)
         controls.sessionChanged(active: false, mirror: false)
@@ -356,6 +364,13 @@ public final class ConnectionModel {
         }
         watchWifi(gen)
         await startLink(info: info, gen: gen, afterWifiLoss: false)
+    }
+
+    private func forgetLingeringWifi(except ssid: String?) {
+        guard let lingering = lingeringWifiSSID else { return }
+        lingeringWifiSSID = nil
+        guard lingering != ssid else { return }
+        core.services.wifi.forget(ssid: lingering)
     }
 
     private func setPhase(_ newPhase: ConnectionPhase, detail newDetail: String? = nil) {
