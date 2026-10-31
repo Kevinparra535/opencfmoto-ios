@@ -476,7 +476,7 @@ public final class WiFiInfo: @unchecked Sendable {
     }
 
     /// Builds a snapshot from a Wi-Fi path.
-    public static func snapshot(from path: NWPath) -> WiFiSnapshot {
+    public static func snapshot(from path: Network.NWPath) -> WiFiSnapshot {
         let wifi = path.availableInterfaces.first { $0.type == .wifi }
         let name = wifi?.name
         let gateways: [String] = path.gateways.compactMap { ep in
@@ -499,7 +499,7 @@ public final class WiFiInfo: @unchecked Sendable {
         )
     }
 
-    private func handle(_ path: NWPath) {
+    private func handle(_ path: Network.NWPath) {
         let s = Self.snapshot(from: path)
         lock.lock()
         let changed = s != _current || !hasFirstUpdate
