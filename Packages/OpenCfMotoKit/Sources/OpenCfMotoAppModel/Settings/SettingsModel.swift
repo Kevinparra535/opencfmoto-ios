@@ -208,6 +208,22 @@ public final class SettingsModel {
         reload()
     }
 
+    /// "Teach my handlebar" for the selected bike: does its ▲/▼ volume rocker reach the phone?
+    /// (Android `▲/▼ works` = present, `▲/▼ absent` = absent; unknown lets the ~90 s probe decide.)
+    /// ControlsModel's live engine follows the stored value.
+    public func setVolumeRockerPresence(_ presence: ButtonPresence) {
+        core.settings.setVolumeRockerPresence(presence, forBike: bikeId)
+        logChange("handlebar \u{25B2}/\u{25BC} rocker taught \(presence.rawValue)")
+        refreshPresence()
+    }
+
+    /// "Teach my handlebar" for the selected bike: do its ◀/▶/★ track keys reach the phone?
+    public func setTrackKeysPresence(_ presence: ButtonPresence) {
+        core.settings.setTrackKeysPresence(presence, forBike: bikeId)
+        logChange("handlebar \u{25C0}/\u{25B6} track keys taught \(presence.rawValue)")
+        refreshPresence()
+    }
+
     /// Re-reads everything from storage (after imports or engine-side presence changes).
     public func reload() {
         let selectedId = core.garage.selected?.id
@@ -378,10 +394,14 @@ public final class SettingsModel {
     }
 
     private func refreshSecondary() {
-        let p = core.settings.presence(forBike: bikeId)
-        if p != presence { presence = p }
+        refreshPresence()
         let places = core.settings.savedPlaces
         if places != savedPlaces { savedPlaces = places }
+    }
+
+    private func refreshPresence() {
+        let p = core.settings.presence(forBike: bikeId)
+        if p != presence { presence = p }
     }
 
     private func notifyHandlers() {

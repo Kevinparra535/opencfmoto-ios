@@ -3,7 +3,8 @@
 //
 // Trips (docs/spec/app-features.md §5.4, §5.6, §5.7): the live trip computer (speed, distance,
 // moving time, max / avg speed, GPS state) with a manual recording (Start recording / Stop & save —
-// the auto-log never stops a manual recording), the auto-log note, and the saved trips grouped by
+// the auto-log never stops a manual recording), Discard (Android "Reset", confirmed; throws the
+// current recording away unsaved), the auto-log note, and the saved trips grouped by
 // local day (TripsModel.sections, newest first) with route thumbnails; tap a trip for its map,
 // stats, GPX export and delete; swipe or long-press to delete (with confirmation).
 
@@ -88,11 +89,13 @@ struct TripsScreen: View {
     }
 }
 
-/// The live trip computer (Android `TripActivity`): big speed, GPS line, 2×2 stats, recording.
+/// The live trip computer (Android `TripActivity`): big speed, GPS line, 2×2 stats, recording
+/// (Start recording / Stop & save / Discard — Android's Start / Pause / Reset).
 @MainActor
 struct TripsComputerCard: View {
     @Environment(AppModel.self) private var model
     @ScaledMetric(relativeTo: .largeTitle) private var speedSize: CGFloat = 76
+    @State private var confirmDiscard = false
 
     var body: some View {
         let trips = model.trips
@@ -179,6 +182,18 @@ struct TripsComputerCard: View {
                 .buttonStyle(PrimaryButtonStyle())
             }
 
+            // Android "Reset": throws the current recording (manual or automatic) away, unsaved.
+            if recording {
+                Button(role: .destructive) {
+                    confirmDiscard = true
+                } label: {
+                    Label("Discard", systemImage: "trash")
+                        .foregroundStyle(Theme.error)
+                }
+                .buttonStyle(TonalButtonStyle())
+                .accessibilityHint(Text("Throws this recording away without saving it"))
+            }
+
             if let error = trips.lastError, !error.isEmpty {
                 Label {
                     Text(verbatim: error)
@@ -196,6 +211,20 @@ struct TripsComputerCard: View {
             FeatureNote("Speed and distance come from the phone's GPS (the bike doesn't share telemetry over the dash link). Keep a clear view of the sky for best accuracy.")
         }
         .cardStyle()
+        .confirmationDialog("Discard this recording?", isPresented: $confirmDiscard, titleVisibility: .visible) {
+            Button("Discard", role: .destructive) { model.trips.discardRecording() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            if model.trips.isManualRecording {
+                Text("The distance and time recorded so far are thrown away. Nothing is saved.")
+            } else {
+                Text("The distance and time logged so far are thrown away. Nothing is saved — automatic logging then starts a new ride.")
+            }
+        }
+        .onChange(of: trips.isRecording) { _, isRecording in
+            // The recording ended meanwhile (saved by Stop or the auto-log): nothing left to discard.
+            if !isRecording { confirmDiscard = false }
+        }
     }
 }
 

@@ -191,6 +191,16 @@
         }
       }
     },
+    "Absent": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausente"
+          }
+        }
+      }
+    },
     "Acquiring GPS…": {
       "localizations": {
         "es": {
@@ -1407,6 +1417,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Desactivar pantalla táctil"
+          }
+        }
+      }
+    },
+    "Discard": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descartar"
+          }
+        }
+      }
+    },
+    "Discard this recording?": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Descartar esta grabación?"
           }
         }
       }
@@ -3651,6 +3681,16 @@
         }
       }
     },
+    "Present": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Presente"
+          }
+        }
+      }
+    },
     "Press a handlebar button: the raw event and the command it triggers show up here.": {
       "localizations": {
         "es": {
@@ -4961,6 +5001,26 @@
         }
       }
     },
+    "The distance and time logged so far are thrown away. Nothing is saved — automatic logging then starts a new ride.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se descartan la distancia y el tiempo registrados hasta ahora. No se guarda nada; después, el registro automático empieza un viaje nuevo."
+          }
+        }
+      }
+    },
+    "The distance and time recorded so far are thrown away. Nothing is saved.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se descartan la distancia y el tiempo grabados hasta ahora. No se guarda nada."
+          }
+        }
+      }
+    },
     "The report includes the app version, the active bike profile, the link state and the recent log.": {
       "localizations": {
         "es": {
@@ -5037,6 +5097,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Este iPhone no permite el acceso a la cámara (Tiempo de uso o un perfil). Importa el QR desde una foto o introduce el Wi-Fi manualmente."
+          }
+        }
+      }
+    },
+    "Throws this recording away without saving it": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descarta esta grabación sin guardarla"
           }
         }
       }
@@ -5471,6 +5541,16 @@
         }
       }
     },
+    "Which buttons does this bike actually send? Mark a source Absent if it never reaches the phone, or leave it Unknown and OpenCfMoto finds out by itself.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué botones envía realmente esta moto? Marca como Ausente lo que nunca llegue al teléfono, o déjalo en Desconocido y OpenCfMoto lo averigua solo."
+          }
+        }
+      }
+    },
     "While mirroring, hold the phone this way so the dash fills. Match dash follows the dash's shape (wide screen → landscape). iOS can't rotate the phone for you.": {
       "localizations": {
         "es": {
@@ -5631,16 +5711,6 @@
         }
       }
     },
-    "absent": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ausente"
-          }
-        }
-      }
-    },
     "double-tap backward within a short window": {
       "localizations": {
         "es": {
@@ -5731,26 +5801,6 @@
         }
       }
     },
-    "untested": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "sin probar"
-          }
-        }
-      }
-    },
-    "works": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "funciona"
-          }
-        }
-      }
-    },
     "© 2026 the OpenCfMoto for iOS contributors · OpenCfMoto © 2026 Alexandru": {
       "localizations": {
         "es": {
@@ -5771,12 +5821,12 @@
         }
       }
     },
-    "▲/▼ %@ · ◀/▶ %@": {
+    "▲/▼ volume rocker": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "▲/▼ %@ · ◀/▶ %@"
+            "value": "Balancín de volumen ▲/▼"
           }
         }
       }
@@ -5807,6 +5857,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "◀/▶ = mover el foco · ◀◀ = grupo anterior · ▶▶ = menú · ★ = Seleccionar · ★★ = Atrás. Las pulsaciones simples se disparan al instante (sin esperar al ×2)."
+          }
+        }
+      }
+    },
+    "◀/▶/★ track keys": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Teclas de pista ◀/▶/★"
           }
         }
       }

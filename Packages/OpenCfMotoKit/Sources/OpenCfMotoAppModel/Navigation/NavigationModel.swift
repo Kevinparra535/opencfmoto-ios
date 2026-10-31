@@ -33,6 +33,8 @@
 //   results (Android shows the idle list then).
 // - GPX files up to 1 MiB are parsed synchronously (`lastError` is set when `loadGpx` returns);
 //   bigger files are parsed and loaded off the main actor.
+// - The phone's arrive card runs the session's own arrive actions (`dismissArrival`,
+//   `arrivalParkHere`), so Done / Park here / Find parking behave exactly like on the dash.
 
 import Foundation
 import Observation
@@ -120,6 +122,11 @@ public final class NavigationModel {
 
     public func acknowledgeTypeOnPhone() { typeOnPhoneRequested = false }
 
+    /// The rider closed the error banner: forget `lastError` (a new failure sets it again).
+    public func dismissError() {
+        if lastError != nil { lastError = nil }
+    }
+
     // MARK: Plan & go (all forward to core.navigation; the dash follows automatically)
     public func preview(_ place: Place) { core.navigation.previewPlace(place) }
     public func selectRoute(_ index: Int) { core.navigation.selectRoute(index) }
@@ -134,6 +141,15 @@ public final class NavigationModel {
     public func parkHere() { core.navigation.parkHere() }
     public func setHomeHere() { core.navigation.setHomeHere() }
     public func recalc() { core.navigation.recalc() }
+
+    // MARK: Arrive card (the same card and actions as the dash's, navigation-dash.md §11.8)
+
+    /// "Done": hides the arrive card; with `announce` the status line says "Free ride" (the dash's
+    /// Done). "Find parking" passes `announce: false` before running the Parking chip, like the dash.
+    public func dismissArrival(announce: Bool = true) { core.navigation.dismissArrival(announce: announce) }
+    /// "Park here": parked pin at the rider's fix ("Marked on arrival"), closes the card. Unlike the
+    /// free-ride `parkHere()` it never toggles an existing parked pin away.
+    public func arrivalParkHere() { core.navigation.arrivalParkHere() }
 
     /// GPX file picked in Files / opened with the app.
     public func loadGpx(data: Data, fileName: String) {

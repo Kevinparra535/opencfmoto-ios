@@ -232,10 +232,12 @@ struct NavigateArrivalCard: View {
                 }
                 .accessibilityElement(children: .combine)
             }
+            // The dash's arrive actions: Park here marks the spot ("Marked on arrival") and closes
+            // the card, Done hides it ("Free ride"), Find parking hides it and searches nearby.
             NavigateActionGrid {
-                Button("Park here") { navigation.parkHere() }
+                Button("Park here") { navigation.arrivalParkHere() }
                 Button("Find parking") { onFindParking() }
-                Button("Done · free ride") { navigation.startFreeRide() }
+                Button("Done · free ride") { navigation.dismissArrival() }
             }
             .buttonStyle(TonalButtonStyle())
         }
