@@ -184,7 +184,8 @@ public final class H264Encoder: @unchecked Sendable {
     private var needsRecreate = false
     private var lastCreateAttempt: TimeInterval = -.greatestFiniteMagnitude
     private var forceNextKeyframe = true
-    private var lastPTS: TimeInterval?
+    /// Last submitted presentation time in integer microseconds (the CMTime timescale).
+    private var lastPTSMicros: Int64?
     private var sequence: UInt64 = 0
     private var inFlight = 0
     private var submitTimes: [TimeInterval] = []
@@ -258,7 +259,7 @@ public final class H264Encoder: @unchecked Sendable {
         generation &+= 1
         inFlight = 0
         submitTimes.removeAll()
-        lastPTS = nil
+        lastPTSMicros = nil
         forceNextKeyframe = true
         needsRecreate = true
         lastSPS = []
@@ -355,9 +356,11 @@ public final class H264Encoder: @unchecked Sendable {
         let gen = generation
         let force = forceKeyframe || forceNextKeyframe
         forceNextKeyframe = false
-        var t = pts.isFinite ? pts : (lastPTS ?? 0) + 0.001
-        if let last = lastPTS, t <= last { t = last + 0.000_001 }
-        lastPTS = t
+        // Work in integer microseconds: bumping a Double by 1e-6 can round back to the same CMTime
+        // value (1.0 + 1e-6 → 1_000_000.99… µs → truncated), which repeated the PTS.
+        var micros: Int64 = pts.isFinite ? Int64((pts * 1_000_000).rounded()) : (lastPTSMicros ?? 0) + 1_000
+        if let last = lastPTSMicros, micros <= last { micros = last + 1 }
+        lastPTSMicros = micros
         inFlight += 1
         submitTimes.append(ProcessInfo.processInfo.systemUptime)
         _stats.framesSubmitted += 1
@@ -368,7 +371,7 @@ public final class H264Encoder: @unchecked Sendable {
         let status = VTCompressionSessionEncodeFrame(
             s,
             imageBuffer: pixelBuffer,
-            presentationTimeStamp: CMTime(seconds: t, preferredTimescale: 1_000_000),
+            presentationTimeStamp: CMTime(value: micros, timescale: 1_000_000),
             duration: CMTime.invalid,
             frameProperties: props,
             infoFlagsOut: &infoFlags
@@ -437,7 +440,7 @@ public final class H264Encoder: @unchecked Sendable {
         session = created
         needsRecreate = false
         forceNextKeyframe = true
-        lastPTS = nil
+        lastPTSMicros = nil
         _stats.sessionsCreated += 1
         _stats.usingHardware = hw
         _stats.softwareRequested = cfg.allowSoftware
