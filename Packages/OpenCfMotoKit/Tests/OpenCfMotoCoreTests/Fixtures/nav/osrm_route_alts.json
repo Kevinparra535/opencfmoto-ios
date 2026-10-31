@@ -1,0 +1,386 @@
+{
+ "code": "Ok",
+ "routes": [
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      26.1,
+      44.43
+     ],
+     [
+      26.1,
+      44.431
+     ],
+     [
+      26.1,
+      44.432
+     ],
+     [
+      26.1,
+      44.433
+     ],
+     [
+      26.1,
+      44.434
+     ],
+     [
+      26.1,
+      44.435
+     ],
+     [
+      26.1,
+      44.436
+     ],
+     [
+      26.1,
+      44.437
+     ],
+     [
+      26.1,
+      44.438
+     ],
+     [
+      26.1,
+      44.439
+     ],
+     [
+      26.1,
+      44.44
+     ],
+     [
+      26.1015,
+      44.44
+     ],
+     [
+      26.103,
+      44.44
+     ],
+     [
+      26.1045,
+      44.44
+     ],
+     [
+      26.106,
+      44.44
+     ],
+     [
+      26.1075,
+      44.44
+     ],
+     [
+      26.109,
+      44.44
+     ],
+     [
+      26.1105,
+      44.44
+     ],
+     [
+      26.112,
+      44.44
+     ],
+     [
+      26.1135,
+      44.44
+     ],
+     [
+      26.115,
+      44.44
+     ]
+    ],
+    "type": "LineString"
+   },
+   "distance": 2302.8,
+   "duration": 240.0,
+   "weight": 240.0,
+   "weight_name": "routability",
+   "legs": [
+    {
+     "distance": 2302.8,
+     "duration": 240.0,
+     "summary": "Bulevardul Test, Strada Exemplu",
+     "steps": [
+      {
+       "name": "Bulevardul Test",
+       "distance": 1111.9,
+       "duration": 110.0,
+       "mode": "driving",
+       "maneuver": {
+        "type": "depart",
+        "location": [
+         26.1,
+         44.43
+        ],
+        "bearing_before": 0,
+        "bearing_after": 0
+       },
+       "intersections": [
+        {
+         "location": [
+          26.1,
+          44.43
+         ],
+         "bearings": [
+          0
+         ],
+         "entry": [
+          true
+         ],
+         "out": 0
+        }
+       ]
+      },
+      {
+       "name": "Strada Exemplu",
+       "distance": 1190.9,
+       "duration": 130.0,
+       "mode": "driving",
+       "maneuver": {
+        "type": "turn",
+        "modifier": "right",
+        "location": [
+         26.1,
+         44.44
+        ],
+        "bearing_before": 0,
+        "bearing_after": 90
+       },
+       "intersections": [
+        {
+         "location": [
+          26.1,
+          44.44
+         ],
+         "bearings": [
+          0,
+          90,
+          180,
+          270
+         ],
+         "entry": [
+          true,
+          true,
+          false,
+          true
+         ],
+         "in": 2,
+         "out": 1,
+         "lanes": [
+          {
+           "valid": false,
+           "indications": [
+            "left"
+           ]
+          },
+          {
+           "valid": true,
+           "indications": [
+            "straight"
+           ]
+          },
+          {
+           "valid": true,
+           "indications": [
+            "straight",
+            "right"
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "name": "Strada Exemplu",
+       "distance": 0,
+       "duration": 0,
+       "mode": "driving",
+       "maneuver": {
+        "type": "arrive",
+        "location": [
+         26.115,
+         44.44
+        ],
+        "bearing_before": 90,
+        "bearing_after": 0
+       },
+       "intersections": [
+        {
+         "location": [
+          26.115,
+          44.44
+         ],
+         "bearings": [
+          270
+         ],
+         "entry": [
+          true
+         ],
+         "in": 0
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "geometry": {
+    "coordinates": [
+     [
+      26.1,
+      44.43
+     ],
+     [
+      26.1015,
+      44.43
+     ],
+     [
+      26.103,
+      44.43
+     ],
+     [
+      26.1045,
+      44.43
+     ],
+     [
+      26.106,
+      44.43
+     ],
+     [
+      26.1075,
+      44.43
+     ],
+     [
+      26.109,
+      44.43
+     ],
+     [
+      26.1105,
+      44.43
+     ],
+     [
+      26.112,
+      44.43
+     ],
+     [
+      26.1135,
+      44.43
+     ],
+     [
+      26.115,
+      44.43
+     ],
+     [
+      26.115,
+      44.431
+     ],
+     [
+      26.115,
+      44.432
+     ],
+     [
+      26.115,
+      44.433
+     ],
+     [
+      26.115,
+      44.434
+     ],
+     [
+      26.115,
+      44.435
+     ],
+     [
+      26.115,
+      44.436
+     ],
+     [
+      26.115,
+      44.437
+     ],
+     [
+      26.115,
+      44.438
+     ],
+     [
+      26.115,
+      44.439
+     ],
+     [
+      26.115,
+      44.44
+     ]
+    ],
+    "type": "LineString"
+   },
+   "distance": 2303.0,
+   "duration": 360.0,
+   "weight": 360.0,
+   "weight_name": "routability",
+   "legs": [
+    {
+     "distance": 2303.0,
+     "duration": 360.0,
+     "summary": "Calea Alternativa",
+     "steps": [
+      {
+       "name": "Calea Alternativa",
+       "distance": 1191.9,
+       "duration": 180.0,
+       "maneuver": {
+        "type": "depart",
+        "location": [
+         26.1,
+         44.43
+        ]
+       }
+      },
+      {
+       "name": "",
+       "distance": 1111.1,
+       "duration": 180.0,
+       "maneuver": {
+        "type": "roundabout",
+        "modifier": "left",
+        "exit": 2,
+        "location": [
+         26.115,
+         44.43
+        ]
+       }
+      },
+      {
+       "name": "",
+       "distance": 0,
+       "duration": 0,
+       "maneuver": {
+        "type": "arrive",
+        "location": [
+         26.115,
+         44.44
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "waypoints": [
+  {
+   "name": "Bulevardul Test",
+   "location": [
+    26.1,
+    44.43
+   ]
+  },
+  {
+   "name": "Strada Exemplu",
+   "location": [
+    26.115,
+    44.44
+   ]
+  }
+ ]
+}

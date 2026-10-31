@@ -1,0 +1,127 @@
+{
+ "trip": {
+  "locations": [
+   {
+    "lat": 44.43,
+    "lon": 26.1
+   },
+   {
+    "lat": 44.44,
+    "lon": 26.115
+   }
+  ],
+  "legs": [
+   {
+    "shape": "_jxvsA_q_xp@o}@?o}@?o}@?o}@?o}@?o}@?o}@?o}@?o}@?o}@??w|A?w|A?w|A?w|A?w|A?w|A?w|A?w|A?w|A?w|A",
+    "summary": {
+     "length": 2.303,
+     "time": 250.5
+    },
+    "maneuvers": [
+     {
+      "type": 1,
+      "instruction": "x",
+      "street_names": [
+       "Bulevardul Test"
+      ],
+      "begin_shape_index": 0,
+      "end_shape_index": 0,
+      "length": 1.112,
+      "time": 10.0
+     },
+     {
+      "type": 10,
+      "instruction": "x",
+      "street_names": [
+       "Strada Exemplu",
+       "DJ100"
+      ],
+      "begin_shape_index": 10,
+      "end_shape_index": 10,
+      "length": 1.192,
+      "time": 10.0,
+      "toll": false
+     },
+     {
+      "type": 4,
+      "instruction": "x",
+      "street_names": [],
+      "begin_shape_index": 20,
+      "end_shape_index": 20,
+      "length": 0.0,
+      "time": 10.0
+     }
+    ]
+   }
+  ],
+  "summary": {
+   "length": 2.303,
+   "time": 250.5
+  },
+  "status": 0,
+  "units": "kilometers"
+ },
+ "alternates": [
+  {
+   "trip": {
+    "legs": [
+     {
+      "shape": "_jxvsA_q_xp@?w|A?w|A?w|A?w|A?w|A?w|A?w|A?w|A?w|A?w|Ao}@?o}@?o}@?o}@?o}@?o}@?o}@?o}@?o}@?o}@?",
+      "summary": {
+       "length": 2.903,
+       "time": 420.0
+      },
+      "maneuvers": [
+       {
+        "type": 2,
+        "instruction": "x",
+        "street_names": [
+         "A1"
+        ],
+        "begin_shape_index": 0,
+        "end_shape_index": 0,
+        "length": 1.192,
+        "time": 10.0,
+        "highway": true
+       },
+       {
+        "type": 26,
+        "instruction": "x",
+        "street_names": [
+         "Piata Rotunda"
+        ],
+        "begin_shape_index": 10,
+        "end_shape_index": 10,
+        "length": 0.1,
+        "time": 10.0
+       },
+       {
+        "type": 27,
+        "instruction": "x",
+        "street_names": [],
+        "begin_shape_index": 11,
+        "end_shape_index": 11,
+        "length": 1.0,
+        "time": 10.0,
+        "toll": true
+       },
+       {
+        "type": 5,
+        "instruction": "x",
+        "street_names": [],
+        "begin_shape_index": 20,
+        "end_shape_index": 20,
+        "length": 0.0,
+        "time": 10.0
+       }
+      ]
+     }
+    ],
+    "summary": {
+     "length": 2.95,
+     "time": 420.0
+    }
+   }
+  }
+ ]
+}

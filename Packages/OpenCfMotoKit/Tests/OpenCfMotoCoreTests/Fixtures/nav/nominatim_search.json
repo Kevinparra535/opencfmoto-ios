@@ -1,0 +1,32 @@
+[
+ {
+  "place_id": 1,
+  "lat": "45.1259000",
+  "lon": "25.7372000",
+  "category": "boundary",
+  "type": "administrative",
+  "addresstype": "city",
+  "name": "Câmpina",
+  "display_name": "Câmpina, Prahova, România",
+  "importance": 0.52
+ },
+ {
+  "place_id": 2,
+  "lat": "44.4392",
+  "lon": "26.0901",
+  "type": "residential",
+  "addresstype": "road",
+  "name": "",
+  "display_name": "Strada Câmpina, Sector 1, București, România",
+  "importance": 0.1
+ },
+ {
+  "place_id": 3,
+  "lat": "47.2",
+  "lon": "27.6",
+  "type": "",
+  "addresstype": "village",
+  "name": "Câmpina",
+  "display_name": "Câmpina, Iași, România"
+ }
+]

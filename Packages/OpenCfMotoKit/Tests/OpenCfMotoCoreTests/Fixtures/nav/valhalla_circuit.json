@@ -1,0 +1,90 @@
+{
+ "trip": {
+  "legs": [
+   {
+    "shape": "_jxvsA_q_xp@o}@?o}@?o}@?o}@?o}@?o}@?o}@?o}@?o}@?o}@??w|A?w|A?w|A?w|A?w|A?w|A?w|A?w|A?w|A?w|A",
+    "summary": {
+     "length": 2.303,
+     "time": 240.0
+    },
+    "maneuvers": [
+     {
+      "type": 1,
+      "instruction": "x",
+      "street_names": [
+       "Bulevardul Test"
+      ],
+      "begin_shape_index": 0,
+      "end_shape_index": 0,
+      "length": 1.112,
+      "time": 10.0
+     },
+     {
+      "type": 10,
+      "instruction": "x",
+      "street_names": [
+       "Strada Exemplu"
+      ],
+      "begin_shape_index": 10,
+      "end_shape_index": 10,
+      "length": 1.192,
+      "time": 10.0
+     },
+     {
+      "type": 4,
+      "instruction": "x",
+      "street_names": [],
+      "begin_shape_index": 20,
+      "end_shape_index": 20,
+      "length": 0,
+      "time": 10.0
+     }
+    ]
+   },
+   {
+    "shape": "_{kwsAoz|xp@?v|A?v|A?v|A?v|A?v|A?v|A?v|A?v|A?v|A?v|An}@?n}@?n}@?n}@?n}@?n}@?n}@?n}@?n}@?n}@?",
+    "summary": {
+     "length": 2.303,
+     "time": 245.0
+    },
+    "maneuvers": [
+     {
+      "type": 1,
+      "instruction": "x",
+      "street_names": [
+       "Strada Exemplu"
+      ],
+      "begin_shape_index": 0,
+      "end_shape_index": 0,
+      "length": 1.192,
+      "time": 10.0
+     },
+     {
+      "type": 15,
+      "instruction": "x",
+      "street_names": [
+       "Bulevardul Test"
+      ],
+      "begin_shape_index": 10,
+      "end_shape_index": 10,
+      "length": 1.112,
+      "time": 10.0
+     },
+     {
+      "type": 4,
+      "instruction": "x",
+      "street_names": [],
+      "begin_shape_index": 20,
+      "end_shape_index": 20,
+      "length": 0,
+      "time": 10.0
+     }
+    ]
+   }
+  ],
+  "summary": {
+   "length": 4.606,
+   "time": 485.0
+  }
+ }
+}

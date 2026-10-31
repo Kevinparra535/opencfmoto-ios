@@ -1,0 +1,5472 @@
+{
+ "altitude": [
+  {
+   "ascentImperial": "↑-2",
+   "metric": "0",
+   "ascentMetric": "↑0",
+   "m": -0.5,
+   "imperial": "-2"
+  },
+  {
+   "ascentImperial": "↑2",
+   "metric": "1",
+   "ascentMetric": "↑1",
+   "m": 0.5,
+   "imperial": "2"
+  },
+  {
+   "ascentImperial": "↑5",
+   "metric": "2",
+   "ascentMetric": "↑2",
+   "m": 1.5,
+   "imperial": "5"
+  },
+  {
+   "ascentImperial": "↑330",
+   "metric": "100",
+   "ascentMetric": "↑100",
+   "m": 100.49,
+   "imperial": "330"
+  },
+  {
+   "ascentImperial": "↑330",
+   "metric": "101",
+   "ascentMetric": "↑101",
+   "m": 100.5,
+   "imperial": "330"
+  },
+  {
+   "ascentImperial": "↑-41",
+   "metric": "-12",
+   "ascentMetric": "↑-12",
+   "m": -12.5,
+   "imperial": "-41"
+  },
+  {
+   "ascentImperial": "↑7696",
+   "metric": "2346",
+   "ascentMetric": "↑2346",
+   "m": 2345.6,
+   "imperial": "7696"
+  },
+  {
+   "ascentImperial": "↑0",
+   "metric": "0",
+   "ascentMetric": "↑0",
+   "m": 0,
+   "imperial": "0"
+  },
+  {
+   "ascentImperial": "↑-5",
+   "metric": "-1",
+   "ascentMetric": "↑-1",
+   "m": -1.5,
+   "imperial": "-5"
+  },
+  {
+   "ascentImperial": "↑500",
+   "metric": "152",
+   "ascentMetric": "↑152",
+   "m": 152.4,
+   "imperial": "500"
+  }
+ ],
+ "distance": [
+  {
+   "metric": "0 m",
+   "m": 0,
+   "imperial": "0 ft"
+  },
+  {
+   "metric": "0 m",
+   "m": 0.4,
+   "imperial": "1 ft"
+  },
+  {
+   "metric": "1 m",
+   "m": 0.5,
+   "imperial": "2 ft"
+  },
+  {
+   "metric": "2 m",
+   "m": 1.5,
+   "imperial": "5 ft"
+  },
+  {
+   "metric": "3 m",
+   "m": 2.5,
+   "imperial": "8 ft"
+  },
+  {
+   "metric": "7 m",
+   "m": 7.45,
+   "imperial": "24 ft"
+  },
+  {
+   "metric": "13 m",
+   "m": 12.5,
+   "imperial": "41 ft"
+  },
+  {
+   "metric": "50 m",
+   "m": 49.99,
+   "imperial": "164 ft"
+  },
+  {
+   "metric": "50 m",
+   "m": 50,
+   "imperial": "164 ft"
+  },
+  {
+   "metric": "100 m",
+   "m": 99.5,
+   "imperial": "326 ft"
+  },
+  {
+   "metric": "152 m",
+   "m": 152.4,
+   "imperial": "500 ft"
+  },
+  {
+   "metric": "161 m",
+   "m": 160.9,
+   "imperial": "528 ft"
+  },
+  {
+   "metric": "161 m",
+   "m": 161,
+   "imperial": "0.1 mi"
+  },
+  {
+   "metric": "500 m",
+   "m": 499.5,
+   "imperial": "0.3 mi"
+  },
+  {
+   "metric": "500 m",
+   "m": 500,
+   "imperial": "0.3 mi"
+  },
+  {
+   "metric": "999 m",
+   "m": 999.4,
+   "imperial": "0.6 mi"
+  },
+  {
+   "metric": "1000 m",
+   "m": 999.5,
+   "imperial": "0.6 mi"
+  },
+  {
+   "metric": "1000 m",
+   "m": 999.6,
+   "imperial": "0.6 mi"
+  },
+  {
+   "metric": "1.0 km",
+   "m": 1000,
+   "imperial": "0.6 mi"
+  },
+  {
+   "metric": "1.0 km",
+   "m": 1049,
+   "imperial": "0.7 mi"
+  },
+  {
+   "metric": "1.0 km",
+   "m": 1049.99,
+   "imperial": "0.7 mi"
+  },
+  {
+   "metric": "1.1 km",
+   "m": 1050,
+   "imperial": "0.7 mi"
+  },
+  {
+   "metric": "1.1 km",
+   "m": 1149.9,
+   "imperial": "0.7 mi"
+  },
+  {
+   "metric": "1.2 km",
+   "m": 1150,
+   "imperial": "0.7 mi"
+  },
+  {
+   "metric": "1.2 km",
+   "m": 1234.5,
+   "imperial": "0.8 mi"
+  },
+  {
+   "metric": "12.3 km",
+   "m": 12345,
+   "imperial": "7.7 mi"
+  },
+  {
+   "metric": "100.0 km",
+   "m": 99999,
+   "imperial": "62.1 mi"
+  },
+  {
+   "metric": "123.5 km",
+   "m": 123456.7,
+   "imperial": "76.7 mi"
+  },
+  {
+   "metric": "1.6 km",
+   "m": 1609.344,
+   "imperial": "1.0 mi"
+  },
+  {
+   "metric": "0 m",
+   "m": 0.05,
+   "imperial": "0 ft"
+  },
+  {
+   "metric": "0 m",
+   "m": 1.0E-7,
+   "imperial": "0 ft"
+  },
+  {
+   "metric": "1.5 km",
+   "m": 1499.999,
+   "imperial": "0.9 mi"
+  },
+  {
+   "metric": "160.9 km",
+   "m": 160934.4,
+   "imperial": "100.0 mi"
+  },
+  {
+   "metric": "30 m",
+   "m": 30.48,
+   "imperial": "100 ft"
+  },
+  {
+   "metric": "46 m",
+   "m": 45.72,
+   "imperial": "150 ft"
+  },
+  {
+   "metric": "2.3 km",
+   "m": 2302.820324740024,
+   "imperial": "1.4 mi"
+  },
+  {
+   "metric": "1.1 km",
+   "m": 1111.9492664455872,
+   "imperial": "0.7 mi"
+  },
+  {
+   "metric": "10.0 km",
+   "m": 9999.95,
+   "imperial": "6.2 mi"
+  }
+ ],
+ "arrows": {
+  "SHARP_LEFT": "↰",
+  "SLIGHT_LEFT": "↖",
+  "ARRIVE": "◉",
+  "LEFT": "←",
+  "SHARP_RIGHT": "↱",
+  "UTURN": "⤺",
+  "STRAIGHT": "↑",
+  "SLIGHT_RIGHT": "↗",
+  "MERGE_LEFT": "⇜",
+  "FORK_LEFT": "⋔",
+  "CONTINUE": "↑",
+  "MERGE_RIGHT": "⇝",
+  "ROUNDABOUT": "↻",
+  "FORK_RIGHT": "⋔",
+  "RIGHT": "→"
+ },
+ "maxspeed": [
+  {
+   "kmh": 50,
+   "raw": "50"
+  },
+  {
+   "kmh": 50,
+   "raw": "50 km/h"
+  },
+  {
+   "kmh": 80,
+   "raw": "50 mph"
+  },
+  {
+   "kmh": null,
+   "raw": "none"
+  },
+  {
+   "kmh": null,
+   "raw": "NONE"
+  },
+  {
+   "kmh": null,
+   "raw": "signals"
+  },
+  {
+   "kmh": null,
+   "raw": "variable"
+  },
+  {
+   "kmh": null,
+   "raw": "walk"
+  },
+  {
+   "kmh": null,
+   "raw": "RO:urban"
+  },
+  {
+   "kmh": 30,
+   "raw": "30;50"
+  },
+  {
+   "kmh": 90,
+   "raw": "90.5"
+  },
+  {
+   "kmh": 70,
+   "raw": " 70 "
+  },
+  {
+   "kmh": 32,
+   "raw": "20mph"
+  },
+  {
+   "kmh": null,
+   "raw": "abc mph"
+  },
+  {
+   "kmh": null,
+   "raw": "."
+  },
+  {
+   "kmh": null,
+   "raw": ""
+  }
+ ],
+ "zoom": [
+  {
+   "kmh": 0,
+   "z": 17.8
+  },
+  {
+   "kmh": 7.989999771118164,
+   "z": 17.8
+  },
+  {
+   "kmh": 8,
+   "z": 17
+  },
+  {
+   "kmh": 19.989999771118164,
+   "z": 17
+  },
+  {
+   "kmh": 20,
+   "z": 16.2
+  },
+  {
+   "kmh": 34.900001525878906,
+   "z": 16.2
+  },
+  {
+   "kmh": 35,
+   "z": 15.4
+  },
+  {
+   "kmh": 54.900001525878906,
+   "z": 15.4
+  },
+  {
+   "kmh": 55,
+   "z": 14.6
+  },
+  {
+   "kmh": 79.9000015258789,
+   "z": 14.6
+  },
+  {
+   "kmh": 80,
+   "z": 13.8
+  },
+  {
+   "kmh": 109.9000015258789,
+   "z": 13.8
+  },
+  {
+   "kmh": 110,
+   "z": 13
+  },
+  {
+   "kmh": 200,
+   "z": 13
+  }
+ ],
+ "speed": [
+  {
+   "metric": "0",
+   "kmh": 0,
+   "imperial": "0"
+  },
+  {
+   "metric": "0",
+   "kmh": 0.4000000059604645,
+   "imperial": "0"
+  },
+  {
+   "metric": "1",
+   "kmh": 0.5,
+   "imperial": "0"
+  },
+  {
+   "metric": "2",
+   "kmh": 1.5,
+   "imperial": "1"
+  },
+  {
+   "metric": "3",
+   "kmh": 2.5,
+   "imperial": "2"
+  },
+  {
+   "metric": "13",
+   "kmh": 12.5,
+   "imperial": "8"
+  },
+  {
+   "metric": "36",
+   "kmh": 36,
+   "imperial": "22"
+  },
+  {
+   "metric": "100",
+   "kmh": 99.5,
+   "imperial": "62"
+  },
+  {
+   "metric": "100",
+   "kmh": 100,
+   "imperial": "62"
+  },
+  {
+   "metric": "130",
+   "kmh": 129.89999389648438,
+   "imperial": "81"
+  },
+  {
+   "metric": "36",
+   "kmh": 36,
+   "imperial": "22"
+  },
+  {
+   "metric": "50",
+   "kmh": 50.03999710083008,
+   "imperial": "31"
+  },
+  {
+   "metric": "2",
+   "kmh": 2.1600000858306885,
+   "imperial": "1"
+  },
+  {
+   "metric": "80",
+   "kmh": 80.46720123291016,
+   "imperial": "50"
+  },
+  {
+   "metric": "4",
+   "kmh": 4.320000171661377,
+   "imperial": "3"
+  }
+ ],
+ "geo": [
+  {
+   "bearingD": 0,
+   "lapMeters": 1111.9492664455875,
+   "a": [
+    0,
+    0,
+    0.01,
+    0
+   ],
+   "haversineM": 1111.9492664455875,
+   "haversineKm": 1.1119492664455874,
+   "bearingF": 0,
+   "approxMetres": 1113.2
+  },
+  {
+   "bearingD": 292.66073215647657,
+   "lapMeters": 411272.4047159302,
+   "a": [
+    44.4268,
+    26.1025,
+    45.7489,
+    21.2087
+   ],
+   "haversineM": 411272.4047159302,
+   "haversineKm": 411.27240471593024,
+   "bearingF": 292.6607360839844,
+   "approxMetres": 411821.8206125482
+  },
+  {
+   "bearingD": 34.6713518634441,
+   "lapMeters": 135786.09062692837,
+   "a": [
+    45,
+    25,
+    46,
+    26
+   ],
+   "haversineM": 135786.09062692837,
+   "haversineKm": 135.78609062692837,
+   "bearingF": 34.67135238647461,
+   "approxMetres": 135941.44786305336
+  },
+  {
+   "bearingD": 46.960056178603,
+   "lapMeters": 1629.370355877428,
+   "a": [
+    44.43,
+    26.1,
+    44.44,
+    26.115
+   ],
+   "haversineM": 1629.370355877428,
+   "haversineKm": 1.6293703558774282,
+   "bearingF": 46.96005630493164,
+   "approxMetres": 1631.2030962477227
+  },
+  {
+   "bearingD": 319.1061067924955,
+   "lapMeters": 1.6995926573970433E7,
+   "a": [
+    -33.9,
+    151.2,
+    51.5,
+    -0.12
+   ],
+   "haversineM": 1.6995926573970433E7,
+   "haversineKm": 16995.926573970435,
+   "bearingF": 319.1061096191406,
+   "approxMetres": 1.9169998407207854E7
+  },
+  {
+   "bearingD": 89.98263516513305,
+   "lapMeters": 21901.124835754712,
+   "a": [
+    10,
+    179.9,
+    10,
+    -179.9
+   ],
+   "haversineM": 21901.124835754716,
+   "haversineKm": 21.901124835754715,
+   "bearingF": 89.98263549804688,
+   "approxMetres": 3.9444441903701775E7
+  },
+  {
+   "bearingD": 0,
+   "lapMeters": 80.06034718421174,
+   "a": [
+    45,
+    7,
+    45.00072,
+    7
+   ],
+   "haversineM": 80.06034718421174,
+   "haversineKm": 0.08006034718421173,
+   "bearingF": 0,
+   "approxMetres": 80.1504000001296
+  }
+ ],
+ "eta": [
+  {
+   "s": 0,
+   "t": "0m"
+  },
+  {
+   "s": 59,
+   "t": "0m"
+  },
+  {
+   "s": 60,
+   "t": "1m"
+  },
+  {
+   "s": 300,
+   "t": "5m"
+  },
+  {
+   "s": 3599,
+   "t": "59m"
+  },
+  {
+   "s": 3600,
+   "t": "1h00m"
+  },
+  {
+   "s": 3900,
+   "t": "1h05m"
+  },
+  {
+   "s": 36000,
+   "t": "10h00m"
+  },
+  {
+   "s": 172800,
+   "t": "48h00m"
+  },
+  {
+   "s": 59999,
+   "t": "16h39m"
+  }
+ ],
+ "dirToFace": [
+  {
+   "t": 90,
+   "h": 0,
+   "dir": "RIGHT"
+  },
+  {
+   "t": 270,
+   "h": 0,
+   "dir": "LEFT"
+  },
+  {
+   "t": 50,
+   "h": 45,
+   "dir": "STRAIGHT"
+  },
+  {
+   "t": 180,
+   "h": 0,
+   "dir": "UTURN"
+  },
+  {
+   "t": 150,
+   "h": 0,
+   "dir": "SHARP_RIGHT"
+  },
+  {
+   "t": 151,
+   "h": 0,
+   "dir": "UTURN"
+  },
+  {
+   "t": 100,
+   "h": 0,
+   "dir": "RIGHT"
+  },
+  {
+   "t": 101,
+   "h": 0,
+   "dir": "SHARP_RIGHT"
+  },
+  {
+   "t": 35,
+   "h": 0,
+   "dir": "SLIGHT_RIGHT"
+  },
+  {
+   "t": 36,
+   "h": 0,
+   "dir": "RIGHT"
+  },
+  {
+   "t": 15,
+   "h": 0,
+   "dir": "STRAIGHT"
+  },
+  {
+   "t": 16,
+   "h": 0,
+   "dir": "SLIGHT_RIGHT"
+  },
+  {
+   "t": 10,
+   "h": 350,
+   "dir": "SLIGHT_RIGHT"
+  },
+  {
+   "t": 350,
+   "h": 10,
+   "dir": "SLIGHT_LEFT"
+  },
+  {
+   "t": -150,
+   "h": 0,
+   "dir": "SHARP_LEFT"
+  },
+  {
+   "t": 209,
+   "h": 0,
+   "dir": "UTURN"
+  },
+  {
+   "t": 0.5,
+   "h": 359.5,
+   "dir": "STRAIGHT"
+  },
+  {
+   "t": 303.3999938964844,
+   "h": 123.4000015258789,
+   "dir": "UTURN"
+  }
+ ],
+ "instruction": [
+  {
+   "exit": null,
+   "road": null,
+   "modifier": null,
+   "text": "continue straight",
+   "type": "turn",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": null,
+   "text": "continue straight onto Main St",
+   "type": "turn",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "uturn",
+   "text": "make a U-turn",
+   "type": "turn",
+   "dir": "UTURN"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "uturn",
+   "text": "make a U-turn onto Main St",
+   "type": "turn",
+   "dir": "UTURN"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp right",
+   "text": "turn sharp right",
+   "type": "turn",
+   "dir": "SHARP_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp right",
+   "text": "turn sharp right onto Main St",
+   "type": "turn",
+   "dir": "SHARP_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "right",
+   "text": "turn right",
+   "type": "turn",
+   "dir": "RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "right",
+   "text": "turn right onto Main St",
+   "type": "turn",
+   "dir": "RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight right",
+   "text": "turn slight right",
+   "type": "turn",
+   "dir": "SLIGHT_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight right",
+   "text": "turn slight right onto Main St",
+   "type": "turn",
+   "dir": "SLIGHT_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "straight",
+   "text": "continue straight",
+   "type": "turn",
+   "dir": "STRAIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "straight",
+   "text": "continue straight onto Main St",
+   "type": "turn",
+   "dir": "STRAIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight left",
+   "text": "turn slight left",
+   "type": "turn",
+   "dir": "SLIGHT_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight left",
+   "text": "turn slight left onto Main St",
+   "type": "turn",
+   "dir": "SLIGHT_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "left",
+   "text": "turn left",
+   "type": "turn",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "left",
+   "text": "turn left onto Main St",
+   "type": "turn",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp left",
+   "text": "turn sharp left",
+   "type": "turn",
+   "dir": "SHARP_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp left",
+   "text": "turn sharp left onto Main St",
+   "type": "turn",
+   "dir": "SHARP_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "Left",
+   "text": "turn left",
+   "type": "turn",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "Left",
+   "text": "turn left onto Main St",
+   "type": "turn",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "weird",
+   "text": "turn null",
+   "type": "turn",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "weird",
+   "text": "turn null onto Main St",
+   "type": "turn",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": null,
+   "text": "continue straight",
+   "type": "new name",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": null,
+   "text": "continue onto Main St",
+   "type": "new name",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "uturn",
+   "text": "continue straight",
+   "type": "new name",
+   "dir": "UTURN"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "uturn",
+   "text": "continue onto Main St",
+   "type": "new name",
+   "dir": "UTURN"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp right",
+   "text": "continue straight",
+   "type": "new name",
+   "dir": "SHARP_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp right",
+   "text": "continue onto Main St",
+   "type": "new name",
+   "dir": "SHARP_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "right",
+   "text": "continue straight",
+   "type": "new name",
+   "dir": "RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "right",
+   "text": "continue onto Main St",
+   "type": "new name",
+   "dir": "RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight right",
+   "text": "continue straight",
+   "type": "new name",
+   "dir": "SLIGHT_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight right",
+   "text": "continue onto Main St",
+   "type": "new name",
+   "dir": "SLIGHT_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "straight",
+   "text": "continue straight",
+   "type": "new name",
+   "dir": "STRAIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "straight",
+   "text": "continue onto Main St",
+   "type": "new name",
+   "dir": "STRAIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight left",
+   "text": "continue straight",
+   "type": "new name",
+   "dir": "SLIGHT_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight left",
+   "text": "continue onto Main St",
+   "type": "new name",
+   "dir": "SLIGHT_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "left",
+   "text": "continue straight",
+   "type": "new name",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "left",
+   "text": "continue onto Main St",
+   "type": "new name",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp left",
+   "text": "continue straight",
+   "type": "new name",
+   "dir": "SHARP_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp left",
+   "text": "continue onto Main St",
+   "type": "new name",
+   "dir": "SHARP_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "Left",
+   "text": "continue straight",
+   "type": "new name",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "Left",
+   "text": "continue onto Main St",
+   "type": "new name",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "weird",
+   "text": "continue straight",
+   "type": "new name",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "weird",
+   "text": "continue onto Main St",
+   "type": "new name",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": null,
+   "text": "continue straight",
+   "type": "depart",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": null,
+   "text": "continue straight onto Main St",
+   "type": "depart",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "uturn",
+   "text": "make a U-turn",
+   "type": "depart",
+   "dir": "UTURN"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "uturn",
+   "text": "make a U-turn onto Main St",
+   "type": "depart",
+   "dir": "UTURN"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp right",
+   "text": "turn sharp right",
+   "type": "depart",
+   "dir": "SHARP_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp right",
+   "text": "turn sharp right onto Main St",
+   "type": "depart",
+   "dir": "SHARP_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "right",
+   "text": "turn right",
+   "type": "depart",
+   "dir": "RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "right",
+   "text": "turn right onto Main St",
+   "type": "depart",
+   "dir": "RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight right",
+   "text": "turn slight right",
+   "type": "depart",
+   "dir": "SLIGHT_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight right",
+   "text": "turn slight right onto Main St",
+   "type": "depart",
+   "dir": "SLIGHT_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "straight",
+   "text": "continue straight",
+   "type": "depart",
+   "dir": "STRAIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "straight",
+   "text": "continue straight onto Main St",
+   "type": "depart",
+   "dir": "STRAIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight left",
+   "text": "turn slight left",
+   "type": "depart",
+   "dir": "SLIGHT_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight left",
+   "text": "turn slight left onto Main St",
+   "type": "depart",
+   "dir": "SLIGHT_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "left",
+   "text": "turn left",
+   "type": "depart",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "left",
+   "text": "turn left onto Main St",
+   "type": "depart",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp left",
+   "text": "turn sharp left",
+   "type": "depart",
+   "dir": "SHARP_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp left",
+   "text": "turn sharp left onto Main St",
+   "type": "depart",
+   "dir": "SHARP_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "Left",
+   "text": "turn left",
+   "type": "depart",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "Left",
+   "text": "turn left onto Main St",
+   "type": "depart",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "weird",
+   "text": "turn null",
+   "type": "depart",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "weird",
+   "text": "turn null onto Main St",
+   "type": "depart",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": null,
+   "text": "you have arrived",
+   "type": "arrive",
+   "dir": "ARRIVE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": null,
+   "text": "you have arrived",
+   "type": "arrive",
+   "dir": "ARRIVE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "uturn",
+   "text": "you have arrived",
+   "type": "arrive",
+   "dir": "ARRIVE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "uturn",
+   "text": "you have arrived",
+   "type": "arrive",
+   "dir": "ARRIVE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp right",
+   "text": "you have arrived",
+   "type": "arrive",
+   "dir": "ARRIVE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp right",
+   "text": "you have arrived",
+   "type": "arrive",
+   "dir": "ARRIVE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "right",
+   "text": "you have arrived",
+   "type": "arrive",
+   "dir": "ARRIVE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "right",
+   "text": "you have arrived",
+   "type": "arrive",
+   "dir": "ARRIVE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight right",
+   "text": "you have arrived",
+   "type": "arrive",
+   "dir": "ARRIVE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight right",
+   "text": "you have arrived",
+   "type": "arrive",
+   "dir": "ARRIVE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "straight",
+   "text": "you have arrived",
+   "type": "arrive",
+   "dir": "ARRIVE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "straight",
+   "text": "you have arrived",
+   "type": "arrive",
+   "dir": "ARRIVE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight left",
+   "text": "you have arrived",
+   "type": "arrive",
+   "dir": "ARRIVE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight left",
+   "text": "you have arrived",
+   "type": "arrive",
+   "dir": "ARRIVE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "left",
+   "text": "you have arrived",
+   "type": "arrive",
+   "dir": "ARRIVE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "left",
+   "text": "you have arrived",
+   "type": "arrive",
+   "dir": "ARRIVE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp left",
+   "text": "you have arrived",
+   "type": "arrive",
+   "dir": "ARRIVE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp left",
+   "text": "you have arrived",
+   "type": "arrive",
+   "dir": "ARRIVE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "Left",
+   "text": "you have arrived",
+   "type": "arrive",
+   "dir": "ARRIVE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "Left",
+   "text": "you have arrived",
+   "type": "arrive",
+   "dir": "ARRIVE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "weird",
+   "text": "you have arrived",
+   "type": "arrive",
+   "dir": "ARRIVE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "weird",
+   "text": "you have arrived",
+   "type": "arrive",
+   "dir": "ARRIVE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": null,
+   "text": "merge",
+   "type": "merge",
+   "dir": "MERGE_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": null,
+   "text": "merge onto Main St",
+   "type": "merge",
+   "dir": "MERGE_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "uturn",
+   "text": "merge around",
+   "type": "merge",
+   "dir": "MERGE_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "uturn",
+   "text": "merge around onto Main St",
+   "type": "merge",
+   "dir": "MERGE_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp right",
+   "text": "merge sharp right",
+   "type": "merge",
+   "dir": "MERGE_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp right",
+   "text": "merge sharp right onto Main St",
+   "type": "merge",
+   "dir": "MERGE_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "right",
+   "text": "merge right",
+   "type": "merge",
+   "dir": "MERGE_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "right",
+   "text": "merge right onto Main St",
+   "type": "merge",
+   "dir": "MERGE_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight right",
+   "text": "merge slight right",
+   "type": "merge",
+   "dir": "MERGE_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight right",
+   "text": "merge slight right onto Main St",
+   "type": "merge",
+   "dir": "MERGE_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "straight",
+   "text": "merge straight",
+   "type": "merge",
+   "dir": "MERGE_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "straight",
+   "text": "merge straight onto Main St",
+   "type": "merge",
+   "dir": "MERGE_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight left",
+   "text": "merge slight left",
+   "type": "merge",
+   "dir": "MERGE_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight left",
+   "text": "merge slight left onto Main St",
+   "type": "merge",
+   "dir": "MERGE_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "left",
+   "text": "merge left",
+   "type": "merge",
+   "dir": "MERGE_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "left",
+   "text": "merge left onto Main St",
+   "type": "merge",
+   "dir": "MERGE_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp left",
+   "text": "merge sharp left",
+   "type": "merge",
+   "dir": "MERGE_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp left",
+   "text": "merge sharp left onto Main St",
+   "type": "merge",
+   "dir": "MERGE_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "Left",
+   "text": "merge left",
+   "type": "merge",
+   "dir": "MERGE_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "Left",
+   "text": "merge left onto Main St",
+   "type": "merge",
+   "dir": "MERGE_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "weird",
+   "text": "merge",
+   "type": "merge",
+   "dir": "MERGE_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "weird",
+   "text": "merge onto Main St",
+   "type": "merge",
+   "dir": "MERGE_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": null,
+   "text": "take the ramp",
+   "type": "on ramp",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": null,
+   "text": "take the ramp onto Main St",
+   "type": "on ramp",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "uturn",
+   "text": "take the ramp around",
+   "type": "on ramp",
+   "dir": "UTURN"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "uturn",
+   "text": "take the ramp around onto Main St",
+   "type": "on ramp",
+   "dir": "UTURN"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp right",
+   "text": "take the ramp sharp right",
+   "type": "on ramp",
+   "dir": "SHARP_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp right",
+   "text": "take the ramp sharp right onto Main St",
+   "type": "on ramp",
+   "dir": "SHARP_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "right",
+   "text": "take the ramp right",
+   "type": "on ramp",
+   "dir": "RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "right",
+   "text": "take the ramp right onto Main St",
+   "type": "on ramp",
+   "dir": "RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight right",
+   "text": "take the ramp slight right",
+   "type": "on ramp",
+   "dir": "SLIGHT_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight right",
+   "text": "take the ramp slight right onto Main St",
+   "type": "on ramp",
+   "dir": "SLIGHT_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "straight",
+   "text": "take the ramp straight",
+   "type": "on ramp",
+   "dir": "STRAIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "straight",
+   "text": "take the ramp straight onto Main St",
+   "type": "on ramp",
+   "dir": "STRAIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight left",
+   "text": "take the ramp slight left",
+   "type": "on ramp",
+   "dir": "SLIGHT_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight left",
+   "text": "take the ramp slight left onto Main St",
+   "type": "on ramp",
+   "dir": "SLIGHT_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "left",
+   "text": "take the ramp left",
+   "type": "on ramp",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "left",
+   "text": "take the ramp left onto Main St",
+   "type": "on ramp",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp left",
+   "text": "take the ramp sharp left",
+   "type": "on ramp",
+   "dir": "SHARP_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp left",
+   "text": "take the ramp sharp left onto Main St",
+   "type": "on ramp",
+   "dir": "SHARP_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "Left",
+   "text": "take the ramp left",
+   "type": "on ramp",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "Left",
+   "text": "take the ramp left onto Main St",
+   "type": "on ramp",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "weird",
+   "text": "take the ramp",
+   "type": "on ramp",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "weird",
+   "text": "take the ramp onto Main St",
+   "type": "on ramp",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": null,
+   "text": "take the exit",
+   "type": "off ramp",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": null,
+   "text": "take the exit onto Main St",
+   "type": "off ramp",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "uturn",
+   "text": "take the exit around",
+   "type": "off ramp",
+   "dir": "UTURN"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "uturn",
+   "text": "take the exit around onto Main St",
+   "type": "off ramp",
+   "dir": "UTURN"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp right",
+   "text": "take the exit sharp right",
+   "type": "off ramp",
+   "dir": "SHARP_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp right",
+   "text": "take the exit sharp right onto Main St",
+   "type": "off ramp",
+   "dir": "SHARP_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "right",
+   "text": "take the exit right",
+   "type": "off ramp",
+   "dir": "RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "right",
+   "text": "take the exit right onto Main St",
+   "type": "off ramp",
+   "dir": "RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight right",
+   "text": "take the exit slight right",
+   "type": "off ramp",
+   "dir": "SLIGHT_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight right",
+   "text": "take the exit slight right onto Main St",
+   "type": "off ramp",
+   "dir": "SLIGHT_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "straight",
+   "text": "take the exit straight",
+   "type": "off ramp",
+   "dir": "STRAIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "straight",
+   "text": "take the exit straight onto Main St",
+   "type": "off ramp",
+   "dir": "STRAIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight left",
+   "text": "take the exit slight left",
+   "type": "off ramp",
+   "dir": "SLIGHT_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight left",
+   "text": "take the exit slight left onto Main St",
+   "type": "off ramp",
+   "dir": "SLIGHT_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "left",
+   "text": "take the exit left",
+   "type": "off ramp",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "left",
+   "text": "take the exit left onto Main St",
+   "type": "off ramp",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp left",
+   "text": "take the exit sharp left",
+   "type": "off ramp",
+   "dir": "SHARP_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp left",
+   "text": "take the exit sharp left onto Main St",
+   "type": "off ramp",
+   "dir": "SHARP_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "Left",
+   "text": "take the exit left",
+   "type": "off ramp",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "Left",
+   "text": "take the exit left onto Main St",
+   "type": "off ramp",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "weird",
+   "text": "take the exit",
+   "type": "off ramp",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "weird",
+   "text": "take the exit onto Main St",
+   "type": "off ramp",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": null,
+   "text": "keep ahead",
+   "type": "fork",
+   "dir": "FORK_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": null,
+   "text": "keep ahead onto Main St",
+   "type": "fork",
+   "dir": "FORK_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "uturn",
+   "text": "keep ahead",
+   "type": "fork",
+   "dir": "FORK_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "uturn",
+   "text": "keep ahead onto Main St",
+   "type": "fork",
+   "dir": "FORK_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp right",
+   "text": "keep right",
+   "type": "fork",
+   "dir": "FORK_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp right",
+   "text": "keep right onto Main St",
+   "type": "fork",
+   "dir": "FORK_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "right",
+   "text": "keep right",
+   "type": "fork",
+   "dir": "FORK_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "right",
+   "text": "keep right onto Main St",
+   "type": "fork",
+   "dir": "FORK_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight right",
+   "text": "keep right",
+   "type": "fork",
+   "dir": "FORK_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight right",
+   "text": "keep right onto Main St",
+   "type": "fork",
+   "dir": "FORK_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "straight",
+   "text": "keep ahead",
+   "type": "fork",
+   "dir": "FORK_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "straight",
+   "text": "keep ahead onto Main St",
+   "type": "fork",
+   "dir": "FORK_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight left",
+   "text": "keep left",
+   "type": "fork",
+   "dir": "FORK_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight left",
+   "text": "keep left onto Main St",
+   "type": "fork",
+   "dir": "FORK_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "left",
+   "text": "keep left",
+   "type": "fork",
+   "dir": "FORK_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "left",
+   "text": "keep left onto Main St",
+   "type": "fork",
+   "dir": "FORK_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp left",
+   "text": "keep left",
+   "type": "fork",
+   "dir": "FORK_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp left",
+   "text": "keep left onto Main St",
+   "type": "fork",
+   "dir": "FORK_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "Left",
+   "text": "keep left",
+   "type": "fork",
+   "dir": "FORK_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "Left",
+   "text": "keep left onto Main St",
+   "type": "fork",
+   "dir": "FORK_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "weird",
+   "text": "keep ahead",
+   "type": "fork",
+   "dir": "FORK_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "weird",
+   "text": "keep ahead onto Main St",
+   "type": "fork",
+   "dir": "FORK_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": null,
+   "text": "turn ahead",
+   "type": "end of road",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": null,
+   "text": "turn ahead onto Main St",
+   "type": "end of road",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "uturn",
+   "text": "turn ahead",
+   "type": "end of road",
+   "dir": "UTURN"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "uturn",
+   "text": "turn ahead onto Main St",
+   "type": "end of road",
+   "dir": "UTURN"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp right",
+   "text": "turn right",
+   "type": "end of road",
+   "dir": "SHARP_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp right",
+   "text": "turn right onto Main St",
+   "type": "end of road",
+   "dir": "SHARP_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "right",
+   "text": "turn right",
+   "type": "end of road",
+   "dir": "RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "right",
+   "text": "turn right onto Main St",
+   "type": "end of road",
+   "dir": "RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight right",
+   "text": "turn right",
+   "type": "end of road",
+   "dir": "SLIGHT_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight right",
+   "text": "turn right onto Main St",
+   "type": "end of road",
+   "dir": "SLIGHT_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "straight",
+   "text": "turn ahead",
+   "type": "end of road",
+   "dir": "STRAIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "straight",
+   "text": "turn ahead onto Main St",
+   "type": "end of road",
+   "dir": "STRAIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight left",
+   "text": "turn left",
+   "type": "end of road",
+   "dir": "SLIGHT_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight left",
+   "text": "turn left onto Main St",
+   "type": "end of road",
+   "dir": "SLIGHT_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "left",
+   "text": "turn left",
+   "type": "end of road",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "left",
+   "text": "turn left onto Main St",
+   "type": "end of road",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp left",
+   "text": "turn left",
+   "type": "end of road",
+   "dir": "SHARP_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp left",
+   "text": "turn left onto Main St",
+   "type": "end of road",
+   "dir": "SHARP_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "Left",
+   "text": "turn left",
+   "type": "end of road",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "Left",
+   "text": "turn left onto Main St",
+   "type": "end of road",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "weird",
+   "text": "turn ahead",
+   "type": "end of road",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "weird",
+   "text": "turn ahead onto Main St",
+   "type": "end of road",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": null,
+   "text": "continue straight",
+   "type": "continue",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": null,
+   "text": "continue onto Main St",
+   "type": "continue",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "uturn",
+   "text": "continue straight",
+   "type": "continue",
+   "dir": "UTURN"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "uturn",
+   "text": "continue onto Main St",
+   "type": "continue",
+   "dir": "UTURN"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp right",
+   "text": "continue straight",
+   "type": "continue",
+   "dir": "SHARP_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp right",
+   "text": "continue onto Main St",
+   "type": "continue",
+   "dir": "SHARP_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "right",
+   "text": "continue straight",
+   "type": "continue",
+   "dir": "RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "right",
+   "text": "continue onto Main St",
+   "type": "continue",
+   "dir": "RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight right",
+   "text": "continue straight",
+   "type": "continue",
+   "dir": "SLIGHT_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight right",
+   "text": "continue onto Main St",
+   "type": "continue",
+   "dir": "SLIGHT_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "straight",
+   "text": "continue straight",
+   "type": "continue",
+   "dir": "STRAIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "straight",
+   "text": "continue onto Main St",
+   "type": "continue",
+   "dir": "STRAIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight left",
+   "text": "continue straight",
+   "type": "continue",
+   "dir": "SLIGHT_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight left",
+   "text": "continue onto Main St",
+   "type": "continue",
+   "dir": "SLIGHT_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "left",
+   "text": "continue straight",
+   "type": "continue",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "left",
+   "text": "continue onto Main St",
+   "type": "continue",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp left",
+   "text": "continue straight",
+   "type": "continue",
+   "dir": "SHARP_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp left",
+   "text": "continue onto Main St",
+   "type": "continue",
+   "dir": "SHARP_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "Left",
+   "text": "continue straight",
+   "type": "continue",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "Left",
+   "text": "continue onto Main St",
+   "type": "continue",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "weird",
+   "text": "continue straight",
+   "type": "continue",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "weird",
+   "text": "continue onto Main St",
+   "type": "continue",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": null,
+   "text": "at the roundabout",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": null,
+   "text": "at the roundabout take exit 2",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": null,
+   "text": "at the roundabout onto Main St",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": null,
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "uturn",
+   "text": "at the roundabout, around",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "uturn",
+   "text": "at the roundabout take exit 2",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "uturn",
+   "text": "at the roundabout, around onto Main St",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "uturn",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp right",
+   "text": "at the roundabout, sharp right",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "sharp right",
+   "text": "at the roundabout take exit 2",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp right",
+   "text": "at the roundabout, sharp right onto Main St",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "sharp right",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "right",
+   "text": "at the roundabout, right",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "right",
+   "text": "at the roundabout take exit 2",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "right",
+   "text": "at the roundabout, right onto Main St",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "right",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight right",
+   "text": "at the roundabout, slight right",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "slight right",
+   "text": "at the roundabout take exit 2",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight right",
+   "text": "at the roundabout, slight right onto Main St",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "slight right",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "straight",
+   "text": "at the roundabout, straight",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "straight",
+   "text": "at the roundabout take exit 2",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "straight",
+   "text": "at the roundabout, straight onto Main St",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "straight",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight left",
+   "text": "at the roundabout, slight left",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "slight left",
+   "text": "at the roundabout take exit 2",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight left",
+   "text": "at the roundabout, slight left onto Main St",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "slight left",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "left",
+   "text": "at the roundabout, left",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "left",
+   "text": "at the roundabout take exit 2",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "left",
+   "text": "at the roundabout, left onto Main St",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "left",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp left",
+   "text": "at the roundabout, sharp left",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "sharp left",
+   "text": "at the roundabout take exit 2",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp left",
+   "text": "at the roundabout, sharp left onto Main St",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "sharp left",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "Left",
+   "text": "at the roundabout, left",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "Left",
+   "text": "at the roundabout take exit 2",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "Left",
+   "text": "at the roundabout, left onto Main St",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "Left",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "weird",
+   "text": "at the roundabout",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "weird",
+   "text": "at the roundabout take exit 2",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "weird",
+   "text": "at the roundabout onto Main St",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "weird",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": null,
+   "text": "at the roundabout",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": null,
+   "text": "at the roundabout take exit 2",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": null,
+   "text": "at the roundabout onto Main St",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": null,
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "uturn",
+   "text": "at the roundabout, around",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "uturn",
+   "text": "at the roundabout take exit 2",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "uturn",
+   "text": "at the roundabout, around onto Main St",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "uturn",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp right",
+   "text": "at the roundabout, sharp right",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "sharp right",
+   "text": "at the roundabout take exit 2",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp right",
+   "text": "at the roundabout, sharp right onto Main St",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "sharp right",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "right",
+   "text": "at the roundabout, right",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "right",
+   "text": "at the roundabout take exit 2",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "right",
+   "text": "at the roundabout, right onto Main St",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "right",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight right",
+   "text": "at the roundabout, slight right",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "slight right",
+   "text": "at the roundabout take exit 2",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight right",
+   "text": "at the roundabout, slight right onto Main St",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "slight right",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "straight",
+   "text": "at the roundabout, straight",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "straight",
+   "text": "at the roundabout take exit 2",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "straight",
+   "text": "at the roundabout, straight onto Main St",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "straight",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight left",
+   "text": "at the roundabout, slight left",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "slight left",
+   "text": "at the roundabout take exit 2",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight left",
+   "text": "at the roundabout, slight left onto Main St",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "slight left",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "left",
+   "text": "at the roundabout, left",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "left",
+   "text": "at the roundabout take exit 2",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "left",
+   "text": "at the roundabout, left onto Main St",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "left",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp left",
+   "text": "at the roundabout, sharp left",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "sharp left",
+   "text": "at the roundabout take exit 2",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp left",
+   "text": "at the roundabout, sharp left onto Main St",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "sharp left",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "Left",
+   "text": "at the roundabout, left",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "Left",
+   "text": "at the roundabout take exit 2",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "Left",
+   "text": "at the roundabout, left onto Main St",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "Left",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "weird",
+   "text": "at the roundabout",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "weird",
+   "text": "at the roundabout take exit 2",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "weird",
+   "text": "at the roundabout onto Main St",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "weird",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": null,
+   "text": "at the roundabout",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": null,
+   "text": "at the roundabout take exit 2",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": null,
+   "text": "at the roundabout onto Main St",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": null,
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "uturn",
+   "text": "at the roundabout, around",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "uturn",
+   "text": "at the roundabout take exit 2",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "uturn",
+   "text": "at the roundabout, around onto Main St",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "uturn",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp right",
+   "text": "at the roundabout, sharp right",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "sharp right",
+   "text": "at the roundabout take exit 2",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp right",
+   "text": "at the roundabout, sharp right onto Main St",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "sharp right",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "right",
+   "text": "at the roundabout, right",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "right",
+   "text": "at the roundabout take exit 2",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "right",
+   "text": "at the roundabout, right onto Main St",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "right",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight right",
+   "text": "at the roundabout, slight right",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "slight right",
+   "text": "at the roundabout take exit 2",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight right",
+   "text": "at the roundabout, slight right onto Main St",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "slight right",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "straight",
+   "text": "at the roundabout, straight",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "straight",
+   "text": "at the roundabout take exit 2",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "straight",
+   "text": "at the roundabout, straight onto Main St",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "straight",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight left",
+   "text": "at the roundabout, slight left",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "slight left",
+   "text": "at the roundabout take exit 2",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight left",
+   "text": "at the roundabout, slight left onto Main St",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "slight left",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "left",
+   "text": "at the roundabout, left",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "left",
+   "text": "at the roundabout take exit 2",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "left",
+   "text": "at the roundabout, left onto Main St",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "left",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp left",
+   "text": "at the roundabout, sharp left",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "sharp left",
+   "text": "at the roundabout take exit 2",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp left",
+   "text": "at the roundabout, sharp left onto Main St",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "sharp left",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "Left",
+   "text": "at the roundabout, left",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "Left",
+   "text": "at the roundabout take exit 2",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "Left",
+   "text": "at the roundabout, left onto Main St",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "Left",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "weird",
+   "text": "at the roundabout",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": null,
+   "modifier": "weird",
+   "text": "at the roundabout take exit 2",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "weird",
+   "text": "at the roundabout onto Main St",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": 2,
+   "road": "Main St",
+   "modifier": "weird",
+   "text": "at the roundabout take exit 2 onto Main St",
+   "type": "roundabout turn",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": null,
+   "text": "continue straight",
+   "type": "exit roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": null,
+   "text": "continue straight onto Main St",
+   "type": "exit roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "uturn",
+   "text": "make a U-turn",
+   "type": "exit roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "uturn",
+   "text": "make a U-turn onto Main St",
+   "type": "exit roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp right",
+   "text": "turn sharp right",
+   "type": "exit roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp right",
+   "text": "turn sharp right onto Main St",
+   "type": "exit roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "right",
+   "text": "turn right",
+   "type": "exit roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "right",
+   "text": "turn right onto Main St",
+   "type": "exit roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight right",
+   "text": "turn slight right",
+   "type": "exit roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight right",
+   "text": "turn slight right onto Main St",
+   "type": "exit roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "straight",
+   "text": "continue straight",
+   "type": "exit roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "straight",
+   "text": "continue straight onto Main St",
+   "type": "exit roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight left",
+   "text": "turn slight left",
+   "type": "exit roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight left",
+   "text": "turn slight left onto Main St",
+   "type": "exit roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "left",
+   "text": "turn left",
+   "type": "exit roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "left",
+   "text": "turn left onto Main St",
+   "type": "exit roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp left",
+   "text": "turn sharp left",
+   "type": "exit roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp left",
+   "text": "turn sharp left onto Main St",
+   "type": "exit roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "Left",
+   "text": "turn left",
+   "type": "exit roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "Left",
+   "text": "turn left onto Main St",
+   "type": "exit roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "weird",
+   "text": "turn null",
+   "type": "exit roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "weird",
+   "text": "turn null onto Main St",
+   "type": "exit roundabout",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": null,
+   "text": "continue straight",
+   "type": "exit rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": null,
+   "text": "continue straight onto Main St",
+   "type": "exit rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "uturn",
+   "text": "make a U-turn",
+   "type": "exit rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "uturn",
+   "text": "make a U-turn onto Main St",
+   "type": "exit rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp right",
+   "text": "turn sharp right",
+   "type": "exit rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp right",
+   "text": "turn sharp right onto Main St",
+   "type": "exit rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "right",
+   "text": "turn right",
+   "type": "exit rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "right",
+   "text": "turn right onto Main St",
+   "type": "exit rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight right",
+   "text": "turn slight right",
+   "type": "exit rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight right",
+   "text": "turn slight right onto Main St",
+   "type": "exit rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "straight",
+   "text": "continue straight",
+   "type": "exit rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "straight",
+   "text": "continue straight onto Main St",
+   "type": "exit rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight left",
+   "text": "turn slight left",
+   "type": "exit rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight left",
+   "text": "turn slight left onto Main St",
+   "type": "exit rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "left",
+   "text": "turn left",
+   "type": "exit rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "left",
+   "text": "turn left onto Main St",
+   "type": "exit rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp left",
+   "text": "turn sharp left",
+   "type": "exit rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp left",
+   "text": "turn sharp left onto Main St",
+   "type": "exit rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "Left",
+   "text": "turn left",
+   "type": "exit rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "Left",
+   "text": "turn left onto Main St",
+   "type": "exit rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "weird",
+   "text": "turn null",
+   "type": "exit rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "weird",
+   "text": "turn null onto Main St",
+   "type": "exit rotary",
+   "dir": "ROUNDABOUT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": null,
+   "text": "continue straight",
+   "type": "notification",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": null,
+   "text": "continue straight onto Main St",
+   "type": "notification",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "uturn",
+   "text": "make a U-turn",
+   "type": "notification",
+   "dir": "UTURN"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "uturn",
+   "text": "make a U-turn onto Main St",
+   "type": "notification",
+   "dir": "UTURN"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp right",
+   "text": "turn sharp right",
+   "type": "notification",
+   "dir": "SHARP_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp right",
+   "text": "turn sharp right onto Main St",
+   "type": "notification",
+   "dir": "SHARP_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "right",
+   "text": "turn right",
+   "type": "notification",
+   "dir": "RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "right",
+   "text": "turn right onto Main St",
+   "type": "notification",
+   "dir": "RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight right",
+   "text": "turn slight right",
+   "type": "notification",
+   "dir": "SLIGHT_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight right",
+   "text": "turn slight right onto Main St",
+   "type": "notification",
+   "dir": "SLIGHT_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "straight",
+   "text": "continue straight",
+   "type": "notification",
+   "dir": "STRAIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "straight",
+   "text": "continue straight onto Main St",
+   "type": "notification",
+   "dir": "STRAIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight left",
+   "text": "turn slight left",
+   "type": "notification",
+   "dir": "SLIGHT_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight left",
+   "text": "turn slight left onto Main St",
+   "type": "notification",
+   "dir": "SLIGHT_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "left",
+   "text": "turn left",
+   "type": "notification",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "left",
+   "text": "turn left onto Main St",
+   "type": "notification",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp left",
+   "text": "turn sharp left",
+   "type": "notification",
+   "dir": "SHARP_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp left",
+   "text": "turn sharp left onto Main St",
+   "type": "notification",
+   "dir": "SHARP_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "Left",
+   "text": "turn left",
+   "type": "notification",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "Left",
+   "text": "turn left onto Main St",
+   "type": "notification",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "weird",
+   "text": "turn null",
+   "type": "notification",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "weird",
+   "text": "turn null onto Main St",
+   "type": "notification",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": null,
+   "text": "continue straight",
+   "type": "ferry",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": null,
+   "text": "continue straight onto Main St",
+   "type": "ferry",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "uturn",
+   "text": "make a U-turn",
+   "type": "ferry",
+   "dir": "UTURN"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "uturn",
+   "text": "make a U-turn onto Main St",
+   "type": "ferry",
+   "dir": "UTURN"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp right",
+   "text": "turn sharp right",
+   "type": "ferry",
+   "dir": "SHARP_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp right",
+   "text": "turn sharp right onto Main St",
+   "type": "ferry",
+   "dir": "SHARP_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "right",
+   "text": "turn right",
+   "type": "ferry",
+   "dir": "RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "right",
+   "text": "turn right onto Main St",
+   "type": "ferry",
+   "dir": "RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight right",
+   "text": "turn slight right",
+   "type": "ferry",
+   "dir": "SLIGHT_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight right",
+   "text": "turn slight right onto Main St",
+   "type": "ferry",
+   "dir": "SLIGHT_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "straight",
+   "text": "continue straight",
+   "type": "ferry",
+   "dir": "STRAIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "straight",
+   "text": "continue straight onto Main St",
+   "type": "ferry",
+   "dir": "STRAIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight left",
+   "text": "turn slight left",
+   "type": "ferry",
+   "dir": "SLIGHT_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight left",
+   "text": "turn slight left onto Main St",
+   "type": "ferry",
+   "dir": "SLIGHT_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "left",
+   "text": "turn left",
+   "type": "ferry",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "left",
+   "text": "turn left onto Main St",
+   "type": "ferry",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp left",
+   "text": "turn sharp left",
+   "type": "ferry",
+   "dir": "SHARP_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp left",
+   "text": "turn sharp left onto Main St",
+   "type": "ferry",
+   "dir": "SHARP_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "Left",
+   "text": "turn left",
+   "type": "ferry",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "Left",
+   "text": "turn left onto Main St",
+   "type": "ferry",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "weird",
+   "text": "turn null",
+   "type": "ferry",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "weird",
+   "text": "turn null onto Main St",
+   "type": "ferry",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": null,
+   "text": "continue straight",
+   "type": "Turn",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": null,
+   "text": "continue straight onto Main St",
+   "type": "Turn",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "uturn",
+   "text": "make a U-turn",
+   "type": "Turn",
+   "dir": "UTURN"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "uturn",
+   "text": "make a U-turn onto Main St",
+   "type": "Turn",
+   "dir": "UTURN"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp right",
+   "text": "turn sharp right",
+   "type": "Turn",
+   "dir": "SHARP_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp right",
+   "text": "turn sharp right onto Main St",
+   "type": "Turn",
+   "dir": "SHARP_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "right",
+   "text": "turn right",
+   "type": "Turn",
+   "dir": "RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "right",
+   "text": "turn right onto Main St",
+   "type": "Turn",
+   "dir": "RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight right",
+   "text": "turn slight right",
+   "type": "Turn",
+   "dir": "SLIGHT_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight right",
+   "text": "turn slight right onto Main St",
+   "type": "Turn",
+   "dir": "SLIGHT_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "straight",
+   "text": "continue straight",
+   "type": "Turn",
+   "dir": "STRAIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "straight",
+   "text": "continue straight onto Main St",
+   "type": "Turn",
+   "dir": "STRAIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight left",
+   "text": "turn slight left",
+   "type": "Turn",
+   "dir": "SLIGHT_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight left",
+   "text": "turn slight left onto Main St",
+   "type": "Turn",
+   "dir": "SLIGHT_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "left",
+   "text": "turn left",
+   "type": "Turn",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "left",
+   "text": "turn left onto Main St",
+   "type": "Turn",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp left",
+   "text": "turn sharp left",
+   "type": "Turn",
+   "dir": "SHARP_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp left",
+   "text": "turn sharp left onto Main St",
+   "type": "Turn",
+   "dir": "SHARP_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "Left",
+   "text": "turn left",
+   "type": "Turn",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "Left",
+   "text": "turn left onto Main St",
+   "type": "Turn",
+   "dir": "LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "weird",
+   "text": "turn null",
+   "type": "Turn",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "weird",
+   "text": "turn null onto Main St",
+   "type": "Turn",
+   "dir": "CONTINUE"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": null,
+   "text": "merge",
+   "type": "MERGE",
+   "dir": "MERGE_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": null,
+   "text": "merge onto Main St",
+   "type": "MERGE",
+   "dir": "MERGE_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "uturn",
+   "text": "merge around",
+   "type": "MERGE",
+   "dir": "MERGE_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "uturn",
+   "text": "merge around onto Main St",
+   "type": "MERGE",
+   "dir": "MERGE_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp right",
+   "text": "merge sharp right",
+   "type": "MERGE",
+   "dir": "MERGE_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp right",
+   "text": "merge sharp right onto Main St",
+   "type": "MERGE",
+   "dir": "MERGE_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "right",
+   "text": "merge right",
+   "type": "MERGE",
+   "dir": "MERGE_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "right",
+   "text": "merge right onto Main St",
+   "type": "MERGE",
+   "dir": "MERGE_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight right",
+   "text": "merge slight right",
+   "type": "MERGE",
+   "dir": "MERGE_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight right",
+   "text": "merge slight right onto Main St",
+   "type": "MERGE",
+   "dir": "MERGE_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "straight",
+   "text": "merge straight",
+   "type": "MERGE",
+   "dir": "MERGE_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "straight",
+   "text": "merge straight onto Main St",
+   "type": "MERGE",
+   "dir": "MERGE_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "slight left",
+   "text": "merge slight left",
+   "type": "MERGE",
+   "dir": "MERGE_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "slight left",
+   "text": "merge slight left onto Main St",
+   "type": "MERGE",
+   "dir": "MERGE_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "left",
+   "text": "merge left",
+   "type": "MERGE",
+   "dir": "MERGE_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "left",
+   "text": "merge left onto Main St",
+   "type": "MERGE",
+   "dir": "MERGE_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "sharp left",
+   "text": "merge sharp left",
+   "type": "MERGE",
+   "dir": "MERGE_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "sharp left",
+   "text": "merge sharp left onto Main St",
+   "type": "MERGE",
+   "dir": "MERGE_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "Left",
+   "text": "merge left",
+   "type": "MERGE",
+   "dir": "MERGE_LEFT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "Left",
+   "text": "merge left onto Main St",
+   "type": "MERGE",
+   "dir": "MERGE_LEFT"
+  },
+  {
+   "exit": null,
+   "road": null,
+   "modifier": "weird",
+   "text": "merge",
+   "type": "MERGE",
+   "dir": "MERGE_RIGHT"
+  },
+  {
+   "exit": null,
+   "road": "Main St",
+   "modifier": "weird",
+   "text": "merge onto Main St",
+   "type": "MERGE",
+   "dir": "MERGE_RIGHT"
+  }
+ ],
+ "hud": [
+  {
+   "total": 1000,
+   "avg": 0,
+   "hasWp": false,
+   "progress": {
+    "nextWaypointM": null,
+    "remainM": 900,
+    "snapLon": 0,
+    "altitudeM": null,
+    "remainAscentM": null,
+    "nextWaypoint": null,
+    "upcomingTurn": null,
+    "trackBearingDeg": 0,
+    "etaSec": 60,
+    "snapLat": 0,
+    "offTrackM": 10,
+    "nearestIndex": 1,
+    "doneM": 100,
+    "gradePct": null
+   },
+   "units": "METRIC",
+   "wpName": null,
+   "text": "Route · 1.0 km",
+   "showNextStop": true
+  },
+  {
+   "total": 1000,
+   "avg": 0,
+   "hasWp": false,
+   "progress": {
+    "nextWaypointM": null,
+    "remainM": 900,
+    "snapLon": 0,
+    "altitudeM": null,
+    "remainAscentM": null,
+    "nextWaypoint": null,
+    "upcomingTurn": null,
+    "trackBearingDeg": 0,
+    "etaSec": 60,
+    "snapLat": 0,
+    "offTrackM": 10,
+    "nearestIndex": 1,
+    "doneM": 100,
+    "gradePct": null
+   },
+   "units": "METRIC",
+   "wpName": null,
+   "text": "Route · 1.0 km",
+   "showNextStop": false
+  },
+  {
+   "total": 1000,
+   "avg": 0,
+   "hasWp": false,
+   "progress": {
+    "nextWaypointM": null,
+    "remainM": 900,
+    "snapLon": 0,
+    "altitudeM": null,
+    "remainAscentM": null,
+    "nextWaypoint": null,
+    "upcomingTurn": null,
+    "trackBearingDeg": 0,
+    "etaSec": 60,
+    "snapLat": 0,
+    "offTrackM": 10,
+    "nearestIndex": 1,
+    "doneM": 100,
+    "gradePct": null
+   },
+   "units": "IMPERIAL",
+   "wpName": null,
+   "text": "Route · 0.6 mi",
+   "showNextStop": true
+  },
+  {
+   "total": 1000,
+   "avg": 0,
+   "hasWp": false,
+   "progress": {
+    "nextWaypointM": null,
+    "remainM": 900,
+    "snapLon": 0,
+    "altitudeM": null,
+    "remainAscentM": null,
+    "nextWaypoint": null,
+    "upcomingTurn": null,
+    "trackBearingDeg": 0,
+    "etaSec": 60,
+    "snapLat": 0,
+    "offTrackM": 10,
+    "nearestIndex": 1,
+    "doneM": 100,
+    "gradePct": null
+   },
+   "units": "IMPERIAL",
+   "wpName": null,
+   "text": "Route · 0.6 mi",
+   "showNextStop": false
+  },
+  {
+   "total": 12345,
+   "avg": 23.399999618530273,
+   "hasWp": true,
+   "progress": {
+    "nextWaypointM": 250,
+    "remainM": 900,
+    "snapLon": 0,
+    "altitudeM": null,
+    "remainAscentM": null,
+    "nextWaypoint": "Peak",
+    "upcomingTurn": null,
+    "trackBearingDeg": 0,
+    "etaSec": 60,
+    "snapLat": 0,
+    "offTrackM": 45,
+    "nearestIndex": 1,
+    "doneM": 100,
+    "gradePct": 5.4
+   },
+   "units": "METRIC",
+   "wpName": "Peak",
+   "text": "Route · 12.3 km · OFF 45 m · +5% · avg 23 · → Peak 250 m",
+   "showNextStop": true
+  },
+  {
+   "total": 12345,
+   "avg": 23.399999618530273,
+   "hasWp": true,
+   "progress": {
+    "nextWaypointM": 250,
+    "remainM": 900,
+    "snapLon": 0,
+    "altitudeM": null,
+    "remainAscentM": null,
+    "nextWaypoint": "Peak",
+    "upcomingTurn": null,
+    "trackBearingDeg": 0,
+    "etaSec": 60,
+    "snapLat": 0,
+    "offTrackM": 45,
+    "nearestIndex": 1,
+    "doneM": 100,
+    "gradePct": 5.4
+   },
+   "units": "METRIC",
+   "wpName": "Peak",
+   "text": "Route · 12.3 km · OFF 45 m · +5% · avg 23",
+   "showNextStop": false
+  },
+  {
+   "total": 12345,
+   "avg": 23.399999618530273,
+   "hasWp": true,
+   "progress": {
+    "nextWaypointM": 250,
+    "remainM": 900,
+    "snapLon": 0,
+    "altitudeM": null,
+    "remainAscentM": null,
+    "nextWaypoint": "Peak",
+    "upcomingTurn": null,
+    "trackBearingDeg": 0,
+    "etaSec": 60,
+    "snapLat": 0,
+    "offTrackM": 45,
+    "nearestIndex": 1,
+    "doneM": 100,
+    "gradePct": 5.4
+   },
+   "units": "IMPERIAL",
+   "wpName": "Peak",
+   "text": "Route · 7.7 mi · OFF 148 ft · +5% · avg 15 · → Peak 0.2 mi",
+   "showNextStop": true
+  },
+  {
+   "total": 12345,
+   "avg": 23.399999618530273,
+   "hasWp": true,
+   "progress": {
+    "nextWaypointM": 250,
+    "remainM": 900,
+    "snapLon": 0,
+    "altitudeM": null,
+    "remainAscentM": null,
+    "nextWaypoint": "Peak",
+    "upcomingTurn": null,
+    "trackBearingDeg": 0,
+    "etaSec": 60,
+    "snapLat": 0,
+    "offTrackM": 45,
+    "nearestIndex": 1,
+    "doneM": 100,
+    "gradePct": 5.4
+   },
+   "units": "IMPERIAL",
+   "wpName": "Peak",
+   "text": "Route · 7.7 mi · OFF 148 ft · +5% · avg 15",
+   "showNextStop": false
+  },
+  {
+   "total": 0,
+   "avg": 0.9900000095367432,
+   "hasWp": true,
+   "progress": {
+    "nextWaypointM": null,
+    "remainM": 900,
+    "snapLon": 0,
+    "altitudeM": null,
+    "remainAscentM": null,
+    "nextWaypoint": "",
+    "upcomingTurn": null,
+    "trackBearingDeg": 0,
+    "etaSec": 60,
+    "snapLat": 0,
+    "offTrackM": 95,
+    "nearestIndex": 1,
+    "doneM": 100,
+    "gradePct": -2.5
+   },
+   "units": "METRIC",
+   "wpName": null,
+   "text": "OFF 95 m · -2% · → wpt ",
+   "showNextStop": true
+  },
+  {
+   "total": 0,
+   "avg": 0.9900000095367432,
+   "hasWp": true,
+   "progress": {
+    "nextWaypointM": null,
+    "remainM": 900,
+    "snapLon": 0,
+    "altitudeM": null,
+    "remainAscentM": null,
+    "nextWaypoint": "",
+    "upcomingTurn": null,
+    "trackBearingDeg": 0,
+    "etaSec": 60,
+    "snapLat": 0,
+    "offTrackM": 95,
+    "nearestIndex": 1,
+    "doneM": 100,
+    "gradePct": -2.5
+   },
+   "units": "METRIC",
+   "wpName": null,
+   "text": "OFF 95 m · -2%",
+   "showNextStop": false
+  },
+  {
+   "total": 0,
+   "avg": 0.9900000095367432,
+   "hasWp": true,
+   "progress": {
+    "nextWaypointM": null,
+    "remainM": 900,
+    "snapLon": 0,
+    "altitudeM": null,
+    "remainAscentM": null,
+    "nextWaypoint": "",
+    "upcomingTurn": null,
+    "trackBearingDeg": 0,
+    "etaSec": 60,
+    "snapLat": 0,
+    "offTrackM": 95,
+    "nearestIndex": 1,
+    "doneM": 100,
+    "gradePct": -2.5
+   },
+   "units": "IMPERIAL",
+   "wpName": null,
+   "text": "OFF 312 ft · -2% · → wpt ",
+   "showNextStop": true
+  },
+  {
+   "total": 0,
+   "avg": 0.9900000095367432,
+   "hasWp": true,
+   "progress": {
+    "nextWaypointM": null,
+    "remainM": 900,
+    "snapLon": 0,
+    "altitudeM": null,
+    "remainAscentM": null,
+    "nextWaypoint": "",
+    "upcomingTurn": null,
+    "trackBearingDeg": 0,
+    "etaSec": 60,
+    "snapLat": 0,
+    "offTrackM": 95,
+    "nearestIndex": 1,
+    "doneM": 100,
+    "gradePct": -2.5
+   },
+   "units": "IMPERIAL",
+   "wpName": null,
+   "text": "OFF 312 ft · -2%",
+   "showNextStop": false
+  },
+  {
+   "total": 500,
+   "avg": 1,
+   "hasWp": true,
+   "progress": {
+    "nextWaypointM": 75.5,
+    "remainM": 900,
+    "snapLon": 0,
+    "altitudeM": null,
+    "remainAscentM": null,
+    "nextWaypoint": " ",
+    "upcomingTurn": null,
+    "trackBearingDeg": 0,
+    "etaSec": 60,
+    "snapLat": 0,
+    "offTrackM": 40,
+    "nearestIndex": 1,
+    "doneM": 100,
+    "gradePct": 1.99
+   },
+   "units": "METRIC",
+   "wpName": " ",
+   "text": "Route · 500 m · avg 1 · → wpt 76 m",
+   "showNextStop": true
+  },
+  {
+   "total": 500,
+   "avg": 1,
+   "hasWp": true,
+   "progress": {
+    "nextWaypointM": 75.5,
+    "remainM": 900,
+    "snapLon": 0,
+    "altitudeM": null,
+    "remainAscentM": null,
+    "nextWaypoint": " ",
+    "upcomingTurn": null,
+    "trackBearingDeg": 0,
+    "etaSec": 60,
+    "snapLat": 0,
+    "offTrackM": 40,
+    "nearestIndex": 1,
+    "doneM": 100,
+    "gradePct": 1.99
+   },
+   "units": "METRIC",
+   "wpName": " ",
+   "text": "Route · 500 m · avg 1",
+   "showNextStop": false
+  },
+  {
+   "total": 500,
+   "avg": 1,
+   "hasWp": true,
+   "progress": {
+    "nextWaypointM": 75.5,
+    "remainM": 900,
+    "snapLon": 0,
+    "altitudeM": null,
+    "remainAscentM": null,
+    "nextWaypoint": " ",
+    "upcomingTurn": null,
+    "trackBearingDeg": 0,
+    "etaSec": 60,
+    "snapLat": 0,
+    "offTrackM": 40,
+    "nearestIndex": 1,
+    "doneM": 100,
+    "gradePct": 1.99
+   },
+   "units": "IMPERIAL",
+   "wpName": " ",
+   "text": "Route · 0.3 mi · avg 1 · → wpt 248 ft",
+   "showNextStop": true
+  },
+  {
+   "total": 500,
+   "avg": 1,
+   "hasWp": true,
+   "progress": {
+    "nextWaypointM": 75.5,
+    "remainM": 900,
+    "snapLon": 0,
+    "altitudeM": null,
+    "remainAscentM": null,
+    "nextWaypoint": " ",
+    "upcomingTurn": null,
+    "trackBearingDeg": 0,
+    "etaSec": 60,
+    "snapLat": 0,
+    "offTrackM": 40,
+    "nearestIndex": 1,
+    "doneM": 100,
+    "gradePct": 1.99
+   },
+   "units": "IMPERIAL",
+   "wpName": " ",
+   "text": "Route · 0.3 mi · avg 1",
+   "showNextStop": false
+  },
+  {
+   "total": 2302.8,
+   "avg": 99.5,
+   "hasWp": false,
+   "progress": {
+    "nextWaypointM": null,
+    "remainM": 900,
+    "snapLon": 0,
+    "altitudeM": null,
+    "remainAscentM": null,
+    "nextWaypoint": null,
+    "upcomingTurn": null,
+    "trackBearingDeg": 0,
+    "etaSec": 60,
+    "snapLat": 0,
+    "offTrackM": 0,
+    "nearestIndex": 1,
+    "doneM": 100,
+    "gradePct": -1.5
+   },
+   "units": "METRIC",
+   "wpName": null,
+   "text": "Route · 2.3 km · avg 100",
+   "showNextStop": true
+  },
+  {
+   "total": 2302.8,
+   "avg": 99.5,
+   "hasWp": false,
+   "progress": {
+    "nextWaypointM": null,
+    "remainM": 900,
+    "snapLon": 0,
+    "altitudeM": null,
+    "remainAscentM": null,
+    "nextWaypoint": null,
+    "upcomingTurn": null,
+    "trackBearingDeg": 0,
+    "etaSec": 60,
+    "snapLat": 0,
+    "offTrackM": 0,
+    "nearestIndex": 1,
+    "doneM": 100,
+    "gradePct": -1.5
+   },
+   "units": "METRIC",
+   "wpName": null,
+   "text": "Route · 2.3 km · avg 100",
+   "showNextStop": false
+  },
+  {
+   "total": 2302.8,
+   "avg": 99.5,
+   "hasWp": false,
+   "progress": {
+    "nextWaypointM": null,
+    "remainM": 900,
+    "snapLon": 0,
+    "altitudeM": null,
+    "remainAscentM": null,
+    "nextWaypoint": null,
+    "upcomingTurn": null,
+    "trackBearingDeg": 0,
+    "etaSec": 60,
+    "snapLat": 0,
+    "offTrackM": 0,
+    "nearestIndex": 1,
+    "doneM": 100,
+    "gradePct": -1.5
+   },
+   "units": "IMPERIAL",
+   "wpName": null,
+   "text": "Route · 1.4 mi · avg 62",
+   "showNextStop": true
+  },
+  {
+   "total": 2302.8,
+   "avg": 99.5,
+   "hasWp": false,
+   "progress": {
+    "nextWaypointM": null,
+    "remainM": 900,
+    "snapLon": 0,
+    "altitudeM": null,
+    "remainAscentM": null,
+    "nextWaypoint": null,
+    "upcomingTurn": null,
+    "trackBearingDeg": 0,
+    "etaSec": 60,
+    "snapLat": 0,
+    "offTrackM": 0,
+    "nearestIndex": 1,
+    "doneM": 100,
+    "gradePct": -1.5
+   },
+   "units": "IMPERIAL",
+   "wpName": null,
+   "text": "Route · 1.4 mi · avg 62",
+   "showNextStop": false
+  }
+ ],
+ "lanes": [
+  {
+   "lanes": [
+    {
+     "valid": false,
+     "indications": ["left"]
+    },
+    {
+     "valid": true,
+     "indications": ["straight"]
+    },
+    {
+     "valid": true,
+     "indications": [
+      "straight",
+      "right"
+     ]
+    }
+   ],
+   "label": "↑ ↑"
+  },
+  {
+   "lanes": [
+    {
+     "valid": true,
+     "indications": ["sharp left"]
+    },
+    {
+     "valid": true,
+     "indications": ["Slight Right"]
+    },
+    {
+     "valid": true,
+     "indications": []
+    },
+    {
+     "valid": true,
+     "indications": ["uturn"]
+    }
+   ],
+   "label": "↰ ↗ ↑ ⤺"
+  },
+  {
+   "lanes": [{
+    "valid": false,
+    "indications": ["left"]
+   }],
+   "label": null
+  },
+  {
+   "lanes": [],
+   "label": null
+  },
+  {
+   "lanes": null,
+   "label": null
+  },
+  {
+   "lanes": [
+    {
+     "valid": true,
+     "indications": ["none"]
+    },
+    {
+     "valid": true,
+     "indications": ["slight left;left"]
+    }
+   ],
+   "label": "↑ ↖"
+  }
+ ],
+ "limit": [
+  {
+   "metric": "100",
+   "kmh": 100,
+   "imperial": "62"
+  },
+  {
+   "metric": "50",
+   "kmh": 50,
+   "imperial": "31"
+  },
+  {
+   "metric": "80",
+   "kmh": 80,
+   "imperial": "49"
+  },
+  {
+   "metric": "130",
+   "kmh": 130,
+   "imperial": "80"
+  },
+  {
+   "metric": "1",
+   "kmh": 1,
+   "imperial": "0"
+  },
+  {
+   "metric": "\u2014",
+   "kmh": null,
+   "imperial": "\u2014"
+  }
+ ],
+ "spoken": [
+  {
+   "metric": "50 meters",
+   "m": 0,
+   "imperial": "50 feet"
+  },
+  {
+   "metric": "50 meters",
+   "m": 10,
+   "imperial": "50 feet"
+  },
+  {
+   "metric": "50 meters",
+   "m": 50,
+   "imperial": "200 feet"
+  },
+  {
+   "metric": "100 meters",
+   "m": 51,
+   "imperial": "200 feet"
+  },
+  {
+   "metric": "300 meters",
+   "m": 260,
+   "imperial": "1000 feet"
+  },
+  {
+   "metric": "700 meters",
+   "m": 650,
+   "imperial": "0.4 miles"
+  },
+  {
+   "metric": "800 meters",
+   "m": 799.9,
+   "imperial": "0.5 miles"
+  },
+  {
+   "metric": "800 meters",
+   "m": 800,
+   "imperial": "0.5 miles"
+  },
+  {
+   "metric": "800 meters",
+   "m": 820,
+   "imperial": "0.5 miles"
+  },
+  {
+   "metric": "900 meters",
+   "m": 850,
+   "imperial": "0.5 miles"
+  },
+  {
+   "metric": "900 meters",
+   "m": 949,
+   "imperial": "0.6 miles"
+  },
+  {
+   "metric": "1000 meters",
+   "m": 950,
+   "imperial": "0.6 miles"
+  },
+  {
+   "metric": "1000 meters",
+   "m": 999,
+   "imperial": "0.6 miles"
+  },
+  {
+   "metric": "1.0 kilometers",
+   "m": 1000,
+   "imperial": "0.6 miles"
+  },
+  {
+   "metric": "1.3 kilometers",
+   "m": 1250,
+   "imperial": "0.8 miles"
+  },
+  {
+   "metric": "1.2 kilometers",
+   "m": 1249.9,
+   "imperial": "0.8 miles"
+  },
+  {
+   "metric": "15.0 kilometers",
+   "m": 15000,
+   "imperial": "9.3 miles"
+  },
+  {
+   "metric": "200 meters",
+   "m": 160.9,
+   "imperial": "800 feet"
+  },
+  {
+   "metric": "200 meters",
+   "m": 152.4,
+   "imperial": "800 feet"
+  },
+  {
+   "metric": "400 meters",
+   "m": 322,
+   "imperial": "0.2 miles"
+  },
+  {
+   "metric": "400 meters",
+   "m": 321.8,
+   "imperial": "1500 feet"
+  },
+  {
+   "metric": "100.0 kilometers",
+   "m": 100000,
+   "imperial": "62.1 miles"
+  },
+  {
+   "metric": "500 meters",
+   "m": 457,
+   "imperial": "0.3 miles"
+  },
+  {
+   "metric": "50 meters",
+   "m": 15.24,
+   "imperial": "100 feet"
+  }
+ ],
+ "join": {
+  "SHARP_LEFT": {
+   "speak": "sharp left toward the route",
+   "word": "Sharp left"
+  },
+  "SLIGHT_LEFT": {
+   "speak": "bear left toward the route",
+   "word": "Bear left"
+  },
+  "ARRIVE": {
+   "speak": "head to the route",
+   "word": "To route"
+  },
+  "LEFT": {
+   "speak": "turn left toward the route",
+   "word": "Turn left"
+  },
+  "SHARP_RIGHT": {
+   "speak": "sharp right toward the route",
+   "word": "Sharp right"
+  },
+  "UTURN": {
+   "speak": "turn around toward the route",
+   "word": "Turn around"
+  },
+  "STRAIGHT": {
+   "speak": "go ahead to the route",
+   "word": "Go ahead"
+  },
+  "SLIGHT_RIGHT": {
+   "speak": "bear right toward the route",
+   "word": "Bear right"
+  },
+  "MERGE_LEFT": {
+   "speak": "head to the route",
+   "word": "To route"
+  },
+  "FORK_LEFT": {
+   "speak": "head to the route",
+   "word": "To route"
+  },
+  "CONTINUE": {
+   "speak": "go ahead to the route",
+   "word": "Go ahead"
+  },
+  "MERGE_RIGHT": {
+   "speak": "head to the route",
+   "word": "To route"
+  },
+  "ROUNDABOUT": {
+   "speak": "head to the route",
+   "word": "To route"
+  },
+  "FORK_RIGHT": {
+   "speak": "head to the route",
+   "word": "To route"
+  },
+  "RIGHT": {
+   "speak": "turn right toward the route",
+   "word": "Turn right"
+  }
+ },
+ "lapFormat": [
+  {
+   "t": "0:00.00",
+   "ms": 0
+  },
+  {
+   "t": "0:01.50",
+   "ms": 1500
+  },
+  {
+   "t": "1:02.03",
+   "ms": 62030
+  },
+  {
+   "t": "0:59.99",
+   "ms": 59999
+  },
+  {
+   "t": "1:00.00",
+   "ms": 60000
+  },
+  {
+   "t": "59:59.99",
+   "ms": 3599990
+  },
+  {
+   "t": "0:00.00",
+   "ms": -5
+  },
+  {
+   "t": "2057:36.78",
+   "ms": 123456789
+  }
+ ],
+ "etaSeconds": [
+  {
+   "eta": 0,
+   "remain": 0,
+   "speed": 0
+  },
+  {
+   "eta": 0,
+   "remain": -5,
+   "speed": 10
+  },
+  {
+   "eta": 80,
+   "remain": 1111.9492664455872,
+   "speed": 0
+  },
+  {
+   "eta": 80,
+   "remain": 1111.9492664455872,
+   "speed": 1.4900000095367432
+  },
+  {
+   "eta": 741,
+   "remain": 1111.9492664455872,
+   "speed": 1.5
+  },
+  {
+   "eta": 222,
+   "remain": 2223.8985328911745,
+   "speed": 10
+  },
+  {
+   "eta": 89,
+   "remain": 1778.6185,
+   "speed": 20
+  },
+  {
+   "eta": 128,
+   "remain": 1778.6185,
+   "speed": 0
+  },
+  {
+   "eta": 7,
+   "remain": 100,
+   "speed": 13.899999618530273
+  },
+  {
+   "eta": 0,
+   "remain": 6.94,
+   "speed": 13.88888931274414
+  },
+  {
+   "eta": 15,
+   "remain": 45,
+   "speed": 3
+  }
+ ]
+}
