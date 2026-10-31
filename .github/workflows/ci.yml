@@ -69,3 +69,116 @@ jobs:
             build.log
             swift-test.log
           if-no-files-found: ignore
+
+  # The REAL app in the iOS Simulator: screenshots of every screen (demo services + demo content)
+  # and end-to-end runs against tools/fakedash/fakedash.py on 127.0.0.1 (real sockets, link,
+  # renderer, VideoToolbox encoder). Evidence is force-pushed to the orphan branch `ci-artifacts`
+  # (RUN.md, PNGs, fakedash summaries, app logs) because job logs / artifacts are not always
+  # reachable. Scripts: tools/ci/e2e/.
+  e2e:
+    name: E2E (iOS Simulator app <-> fake dash) + screenshots
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/wip/e2e'))
+    runs-on: macos-15
+    timeout-minutes: 60
+    continue-on-error: true
+    permissions:
+      contents: write
+    env:
+      BUNDLE_ID: com.example.opencfmoto
+      OUT: ${{ github.workspace }}/e2e-out
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+      HOMEBREW_NO_ENV_HINTS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare (XcodeGen, ffmpeg in the background, pick + boot an iPhone simulator)
+        id: sim
+        run: |
+          mkdir -p "$OUT"
+          t0=$(date +%s)
+          brew install xcodegen
+          nohup bash -c 'brew install ffmpeg > "$OUT/brew-ffmpeg.log" 2>&1; echo $? > "$OUT/brew-ffmpeg.rc"' < /dev/null > /dev/null 2>&1 &
+          python3 tools/ci/e2e/simctl_pick.py > "$OUT/sim.txt"
+          cat "$OUT/sim.txt" | tee -a "$GITHUB_OUTPUT"
+          UDID=$(grep '^udid=' "$OUT/sim.txt" | cut -d= -f2)
+          xcrun simctl boot "$UDID" || true
+          {
+            echo "sha=$GITHUB_SHA"
+            echo "ref=$GITHUB_REF_NAME"
+            echo "run_url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "xcode=$(xcodebuild -version | tr '\n' ' ')"
+            echo "macos=$(sw_vers -productVersion)"
+            echo "sim_name=$(grep '^name=' "$OUT/sim.txt" | cut -d= -f2-)"
+            echo "sim_runtime=$(grep '^runtime=' "$OUT/sim.txt" | cut -d= -f2-)"
+            echo "sim_udid=$UDID"
+            echo "bundle=$BUNDLE_ID"
+          } > "$OUT/env.txt"
+          printf "prepare\t%s\tok\n" $(( $(date +%s) - t0 )) >> "$OUT/timings.tsv"
+      - name: Build the app for the simulator (unsigned)
+        id: build
+        run: |
+          t0=$(date +%s)
+          xcodegen generate
+          set -o pipefail
+          xcodebuild -project OpenCfMoto.xcodeproj -scheme OpenCfMoto -configuration Debug \
+            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" \
+            -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO \
+            build 2>&1 | tee "$OUT/build.log" | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
+          if grep -q "BUILD SUCCEEDED" "$OUT/build.log"; then st=ok; else st=failed; fi
+          echo "status=$st" > "$OUT/build.env"
+          printf "build\t%s\t%s\n" $(( $(date +%s) - t0 )) "$st" >> "$OUT/timings.tsv"
+          [ "$st" = ok ]
+      - name: Annotate build errors
+        if: failure() && steps.build.outcome == 'failure'
+        run: python3 tools/ci/annotate.py "$OUT/build.log" "e2e simulator build"
+      - name: Install the app (clean status bar)
+        id: install
+        run: |
+          t0=$(date +%s)
+          UDID=${{ steps.sim.outputs.udid }}
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl install "$UDID" build/dd/Build/Products/Debug-iphonesimulator/OpenCfMoto.app
+          xcrun simctl status_bar "$UDID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 \
+            --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100 || true
+          xcrun simctl privacy "$UDID" grant camera "$BUNDLE_ID" || true
+          printf "install\t%s\tok\n" $(( $(date +%s) - t0 )) >> "$OUT/timings.tsv"
+      - name: Screenshots (demo services + demo content)
+        if: steps.install.outcome == 'success'
+        run: |
+          t0=$(date +%s)
+          bash tools/ci/e2e/screenshots.sh "${{ steps.sim.outputs.udid }}" "$BUNDLE_ID" "$OUT"
+          printf "screenshots\t%s\tok\n" $(( $(date +%s) - t0 )) >> "$OUT/timings.tsv"
+      - name: Wait for ffmpeg
+        if: steps.install.outcome == 'success'
+        run: |
+          t0=$(date +%s)
+          for i in $(seq 1 120); do [ -f "$OUT/brew-ffmpeg.rc" ] && break; sleep 5; done
+          rc=$(cat "$OUT/brew-ffmpeg.rc" 2>/dev/null || echo timeout)
+          echo "brew install ffmpeg: $rc"
+          tail -n 5 "$OUT/brew-ffmpeg.log" || true
+          if command -v ffmpeg > /dev/null; then ffmpeg -version | head -1; else echo "::warning title=ffmpeg::not available, frames will not be decoded"; fi
+          printf "ffmpeg\t%s\t%s\n" $(( $(date +%s) - t0 )) "$rc" >> "$OUT/timings.tsv"
+      - name: E2E cfdl16 (800x386 landscape, non-touch)
+        if: steps.install.outcome == 'success'
+        run: |
+          t0=$(date +%s)
+          bash tools/ci/e2e/run-fakedash.sh "${{ steps.sim.outputs.udid }}" "$BUNDLE_ID" cfdl16 cfdl16 45 "$OUT"
+          printf "e2e cfdl16\t%s\tdone\n" $(( $(date +%s) - t0 )) >> "$OUT/timings.tsv"
+      - name: E2E cfdl26 (800x951 portrait, notify burst) with the dash view open
+        if: steps.install.outcome == 'success'
+        run: |
+          t0=$(date +%s)
+          bash tools/ci/e2e/run-fakedash.sh "${{ steps.sim.outputs.udid }}" "$BUNDLE_ID" cfdl26 cfdl26 30 "$OUT" -uiScreen dash
+          printf "e2e cfdl26\t%s\tdone\n" $(( $(date +%s) - t0 )) >> "$OUT/timings.tsv"
+      - name: Report (RUN.md + annotations)
+        if: always()
+        run: |
+          mkdir -p "$OUT/crash"
+          cp ~/Library/Logs/DiagnosticReports/OpenCfMoto*.ips "$OUT/crash/" 2>/dev/null || true
+          python3 tools/ci/e2e/assemble.py "$OUT" "$RUNNER_TEMP/ci-artifacts"
+      - name: Publish to the ci-artifacts branch
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash tools/ci/e2e/publish.sh "$RUNNER_TEMP/ci-artifacts"
