@@ -3,9 +3,13 @@
 // Raster map tiles for the dash map (docs/spec/navigation-dash.md §10.1, §10.3, §9) — (osmdroid MAPNIK
 // source: {z}/{x}/{y}.png, 256-px tiles, at most 2 download threads, 90-day expiry, 512 MiB disk
 // cap, identifying User-Agent, redirects followed up to 3 times, non-200 → tile missing) and the
-// osmdroid INVERT_COLORS night filter (R' = 255 − R, G' = 255 − G, B' = 255 − B, A' = A, tiles only).
+// night variant of the tiles (tiles only, chrome unchanged, §10.3). iOS deviation: the default night
+// filter is a hue- and saturation-preserving HSL LIGHTNESS inversion (L' = 1 − L, then dimmed ×0.9)
+// so parks stay green and water blue; osmdroid's INVERT_COLORS (R' = 255 − R, G' = 255 − G,
+// B' = 255 − B, A' = A — parks turn magenta, water orange) is `nightStyle = .rgbInvert`.
 //
-// Layers: memory LRU of decoded CGImages (day and night variants, ~256 entries) → disk cache
+// Layers: memory LRU of decoded CGImages (day images + night variants keyed by their exact filter,
+// ~256 entries; night variants are never written to disk) → disk cache
 // Caches/tiles/<source>/z/x/y.png (expiry by download date, LRU purge by last access) → network
 // through the injected HTTPClient (cellular-preferring on iOS). Stale tiles are served when the
 // network is unavailable and refreshed in the background when it is back.
@@ -183,6 +187,9 @@ struct VideoLRU<Key: Hashable, Value> {
 
     mutating func remove(_ key: Key) { storage[key] = nil }
     mutating func removeAll() { storage.removeAll() }
+    mutating func removeAll(where shouldRemove: (Key) -> Bool) {
+        storage = storage.filter { !shouldRemove($0.key) }
+    }
 }
 
 /// Retry policy for tile downloads.
@@ -214,7 +221,100 @@ enum TileFetchPolicy {
     }
 }
 
+/// How the night variant of a raster tile is derived from the day tile (`DashDisplayList`
+/// `.tile(invert: true)`, navigation-dash.md §10.3).
+public enum TileNightStyle: String, Sendable, Hashable, CaseIterable {
+    /// iOS default: HSL lightness inversion — L' = 1 − L with hue and saturation kept (white roads →
+    /// black, light land → near-black, light green parks → dark green, light blue water → dark
+    /// blue), then dimmed by `TileImageCache.Configuration.nightDimming` against night glare.
+    case lightnessInvert
+    /// Android parity: osmdroid `TilesOverlay.INVERT_COLORS` (c' = 255 − c, alpha kept), which turns
+    /// parks magenta and water orange.
+    case rgbInvert
+}
+
+/// The exact night recipe (style + dimming): the cache identity of a night variant.
+struct TileNightFilter: Hashable, Sendable {
+    let style: TileNightStyle
+    /// Colour multiplier applied after the lightness inversion (0…1); always 1 for `.rgbInvert`.
+    let dimming: Double
+
+    init(style: TileNightStyle, dimming: Double = 1) {
+        self.style = style
+        self.dimming = style == .lightnessInvert ? TileNightInversion.clampedDimming(dimming) : 1
+    }
+
+    /// Applies the filter in place to premultiplied 4-byte pixels.
+    func apply(to buffer: UnsafeMutableRawBufferPointer, width: Int, height: Int, bytesPerRow: Int, alphaIndex: Int = 3) {
+        switch style {
+        case .lightnessInvert:
+            TileNightInversion.lightnessInvertPremultiplied(buffer, width: width, height: height, bytesPerRow: bytesPerRow,
+                                                           alphaIndex: alphaIndex, dimming: dimming)
+        case .rgbInvert:
+            TileNightInversion.invertPremultiplied(buffer, width: width, height: height, bytesPerRow: bytesPerRow,
+                                                   alphaIndex: alphaIndex)
+        }
+    }
+}
+
+/// Night filters as pure functions (platform-neutral, unit-tested on Linux; the Apple tile cache
+/// runs them over the CGContext bitmap of each 256×256 tile once and caches the result).
 enum TileNightInversion {
+    /// HSL lightness inversion of one colour, components 0…1 (un-premultiplied): every channel is
+    /// shifted by 1 − (max + min). Then max' = 1 − min and min' = 1 − max, so L' = 1 − L while the
+    /// chroma max − min — hence hue and HSL saturation — is unchanged; results stay in 0…1.
+    static func lightnessInverted(r: Double, g: Double, b: Double) -> (r: Double, g: Double, b: Double) {
+        let shift = 1 - (max(r, g, b) + min(r, g, b))
+        return (r + shift, g + shift, b + shift)
+    }
+
+    /// `lightnessInverted` of an opaque 0xRRGGBB colour (exact integer maths), then × `dimming`.
+    static func lightnessInverted(rgb: UInt32, dimming: Double = 1) -> UInt32 {
+        let r = Int((rgb >> 16) & 0xFF), g = Int((rgb >> 8) & 0xFF), b = Int(rgb & 0xFF)
+        let shift = 255 - max(r, g, b) - min(r, g, b)
+        let d = clampedDimming(dimming)
+        func ch(_ c: Int) -> UInt32 { UInt32(dimmed(c + shift, d)) }
+        return (ch(r) << 16) | (ch(g) << 8) | ch(b)
+    }
+
+    /// `lightnessInverted` of one 8-bit PREMULTIPLIED pixel (channels ≤ alpha; larger values are
+    /// clamped to alpha). With c = a·cᵤ the shift becomes a − (max + min) in premultiplied units, so
+    /// c' = c + a − max − min is exact without un-premultiplying (alpha 0 stays 0). Alpha unchanged.
+    static func lightnessInvertedPremultiplied(_ c0: UInt8, _ c1: UInt8, _ c2: UInt8, alpha: UInt8,
+                                               dimming: Double = 1) -> (UInt8, UInt8, UInt8) {
+        let a = Int(alpha)
+        let x = min(Int(c0), a), y = min(Int(c1), a), z = min(Int(c2), a)
+        let shift = a - max(x, y, z) - min(x, y, z)
+        let d = clampedDimming(dimming)
+        return (dimmed(x + shift, d), dimmed(y + shift, d), dimmed(z + shift, d))
+    }
+
+    /// `lightnessInvertedPremultiplied` over premultiplied 4-byte pixels, in place. `alphaIndex` =
+    /// byte offset of alpha inside a pixel (3 for BGRA premultipliedFirst-little-endian and RGBA
+    /// premultipliedLast); the other three bytes are colour (their order does not matter).
+    static func lightnessInvertPremultiplied(_ buffer: UnsafeMutableRawBufferPointer, width: Int, height: Int,
+                                             bytesPerRow: Int, alphaIndex: Int = 3, dimming: Double = 1) {
+        guard width > 0, height > 0, (0 ..< 4).contains(alphaIndex), bytesPerRow >= width * 4,
+              buffer.count >= bytesPerRow * (height - 1) + width * 4 else { return }
+        let colour = (0 ..< 4).filter { $0 != alphaIndex }
+        let (o0, o1, o2) = (colour[0], colour[1], colour[2])
+        let d = clampedDimming(dimming)
+        let table = (0 ... 255).map { dimmed($0, d) } // × dimming, rounded
+        for row in 0 ..< height {
+            var i = row * bytesPerRow
+            let end = i + width * 4
+            while i < end {
+                let a = Int(buffer[i + alphaIndex])
+                let x = min(Int(buffer[i + o0]), a), y = min(Int(buffer[i + o1]), a), z = min(Int(buffer[i + o2]), a)
+                let shift = a - max(x, y, z) - min(x, y, z)
+                buffer[i + o0] = table[x + shift]
+                buffer[i + o1] = table[y + shift]
+                buffer[i + o2] = table[z + shift]
+                i += 4
+            }
+        }
+    }
+
     /// osmdroid INVERT_COLORS on premultiplied 4-byte pixels, in place: every colour channel
     /// c' = a − c (= 255 − c for opaque pixels), alpha unchanged. `alphaIndex` = byte offset of
     /// alpha inside a pixel (3 for BGRA premultipliedFirst-little-endian and RGBA premultipliedLast).
@@ -233,6 +333,13 @@ enum TileNightInversion {
                 i += 4
             }
         }
+    }
+
+    /// Dimming factor clamped to 0…1 (a factor above 1 could break the premultiplied c ≤ a rule).
+    static func clampedDimming(_ d: Double) -> Double { d.isFinite ? min(max(d, 0), 1) : 1 }
+
+    private static func dimmed(_ c: Int, _ d: Double) -> UInt8 {
+        d >= 1 ? UInt8(c) : UInt8((Double(c) * d).rounded())
     }
 }
 
@@ -282,11 +389,18 @@ public final class TileImageCache: @unchecked Sendable {
         /// Highest zoom the server provides (OSM 19); deeper tiles are drawn from ancestors.
         public var maxFetchZoom: Int
         public var requestTimeout: TimeInterval
+        /// Night variant of the tiles: `.lightnessInvert` (iOS default — parks stay green, water
+        /// blue) or `.rgbInvert` (osmdroid INVERT_COLORS, Android parity).
+        public var nightStyle: TileNightStyle
+        /// Colour multiplier after the `.lightnessInvert` night filter, 0…1 (1 = none); ignored by
+        /// `.rgbInvert`.
+        public var nightDimming: Double
 
         public init(urlTemplate: String = BikeSettings().tileURLTemplate, directory: URL? = nil, memoryCapacity: Int = 256,
                     diskCapacityBytes: Int64 = 512 * 1024 * 1024, expiry: TimeInterval = 90 * 24 * 3600,
                     maxConcurrentDownloads: Int = 2, maxQueuedRequests: Int = 96, maxPrefetchTiles: Int = 400,
-                    maxFetchZoom: Int = 19, requestTimeout: TimeInterval = 15) {
+                    maxFetchZoom: Int = 19, requestTimeout: TimeInterval = 15, nightStyle: TileNightStyle = .lightnessInvert,
+                    nightDimming: Double = 0.9) {
             self.urlTemplate = urlTemplate
             self.directory = directory
             self.memoryCapacity = memoryCapacity
@@ -297,12 +411,16 @@ public final class TileImageCache: @unchecked Sendable {
             self.maxPrefetchTiles = maxPrefetchTiles
             self.maxFetchZoom = maxFetchZoom
             self.requestTimeout = requestTimeout
+            self.nightStyle = nightStyle
+            self.nightDimming = nightDimming
         }
     }
 
     private struct MemoryKey: Hashable {
         let tile: TileCacheKey
-        let night: Bool
+        /// nil = the decoded day image; else the exact filter the night variant was built with, so
+        /// variants of different styles / dimmings never mix (night variants live in memory only).
+        let night: TileNightFilter?
     }
 
     public let configuration: Configuration
@@ -333,6 +451,7 @@ public final class TileImageCache: @unchecked Sendable {
     private var _stats = TileCacheStats()
     private var _onTileLoaded: (@Sendable (TileCacheKey) -> Void)?
     private var memoryWarningToken: NSObjectProtocol?
+    private var nightFilter: TileNightFilter
 
     public init(httpClient: any HTTPClient, configuration: Configuration = Configuration()) {
         http = httpClient
@@ -343,6 +462,7 @@ public final class TileImageCache: @unchecked Sendable {
         template = configuration.urlTemplate
         sourceDirectory = root.appendingPathComponent(TileDiskLayout.sourceKey(for: configuration.urlTemplate), isDirectory: true)
         memory = VideoLRU(capacity: configuration.memoryCapacity)
+        nightFilter = TileNightFilter(style: configuration.nightStyle, dimming: configuration.nightDimming)
         // UIApplication.didReceiveMemoryWarningNotification by name (no UIKit import; never fires on macOS).
         memoryWarningToken = NotificationCenter.default.addObserver(
             forName: Notification.Name("UIApplicationDidReceiveMemoryWarningNotification"), object: nil, queue: nil
@@ -381,6 +501,20 @@ public final class TileImageCache: @unchecked Sendable {
         }
     }
 
+    /// The night filter in use (initially `configuration.nightStyle`). Switching it drops the night
+    /// variants built with the previous one; day images are kept.
+    public var nightStyle: TileNightStyle {
+        get { lock.lock(); defer { lock.unlock() }; return nightFilter.style }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            let filter = TileNightFilter(style: newValue, dimming: configuration.nightDimming)
+            guard filter != nightFilter else { return }
+            nightFilter = filter
+            memory.removeAll { $0.night != nil }
+        }
+    }
+
     public var stats: TileCacheStats {
         lock.lock(); defer { lock.unlock() }
         var s = _stats
@@ -391,8 +525,9 @@ public final class TileImageCache: @unchecked Sendable {
 
     // MARK: lookup (render thread)
 
-    /// The decoded tile from memory, or nil. A night variant is built from the day image once and
-    /// cached. Never touches disk or network (call `request` for a missing tile).
+    /// The decoded tile from memory, or nil. A night variant is built from the day image once (with
+    /// the current `nightStyle`) and cached. Never touches disk or network (call `request` for a
+    /// missing tile).
     public func image(z: Int, x: Int, y: Int, night: Bool) -> CGImage? {
         let key = TileCacheKey(z: z, x: x, y: y)
         if let img = lookup(key, night: night) {
@@ -424,18 +559,19 @@ public final class TileImageCache: @unchecked Sendable {
 
     private func lookup(_ key: TileCacheKey, night: Bool) -> CGImage? {
         lock.lock()
-        if let img = memory.get(MemoryKey(tile: key, night: night)) { lock.unlock(); return img }
-        guard night, let day = memory.get(MemoryKey(tile: key, night: false)) else { lock.unlock(); return nil }
+        let filter = night ? nightFilter : nil
+        if let img = memory.get(MemoryKey(tile: key, night: filter)) { lock.unlock(); return img }
+        guard let filter, let day = memory.get(MemoryKey(tile: key, night: nil)) else { lock.unlock(); return nil }
         let gen = generation
         lock.unlock()
-        guard let inverted = Self.invertedImage(day) else { return nil }
+        guard let variant = Self.nightImage(day, filter: filter) else { return nil }
         lock.lock()
-        if gen == generation {
-            memory.set(MemoryKey(tile: key, night: true), inverted)
+        if gen == generation, filter == nightFilter {
+            memory.set(MemoryKey(tile: key, night: filter), variant)
             _stats.nightVariantsBuilt += 1
         }
         lock.unlock()
-        return inverted
+        return variant
     }
 
     // MARK: loading
@@ -447,7 +583,7 @@ public final class TileImageCache: @unchecked Sendable {
         guard key.isValid else { return }
         let now = ProcessInfo.processInfo.systemUptime
         lock.lock()
-        if memory.contains(MemoryKey(tile: key, night: false)) || diskPending.contains(key) || netPending.contains(key) {
+        if memory.contains(MemoryKey(tile: key, night: nil)) || diskPending.contains(key) || netPending.contains(key) {
             lock.unlock()
             return
         }
@@ -540,7 +676,7 @@ public final class TileImageCache: @unchecked Sendable {
                     try? fileManager.setAttributes([.modificationDate: Date()], ofItemAtPath: file.path) // LRU access
                     lock.lock()
                     if gen == generation {
-                        memory.set(MemoryKey(tile: key, night: false), image)
+                        memory.set(MemoryKey(tile: key, night: nil), image)
                         _stats.diskHits += 1
                         if stale { _stats.staleServed += 1 }
                         loaded = true
@@ -738,8 +874,8 @@ public final class TileImageCache: @unchecked Sendable {
         netPending.remove(key)
         if gen == generation {
             if let o = outcome {
-                memory.set(MemoryKey(tile: key, night: false), o.image)
-                memory.remove(MemoryKey(tile: key, night: true)) // refreshed: rebuild the night variant
+                memory.set(MemoryKey(tile: key, night: nil), o.image)
+                memory.removeAll { $0.tile == key && $0.night != nil } // refreshed: rebuild the night variant
                 _stats.downloads += 1
                 _stats.bytesDownloaded += Int64(o.data.count)
                 consecutiveNetworkErrors = 0
@@ -768,14 +904,15 @@ public final class TileImageCache: @unchecked Sendable {
         guard !data.isEmpty, let source = CGImageSourceCreateWithData(data as CFData, nil),
               CGImageSourceGetCount(source) > 0,
               let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
-        return redraw(image, invert: false)
+        return redraw(image, night: nil)
     }
 
-    static func invertedImage(_ image: CGImage) -> CGImage? { redraw(image, invert: true) }
+    /// The night variant of a (decoded) day tile.
+    static func nightImage(_ image: CGImage, filter: TileNightFilter) -> CGImage? { redraw(image, night: filter) }
 
-    /// Decodes into a 32BGRA bitmap (forces decoding off the render thread) and optionally applies
-    /// the night inversion.
-    private static func redraw(_ image: CGImage, invert: Bool) -> CGImage? {
+    /// Decodes into a 32BGRA premultiplied bitmap (forces decoding off the render thread) and
+    /// optionally runs a night filter over its pixels (alpha is byte 3 of each little-endian BGRA pixel).
+    private static func redraw(_ image: CGImage, night: TileNightFilter?) -> CGImage? {
         let w = image.width, h = image.height
         guard w > 0, h > 0, w <= 2_048, h <= 2_048,
               let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
@@ -783,9 +920,9 @@ public final class TileImageCache: @unchecked Sendable {
         ctx.interpolationQuality = .none
         ctx.setBlendMode(.copy)
         ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
-        if invert, let data = ctx.data {
-            TileNightInversion.invertPremultiplied(UnsafeMutableRawBufferPointer(start: data, count: ctx.bytesPerRow * h),
-                                                   width: w, height: h, bytesPerRow: ctx.bytesPerRow)
+        if let night, let data = ctx.data {
+            night.apply(to: UnsafeMutableRawBufferPointer(start: data, count: ctx.bytesPerRow * h),
+                        width: w, height: h, bytesPerRow: ctx.bytesPerRow, alphaIndex: 3)
         }
         return ctx.makeImage()
     }

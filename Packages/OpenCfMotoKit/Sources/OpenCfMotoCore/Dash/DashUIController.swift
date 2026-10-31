@@ -11,6 +11,14 @@
 // may be called from any thread (the render loop calls `displayList(now:)` on its own queue).
 // `now` values must come from one monotonic clock (the same as `DashTouch.time`).
 //
+// Smooth follow (iOS addition, DashFollowEase.swift): `update(_:)` moves the TARGET camera / puck
+// (`state.camera`, `mapProjection()`), exactly like osmdroid's jump; what `displayList(now:)` draws
+// then eases from the previous picture to the targets over `Options.followEaseDuration` (0.35 s,
+// started by the first call that knows the time). A running ease changes the list on every call,
+// so the projection engine renders at its frame cap only while it runs; once it is over the list
+// is identical frame after frame. `mapProjection(now:)` / `visibleTiles(now:)` / `isAnimating(now:)`
+// describe what is drawn at `now`. Explicit camera actions never ease.
+//
 // Integration recipe (app layer):
 //   let ui = DashUIController(measurer: CoreTextMeasurer())        // same measurer as the renderer
 //   render loop (≥ 1 Hz, typically at the frame cap):
@@ -61,6 +69,13 @@ public final class DashUIController: @unchecked Sendable {
         /// Feedback toasts for UI-only actions ("Centered on GPS", "Heading up"…) — iOS addition,
         /// Android's status line is hidden on landscape dashes.
         public var feedbackToasts = true
+        /// Smooth follow (iOS addition, navigation-dash.md §4.9 / §15.3): when a fix, bearing or speed
+        /// zoom moves the follow camera, the drawn centre (incl. look-ahead), rotation, zoom AND the
+        /// rider puck ease from what is on screen to the new targets (cubic ease-out) over this many
+        /// seconds; a fix while not following glides the puck only. Android's MapLibre phone map eases
+        /// 280 ms; 0 = jump on every fix (osmdroid bike parity). Explicit camera actions (recenter,
+        /// overview / preview fits, zoom buttons, pan / pinch / double tap, free-pan recenter) jump.
+        public var followEaseDuration: TimeInterval = 0.35
         public init() {}
     }
 
@@ -87,6 +102,10 @@ public final class DashUIController: @unchecked Sendable {
     private var scene: DashScene?
     /// Scroll the focused control into view at the next scene build (set by focus moves).
     private var revealFocus = false
+    /// The running follow ease (nil: the targets are drawn as they are).
+    private var ease: DashFollowEase?
+    /// An explicit camera move happened inside the current `update` (fits, restore, navigation start…): no ease.
+    private var cameraJumped = false
 
     public init(measurer: any DashTextMeasurer = ApproximateTextMeasurer(), options: Options = Options()) {
         self.measurer = measurer
@@ -100,8 +119,11 @@ public final class DashUIController: @unchecked Sendable {
     public func update(_ newModel: DashModel) {
         lock.lock(); defer { lock.unlock() }
         let prev = hasModel ? model : DashModel(canvas: newModel.canvas)
+        let shownBefore = hasModel ? shownView() : nil // what the last frame showed
+        let cameraBefore = camera
         model = newModel
         hasModel = true
+        cameraJumped = false
         gestures.config = .scaled(newModel.scale)
         transitions(from: prev, to: newModel)
         if camera.follow && !newModel.inPreview {
@@ -110,6 +132,9 @@ public final class DashUIController: @unchecked Sendable {
             puckBearing = currentBearing()
         }
         if !camera.isPositioned { positionIfNeeded() }
+        let canvasChanged = prev.canvas != newModel.canvas || prev.margins != newModel.margins
+            || prev.tileSize != newModel.tileSize
+        retarget(from: shownBefore, cameraMoved: !camera.hasSameGeometry(as: cameraBefore), jump: cameraJumped || canvasChanged)
         scene = nil
     }
 
@@ -194,16 +219,39 @@ public final class DashUIController: @unchecked Sendable {
                            searchListScroll: searchListScroll)
     }
 
-    /// The map projection of the current camera (nil until positioned).
+    /// The map projection of the target camera (nil until positioned): where a running follow
+    /// ease ends. What is drawn at a given time: `mapProjection(now:)`.
     public func mapProjection() -> MapProjection? {
         lock.lock(); defer { lock.unlock() }
         return projection()
     }
 
-    /// Raster tiles the current frame draws (for tile prefetch / cache warm-up).
+    /// Raster tiles of the target camera (tile prefetch / cache warm-up: the picture a running
+    /// follow ease ends on; tiles drawn on the way are requested by the renderer).
     public func visibleTiles() -> [DashMapTile] {
         lock.lock(); defer { lock.unlock() }
         return projection()?.visibleTiles(maxTileZoom: model.maxTileZoom) ?? []
+    }
+
+    /// The projection `displayList(now:)` draws the map with at `now` (follow ease included).
+    public func mapProjection(now: TimeInterval) -> MapProjection? {
+        lock.lock(); defer { lock.unlock() }
+        advance(now)
+        return shownProjection()
+    }
+
+    /// The raster tiles `displayList(now:)` draws at `now`.
+    public func visibleTiles(now: TimeInterval) -> [DashMapTile] {
+        lock.lock(); defer { lock.unlock() }
+        advance(now)
+        return shownProjection()?.visibleTiles(maxTileZoom: model.maxTileZoom) ?? []
+    }
+
+    /// True while the follow ease runs at `now`: the drawn map keeps changing without new input.
+    public func isAnimating(now: TimeInterval) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        advance(now)
+        return ease != nil
     }
 
     // MARK: - Geometry helpers
@@ -215,6 +263,110 @@ public final class DashUIController: @unchecked Sendable {
 
     private func projection() -> MapProjection? {
         camera.projection(viewport: model.canvas, anchor: anchor, tileSize: model.tileSize)
+    }
+
+    // MARK: - Follow ease (iOS addition, DashFollowEase.swift)
+
+    /// The targets: the camera and the model's rider (nil until positioned).
+    private func targetView() -> DashMapView? {
+        guard let c = camera.center else { return nil }
+        return DashMapView(center: c, zoom: camera.zoom, bearingDeg: camera.bearingDeg, puck: model.riderPosition,
+                           puckBearingDeg: puckBearing)
+    }
+
+    /// What is drawn (as of the last `now` seen): the running ease, else the targets.
+    private func shownView() -> DashMapView? {
+        guard let t = targetView() else { return nil }
+        return ease?.view(base: t) ?? t
+    }
+
+    private func shownProjection() -> MapProjection? {
+        guard let v = shownView() else { return nil }
+        return MapProjection(center: v.center, zoom: v.zoom, bearingDeg: v.bearingDeg, viewport: model.canvas, anchor: anchor,
+                             tileSize: model.tileSize)
+    }
+
+    /// After `update` moved the targets: keep, start or drop the ease from what was on screen.
+    private func retarget(from before: DashMapView?, cameraMoved: Bool, jump: Bool) {
+        guard options.followEaseDuration > 0, !jump, let before, let after = targetView(),
+              before.puck != nil, after.puck != nil else {
+            ease = nil
+            return
+        }
+        // A model change that does not move the targets (metrics, toasts, a repeated fix…) must not
+        // restart or slow down the running ease.
+        if let e = ease {
+            let same = e.movesCamera ? e.to == after
+                : !cameraMoved && e.to.puck == after.puck && e.to.puckBearingDeg == after.puckBearingDeg
+            if same { return }
+        }
+        if before == after {
+            ease = nil
+            return
+        }
+        let movesCamera = !before.hasSameCamera(as: after)
+        // Only the follow camera eases; a camera moved for any other reason jumps. Sub-2 dp changes
+        // (compass / GPS noise while stopped) jump too: invisible, and no 0.35 s of frames at the
+        // frame cap for every 125 ms compass tick.
+        guard !movesCamera || (camera.follow && !model.inPreview), easeTravelIsSmall(before, after),
+              easeMovementPx(before, after) >= layoutContext.dp(Self.followEaseMinimumMovementDp) else {
+            ease = nil
+            return
+        }
+        ease = DashFollowEase(from: before, to: after, duration: options.followEaseDuration, tileSize: model.tileSize,
+                              movesCamera: movesCamera)
+    }
+
+    /// Smaller visible changes are applied without an ease (dp).
+    static let followEaseMinimumMovementDp = 2.0
+
+    /// Largest on-screen movement (px) from view `a` to view `b`: the map under the safe-area
+    /// corners (pan, zoom and rotation), the puck, and the tip of the puck icon (its own rotation).
+    private func easeMovementPx(_ a: DashMapView, _ b: DashMapView) -> Double {
+        let pa = MapProjection(center: a.center, zoom: a.zoom, bearingDeg: a.bearingDeg, viewport: model.canvas, anchor: anchor,
+                               tileSize: model.tileSize)
+        let pb = MapProjection(center: b.center, zoom: b.zoom, bearingDeg: b.bearingDeg, viewport: model.canvas, anchor: anchor,
+                               tileSize: model.tileSize)
+        func dist(_ p: DashPoint, _ q: DashPoint) -> Double { hypot(p.x - q.x, p.y - q.y) }
+        let safe = model.safeRect
+        var m = 0.0
+        for s in [DashPoint(safe.minX, safe.minY), DashPoint(safe.maxX, safe.minY), DashPoint(safe.maxX, safe.maxY),
+                  DashPoint(safe.minX, safe.maxY)] {
+            m = max(m, dist(pb.screenPoint(pa.geoPoint(atScreen: s)), s))
+        }
+        if let ra = a.puck, let rb = b.puck { m = max(m, dist(pb.screenPoint(rb), pa.screenPoint(ra))) }
+        let turn = DashEasing.shortestTurnDeg(from: a.puckBearingDeg - a.bearingDeg, to: b.puckBearingDeg - b.bearingDeg)
+        return max(m, abs(turn) * .pi / 180 * layoutContext.dp(24))
+    }
+
+    /// Far jumps (first fix after a tunnel, a GPS glitch) are not animated: the tiles on the way
+    /// are not loaded and a long slide is disorienting.
+    private func easeTravelIsSmall(_ a: DashMapView, _ b: DashMapView) -> Bool {
+        let limit = max(model.canvas.width, model.canvas.height)
+        let proj = MapProjection(center: b.center, zoom: b.zoom, bearingDeg: b.bearingDeg, viewport: model.canvas, anchor: anchor,
+                                 tileSize: model.tileSize)
+        func far(_ p: DashPoint, _ q: DashPoint) -> Bool { hypot(p.x - q.x, p.y - q.y) > limit }
+        if let pa = a.puck, let pb = b.puck, far(proj.screenPoint(pa), proj.screenPoint(pb)) { return false }
+        return !far(proj.screenPoint(a.center), proj.anchor)
+    }
+
+    /// An explicit RELATIVE camera change (gesture, zoom button, follow off) continues from what is
+    /// drawn: the running ease's camera becomes the camera; a gliding puck keeps gliding.
+    private func freezeShownCamera() {
+        guard var e = ease, e.movesCamera, let v = shownView() else { return }
+        camera.center = v.center
+        camera.zoom = v.zoom
+        camera.bearingDeg = v.bearingDeg
+        e.movesCamera = false
+        ease = e
+        scene = nil
+    }
+
+    /// An explicit ABSOLUTE camera change (recenter, overview, fits, compass, follow on) jumps.
+    private func cancelEase() {
+        guard ease != nil else { return }
+        ease = nil
+        scene = nil
     }
 
     // MARK: - Camera policy (navigation-dash.md §4.9)
@@ -262,6 +414,7 @@ public final class DashUIController: @unchecked Sendable {
     /// First positioning when the follow camera did not run: on the rider (e.g. zoomed before
     /// the first fix), else the route / destination (GpxDashUi bind).
     private func positionIfNeeded() {
+        cameraJumped = true
         if let me = model.riderPosition {
             camera.center = me
             return
@@ -368,6 +521,7 @@ public final class DashUIController: @unchecked Sendable {
         if let p = new.nav.preview {
             if let old = prev.nav.preview, old.place == p.place, old.pinMode == p.pinMode {
                 if Self.routesChanged(old, p) {
+                    cameraJumped = true
                     fitPreview(p)
                     pendingPreference = .go
                 }
@@ -376,6 +530,7 @@ public final class DashUIController: @unchecked Sendable {
             }
         } else if prev.nav.preview != nil && !navStarted {
             if options.restoreCameraAfterPreview, let s = savedCamera {
+                cameraJumped = true // back to the follow camera from the overview: a jump, like Recenter
                 camera.follow = s.follow
                 camera.headingUp = s.headingUp
                 camera.speedZoom = s.speedZoom
@@ -384,6 +539,7 @@ public final class DashUIController: @unchecked Sendable {
             pendingPreference = DashFocusEngine.defaultPreference(inPreview: false, navigating: new.navigating)
         }
         if navStarted {
+            cameraJumped = true
             savedCamera = nil
             camera.follow = true
             camera.speedZoom = true
@@ -417,6 +573,7 @@ public final class DashUIController: @unchecked Sendable {
     }
 
     private func previewStarted(_ p: RoutePreview, fresh: Bool) {
+        cameraJumped = true
         if fresh { savedCamera = (camera.follow, camera.headingUp, camera.speedZoom) }
         sheet = .none
         camera.follow = false
@@ -434,8 +591,21 @@ public final class DashUIController: @unchecked Sendable {
     // MARK: - Timers
 
     private func advance(_ now: TimeInterval) {
+        if var e = ease {
+            let progress = e.progress
+            if e.advance(to: now) {
+                ease = e
+                if e.progress != progress { scene = nil }
+            } else {
+                ease = nil // over: the targets themselves are drawn from now on
+                scene = nil
+            }
+        }
         if camera.advance(now: now) {
-            if !model.inPreview { applyFollowCamera() }
+            if !model.inPreview {
+                cancelEase() // the free-pan auto-recenter jumps back, like Recenter
+                applyFollowCamera()
+            }
             scene = nil
         }
         if let t = toast, now >= t.until {
@@ -447,7 +617,18 @@ public final class DashUIController: @unchecked Sendable {
     // MARK: - Scene
 
     private func buildScene() -> DashScene {
-        let input = DashSceneInput(model: model, sheet: sheet, camera: camera, puckBearingDeg: puckBearing, anchor: anchor,
+        // The map is drawn as shown (follow ease); the chrome reads the camera flags.
+        var drawn = camera
+        var puck = model.riderPosition
+        var puckBrg = puckBearing
+        if let v = shownView() {
+            drawn.center = v.center
+            drawn.zoom = v.zoom
+            drawn.bearingDeg = v.bearingDeg
+            puck = v.puck
+            puckBrg = v.puckBearingDeg
+        }
+        let input = DashSceneInput(model: model, sheet: sheet, camera: drawn, puckBearingDeg: puckBrg, puck: puck, anchor: anchor,
                                    menuScroll: menuScroll, searchListScroll: searchListScroll,
                                    searchChipScroll: searchChipScroll, previewChipScroll: previewChipScroll,
                                    lapReachableByHandlebar: options.lapReachableByHandlebar,
@@ -560,17 +741,21 @@ public final class DashUIController: @unchecked Sendable {
             case .mapTap:
                 break
             case let .longPress(p):
-                if let proj = projection() { out += activate(.dropPin(proj.geoPoint(atScreen: p)), now: now) }
+                // the point under the finger in the picture on screen
+                if let proj = shownProjection() { out += activate(.dropPin(proj.geoPoint(atScreen: p)), now: now) }
             case let .doubleTap(p):
                 guard camera.isPositioned else { continue }
+                freezeShownCamera()
                 if options.panStopsFollow { camera.bumpFreePan(now: now) }
                 camera.speedZoom = false
                 camera.setZoom(camera.zoom + 1, keeping: p, viewport: model.canvas, anchor: anchor, tileSize: model.tileSize)
                 scene = nil
             case .panBegan:
+                freezeShownCamera()
                 if options.panStopsFollow, camera.isPositioned { camera.bumpFreePan(now: now) }
             case let .pan(d):
                 guard camera.isPositioned else { continue }
+                freezeShownCamera()
                 if options.panStopsFollow { camera.bumpFreePan(now: now) }
                 camera.pan(byScreenDelta: d, viewport: model.canvas, anchor: anchor, tileSize: model.tileSize)
                 scene = nil
@@ -578,6 +763,7 @@ public final class DashUIController: @unchecked Sendable {
                 break
             case let .pinch(scale, focal, translation):
                 guard camera.isPositioned, scale > 0 else { continue }
+                freezeShownCamera()
                 if options.panStopsFollow { camera.bumpFreePan(now: now) }
                 camera.speedZoom = false
                 camera.setZoom(camera.zoom + log2(scale), keeping: focal, viewport: model.canvas, anchor: anchor, tileSize: model.tileSize)
@@ -655,6 +841,7 @@ public final class DashUIController: @unchecked Sendable {
                 let brng = camera.headingUp ? bestBearing() : 0
                 camera.lastMapBearing = brng
                 if !model.inPreview {
+                    cancelEase()
                     let me = model.riderPosition!
                     puckBearing = currentBearing()
                     camera.applyFollow(me: me, bearingDeg: brng, targetZoom: DashCamera.bikeFollowZoom(speedKmh: (fix.speedMps ?? 0) * 3.6),
@@ -665,10 +852,12 @@ public final class DashUIController: @unchecked Sendable {
                 feedback(.noGpsYet, now: now)
             }
         case .zoomIn, .zoomOut:
+            freezeShownCamera() // ±1 from the zoom on screen
             camera.bumpFreePan(now: now)
             camera.speedZoom = false
             camera.zoomBy(intent == .zoomIn ? 1 : -1)
         case .toggleCompass, .toggleHeadingUp:
+            cancelEase()
             camera.headingUp.toggle()
             if !camera.headingUp {
                 camera.resetNorth()
@@ -685,8 +874,16 @@ public final class DashUIController: @unchecked Sendable {
         case .toggleFollow:
             camera.follow.toggle()
             camera.cancelAutoRecenter()
-            if camera.follow && !model.inPreview { applyFollowCamera() }
+            if camera.follow {
+                if !model.inPreview {
+                    cancelEase()
+                    applyFollowCamera()
+                }
+            } else {
+                freezeShownCamera() // Free pan: the map stays where it is drawn
+            }
         case .overview:
+            cancelEase()
             camera.bumpFreePan(now: now)
             camera.headingUp = false
             camera.resetNorth()
@@ -727,7 +924,10 @@ public final class DashUIController: @unchecked Sendable {
             sheet = .none
             camera.follow = true
             camera.cancelAutoRecenter()
-            if !model.inPreview { applyFollowCamera() }
+            if !model.inPreview {
+                cancelEase()
+                applyFollowCamera()
+            }
             pendingPreference = navPref
         case .go:
             sheet = .none

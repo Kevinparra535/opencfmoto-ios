@@ -60,8 +60,11 @@ struct DashScene: Sendable {
 struct DashSceneInput: Sendable {
     var model: DashModel
     var sheet: DashSheet
+    /// The camera as DRAWN (during a follow ease: the interpolated geometry; flags as the controller's).
     var camera: DashCamera
     var puckBearingDeg: Double
+    /// Where the rider puck is drawn (during a follow ease: the interpolated position).
+    var puck: GeoPoint?
     var anchor: DashPoint
     var menuScroll: Double
     var searchListScroll: Double
@@ -260,7 +263,7 @@ struct DashSceneBuilder {
         let minX = corners.map(\.x).min()! - pad, maxX = corners.map(\.x).max()! + pad
         let minY = corners.map(\.y).min()! - pad, maxY = corners.map(\.y).max()! + pad
         let cull = DashRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
-        let rider = m.riderPosition
+        let rider = input.puck
 
         if let preview = m.nav.preview {
             if !preview.pinMode, !preview.routes.isEmpty {
