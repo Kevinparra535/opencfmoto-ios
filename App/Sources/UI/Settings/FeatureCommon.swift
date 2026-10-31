@@ -146,6 +146,10 @@ enum FeatureFileReader {
 /// while a ride, a recording, a navigation or a route preview still needs fixes.
 @MainActor
 final class FeatureLocationLease {
+    /// One lease per feature, shared by every instance of its screen (ownership survives a pop).
+    static let mapHub = FeatureLocationLease()
+    static let tripComputer = FeatureLocationLease()
+
     private var owned = false
 
     func acquire(_ model: AppModel) {
@@ -164,12 +168,14 @@ final class FeatureLocationLease {
         owned = false
     }
 
+    /// Stops the preview GPS if this lease started it and nothing needs fixes any more; otherwise
+    /// keeps the ownership so a later release (the screen shown and left again) can stop it.
     func release(_ model: AppModel) {
         guard owned else { return }
-        owned = false
         let snapshot = model.navigation.snapshot
         guard !model.ride.isProjecting, !model.ride.isRideModeActive, !model.trips.isRecording,
               !snapshot.mode.isNavigating, snapshot.preview == nil else { return }
+        owned = false
         model.ride.stopLocationPreview()
     }
 }

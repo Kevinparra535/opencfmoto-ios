@@ -33,14 +33,15 @@ struct NavigateScreen: View {
     @State private var importError: String?
     @State private var dismissedError: String?
     @State private var hapticTrigger = 0
-    @State private var lease = FeatureLocationLease()
     @FocusState private var searchFocused: Bool
+
+    private var lease: FeatureLocationLease { .mapHub }
 
     var body: some View {
         let navigation = model.navigation
         let snapshot = navigation.snapshot
         NavigateMapLayer(snapshot: snapshot,
-                         results: panelVisible ? navigation.results : [],
+                         results: panelVisible || selectedPlace != nil ? navigation.results : [],
                          saved: [navigation.home, navigation.parked].compactMap { $0 },
                          camera: $camera,
                          selection: $selectedPlace)
@@ -82,10 +83,15 @@ struct NavigateScreen: View {
                 if focused { panelDismissed = false }
             }
             .onChange(of: selectedPlace) { _, place in
+                guard let place else { return }
                 // The previewed place already has its card.
-                if let place, let previewed = model.navigation.snapshot.preview?.place, place == previewed {
+                if let previewed = model.navigation.snapshot.preview?.place, place == previewed {
                     selectedPlace = nil
+                    return
                 }
+                // A marker was tapped while the list was open: show its card instead of the list.
+                searchFocused = false
+                panelDismissed = true
             }
             .onChange(of: navigation.toast) { _, toast in
                 if let toast, !toast.isEmpty {

@@ -14,8 +14,9 @@ import OpenCfMotoAppModel
 @MainActor
 struct TripsScreen: View {
     @Environment(AppModel.self) private var model
-    @State private var lease = FeatureLocationLease()
     @State private var pendingDelete: Trip?
+
+    private var lease: FeatureLocationLease { .tripComputer }
 
     var body: some View {
         let trips = model.trips
@@ -82,10 +83,7 @@ struct TripsScreen: View {
         } message: { trip in
             Text(verbatim: TripsText.deleteMessage(trip))
         }
-        .onAppear {
-            lease.acquire(model)
-            model.trips.reload()
-        }
+        .onAppear { lease.acquire(model) }
         .onDisappear { lease.release(model) }
     }
 }
