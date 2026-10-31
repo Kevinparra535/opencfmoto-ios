@@ -1,11 +1,26 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // ControlsModel: opt-in media remote → HandlebarGestureEngine → DashInput → the dash UI
-// (input-controls.md §7–§10): tester texts, focus moves, Select, doubles, presence learning,
-// session claim / release, mirror mode.
+// (input-controls.md §7–§10): tester texts, focus moves, Select, doubles, presence learning and
+// teaching, session claim / release, mirror mode, the observed ▲/▼ volume-path option.
 import Foundation
+import Observation
 import XCTest
 @testable import OpenCfMotoAppModel
 @testable import OpenCfMotoCore
+
+/// A handlebar port whose experimental volume path cannot be switched on.
+@MainActor
+private final class ControlsRefusingVolumeHandlebar: HandlebarRemoteProviding {
+    var isAvailable = true
+    private(set) var isEnabled = false
+    var volumeButtonsEnabled: Bool {
+        get { false }
+        set { _ = newValue }
+    }
+    var onSignal: ((HandlebarSignal) -> Void)?
+    func enable() { isEnabled = true }
+    func disable() { isEnabled = false }
+}
 
 final class ControlsModelTests: XCTestCase {
     @MainActor
@@ -98,6 +113,106 @@ final class ControlsModelTests: XCTestCase {
         XCTAssertTrue(h.handlebar.volumeButtonsEnabled)
         XCTAssertTrue(h.controls.volumeButtonsEnabled)
         XCTAssertEqual(h.core.services.keyValueStore.bool(forKey: ControlsModel.volumeButtonsKey), true)
+    }
+
+    @MainActor
+    func testVolumeButtonsStateIsObservedAndFollowsThePort() async {
+        // Restored from the rider's persisted choice at launch.
+        let h = AppTestHarness { services in
+            services.keyValueStore.set(true, forKey: ControlsModel.volumeButtonsKey)
+        }
+        XCTAssertTrue(h.controls.volumeButtonsEnabled)
+        XCTAssertTrue(h.handlebar.volumeButtonsEnabled)
+
+        // A stored, observed property: a view reading it is told about the change.
+        let changes = Locked(0)
+        withObservationTracking {
+            _ = h.controls.volumeButtonsEnabled
+        } onChange: {
+            changes.withLock { $0 += 1 }
+        }
+        h.controls.setVolumeButtonsEnabled(false)
+        XCTAssertEqual(changes.current, 1)
+        XCTAssertFalse(h.controls.volumeButtonsEnabled)
+        XCTAssertFalse(h.handlebar.volumeButtonsEnabled)
+        XCTAssertEqual(h.core.services.keyValueStore.bool(forKey: ControlsModel.volumeButtonsKey), false)
+
+        // The model shows what the port really does; the rider's choice is still remembered.
+        let refusing = AppTestHarness { services in
+            services.keyValueStore.set(true, forKey: ControlsModel.volumeButtonsKey)
+            services.handlebar = ControlsRefusingVolumeHandlebar()
+        }
+        XCTAssertFalse(refusing.controls.volumeButtonsEnabled)
+        refusing.controls.setVolumeButtonsEnabled(true)
+        XCTAssertFalse(refusing.controls.volumeButtonsEnabled)
+        XCTAssertEqual(refusing.core.services.keyValueStore.bool(forKey: ControlsModel.volumeButtonsKey), true)
+    }
+
+    @MainActor
+    func testTaughtPresenceDrivesTheLiveEngine() async {
+        let h = AppTestHarness()
+        let (bike, _) = h.addBike()
+        await settle()
+        let settings = h.model.settings
+        let engine = h.controls.engine
+        XCTAssertEqual(engine.presence, HandlebarPresence())
+
+        // Teach my handlebar (Present / Absent / Unknown per source): the live engine follows.
+        settings.setVolumeRockerPresence(.absent)
+        XCTAssertEqual(settings.presence.volumeRocker, .absent)
+        var synced = await eventually { engine.presence.volumeRocker == .absent }
+        XCTAssertTrue(synced, "rocker taught absent")
+        settings.setTrackKeysPresence(.present)
+        let taught = HandlebarPresence(volumeRocker: .absent, trackKeys: .present)
+        synced = await eventually { engine.presence == taught }
+        XCTAssertTrue(synced, "track keys taught present")
+        XCTAssertEqual(h.core.settings.presence(forBike: bike.id), taught)
+
+        // Streaming with the rocker marked absent: no probe. Back to Unknown: a fresh ~90 s window.
+        h.controls.setRemoteEnabled(true)
+        h.controls.linkStreamingChanged(true, mirror: false)
+        XCTAssertNil(engine.nextDeadlineMs())
+        await settle(0.2)
+        let taughtAtMs = Int64((h.core.services.clock.now() * 1000).rounded())
+        settings.setVolumeRockerPresence(.unknown)
+        synced = await eventually { engine.presence.volumeRocker == .unknown }
+        XCTAssertTrue(synced, "rocker back to unknown")
+        let probe = engine.nextDeadlineMs()
+        XCTAssertNotNil(probe)
+        XCTAssertGreaterThanOrEqual(probe ?? 0, taughtAtMs + HandlebarGestureEngine.absentVolumeProbeMs)
+
+        // Reset to untested: both sources unknown in the engine too.
+        settings.resetHandlebarPresence()
+        synced = await eventually { engine.presence == HandlebarPresence() }
+        XCTAssertTrue(synced, "reset")
+
+        // Taught while the engine's own learning is still being persisted (both hops queued):
+        // the engine, the store and the screen end up agreeing.
+        settings.setVolumeRockerPresence(.absent)
+        signal(h, .volumeDown, steps: 3)
+        await settle(0.1)
+        let agreed = h.core.settings.presence(forBike: bike.id)
+        XCTAssertEqual(engine.presence, agreed)
+        XCTAssertEqual(settings.presence, agreed)
+
+        // What the engine learns by itself is persisted, never "taught" back to it.
+        settings.setVolumeRockerPresence(.absent)
+        synced = await eventually { engine.presence.volumeRocker == .absent }
+        XCTAssertTrue(synced, "absent again")
+        await settle()
+        let echoed = Locked(false)
+        let subscription = Log.shared.subscribe { line in
+            if line.message.contains("handlebar sources taught") { echoed.withLock { $0 = true } }
+        }
+        defer { Log.shared.unsubscribe(subscription) }
+        signal(h, .volumeDown, steps: 3)
+        let learned = await eventually { h.core.settings.presence(forBike: bike.id).volumeRocker == .present }
+        XCTAssertTrue(learned)
+        await settle()
+        XCTAssertEqual(engine.presence.volumeRocker, .present)
+        XCTAssertEqual(settings.presence.volumeRocker, .present)
+        XCTAssertFalse(echoed.current, "the learned value was sent back to the engine as if taught")
+        h.controls.sessionChanged(active: false, mirror: false)
     }
 
     @MainActor

@@ -269,6 +269,43 @@ final class SettingsModelTests: XCTestCase {
     }
 
     @MainActor
+    func testTeachPresenceSettersScopeToTheSelectedBike() async throws {
+        let env = LDTestEnv()
+        env.cleanUp(after: self)
+        let (garage, settings) = makeModels(env)
+        guard case let .paired(a) = garage.pair(rawQR: LDTest.docQR) else { return XCTFail("pairing failed") }
+        var observed = 0
+        settings.observe { _ in observed += 1 }
+
+        // "Teach my handlebar": Present / Absent / Unknown per source, stored for the selected bike.
+        settings.setVolumeRockerPresence(.present)
+        XCTAssertEqual(settings.presence, HandlebarPresence(volumeRocker: .present, trackKeys: .unknown))
+        settings.setTrackKeysPresence(.absent)
+        XCTAssertEqual(settings.presence, HandlebarPresence(volumeRocker: .present, trackKeys: .absent))
+        XCTAssertEqual(env.core.settings.presence(forBike: a.id), settings.presence)
+        XCTAssertEqual(env.core.services.keyValueStore.string(forKey: "button_presence.volume_rocker#\(a.id)"), "PRESENT")
+        XCTAssertEqual(env.core.services.keyValueStore.string(forKey: "button_presence.track_keys#\(a.id)"), "ABSENT")
+        XCTAssertEqual(observed, 0, "presence is not part of `current`")
+
+        // Every bike has its own presence.
+        guard case let .paired(b) = garage.pair(rawQR: LDTest.qr4288) else { return XCTFail("pairing failed") }
+        XCTAssertEqual(settings.presence, HandlebarPresence())
+        settings.setVolumeRockerPresence(.absent)
+        XCTAssertEqual(env.core.settings.presence(forBike: b.id).volumeRocker, .absent)
+        XCTAssertEqual(env.core.settings.presence(forBike: a.id).volumeRocker, .present)
+        garage.select(a.id)
+        XCTAssertEqual(settings.presence, HandlebarPresence(volumeRocker: .present, trackKeys: .absent))
+
+        // Unknown = untested again (the probe decides); Reset clears both sources.
+        settings.setVolumeRockerPresence(.unknown)
+        XCTAssertEqual(settings.presence.volumeRocker, .unknown)
+        XCTAssertEqual(env.core.settings.presence(forBike: a.id).volumeRocker, .unknown)
+        settings.resetHandlebarPresence()
+        XCTAssertEqual(settings.presence, HandlebarPresence())
+        XCTAssertEqual(env.core.settings.presence(forBike: b.id).volumeRocker, .absent)
+    }
+
+    @MainActor
     func testSavedPlacesAndDefaultMargins() async throws {
         let env = LDTestEnv()
         env.cleanUp(after: self)

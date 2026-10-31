@@ -40,6 +40,7 @@ struct SettingsScreen: View {
             Group {
                 routingSection
                 startupSection
+                compatibilitySection
                 privacySection
                 permissionsSection
                 backupSection
@@ -313,6 +314,18 @@ struct SettingsScreen: View {
                                            set: { model.settings.setKeepScreenOn($0) }))
         } header: {
             Text("Startup & recovery")
+        }
+        .featureRowBackground()
+    }
+
+    private var compatibilitySection: some View {
+        Section {
+            FeatureToggleRow(title: "Identify as an Android phone",
+                             detail: Text("Sends an Android phone's brand and model to the dash instead of \"Apple / iPhone\". Everything else is already identical to the Android app. Turn on only if your dash refuses to connect or keeps dropping the link. Applies on the next connect."),
+                             isOn: Binding(get: { model.settings.identifyAsAndroidPhone },
+                                           set: { model.settings.setIdentifyAsAndroidPhone($0) }))
+        } header: {
+            Text("Compatibility")
         }
         .featureRowBackground()
     }

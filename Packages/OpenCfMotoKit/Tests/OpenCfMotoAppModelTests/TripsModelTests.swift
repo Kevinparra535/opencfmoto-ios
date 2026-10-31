@@ -158,6 +158,64 @@ final class TripsModelTests: XCTestCase {
         XCTAssertFalse(trips.isManualRecording)
     }
 
+    @MainActor
+    func testDiscardThrowsTheRideAwayWithoutSaving() async throws {
+        let env = LDTestEnv()
+        env.cleanUp(after: self)
+        let trips = await makeModel(env)
+        let recorder = env.core.tripRecorder
+
+        // A manual ride long enough to be saved (≥ 100 m, ≥ 15 s moving)…
+        trips.startRecording()
+        for fix in LDTest.rideFixes(count: 31, startMs: LDTest.epochMs("2026-10-31T09:00:00Z")) {
+            recorder.ingest(fix)
+        }
+        await LDTest.expect { trips.live.distanceMeters > 250 }
+
+        // …is thrown away by Discard (Android "Reset"): recording off, trip computer at zero.
+        trips.discardRecording()
+        XCTAssertFalse(trips.isRecording)
+        XCTAssertFalse(trips.isManualRecording)
+        XCTAssertEqual(trips.live.distanceMeters, 0)
+        XCTAssertEqual(trips.live.movingTimeMs, 0)
+        XCTAssertEqual(trips.live.maxSpeedMs, 0)
+        XCTAssertEqual(trips.live.speedKmh, 0)
+        XCTAssertFalse(trips.live.hasFix)
+        XCTAssertTrue(recorder.currentPoints.isEmpty)
+        await LDTest.settle(0.05)
+        XCTAssertTrue(trips.sections.isEmpty, "nothing saved")
+        XCTAssertTrue(env.core.tripStore.list().isEmpty)
+        trips.reload()
+        await trips.pendingReload?.value
+        XCTAssertTrue(trips.sections.isEmpty)
+
+        // An automatic log is discarded the same way (RideModel's next check starts a fresh leg).
+        recorder.start()
+        trips.recorderStateChanged()
+        XCTAssertFalse(trips.isManualRecording)
+        for fix in LDTest.rideFixes(count: 31, startMs: LDTest.epochMs("2026-10-31T10:00:00Z")) {
+            recorder.ingest(fix)
+        }
+        await LDTest.expect { trips.live.distanceMeters > 250 }
+        trips.discardRecording()
+        XCTAssertFalse(trips.isRecording)
+        XCTAssertEqual(trips.live.distanceMeters, 0)
+        await LDTest.settle(0.05)
+        XCTAssertTrue(env.core.tripStore.list().isEmpty)
+
+        // Discard with nothing recording is harmless; the next recording starts from zero.
+        trips.discardRecording()
+        XCTAssertFalse(trips.isRecording)
+        trips.startRecording()
+        XCTAssertTrue(trips.isManualRecording)
+        XCTAssertEqual(trips.live.distanceMeters, 0)
+        XCTAssertEqual(TripAutoLogPolicy.action(logTrips: true, streaming: true, dashUILive: true,
+                                                recording: trips.isRecording, manualRecording: trips.isManualRecording), .none)
+        trips.stopRecording()
+        await LDTest.settle(0.05)
+        XCTAssertTrue(trips.sections.isEmpty, "a leg without fixes is never saved")
+    }
+
     // MARK: Delete
 
     @MainActor

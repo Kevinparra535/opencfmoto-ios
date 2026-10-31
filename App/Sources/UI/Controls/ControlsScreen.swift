@@ -10,8 +10,9 @@
 // - a live button tester (last raw event / last decoded command);
 // - left-cluster presets (Apply preset… with confirmation, Clear preset; plus the iOS-only
 //   "★ only" mapping), the 9-gesture mapping editor (+ Reset to defaults), timing (double-tap
-//   200/300/450/1000 ms, hold detection, hold delay 500/600/800 ms), saved places 1–3 and the
-//   learned presence of the handlebar sources.
+//   200/300/450/1000 ms, hold detection, hold delay 500/600/800 ms), saved places 1–3 and
+//   "Teach my handlebar" (Present / Absent / Unknown per source, Reset to untested; the engine
+//   also learns them by itself).
 
 import SwiftUI
 import OpenCfMotoCore
@@ -20,7 +21,6 @@ import OpenCfMotoAppModel
 @MainActor
 struct ControlsScreen: View {
     @Environment(AppModel.self) private var model
-    @State private var volumeButtons = false
     @State private var confirmRemote = false
     @State private var pendingPreset: ControlsLabels.PresetChoice?
     @State private var slotNames = ["", "", ""]
@@ -39,10 +39,7 @@ struct ControlsScreen: View {
         }
         .navigationTitle("Controls")
         .featureScreenChrome()
-        .onAppear {
-            volumeButtons = model.controls.volumeButtonsEnabled
-            loadSlots()
-        }
+        .onAppear(perform: loadSlots)
         .onDisappear(perform: commitDirtySlots)
         .onChange(of: model.settings.savedPlaces) { old, new in refreshSlots(old: old, new: new) }
         .alert("Use the phone media remote?", isPresented: $confirmRemote) {
@@ -102,11 +99,8 @@ struct ControlsScreen: View {
             }
             FeatureToggleRow(title: "Volume buttons ▲/▼ (experimental)",
                              detail: Text("Also read the dash's ▲/▼ by watching the phone volume. Each press really changes the volume and shows the volume indicator."),
-                             isOn: Binding(get: { volumeButtons },
-                                           set: { on in
-                                               model.controls.setVolumeButtonsEnabled(on)
-                                               volumeButtons = model.controls.volumeButtonsEnabled
-                                           }))
+                             isOn: Binding(get: { model.controls.volumeButtonsEnabled },
+                                           set: { model.controls.setVolumeButtonsEnabled($0) }))
                 .disabled(!controls.isRemoteEnabled)
         } header: {
             Text("Phone media remote")
@@ -327,11 +321,22 @@ struct ControlsScreen: View {
         .padding(.vertical, 4)
     }
 
+    /// Android "Teach my handlebar…": the rider tells which sources this bike sends (Present /
+    /// Absent / Unknown per source) or resets both to untested; the live engine follows.
     private var presenceSection: some View {
         let presence = model.settings.presence
         return Section {
-            Text("▲/▼ \(ControlsLabels.presence(presence.volumeRocker)) · ◀/▶ \(ControlsLabels.presence(presence.trackKeys))")
-                .foregroundStyle(Theme.text)
+            FeatureNote("Which buttons does this bike actually send? Mark a source Absent if it never reaches the phone, or leave it Unknown and OpenCfMoto finds out by itself.")
+            FeatureChoiceRow(title: "▲/▼ volume rocker",
+                             options: ControlsLabels.teachChoices,
+                             selection: Binding(get: { model.settings.presence.volumeRocker },
+                                                set: { model.settings.setVolumeRockerPresence($0) }),
+                             label: { ControlsLabels.teachChoice($0) })
+            FeatureChoiceRow(title: "◀/▶/★ track keys",
+                             options: ControlsLabels.teachChoices,
+                             selection: Binding(get: { model.settings.presence.trackKeys },
+                                                set: { model.settings.setTrackKeysPresence($0) }),
+                             label: { ControlsLabels.teachChoice($0) })
             Button("Reset to untested") { model.settings.resetHandlebarPresence() }
                 .disabled(presence.volumeRocker == .unknown && presence.trackKeys == .unknown)
         } header: {

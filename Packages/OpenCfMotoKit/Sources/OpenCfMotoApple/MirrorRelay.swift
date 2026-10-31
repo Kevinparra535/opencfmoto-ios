@@ -142,12 +142,38 @@ enum RelaySocketIO {
         return fd
     }
 
-    /// Bound + listening socket at `path` (a stale socket file is removed first).
-    static func makeListener(path: String, backlog: Int32 = 4) throws -> Int32 {
+    /// Device + inode of a socket file: tells "the socket I bound" from a newer one at the same path.
+    struct FileIdentity: Equatable {
+        let device: UInt64
+        let inode: UInt64
+    }
+
+    /// A listening socket and the identity of the file it bound.
+    struct Listener {
+        let fd: Int32
+        let identity: FileIdentity
+    }
+
+    /// Serializes every bind / identity check / unlink of relay socket paths in this process: a
+    /// server can never check "is this still my socket file?" while another one replaces it.
+    private static let pathLock = NSLock()
+
+    /// Identity of the directory entry at `path` itself (a symlink is not followed); nil if none.
+    private static func identity(ofPath path: String) -> FileIdentity? {
+        var st = stat()
+        guard lstat(path, &st) == 0 else { return nil }
+        return FileIdentity(device: UInt64(truncatingIfNeeded: st.st_dev), inode: UInt64(truncatingIfNeeded: st.st_ino))
+    }
+
+    /// Bound + listening socket at `path` (a stale socket file is removed first) and the identity
+    /// of the socket file it created, captured right after bind().
+    static func makeListener(path: String, backlog: Int32 = 4) throws -> Listener {
         var addr = try address(path)
-        unlink(path)
         let fd = try newSocket()
         let len = socklen_t(MemoryLayout<sockaddr_un>.size)
+        pathLock.lock()
+        defer { pathLock.unlock() }
+        unlink(path)
         let rc = withUnsafePointer(to: &addr) { p in
             p.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, len) }
         }
@@ -156,12 +182,29 @@ enum RelaySocketIO {
             close(fd)
             throw Failure.syscall("bind", e)
         }
+        guard let identity = identity(ofPath: path) else {
+            let e = errno
+            close(fd)
+            throw Failure.syscall("lstat", e)
+        }
         guard listen(fd, backlog) == 0 else {
             let e = errno
+            unlink(path) // ours: bound just above, under the path lock
             close(fd)
             throw Failure.syscall("listen", e)
         }
-        return fd
+        return Listener(fd: fd, identity: identity)
+    }
+
+    /// Removes `path` only while it still names the socket file `identity`. The caller keeps the
+    /// listening descriptor open until this returns, so the inode cannot have been recycled for a
+    /// newer file. Returns false when the path is gone or now belongs to a newer socket.
+    @discardableResult
+    static func unlinkIfOwned(path: String, identity: FileIdentity) -> Bool {
+        pathLock.lock()
+        defer { pathLock.unlock() }
+        guard self.identity(ofPath: path) == identity else { return false }
+        return unlink(path) == 0
     }
 
     static func makeConnection(path: String) throws -> Int32 {
@@ -317,6 +360,12 @@ public final class MirrorRelayServer: VideoFrameSource, @unchecked Sendable {
     private let lock = NSLock()
     private var running = false
     private var listenGeneration: UInt64 = 0
+    /// The socket file this instance bound and still owns (cleared once it was released).
+    private var bound: BoundSocket?
+    private struct BoundSocket {
+        let generation: UInt64
+        let identity: RelaySocketIO.FileIdentity
+    }
     private var connection: RelayConnection?
     private var nextConnectionId: UInt64 = 0
     private var _config: MirrorRelayConfig?
@@ -363,21 +412,27 @@ public final class MirrorRelayServer: VideoFrameSource, @unchecked Sendable {
         lock.lock()
         guard !running else { lock.unlock(); return }
         lock.unlock()
-        let fd = try RelaySocketIO.makeListener(path: socketPath)
+        let listener = try RelaySocketIO.makeListener(path: socketPath)
         frameQueue.reopen()
         lock.lock()
         running = true
         listenGeneration &+= 1
         let generation = listenGeneration
+        bound = BoundSocket(generation: generation, identity: listener.identity)
         lock.unlock()
+        let fd = listener.fd
         let thread = Thread { [weak self] in self?.acceptLoop(fd, generation: generation) }
         thread.name = "ocm.mirror.accept"
         thread.start()
         Log.i("MIRROR", "relay listening on \(socketPath.split(separator: "/").last ?? "")")
     }
 
-    /// Stops accepting, tells the extension, closes everything and wakes pending pulls.
+    /// Stops accepting, tells the extension, closes everything and wakes pending pulls. The
+    /// socket file is removed before this returns — unless a newer server owns the path now.
     public func stop() {
+        // First, while the accept thread still holds the listener open (so the file's inode
+        // cannot have been recycled): remove the socket file iff the path still names it.
+        releaseSocketFile(generation: nil)
         lock.lock()
         let wasRunning = running
         running = false
@@ -448,11 +503,27 @@ public final class MirrorRelayServer: VideoFrameSource, @unchecked Sendable {
             guard let client = RelaySocketIO.acceptClient(fd, timeoutMs: 250) else { continue }
             attach(client)
         }
+        // stop() normally released the file already. This loop may wake up to 250 ms later, when
+        // a newer server (this instance restarted, or another one) can own the path: only this
+        // generation's own, still-present socket file is removed — before closing the listener.
+        releaseSocketFile(generation: generation)
         RelaySocketIO.closeFD(fd)
+    }
+
+    /// Removes the socket file this instance bound (`generation` nil = whatever it still owns),
+    /// once, and only if the path still names that very socket (device + inode).
+    private func releaseSocketFile(generation: UInt64?) {
         lock.lock()
-        let restarted = running || generation != listenGeneration
+        var owned: BoundSocket?
+        if let b = bound, generation == nil || b.generation == generation {
+            owned = b
+            bound = nil
+        }
         lock.unlock()
-        if !restarted { unlink(socketPath) } // a newer start() owns the path now
+        guard let owned else { return }
+        if !RelaySocketIO.unlinkIfOwned(path: socketPath, identity: owned.identity) {
+            Log.i("MIRROR", "relay socket file left alone (already gone, or a newer listener owns the path)")
+        }
     }
 
     private func attach(_ fd: Int32) {

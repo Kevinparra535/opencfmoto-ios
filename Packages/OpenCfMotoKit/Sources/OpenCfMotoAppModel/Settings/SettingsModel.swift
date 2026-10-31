@@ -48,6 +48,14 @@ public final class SettingsModel {
     public private(set) var presence: HandlebarPresence = HandlebarPresence()
     /// Handlebar saved-place slots 1…3 (index 0…2).
     public private(set) var savedPlaces: [SavedPlaceSlot] = []
+    /// Compatibility (global, iOS-only): send an Android phone's brand/model in CLIENT_INFO instead of
+    /// "Apple"/<device model>. Everything else is already spoofed exactly like the Android app
+    /// (docs/spec/control-plane.md §18.7); this is the only CLIENT_INFO difference found by the
+    /// differential test (docs/verification/pxc-differential.md). Off by default.
+    public private(set) var identifyAsAndroidPhone = false
+
+    /// KeyValueStore key of `identifyAsAndroidPhone`.
+    static let identifyAsAndroidKey = "ios.identify_as_android_phone"
 
     /// Time zone of the export time stamps (`exportedAt`, map file name). Tests pin it.
     @ObservationIgnored var timeZone: TimeZone = .current
@@ -59,6 +67,7 @@ public final class SettingsModel {
         bikeId = garage.selected?.id
         presence = core.settings.presence(forBike: bikeId)
         savedPlaces = core.settings.savedPlaces
+        identifyAsAndroidPhone = core.services.keyValueStore.bool(forKey: Self.identifyAsAndroidKey) ?? false
         garage.observeSelection { [weak self] bike in
             self?.rescope(to: bike?.id)
         }
@@ -208,6 +217,22 @@ public final class SettingsModel {
         reload()
     }
 
+    /// "Teach my handlebar" for the selected bike: does its ▲/▼ volume rocker reach the phone?
+    /// (Android `▲/▼ works` = present, `▲/▼ absent` = absent; unknown lets the ~90 s probe decide.)
+    /// ControlsModel's live engine follows the stored value.
+    public func setVolumeRockerPresence(_ presence: ButtonPresence) {
+        core.settings.setVolumeRockerPresence(presence, forBike: bikeId)
+        logChange("handlebar \u{25B2}/\u{25BC} rocker taught \(presence.rawValue)")
+        refreshPresence()
+    }
+
+    /// "Teach my handlebar" for the selected bike: do its ◀/▶/★ track keys reach the phone?
+    public func setTrackKeysPresence(_ presence: ButtonPresence) {
+        core.settings.setTrackKeysPresence(presence, forBike: bikeId)
+        logChange("handlebar \u{25C0}/\u{25B6} track keys taught \(presence.rawValue)")
+        refreshPresence()
+    }
+
     /// Re-reads everything from storage (after imports or engine-side presence changes).
     public func reload() {
         let selectedId = core.garage.selected?.id
@@ -254,6 +279,14 @@ public final class SettingsModel {
         logChange(current.includeSecretsInLogs
                   ? "Shared logs will include secrets \u{2014} turn off before posting publicly"
                   : "Log redaction on")
+    }
+
+    // MARK: Compatibility
+    /// Applies on the next connect.
+    public func setIdentifyAsAndroidPhone(_ on: Bool) {
+        core.services.keyValueStore.set(on, forKey: Self.identifyAsAndroidKey)
+        identifyAsAndroidPhone = on
+        logChange("identify as \(on ? "an Android phone" : "an iPhone") (applies next connect)")
     }
 
     // MARK: Saved places (handlebar slots)
@@ -378,10 +411,14 @@ public final class SettingsModel {
     }
 
     private func refreshSecondary() {
-        let p = core.settings.presence(forBike: bikeId)
-        if p != presence { presence = p }
+        refreshPresence()
         let places = core.settings.savedPlaces
         if places != savedPlaces { savedPlaces = places }
+    }
+
+    private func refreshPresence() {
+        let p = core.settings.presence(forBike: bikeId)
+        if p != presence { presence = p }
     }
 
     private func notifyHandlers() {

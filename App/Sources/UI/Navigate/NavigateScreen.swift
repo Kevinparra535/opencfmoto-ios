@@ -31,7 +31,6 @@ struct NavigateScreen: View {
     @State private var dashSearchHint = false
     @State private var showGpxImporter = false
     @State private var importError: String?
-    @State private var dismissedError: String?
     @State private var hapticTrigger = 0
     @FocusState private var searchFocused: Bool
 
@@ -97,9 +96,6 @@ struct NavigateScreen: View {
                 if let toast, !toast.isEmpty {
                     UIAccessibility.post(notification: .announcement, argument: toast)
                 }
-            }
-            .onChange(of: navigation.lastError) { _, _ in
-                dismissedError = nil
             }
     }
 
@@ -225,7 +221,7 @@ struct NavigateScreen: View {
 
     private var visibleError: String? {
         if let importError { return importError }
-        guard let error = model.navigation.lastError, !error.isEmpty, error != dismissedError else { return nil }
+        guard let error = model.navigation.lastError, !error.isEmpty else { return nil }
         return error
     }
 
@@ -274,8 +270,12 @@ struct NavigateScreen: View {
         model.navigation.searchNearby(chip)
     }
 
+    /// Arrive card "Find parking" (the dash's): hide the card without an announcement, then run the
+    /// Parking chip.
     private func findParking() {
-        let chips = model.navigation.poiChips
+        let navigation = model.navigation
+        if navigation.snapshot.arrival != nil { navigation.dismissArrival(announce: false) }
+        let chips = navigation.poiChips
         if let chip = chips.first(where: { $0.label == "Parking" }) ?? chips.first(where: { $0.query == "amenity=parking" }) {
             searchChip(chip)
         }
@@ -296,11 +296,12 @@ struct NavigateScreen: View {
         }
     }
 
+    /// The banner shows the file-picker error first, then the model's last error.
     private func dismissError() {
         if importError != nil {
             importError = nil
         } else {
-            dismissedError = model.navigation.lastError
+            model.navigation.dismissError()
         }
     }
 
