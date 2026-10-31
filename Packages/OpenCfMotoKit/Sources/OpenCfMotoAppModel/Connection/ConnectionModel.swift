@@ -269,9 +269,14 @@ public final class ConnectionModel {
             issue = .noBikePaired
             return
         }
-        // Hard switch: the previous projection and link die first; the Wi-Fi association stays.
+        // Hard switch: the previous projection and link die first; the Wi-Fi association stays
+        // (unless the previous session was for another bike).
+        let previousSSID = session?.qr.ssid
         teardownSession(keepWifi: true)
         forgetLingeringWifi(except: qr.ssid)
+        if let previousSSID, previousSSID != qr.ssid, core.services.wifi.supportsAutomaticJoin {
+            core.services.wifi.forget(ssid: previousSSID)
+        }
         if newMode == .mirror {
             do {
                 try core.services.mirror.start()
@@ -405,7 +410,13 @@ public final class ConnectionModel {
         let l = core.language
         do {
             let result = try await wifi.join(ssid: s.qr.ssid, passphrase: s.qr.password.isEmpty ? nil : s.qr.password)
-            guard gen == generation else { return nil }
+            guard gen == generation else {
+                // Stop was tapped while iOS was still applying the configuration: forget it again.
+                if session == nil, phase == .stopped, wifi.supportsAutomaticJoin, result == .joined {
+                    wifi.forget(ssid: s.qr.ssid)
+                }
+                return nil
+            }
             switch result {
             case .joined, .alreadyJoined:
                 Log.i("WIFI", result == .joined ? "Wi-Fi joined: \(s.qr.ssid)"

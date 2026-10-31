@@ -323,6 +323,20 @@ final class ConnectionModelTests: XCTestCase {
     }
 
     @MainActor
+    func testConnectingAnotherBikeForgetsThePreviousBikeWifi() async {
+        let h = AppTestHarness()
+        let (_, qrA) = h.addBike()
+        h.connection.connect()
+        _ = await eventually { h.connection.link != nil }
+        let (_, qrB) = h.addBike(raw: "http://www.carbit.com.cn/downsdk/657/658/_sdk?modelid=37426&action=9&ssid=DIRECT-CF-CFMOTO-805120&pwd=12345678&auth=wpa2-psk&name=CFMOTO-805120")
+        h.connection.connect()
+        XCTAssertEqual(h.wifi.forgottenSSIDs, [qrA.ssid])
+        XCTAssertEqual(h.connection.session?.qr.ssid, qrB.ssid)
+        h.connection.stop()
+        XCTAssertEqual(h.wifi.forgottenSSIDs, [qrA.ssid, qrB.ssid])
+    }
+
+    @MainActor
     func testAFailedSessionForgetsItsBikeWifiOnStopOrWhenTheAppLeaves() async {
         let net = LinkMemoryNetwork(phoneHost: "192.168.0.2")
         net.blockPort(10921)

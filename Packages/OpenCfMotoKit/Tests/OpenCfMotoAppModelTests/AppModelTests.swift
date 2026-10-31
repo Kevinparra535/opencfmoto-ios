@@ -202,11 +202,12 @@ final class AppModelTests: XCTestCase {
         let (bike, _) = h.addBike()
         let d = h.model.logs.diagnostics()
         XCTAssertEqual(d["phase"], "IDLE")
+        XCTAssertEqual(d["detail"], "")
         XCTAssertEqual(d["ssid"], bike.ssid)
-        XCTAssertEqual(d["appVersion"], h.system.appVersion)
-        XCTAssertEqual(d["profileOverride"], "auto")
-        XCTAssertEqual(d["forceTouch"], "false")
-        XCTAssertNotNil(d["marginsSummary"])
+        XCTAssertEqual(d["bike"], bike.name)
+        XCTAssertEqual(d["mode"], "none")
+        XCTAssertEqual(d["localNetwork"], "undetermined")
+        XCTAssertNil(d["profile"]) // not identified yet: LogsModel falls back to the override / hint
     }
 
     // MARK: EN / ES texts

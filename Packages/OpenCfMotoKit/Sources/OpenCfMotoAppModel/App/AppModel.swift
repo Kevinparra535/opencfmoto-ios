@@ -193,46 +193,32 @@ public final class AppModel {
 
     // MARK: - Problem report diagnostics
 
-    /// Keys follow `ProblemReport.Diagnostics` (+ a few iOS extras) for LogsModel.
+    /// For LogsModel's problem report: `phase` / `detail` / `profile` / `ssid` fill the Android SETUP
+    /// block (LogsModel computes the settings lines itself); every other key is an extra
+    /// `key=value` line (link, projection, permissions, power).
     private func problemDiagnostics() -> [String: String] {
         let st = core.currentSettings
         let system = core.services.system
-        let bike = core.garage.selected
         let diag = connection.diagnostics
-        let profileId = diag.dashInfo?.profile ?? st.profileOverride
-        let profileDefault = (profileId.map { BikeProfile.profile($0) } ?? .legacy).defaultMargins
         var d: [String: String] = [
-            "appVersion": system.appVersion,
-            "buildNumber": system.buildNumber,
-            "device": system.deviceModel,
-            "system": system.systemVersion,
-            "flavor": system.flavor.rawValue,
-            "profileName": diag.profileName ?? (st.profileOverride.map { BikeProfile.profile($0).name } ?? "Auto"),
-            "profileOverride": st.profileOverride?.rawValue ?? "auto",
-            "wifiTransport": st.wifiTransport.rawValue,
-            "marginsSummary": CanvasFit.marginsSummary(st.screenMargins, profileDefault: profileDefault),
-            "forceNonTouch": String(st.forceNonTouch),
-            "forceTouch": String(st.forceTouch),
             "phase": SessionText.phaseAndroidName(connection.phase),
-            "phaseDetail": connection.detail,
+            "detail": connection.detail,
             "mode": connection.mode.rawValue,
             "linkState": diag.state.description,
             "framesSent": String(diag.stats.framesSent),
             "keyframesSent": String(diag.stats.keyframesSent),
             "missedPulls": String(diag.stats.missedPulls),
             "projection": diag.projection.mode,
-            "location": permissions.location.rawValue,
-            "preciseLocation": String(permissions.isPreciseLocation),
+            "location": permissions.location.rawValue + (permissions.isPreciseLocation ? "" : " (approximate)"),
             "localNetwork": permissions.localNetwork.rawValue,
             "powerMode": st.powerMode.rawValue,
             "videoQuality": st.videoQuality.rawValue,
             "thermal": system.thermalLevel.androidName,
             "lowPowerMode": String(system.isLowPowerModeEnabled),
         ]
-        if let bike {
-            d["ssid"] = bike.ssid
-            d["bike"] = bike.name
-        }
+        if let name = diag.profileName { d["profile"] = name }
+        if let ssid = connection.session?.qr.ssid ?? core.garage.selected?.ssid { d["ssid"] = ssid }
+        if let bike = core.garage.selected { d["bike"] = bike.name }
         if let info = diag.dashInfo {
             d["dash"] = "\(info.huName) sdk=\(info.sdkVersion) ver=\(info.versionName) touch=\(info.supportsScreenTouch)"
         }

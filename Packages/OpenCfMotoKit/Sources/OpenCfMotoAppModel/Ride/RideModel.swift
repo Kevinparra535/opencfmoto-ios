@@ -549,7 +549,8 @@ public final class RideModel {
             uiTickTask = Task { [weak self] in
                 var n = 0
                 while !Task.isCancelled {
-                    let interval = self?.tuning.uiTickInterval ?? 0.1
+                    // Backgrounded (screen locked, pocket): long-press / toast timers barely matter.
+                    let interval = self.map { $0.scenePhase == .background ? max($0.tuning.uiTickInterval, 0.5) : $0.tuning.uiTickInterval } ?? 0.1
                     await sleepSeconds(interval)
                     guard !Task.isCancelled, let self else { return }
                     n &+= 1
