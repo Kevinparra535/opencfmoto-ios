@@ -38,7 +38,8 @@ extension LogicData {
         }
 
         /// The iOS wording of the seven Android parse-failure hints (Android hotspot → Personal
-        /// Hotspot) → Spanish.
+        /// Hotspot) → Spanish (iOS names Personal Hotspot "Compartir Internet" in Spain and
+        /// "Hotspot personal" in Latin America).
         static let qrHintsES: [String: String] = [
             "Moto Morini QR has no Wifi= field \u{2014} open the phone-link / MotoFun QR on the dash":
                 "El QR de Moto Morini no tiene el campo Wifi=: abre en el tablero el QR de enlace con el teléfono / MotoFun",
@@ -47,9 +48,9 @@ extension LogicData {
             "that is the Carbit app-download QR, not pairing \u{2014} open MotoPlay / EasyConnect so the Wi-Fi QR (SSID + password) stays on screen":
                 "ese es el QR para descargar la app de Carbit, no el de emparejamiento: abre MotoPlay / EasyConnect para que el QR del Wi-Fi (SSID + contraseña) quede en pantalla",
             "this dash joins your phone hotspot \u{2014} turn on Personal Hotspot with the SSID/password shown on the dash, then Connect":
-                "este tablero se conecta al punto de acceso de tu teléfono: activa el Punto de acceso personal con el SSID y la contraseña que muestra el tablero y luego toca Conectar",
+                "este tablero se conecta al punto de acceso de tu teléfono: activa Compartir Internet (Hotspot personal) con el SSID y la contraseña que muestra el tablero y luego toca Conectar",
             "Carbit ID QR \u{2014} enable Personal Hotspot with the SSID/password on the dash, then Connect":
-                "QR de ID de Carbit: activa el Punto de acceso personal con el SSID y la contraseña del tablero y luego toca Conectar",
+                "QR de ID de Carbit: activa Compartir Internet (Hotspot personal) con el SSID y la contraseña del tablero y luego toca Conectar",
             "Kove/Thinkerride \u{2014} need the SoftAP pairing QR (SSID+password on the dash, or g.thinkerride.com?SSID&PWD&ap=1). Garage \u{2192} enter SSID/pwd if the QR is only \u{201C}download KOVE APP\u{201D}":
                 "Kove/Thinkerride: hace falta el QR de emparejamiento SoftAP (SSID + contraseña en el tablero, o g.thinkerride.com?SSID&PWD&ap=1). Garaje \u{2192} introduce el SSID y la contraseña si el QR solo dice \u{00AB}download KOVE APP\u{00BB}",
             "URL QR without ssid/pwd \u{2014} need the dash pairing QR (Carbit / EasyConnect / MotoFun / Thinkerride SoftAP), or enable phone hotspot if the dash asks for it":
