@@ -15,7 +15,7 @@ import OpenCfMotoCore
 /// Compass smoothing of the Android map (GpxDashUi.kt): the azimuth is filtered as a unit vector
 /// (`s += α·(sin r − s)`, `c += α·(cos r − c)`, heading = atan2(s, c) in 0..<360) on EVERY sample;
 /// downstream processing (map rotation, UI) is throttled to one tick per `minInterval`.
-public struct HeadingSmoother: Sendable, Equatable {
+public struct CompassSmoother: Sendable, Equatable {
     public static let defaultAlpha = 0.15
     public static let defaultMinInterval: TimeInterval = 0.120
 
@@ -27,7 +27,7 @@ public struct HeadingSmoother: Sendable, Equatable {
     private var c = 0.0
     private var lastTick: TimeInterval?
 
-    public init(alpha: Double = HeadingSmoother.defaultAlpha, minInterval: TimeInterval = HeadingSmoother.defaultMinInterval) {
+    public init(alpha: Double = CompassSmoother.defaultAlpha, minInterval: TimeInterval = CompassSmoother.defaultMinInterval) {
         self.alpha = alpha
         self.minInterval = minInterval
     }
@@ -126,8 +126,8 @@ public final class LocationService: NSObject, CLLocationManagerDelegate {
 
         public init(desiredAccuracy: Double = kCLLocationAccuracyBestForNavigation,
                     distanceFilter: Double = kCLDistanceFilterNone, headingEnabled: Bool = true,
-                    headingAlpha: Double = HeadingSmoother.defaultAlpha,
-                    headingInterval: TimeInterval = HeadingSmoother.defaultMinInterval) {
+                    headingAlpha: Double = CompassSmoother.defaultAlpha,
+                    headingInterval: TimeInterval = CompassSmoother.defaultMinInterval) {
             self.desiredAccuracy = desiredAccuracy
             self.distanceFilter = distanceFilter
             self.headingEnabled = headingEnabled
@@ -138,7 +138,7 @@ public final class LocationService: NSObject, CLLocationManagerDelegate {
 
     private let manager: CLLocationManager
     private let clock: any MonotonicClock
-    private var smoother: HeadingSmoother
+    private var smoother: CompassSmoother
     private let fixBroadcaster = OCMPlatformBroadcaster<LocationFix>()
     private let headingBroadcaster = OCMPlatformBroadcaster<Double>()
     private let authorizationBroadcaster = OCMPlatformBroadcaster<LocationAuthorization>()
@@ -159,6 +159,10 @@ public final class LocationService: NSObject, CLLocationManagerDelegate {
     public var onFix: ((LocationFix) -> Void)?
     /// Smoothed heading, at most every `headingInterval` (120 ms).
     public var onHeading: ((Double) -> Void)?
+    /// Every valid RAW compass sample (degrees, true north when available, unfiltered and
+    /// unthrottled). Feed THIS into `NavigationSession.updateHeading(_:)`, which applies the same
+    /// α = 0.15 filter and 120 ms throttle itself — feeding `onHeading` there would filter twice.
+    public var onRawHeading: ((Double) -> Void)?
     public var onAuthorizationChange: ((LocationAuthorization) -> Void)?
     public var onError: ((Error) -> Void)?
 
@@ -167,7 +171,7 @@ public final class LocationService: NSObject, CLLocationManagerDelegate {
         self.manager = m
         self.clock = clock
         self.configuration = configuration
-        self.smoother = HeadingSmoother(alpha: configuration.headingAlpha, minInterval: configuration.headingInterval)
+        self.smoother = CompassSmoother(alpha: configuration.headingAlpha, minInterval: configuration.headingInterval)
         self.authorization = Self.map(m.authorizationStatus)
         self.isPreciseLocation = m.accuracyAuthorization == .fullAccuracy
         super.init()
@@ -238,7 +242,7 @@ public final class LocationService: NSObject, CLLocationManagerDelegate {
         manager.activityType = .automotiveNavigation
         manager.pausesLocationUpdatesAutomatically = false
         manager.headingFilter = kCLHeadingFilterNone
-        smoother = HeadingSmoother(alpha: configuration.headingAlpha, minInterval: configuration.headingInterval)
+        smoother = CompassSmoother(alpha: configuration.headingAlpha, minInterval: configuration.headingInterval)
     }
 
     static func map(_ s: CLAuthorizationStatus) -> LocationAuthorization {
@@ -291,8 +295,9 @@ public final class LocationService: NSObject, CLLocationManagerDelegate {
     }
 
     private func handleHeading(trueHeading: Double, magneticHeading: Double, accuracy: Double) {
-        guard let raw = HeadingSmoother.rawHeading(trueHeading: trueHeading, magneticHeading: magneticHeading,
+        guard let raw = CompassSmoother.rawHeading(trueHeading: trueHeading, magneticHeading: magneticHeading,
                                                    accuracy: accuracy) else { return }
+        onRawHeading?(raw)
         guard let h = smoother.update(rawDegrees: raw, now: clock.now()) else { return }
         heading = h
         onHeading?(h)

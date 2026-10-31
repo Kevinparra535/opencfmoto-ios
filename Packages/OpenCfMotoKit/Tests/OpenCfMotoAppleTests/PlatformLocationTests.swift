@@ -8,13 +8,13 @@ import OpenCfMotoCore
 
 final class PlatformLocationTests: XCTestCase {
     func testFirstSampleIsTakenAsIs() {
-        var s = HeadingSmoother()
+        var s = CompassSmoother()
         XCTAssertEqual(s.update(rawDegrees: 123.4, now: 0)!, 123.4, accuracy: 1e-9)
         XCTAssertEqual(s.heading!, 123.4, accuracy: 1e-9)
     }
 
     func testOneAlphaStepFrom0To90() {
-        var s = HeadingSmoother()
+        var s = CompassSmoother()
         _ = s.update(rawDegrees: 0, now: 0)
         // s = 0.15, c = 0.85 → atan2(0.15, 0.85) = 10.00797980144134°
         let h = s.update(rawDegrees: 90, now: 1)
@@ -22,7 +22,7 @@ final class PlatformLocationTests: XCTestCase {
     }
 
     func testWrapAroundNorthDoesNotSwingThrough180() {
-        var s = HeadingSmoother()
+        var s = CompassSmoother()
         _ = s.update(rawDegrees: 350, now: 0)
         let h = s.update(rawDegrees: 10, now: 1)!
         // s = sin350 + 0.15(sin10 − sin350), c ≈ cos350 → ≈ 352.96°
@@ -32,19 +32,19 @@ final class PlatformLocationTests: XCTestCase {
     }
 
     func testConstantInputStaysPutAndResultIsNormalised() {
-        var s = HeadingSmoother()
+        var s = CompassSmoother()
         for i in 0 ..< 20 {
             let h = s.update(rawDegrees: 270, now: Double(i))
             XCTAssertEqual(h!, 270, accuracy: 1e-9)
         }
-        var t = HeadingSmoother()
+        var t = CompassSmoother()
         XCTAssertEqual(t.update(rawDegrees: 360, now: 0)!, 0, accuracy: 1e-9)
         // One α-step from north towards 270° (= −90°): atan2(−0.15, 0.85) → 349.992…°
         XCTAssertEqual(t.update(rawDegrees: -90, now: 1)!, 360 - 10.00797980144134, accuracy: 1e-9)
     }
 
     func testThrottleTo120ms() {
-        var s = HeadingSmoother()
+        var s = CompassSmoother()
         XCTAssertNotNil(s.update(rawDegrees: 10, now: 0))
         XCTAssertNil(s.update(rawDegrees: 20, now: 0.050))
         XCTAssertNil(s.update(rawDegrees: 30, now: 0.119))
@@ -52,7 +52,7 @@ final class PlatformLocationTests: XCTestCase {
         XCTAssertNil(s.update(rawDegrees: 50, now: 0.200))
         XCTAssertNotNil(s.update(rawDegrees: 60, now: 0.245))
         // The filter keeps integrating throttled samples (Android updates deviceHeading every sample).
-        var u = HeadingSmoother()
+        var u = CompassSmoother()
         _ = u.update(rawDegrees: 0, now: 0)
         XCTAssertNil(u.update(rawDegrees: 90, now: 0.01))
         XCTAssertEqual(u.heading!, 10.00797980144134, accuracy: 1e-9)
@@ -62,19 +62,19 @@ final class PlatformLocationTests: XCTestCase {
     }
 
     func testCustomParameters() {
-        var s = HeadingSmoother(alpha: 1.0, minInterval: 0)
+        var s = CompassSmoother(alpha: 1.0, minInterval: 0)
         _ = s.update(rawDegrees: 0, now: 0)
         XCTAssertEqual(s.update(rawDegrees: 90, now: 0)!, 90, accuracy: 1e-9)
-        XCTAssertEqual(HeadingSmoother.defaultAlpha, 0.15)
-        XCTAssertEqual(HeadingSmoother.defaultMinInterval, 0.120)
+        XCTAssertEqual(CompassSmoother.defaultAlpha, 0.15)
+        XCTAssertEqual(CompassSmoother.defaultMinInterval, 0.120)
     }
 
     func testRawHeadingSelection() {
-        XCTAssertEqual(HeadingSmoother.rawHeading(trueHeading: 90, magneticHeading: 80, accuracy: 5), 90)
-        XCTAssertEqual(HeadingSmoother.rawHeading(trueHeading: -1, magneticHeading: 80, accuracy: 5), 80)
-        XCTAssertNil(HeadingSmoother.rawHeading(trueHeading: 90, magneticHeading: 80, accuracy: -1))
-        XCTAssertNil(HeadingSmoother.rawHeading(trueHeading: -1, magneticHeading: -1, accuracy: 3))
-        XCTAssertEqual(HeadingSmoother.rawHeading(trueHeading: 360, magneticHeading: 0, accuracy: 3), 0)
+        XCTAssertEqual(CompassSmoother.rawHeading(trueHeading: 90, magneticHeading: 80, accuracy: 5), 90)
+        XCTAssertEqual(CompassSmoother.rawHeading(trueHeading: -1, magneticHeading: 80, accuracy: 5), 80)
+        XCTAssertNil(CompassSmoother.rawHeading(trueHeading: 90, magneticHeading: 80, accuracy: -1))
+        XCTAssertNil(CompassSmoother.rawHeading(trueHeading: -1, magneticHeading: -1, accuracy: 3))
+        XCTAssertEqual(CompassSmoother.rawHeading(trueHeading: 360, magneticHeading: 0, accuracy: 3), 0)
     }
 
     func testLocationFixConversion() {
