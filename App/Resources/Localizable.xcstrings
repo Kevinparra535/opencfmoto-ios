@@ -751,6 +751,16 @@
         }
       }
     },
+    "Bike search open — long-press to exit Ride Mode, then type your search": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Búsqueda de la moto abierta: mantén pulsado para salir del modo ruta y escribe tu búsqueda"
+          }
+        }
+      }
+    },
     "Bike search open — type here. Results appear on the dash.": {
       "localizations": {
         "es": {
@@ -4041,6 +4051,16 @@
         }
       }
     },
+    "Retry now": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reintentar ahora"
+          }
+        }
+      }
+    },
     "Ride Mode": {
       "localizations": {
         "es": {
@@ -4516,7 +4536,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Configuración y ajustes"
+            "value": "Ajustes"
           }
         }
       }
@@ -5217,6 +5237,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tableros táctiles (800NK Advanced, 800MT): toca el tablero. El control por manillar está pensado para tableros no táctiles como la 450SR."
+          }
+        }
+      }
+    },
+    "Tries the bike again right away instead of waiting for the automatic retry": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vuelve a intentarlo con la moto ahora mismo en lugar de esperar al reintento automático"
           }
         }
       }
