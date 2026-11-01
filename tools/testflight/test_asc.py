@@ -3174,8 +3174,20 @@ class WorkflowTextTest(ScriptTest):
         title, message = self.annotation(proc, "error")
         self.assertEqual(title, "Prefijo no válido / Invalid prefix")
         self.assertIn("BUNDLE_ID_PREFIX", message)
+        self.assertIn("El prefijo «com.bad prefix» no es válido", message)
         self.run_step("prepare", "Bundle id prefix", {"PREFIX_VARIABLE": "", "OWNER": "Kevinparra535"})
         self.assertEqual(self.outputs()["prefix"], "com.kevinparra535")
+
+    def test_no_variable_name_runs_into_a_non_ascii_character(self):
+        # macOS bash with a non-UTF-8 locale (bash 3.2 here) takes the first byte of «, », ▸ or …
+        # right after $name as part of the name: «$app» expands the unset $app\xc2 (an error under
+        # set -u, an empty text without it). ${app} is safe everywhere.
+        for path in (SCRIPT_PATH, WORKFLOW_PATH):
+            with open(path, "rb") as fh:
+                for number, line in enumerate(fh, 1):
+                    found = re.search(rb"\$[A-Za-z_][A-Za-z0-9_]*[\x80-\xff]", line)
+                    self.assertIsNone(found, f"{os.path.basename(path)}:{number}: use ${{name}} before a non-ASCII "
+                                             f"character: {found.group(0) if found else b''!r}")
 
     def build_summary(self, **env):
         open(self.step_summary, "w").close()

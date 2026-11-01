@@ -708,7 +708,7 @@ cmd_teardown() {
       profile_ids=$(state_json profile_ids)
       app="OpenCfMoto CI ${suffix:-…} app"
       mirror="OpenCfMoto CI ${suffix:-…} mirror"
-      annotate warning "Revoca a mano / Revoke by hand" "Sin la clave de la API no se pudo revocar lo que creó esta ejecución. En $URL_CERTS revoca el certificado «Apple Distribution» creado hoy${cert_id:+ (id $cert_id)} (púlsalo ▸ Revoke) y en $URL_PROFILES borra los perfiles «$app» y «$mirror»${profile_ids:+ (ids $profile_ids)} (cada uno ▸ Remove; ningún otro «OpenCfMoto CI …»)."$'\n'"Without the API key, what this run created could not be revoked. At $URL_CERTS revoke the «Apple Distribution» certificate created today${cert_id:+ (id $cert_id)} (click it ▸ Revoke) and at $URL_PROFILES delete the «$app» and «$mirror» profiles${profile_ids:+ (ids $profile_ids)} (each ▸ Remove; no other «OpenCfMoto CI …» one)."
+      annotate warning "Revoca a mano / Revoke by hand" "Sin la clave de la API no se pudo revocar lo que creó esta ejecución. En $URL_CERTS revoca el certificado «Apple Distribution» creado hoy${cert_id:+ (id $cert_id)} (púlsalo ▸ Revoke) y en $URL_PROFILES borra los perfiles «${app}» y «${mirror}»${profile_ids:+ (ids $profile_ids)} (cada uno ▸ Remove; ningún otro «OpenCfMoto CI …»)."$'\n'"Without the API key, what this run created could not be revoked. At $URL_CERTS revoke the «Apple Distribution» certificate created today${cert_id:+ (id $cert_id)} (click it ▸ Revoke) and at $URL_PROFILES delete the «${app}» and «${mirror}» profiles${profile_ids:+ (ids $profile_ids)} (each ▸ Remove; no other «OpenCfMoto CI …» one)."
     fi
   fi
   gh_output uploaded "$uploaded"

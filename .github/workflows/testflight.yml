@@ -96,7 +96,7 @@ jobs:
             prefix="com.$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9.-')"
           fi
           if ! [[ "$prefix" =~ ^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$ ]]; then
-            echo "::error title=Prefijo no válido / Invalid prefix::El prefijo «$prefix» no es válido (ejemplo: com.tunombre). Corrige la variable BUNDLE_ID_PREFIX en Settings ▸ Secrets and variables ▸ Actions ▸ Variables y lanza una ejecución nueva: Actions ▸ TestFlight ▸ Run workflow.%0AThe prefix \"$prefix\" is not valid (example: com.yourname). Fix the BUNDLE_ID_PREFIX repository variable, then start a new run: Actions ▸ TestFlight ▸ Run workflow."
+            echo "::error title=Prefijo no válido / Invalid prefix::El prefijo «${prefix}» no es válido (ejemplo: com.tunombre). Corrige la variable BUNDLE_ID_PREFIX en Settings ▸ Secrets and variables ▸ Actions ▸ Variables y lanza una ejecución nueva: Actions ▸ TestFlight ▸ Run workflow.%0AThe prefix \"$prefix\" is not valid (example: com.yourname). Fix the BUNDLE_ID_PREFIX repository variable, then start a new run: Actions ▸ TestFlight ▸ Run workflow."
             exit 1
           fi
           echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
@@ -219,7 +219,7 @@ jobs:
           python3 tools/testflight/asc.py next-build --app-id "$APP_ID"
           number=$(sed -n 's/^build_number=//p' "$GITHUB_OUTPUT" | tail -n 1)
           if ! [[ "$number" =~ ^[0-9]+$ ]]; then
-            echo "::error title=Número de build / Build number::asc.py next-build no dio un número de build («$number»). Lanza una ejecución nueva: Actions ▸ TestFlight ▸ Run workflow.%0Aasc.py next-build gave no build number («$number»). Start a new run: Actions ▸ TestFlight ▸ Run workflow."
+            echo "::error title=Número de build / Build number::asc.py next-build no dio un número de build («${number}»). Lanza una ejecución nueva: Actions ▸ TestFlight ▸ Run workflow.%0Aasc.py next-build gave no build number («${number}»). Start a new run: Actions ▸ TestFlight ▸ Run workflow."
             exit 1
           fi
           echo "BUILD_NUMBER=$number" >> "$GITHUB_ENV"
