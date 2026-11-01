@@ -113,6 +113,49 @@ final class VideoMirrorSourceTests: XCTestCase {
         XCTAssertTrue(pollUntil { frames.current.count > before && frames.current.last?.isKeyframe == true })
     }
 
+    /// MP-3: the broadcast extension starts without a canvas; nothing is encoded (no guessed
+    /// 800×384 IDR) until the host's CONFIG, and the frame that waited is encoded right away.
+    func testNothingIsEncodedBeforeTheFirstConfiguration() throws {
+        let (configured, _) = try makeSource() // skips without an encoder
+        configured.stop()
+        let source = MirrorFrameSource(configuration: nil)
+        defer { source.stop() }
+        let frames = Locked<[EncodedFrame]>([])
+        source.onFrame = { f in frames.withLock { $0.append(f) } }
+        XCTAssertFalse(source.isConfigured)
+        source.append(pixelBuffer: try screen(120, 240), orientation: .up)
+        source.requestKeyframe() // the relay asks for an IDR on connect, before CONFIG
+        Thread.sleep(forTimeInterval: 0.4)
+        XCTAssertTrue(frames.current.isEmpty, "no IDR at a guessed canvas")
+        let canvas = VideoCanvas(width: 320, height: 160)
+        source.update(configuration: MirrorRelayConfig(canvas: canvas, parameters: EncoderParameters(bitrate: 800_000, frameRate: 30)))
+        XCTAssertTrue(pollUntil { frames.current.first?.isKeyframe == true }, "the waiting frame is encoded at once")
+        let sps = H264SPS.parse(accessUnit: frames.current[0].accessUnit)
+        XCTAssertEqual(sps.map { [$0.width, $0.height] }, [320, 160])
+        XCTAssertTrue(source.isConfigured)
+    }
+
+    /// A canvas change re-encodes the last screen picture at the new size immediately (ReplayKit
+    /// delivers nothing while the screen is static).
+    func testCanvasChangeReEncodesTheStaticScreen() throws {
+        let (source, frames) = try makeSource()
+        defer { source.stop() }
+        source.append(pixelBuffer: try screen(120, 240), orientation: .up)
+        XCTAssertTrue(pollUntil { !frames.current.isEmpty })
+        let before = frames.current.count
+        source.update(configuration: MirrorRelayConfig(canvas: VideoCanvas(width: 160, height: 320),
+                                                       parameters: EncoderParameters(bitrate: 800_000, frameRate: 30)))
+        XCTAssertTrue(pollUntil {
+            frames.current.dropFirst(before).contains { f in
+                f.isKeyframe && H264SPS.parse(accessUnit: f.accessUnit).map { [$0.width, $0.height] } == [160, 320]
+            }
+        }, "an IDR at the new canvas without a new screen frame")
+        let canvas = try XCTUnwrap(source.lastCanvasBufferForTesting)
+        XCTAssertEqual(CVPixelBufferGetWidth(canvas), 160)
+        XCTAssertTrue(isRed(rgb(canvas, 80, 100)), "\(rgb(canvas, 80, 100))")
+        XCTAssertTrue(isBlue(rgb(canvas, 80, 220)), "\(rgb(canvas, 80, 220))")
+    }
+
     func testDirectPullUseAsVideoFrameSource() async throws {
         let (source, _) = try makeSource()
         defer { source.stop() }

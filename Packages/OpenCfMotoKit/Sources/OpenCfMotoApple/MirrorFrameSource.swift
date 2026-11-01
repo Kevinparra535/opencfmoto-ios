@@ -156,9 +156,12 @@ public struct MirrorFrameSourceStats: Sendable, Equatable {
 }
 
 /// Fits phone-screen frames into the dash canvas and encodes them.
-/// - In the broadcast extension: set `onFrame` (forward to `MirrorRelayClient.send(frame:)`),
-///   feed `append(sampleBuffer:orientation:)`, apply `MirrorRelayClient.onConfig` with
-///   `update(configuration:)` and keyframe requests with `requestKeyframe()`.
+/// - In the broadcast extension: create it WITHOUT a configuration (`init(configuration: nil)`),
+///   set `onFrame` (forward to `MirrorRelayClient.send(frame:)`), feed
+///   `append(sampleBuffer:orientation:)`, apply `MirrorRelayClient.onConfig` with
+///   `update(configuration:)` and keyframe requests with `requestKeyframe()`. Nothing is encoded
+///   until the host's first CONFIG: an IDR at a guessed canvas could reach a dash that negotiated
+///   another size (MP-3). The newest screen frame waits and is encoded as soon as CONFIG arrives.
 /// - In-process (iOS 27 ScreenCaptureKit): use it directly as the link's `VideoFrameSource`.
 /// Thread-safe; `append` returns immediately (work runs on a private serial queue).
 public final class MirrorFrameSource: VideoFrameSource, @unchecked Sendable {
@@ -170,7 +173,8 @@ public final class MirrorFrameSource: VideoFrameSource, @unchecked Sendable {
     private let lock = NSLock()
 
     // Guarded by `lock`.
-    private var _configuration: MirrorRelayConfig
+    /// nil until the host's first CONFIG (extension use): nothing is encoded meanwhile.
+    private var _configuration: MirrorRelayConfig?
     private var _onFrame: FrameHandler?
     private var deliversToQueue: Bool
     private var pending: (buffer: CVPixelBuffer, orientation: UInt32)?
@@ -185,6 +189,9 @@ public final class MirrorFrameSource: VideoFrameSource, @unchecked Sendable {
     private var transfer: VTPixelTransferSession?
     private var encoder: H264Encoder?
     private var lastCanvasBuffer: CVPixelBuffer?
+    /// The last scaled (un-rotated) screen picture and what it was made from: re-composed into
+    /// the canvas when the configuration changes while the screen is static.
+    private var lastScaled: (buffer: CVPixelBuffer, orientation: UInt32, sourceWidth: Int, sourceHeight: Int)?
     private var lastEncodeAt: TimeInterval = 0
     private var lastProcessedAt: TimeInterval = -.greatestFiniteMagnitude
     private var keyframePending = true
@@ -193,9 +200,12 @@ public final class MirrorFrameSource: VideoFrameSource, @unchecked Sendable {
     private static let colorSpace: CGColorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
     private static let bitmapInfo: UInt32 = CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
 
-    /// - Parameter deliversToQueue: also push frames into `frameQueue` (direct `VideoFrameSource`
-    ///   use; enabled automatically by `prepare`).
-    public init(configuration: MirrorRelayConfig, deliversToQueue: Bool = false, queueCapacity: Int = 3) {
+    /// - Parameters:
+    ///   - configuration: the canvas / encoder / fit settings, or nil to wait for the first
+    ///     `update(configuration:)` (the broadcast extension waits for the host's CONFIG).
+    ///   - deliversToQueue: also push frames into `frameQueue` (direct `VideoFrameSource` use;
+    ///     enabled automatically by `prepare`).
+    public init(configuration: MirrorRelayConfig?, deliversToQueue: Bool = false, queueCapacity: Int = 3) {
         _configuration = configuration
         self.deliversToQueue = deliversToQueue
         frameQueue = FrameQueue(capacity: queueCapacity)
@@ -209,7 +219,14 @@ public final class MirrorFrameSource: VideoFrameSource, @unchecked Sendable {
         if let t = transfer { VTPixelTransferSessionInvalidate(t) }
     }
 
-    public var configuration: MirrorRelayConfig { lock.lock(); defer { lock.unlock() }; return _configuration }
+    /// The current settings (the 800×384 default while no configuration was received yet).
+    public var configuration: MirrorRelayConfig {
+        lock.lock(); defer { lock.unlock() }
+        return _configuration ?? MirrorRelayConfig(canvas: .defaultLandscape)
+    }
+
+    /// A configuration was given (init or `update(configuration:)`): frames are being encoded.
+    public var isConfigured: Bool { lock.lock(); defer { lock.unlock() }; return _configuration != nil }
 
     /// Receives every encoded access unit (encoder thread).
     public var onFrame: FrameHandler? {
@@ -224,14 +241,27 @@ public final class MirrorFrameSource: VideoFrameSource, @unchecked Sendable {
     /// The last composed canvas picture (tests / diagnostics). Do not call from the work queue.
     var lastCanvasBufferForTesting: CVPixelBuffer? { work.sync { lastCanvasBuffer } }
 
-    /// New canvas / encoder / fit settings (from the host). The next frame is an IDR.
+    /// New canvas / encoder / fit settings (from the host). The next frame is an IDR: the last
+    /// screen picture is re-composed for the new canvas / fit / margins at once (ReplayKit sends
+    /// nothing new while the screen is static), and a frame that waited for the first CONFIG is
+    /// processed now.
     public func update(configuration: MirrorRelayConfig) {
-        lock.lock(); _configuration = configuration; lock.unlock()
+        lock.lock()
+        let old = _configuration
+        _configuration = configuration
+        let waiting = pending != nil && !drainScheduled
+        if waiting { drainScheduled = true }
+        lock.unlock()
+        if old.map({ $0.canvas.width != configuration.canvas.width || $0.canvas.height != configuration.canvas.height }) ?? true {
+            frameQueue.invalidateKeyframe() // in-process use: never re-send an IDR of another canvas
+        }
         work.async { [weak self] in
             guard let self else { return }
             self.keyframePending = true
-            self.applyConfigurationIfNeeded()
+            let changed = self.applyConfigurationIfNeeded()
+            if changed { self.recomposeLastPicture() }
             self.encodeLast(force: true)
+            if waiting { self.drain() }
         }
     }
 
@@ -248,8 +278,9 @@ public final class MirrorFrameSource: VideoFrameSource, @unchecked Sendable {
         _stats.framesIn += 1
         if pending != nil { _stats.framesCoalesced += 1 }
         pending = (pixelBuffer, orientation.rawValue) // keep only the newest frame
-        let schedule = !drainScheduled
-        drainScheduled = true
+        // Without a configuration the newest frame just waits for the first CONFIG.
+        let schedule = !drainScheduled && _configuration != nil
+        if schedule { drainScheduled = true }
         lock.unlock()
         if schedule { work.async { [weak self] in self?.drain() } }
     }
@@ -276,6 +307,7 @@ public final class MirrorFrameSource: VideoFrameSource, @unchecked Sendable {
             canvasFactory = nil
             intermediateFactory = nil
             lastCanvasBuffer = nil
+            lastScaled = nil
             appliedConfig = nil
         }
         frameQueue.close()
@@ -340,6 +372,11 @@ public final class MirrorFrameSource: VideoFrameSource, @unchecked Sendable {
             return
         }
         lock.lock()
+        guard _configuration != nil else {
+            drainScheduled = false // keep `pending` for the first CONFIG
+            lock.unlock()
+            return
+        }
         let item = pending
         pending = nil
         drainScheduled = false
@@ -349,16 +386,20 @@ public final class MirrorFrameSource: VideoFrameSource, @unchecked Sendable {
         process(item.buffer, orientation: item.orientation)
     }
 
-    private func applyConfigurationIfNeeded() {
-        let cfg = configuration
-        guard appliedConfig != cfg else { return }
+    /// Applies a new configuration (work queue); true when it changed something.
+    @discardableResult
+    private func applyConfigurationIfNeeded() -> Bool {
+        lock.lock()
+        let pendingConfig = _configuration
+        lock.unlock()
+        guard let cfg = pendingConfig, appliedConfig != cfg else { return false }
         let old = appliedConfig
         appliedConfig = cfg
         let w = cfg.canvas.width, h = cfg.canvas.height
         guard w >= 16, h >= 16 else {
             Log.w("MIRROR", "invalid mirror canvas \(cfg.canvas)")
             canvasFactory = nil
-            return
+            return true
         }
         let sizeChanged = old.map { $0.canvas.width != w || $0.canvas.height != h } ?? true
         if sizeChanged || canvasFactory == nil {
@@ -394,6 +435,21 @@ public final class MirrorFrameSource: VideoFrameSource, @unchecked Sendable {
         keyframePending = true
         Log.i("MIRROR", "canvas \(w)x\(h) fit=\(cfg.fit.rawValue) \(p.frameRate)fps \(p.bitrate / 1000)kbps "
             + "margins T\(cfg.margins.top) B\(cfg.margins.bottom) L\(cfg.margins.left) R\(cfg.margins.right)")
+        return true
+    }
+
+    /// Re-composes the last screen picture with the applied configuration (work queue): a canvas,
+    /// fit or margin change takes effect at once even while ReplayKit sends no new frame.
+    private func recomposeLastPicture() {
+        guard let last = lastScaled, let cfg = appliedConfig, let canvasFactory else { return }
+        let w = canvasFactory.width, h = canvasFactory.height
+        let oriented = MirrorFitMath.orientedSize(width: last.sourceWidth, height: last.sourceHeight, orientation: last.orientation)
+        guard let vp = MirrorFitMath.viewport(canvasWidth: w, canvasHeight: h, sourceWidth: oriented.width,
+                                              sourceHeight: oriented.height, fit: cfg.fit, margins: cfg.margins),
+              let target = canvasFactory.makeBuffer(),
+              compose(last.buffer, into: target, viewport: vp, orientation: last.orientation, margins: cfg.margins)
+        else { return }
+        lastCanvasBuffer = target
     }
 
     private func process(_ source: CVPixelBuffer, orientation raw: UInt32) {
@@ -419,6 +475,7 @@ public final class MirrorFrameSource: VideoFrameSource, @unchecked Sendable {
         }
         guard compose(scaled, into: target, viewport: vp, orientation: raw, margins: cfg.margins) else { return }
         lastCanvasBuffer = target
+        lastScaled = (scaled, raw, sw, sh)
         _ = encodeLast(force: keyframePending)
         let ms = (ProcessInfo.processInfo.systemUptime - t0) * 1000
         lock.lock()

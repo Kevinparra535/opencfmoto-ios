@@ -99,6 +99,25 @@ final class FrameQueueTests: XCTestCase {
         XCTAssertEqual(q.pendingCount, 0)
     }
 
+    /// MP-3: the cached keyframe belongs to one media session and one canvas.
+    func testLastKeyframeIsForgottenOnReopenAndInvalidation() async {
+        let q = FrameQueue()
+        q.push(frame(1, key: true))
+        q.flush()
+        q.resynchronize()
+        XCTAssertEqual(q.lastKeyframe?.sequence, 1, "a resync / flush keeps it (same session, same canvas)")
+        q.invalidateKeyframe()
+        XCTAssertNil(q.lastKeyframe, "canvas change")
+        q.push(frame(2, key: true))
+        q.close()
+        XCTAssertEqual(q.lastKeyframe?.sequence, 2)
+        q.reopen()
+        XCTAssertNil(q.lastKeyframe, "a new media session never re-sends the previous one's IDR")
+        XCTAssertTrue(q.isGateClosed)
+        q.push(frame(3, key: true))
+        XCTAssertEqual(q.lastKeyframe?.sequence, 3)
+    }
+
     func testCloseWakesWaiters() async {
         let q = FrameQueue()
         async let w = q.next(timeout: 5)

@@ -236,6 +236,13 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
 
     public typealias DisplayListProvider = @Sendable (TimeInterval) -> DashDisplayList
 
+    /// Encoded size (canvas width × height) a cached IDR belongs to.
+    private struct PictureSize: Equatable {
+        let width: Int
+        let height: Int
+        init(_ c: VideoCanvas) { width = c.width; height = c.height }
+    }
+
     private struct Shared {
         var displayListProvider: DisplayListProvider?
         var holdDisplayListProvider: DisplayListProvider?
@@ -250,6 +257,11 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
         var mode: Mode = .idle
         var holdFrames: [EncodedFrame] = []
         var holdIndex = 0
+        /// The canvas of the current session (mirrors the render-queue `canvas`; nil when idle /
+        /// stopped) and the last live IDR with the canvas it was encoded at (MP-3: a cached IDR is
+        /// only ever re-sent for the canvas it was made for, and never across sessions).
+        var canvasSize: PictureSize?
+        var lastLiveKeyframe: (frame: EncodedFrame, size: PictureSize)?
         var stats = DashProjectionStats()
         var dump: H264WireDump?
         var pullMeter = RateMeter()
@@ -524,9 +536,16 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
             self.canvas = nil
             self.lastPixelBuffer = nil
             self.lastList = nil
-            self.shared.withLock { $0.mode = .stopped; $0.holdFrames = []; $0.stats.mode = .stopped }
+            self.shared.withLock {
+                $0.mode = .stopped
+                $0.holdFrames = []
+                $0.stats.mode = .stopped
+                $0.canvasSize = nil
+                $0.lastLiveKeyframe = nil // never seed a later session's hold with this ride's map
+            }
         }
         frameQueue.close()
+        frameQueue.invalidateKeyframe()
         Log.i("VIDEO", "projection stopped")
     }
 
@@ -574,10 +593,12 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
             lastList = nil
             pictureNotEncoded = false
             lastEncodeAt = nil
-            shared.withLock { $0.holdFrames = [] }
+            shared.withLock { $0.holdFrames = []; $0.lastLiveKeyframe = nil }
+            frameQueue.invalidateKeyframe() // an IDR of the old size must never answer a pull (MP-3)
             encoder?.invalidate()
             encoder = nil
         }
+        shared.withLock { $0.canvasSize = PictureSize(newCanvas) }
         if state == .idle || state == .stopped {
             shared.withLock { $0.mode = .foreground }
         }
@@ -599,7 +620,8 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
     private func makeEncoder(software: Bool) -> H264Encoder? {
         guard let c = canvas else { return nil }
         let enc = H264Encoder(label: software ? "own-sw" : "own")
-        enc.onFrame = { [weak self] f in self?.encoderOutput(f) }
+        let size = PictureSize(c)
+        enc.onFrame = { [weak self] f in self?.encoderOutput(f, size: size) }
         enc.onError = { [weak self] e in
             self?.shared.withLock { $0.stats.encoderErrors += 1 }
             if let s = e.status, H264EncoderStatus.requiresSessionRecreation(s) {
@@ -617,14 +639,25 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
         return enc
     }
 
-    private func encoderOutput(_ frame: EncodedFrame) {
+    private func encoderOutput(_ frame: EncodedFrame, size: PictureSize) {
         let now = clock.now()
         shared.withLock {
             $0.stats.outputFrames += 1
-            if frame.isKeyframe { $0.stats.outputKeyframes += 1 }
+            if frame.isKeyframe {
+                $0.stats.outputKeyframes += 1
+                $0.lastLiveKeyframe = (frame, size)
+            }
             $0.outputMeter.add(now)
         }
         frameQueue.push(frame)
+    }
+
+    /// The last live IDR if it was encoded for the current canvas (nil otherwise).
+    private func liveKeyframeForCurrentCanvas() -> EncodedFrame? {
+        shared.withLock { s -> EncodedFrame? in
+            guard let k = s.lastLiveKeyframe, let size = s.canvasSize, k.size == size else { return nil }
+            return k.frame
+        }
     }
 
     /// Called from FrameQueue (overflow / resync) and encoder errors.
@@ -801,9 +834,10 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
                 encoder = nil
             }
         }
+        let live = liveKeyframeForCurrentCanvas()
         shared.withLock { s in
             s.mode = nextMode
-            if nextMode == .hold, s.holdFrames.isEmpty, let k = frameQueue.lastKeyframe { s.holdFrames = [k] }
+            if nextMode == .hold, s.holdFrames.isEmpty, let k = live { s.holdFrames = [k] }
         }
         factory?.flush()
         keyframePending = true
@@ -831,7 +865,7 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
     }
 
     private func holdOrLastKeyframe() -> EncodedFrame? {
-        nextHoldFrame() ?? frameQueue.lastKeyframe
+        nextHoldFrame() ?? liveKeyframeForCurrentCanvas()
     }
 
     /// Round-robin over the hold IDRs (consecutive identical IDRs share an idr_pic_id).

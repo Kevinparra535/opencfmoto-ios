@@ -263,4 +263,119 @@ final class VideoMirrorRelayTests: XCTestCase {
         b.stop()
         server.stop()
     }
+
+    // MARK: canvas hygiene (MP-3)
+
+    /// Baseline L3.1 SPS NAL units (Exp-Golomb built, no cropping) for a few dash canvases.
+    private static let sps800x384 = Data([0x67, 0x42, 0xC0, 0x1F, 0xDA, 0x03, 0x20, 0xC6, 0x40])
+    private static let sps800x944 = Data([0x67, 0x42, 0xC0, 0x1F, 0xDA, 0x03, 0x20, 0x77, 0x90])
+
+    private func idr(_ sps: Data, seq: UInt64) -> EncodedFrame {
+        EncodedFrame(accessUnit: AnnexB.join([sps, Data([0x68, 0xCE, 0x3C, 0x80]), Data([0x65, 0x88, 0x80, UInt8(seq & 0xFF)])]),
+                     isKeyframe: true, presentationTime: Double(seq) / 8, sequence: seq)
+    }
+
+    func testSPSVectorsDecodeToTheirCanvas() {
+        XCTAssertEqual(H264SPS.parse(nal: Self.sps800x384).map { [$0.width, $0.height] }, [800, 384])
+        XCTAssertEqual(H264SPS.parse(nal: Self.sps800x944).map { [$0.width, $0.height] }, [800, 944])
+    }
+
+    func testCanvasVerdict() {
+        let tall = VideoCanvas(width: 800, height: 944)
+        let wide = idr(Self.sps800x384, seq: 1), right = idr(Self.sps800x944, seq: 2), p = pFrame(3)
+        var v = MirrorRelayServer.canvasVerdict(for: wide, canvas: tall, awaitingKeyframe: false)
+        XCTAssertFalse(v.accept)
+        XCTAssertTrue(v.awaitingKeyframe)
+        XCTAssertEqual(v.wrongSize.map { [$0.width, $0.height] }, [800, 384], "ask for a new IDR once")
+        v = MirrorRelayServer.canvasVerdict(for: p, canvas: tall, awaitingKeyframe: true)
+        XCTAssertFalse(v.accept, "P-frames of a dropped IDR are dropped too")
+        v = MirrorRelayServer.canvasVerdict(for: wide, canvas: tall, awaitingKeyframe: true)
+        XCTAssertFalse(v.accept)
+        XCTAssertNil(v.wrongSize, "no second request in the same episode")
+        v = MirrorRelayServer.canvasVerdict(for: right, canvas: tall, awaitingKeyframe: true)
+        XCTAssertTrue(v.accept)
+        XCTAssertFalse(v.awaitingKeyframe)
+        XCTAssertTrue(MirrorRelayServer.canvasVerdict(for: p, canvas: tall, awaitingKeyframe: false).accept)
+        XCTAssertTrue(MirrorRelayServer.canvasVerdict(for: wide, canvas: nil, awaitingKeyframe: false).accept, "before any 16")
+        XCTAssertTrue(MirrorRelayServer.canvasVerdict(for: key(4), canvas: tall, awaitingKeyframe: false).accept,
+                      "an unparseable SPS is not judged")
+    }
+
+    /// The extension encoded its 800×384 default before CONFIG (or the previous canvas is still in
+    /// flight): that IDR and its P-frames never reach an 800×944 dash; a matching IDR does.
+    func testWrongCanvasIDRsAreDroppedUntilAMatchingOne() async throws {
+        let path = try socketPath()
+        let server = MirrorRelayServer(socketPath: path)
+        try server.start()
+        defer { server.stop() }
+        let configs = Locked<[MirrorRelayConfig]>([])
+        let keyRequests = Locked(0)
+        let client = MirrorRelayClient(socketPath: path)
+        client.retryInterval = 0.05
+        client.onConfig = { cfg in configs.withLock { $0.append(cfg) } }
+        client.onKeyframeRequest = { keyRequests.withLock { $0 += 1 } }
+        defer { client.stop() }
+        client.start()
+        var ok = await waitUntil { client.isConnected && server.isClientConnected }
+        XCTAssertTrue(ok)
+        let tall = VideoCanvas(width: 800, height: 944, requestedWidth: 800, requestedHeight: 951)
+        server.prepare(canvas: tall, parameters: .default)
+        ok = await waitUntil { configs.current.last?.canvas == tall }
+        XCTAssertTrue(ok)
+        let before = keyRequests.current
+        client.send(frame: idr(Self.sps800x384, seq: 1))
+        client.send(frame: pFrame(2))
+        ok = await waitUntil { server.stats.framesReceived >= 2 }
+        XCTAssertTrue(ok)
+        XCTAssertEqual(server.stats.wrongCanvasFramesDropped, 2)
+        ok = await waitUntil { keyRequests.current > before }
+        XCTAssertTrue(ok, "the host asked for an IDR at the negotiated canvas")
+        let nothing = await server.nextFrame(timeout: 0.4)
+        XCTAssertNil(nothing, "never the wrong-size IDR, not even as the fallback")
+        client.send(frame: idr(Self.sps800x944, seq: 3))
+        client.send(frame: pFrame(4))
+        let f3 = await server.nextFrame(timeout: 3)
+        let f4 = await server.nextFrame(timeout: 3)
+        XCTAssertEqual(f3?.sequence, 3)
+        XCTAssertEqual(f4?.sequence, 4)
+    }
+
+    /// A stop / start or a canvas change never serves the previous IDR as the 114 fallback.
+    func testStaleKeyframeIsNotServedAcrossSessionsOrCanvases() async throws {
+        let path = try socketPath()
+        let server = MirrorRelayServer(socketPath: path)
+        try server.start()
+        defer { server.stop() }
+        let client = MirrorRelayClient(socketPath: path)
+        client.retryInterval = 0.05
+        defer { client.stop() }
+        client.start()
+        var ok = await waitUntil { client.isConnected && server.isClientConnected }
+        XCTAssertTrue(ok)
+        let wide = VideoCanvas(width: 800, height: 384, requestedWidth: 800, requestedHeight: 386)
+        server.prepare(canvas: wide, parameters: .default)
+        client.send(frame: idr(Self.sps800x384, seq: 1))
+        let first = await server.nextFrame(timeout: 3)
+        XCTAssertEqual(first?.sequence, 1)
+        let fallback = await server.nextFrame(timeout: 0.4)
+        XCTAssertEqual(fallback?.sequence, 1, "same session and canvas: the cached IDR keeps the dash alive")
+
+        // New canvas (another bike): the cached 800×384 IDR is gone.
+        server.prepare(canvas: VideoCanvas(width: 800, height: 944, requestedWidth: 800, requestedHeight: 951), parameters: .default)
+        let afterCanvas = await server.nextFrame(timeout: 0.4)
+        XCTAssertNil(afterCanvas)
+
+        // Stop / start (next Mirror session in the same process): nothing stale either.
+        server.prepare(canvas: wide, parameters: .default)
+        client.send(frame: idr(Self.sps800x384, seq: 5))
+        let five = await server.nextFrame(timeout: 3)
+        XCTAssertEqual(five?.sequence, 5)
+        server.stop()
+        try server.start()
+        server.prepare(canvas: wide, parameters: .default)
+        let afterRestart = await server.nextFrame(timeout: 0.4)
+        XCTAssertNil(afterRestart)
+        ok = await waitUntil(15) { client.isConnected && server.isClientConnected }
+        XCTAssertTrue(ok, "the extension reconnects to the restarted host")
+    }
 }

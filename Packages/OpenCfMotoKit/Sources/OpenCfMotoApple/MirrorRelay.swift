@@ -346,6 +346,9 @@ public struct MirrorRelayServerStats: Sendable, Equatable {
     public var bytesReceived: Int64 = 0
     public var keyframeRequestsSent = 0
     public var fallbackKeyframesServed = 0
+    /// Extension frames dropped because their IDR was encoded for another canvas (SPS size ≠ the
+    /// negotiated canvas), including the P-frames that depend on it.
+    public var wrongCanvasFramesDropped = 0
     public var peerAgent: String?
     public init() {}
 }
@@ -373,6 +376,8 @@ public final class MirrorRelayServer: VideoFrameSource, @unchecked Sendable {
     private var _margins: ScreenMargins = .zero
     private var _stats = MirrorRelayServerStats()
     private var _onClientChange: (@Sendable (Bool) -> Void)?
+    /// The extension's last IDR had the wrong size: drop its frames until a matching IDR.
+    private var awaitingCanvasKeyframe = false
 
     public init(socketPath: String, queueCapacity: Int = 3) {
         self.socketPath = socketPath
@@ -413,8 +418,9 @@ public final class MirrorRelayServer: VideoFrameSource, @unchecked Sendable {
         guard !running else { lock.unlock(); return }
         lock.unlock()
         let listener = try RelaySocketIO.makeListener(path: socketPath)
-        frameQueue.reopen()
+        frameQueue.reopen() // a new session never serves the previous one's IDR (MP-3)
         lock.lock()
+        awaitingCanvasKeyframe = false
         running = true
         listenGeneration &+= 1
         let generation = listenGeneration
@@ -443,6 +449,7 @@ public final class MirrorRelayServer: VideoFrameSource, @unchecked Sendable {
             conn.shutdown()
         }
         frameQueue.close()
+        frameQueue.invalidateKeyframe()
         if wasRunning { Log.i("MIRROR", "relay stopped") }
     }
 
@@ -450,9 +457,15 @@ public final class MirrorRelayServer: VideoFrameSource, @unchecked Sendable {
 
     public func prepare(canvas: VideoCanvas, parameters: EncoderParameters) {
         lock.lock()
+        let old = _config?.canvas
         let cfg = MirrorRelayConfig(canvas: canvas, parameters: parameters, fit: _fit, margins: _margins)
         _config = cfg
         lock.unlock()
+        if old.map({ $0.width != canvas.width || $0.height != canvas.height }) ?? true {
+            // An IDR of the previous (or the extension's default) canvas must never answer a pull
+            // for this one (RLY 17 = encoded size, MP-3).
+            frameQueue.invalidateKeyframe()
+        }
         send(.config(cfg))
     }
 
@@ -571,8 +584,16 @@ public final class MirrorRelayServer: VideoFrameSource, @unchecked Sendable {
             _stats.framesReceived += 1
             if f.isKeyframe { _stats.keyframesReceived += 1 }
             _stats.bytesReceived += Int64(f.accessUnit.count)
+            let verdict = Self.canvasVerdict(for: f, canvas: _config?.canvas, awaitingKeyframe: awaitingCanvasKeyframe)
+            awaitingCanvasKeyframe = verdict.awaitingKeyframe
+            if !verdict.accept { _stats.wrongCanvasFramesDropped += 1 }
             lock.unlock()
-            frameQueue.push(f)
+            if let size = verdict.wrongSize {
+                Log.shared.throttled("mirror-wrong-canvas", interval: 5, .warn, "MIRROR",
+                                     "dropped an extension IDR encoded at \(size.width)x\(size.height) — asked for one at the negotiated canvas")
+                sendKeyframeRequest()
+            }
+            if verdict.accept { frameQueue.push(f) }
         case let .hello(version, agent):
             lock.lock(); _stats.peerAgent = agent; lock.unlock()
             Log.i("MIRROR", "extension hello v\(version) \(agent)")
@@ -583,6 +604,22 @@ public final class MirrorRelayServer: VideoFrameSource, @unchecked Sendable {
         case .config, .keyframeRequest:
             break // host → extension messages; ignore if echoed
         }
+    }
+
+    /// Whether an extension frame may reach the dash: an IDR whose SPS size differs from the
+    /// negotiated canvas is dropped — and every P-frame after it until a matching IDR — because
+    /// the dash must decode exactly the RLY 17 size (MP-3: the extension encodes its 800×384
+    /// default before CONFIG arrives, or a frame of the previous canvas is still in flight).
+    /// An IDR without a parseable SPS, or any frame before the first `prepare`, is accepted.
+    static func canvasVerdict(for f: EncodedFrame, canvas: VideoCanvas?, awaitingKeyframe: Bool)
+        -> (accept: Bool, awaitingKeyframe: Bool, wrongSize: (width: Int, height: Int)?) {
+        guard f.isKeyframe else { return (!awaitingKeyframe, awaitingKeyframe, nil) }
+        if let canvas, let sps = H264SPS.parse(accessUnit: f.accessUnit),
+           sps.width != canvas.width || sps.height != canvas.height {
+            // Ask for a fresh IDR once per wrong-size episode.
+            return (false, true, awaitingKeyframe ? nil : (sps.width, sps.height))
+        }
+        return (true, false, nil)
     }
 }
 
