@@ -432,6 +432,56 @@ final class LinkEndToEndTests: XCTestCase {
         h.link.stop()
     }
 
+    /// MP-1: the dash's first 114 came before any picture existed (mirror broadcast not started,
+    /// app locked before REQ 16): it got nothing and the dash, pulling in lock-step, never pulls
+    /// again while keeping :10922 open. The watchdog recovers `.awaitingMedia` too.
+    func testNoFirstFrameWhileAwaitingMediaForcesAReconnect() async throws {
+        let h = makeHarness(stallTimeout: 0.4, cooldown: 0.2)
+        h.source.starve = true
+        h.link.start()
+        let probed = await linkEventually { h.dash.acceptedCount.current == 1 }
+        XCTAssertTrue(probed)
+        let ctrl = try h.dash.openControl()
+        try await ctrl.send(PxcFrame(cmd: 0x10000))
+        _ = try await ctrl.nextRaw()
+        let mctl = try h.dash.openMedia(port: 10921)
+        try await mctl.send(cmd: 112)
+        _ = try await mctl.reply()
+        let mdata = try h.dash.openMedia(port: 10920)
+        try await mdata.send(cmd: 114) // never answered: nothing to send yet
+        await waitState(h) { $0 == .awaitingMedia }
+        let missed = await linkEventually { h.link.stats.missedPulls >= 1 }
+        XCTAssertTrue(missed)
+        // No further pull, :10922 stays open: the watchdog drops every socket and re-probes.
+        await waitState(h, timeout: 5) { self.isReconnecting($0) }
+        do {
+            _ = try await ctrl.next(timeout: 1)
+            XCTFail("expected the watchdog to close the control socket")
+        } catch {
+            XCTAssertFalse(error is TimeoutError)
+        }
+        let reprobed = await linkEventually { h.dash.acceptedCount.current >= 2 }
+        XCTAssertTrue(reprobed)
+        h.link.stop()
+    }
+
+    func testFirstUnansweredPullIsTrackedUntilAFrameIsSent() {
+        let clock = LinkManualClock()
+        let stats = LinkStatsTracker(clock: clock)
+        XCTAssertNil(stats.firstUnansweredPullAt)
+        clock.set(1)
+        stats.recordMissedPull()
+        clock.set(3)
+        stats.recordMissedPull()
+        XCTAssertEqual(stats.firstUnansweredPullAt, 1, "the oldest unanswered pull counts")
+        stats.recordFrameSent(wireBytes: 10, keyframe: true)
+        XCTAssertNil(stats.firstUnansweredPullAt)
+        stats.recordMissedPull()
+        XCTAssertEqual(stats.firstUnansweredPullAt, 3)
+        stats.resetConnectionFrameCount()
+        XCTAssertNil(stats.firstUnansweredPullAt)
+    }
+
     // MARK: - Discovery race, restart hygiene
 
     func testBonjourResultIsProbedWhenTheGatewayIsSilent() async {

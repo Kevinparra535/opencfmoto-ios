@@ -876,35 +876,54 @@ final class LinkSession: @unchecked Sendable {
     // MARK: Watchdog
 
     /// 5 s tick: stats event + `hb#` health line; STREAMING with no frame for > stallTimeout → drop
-    /// every bike socket (cooldown); recoverable `.failed` → re-arm after `errorRearmInterval`.
+    /// every bike socket (cooldown); AWAITING_MEDIA with media open and an unanswered 114 older than
+    /// stallTimeout (no first frame, iOS addition) → the same; recoverable `.failed` → re-arm after
+    /// `errorRearmInterval`.
     private func watchdogLoop() async {
         var tick = 0
         while true {
             guard await LinkIO.sleep(timings.watchdogTick), isAlive else { return }
             tick += 1
             let snap = stats.snapshot()
+            let unansweredSince = stats.firstUnansweredPullAt
             owner?.sessionEvent(.stats(snap), generation: generation)
             let now = clock.now()
-            let check: (state: LinkState, open: Int, probed: Bool, media: Bool, stall: Bool, rearm: Bool) = withLock {
+            let check: (state: LinkState, open: Int, probed: Bool, media: Bool, stall: Bool, noFirstFrame: Bool,
+                        rearm: Bool) = withLock {
                 var stall = false
+                var noFirstFrame = false
                 var rearm = false
                 if state == .streaming, let last = snap.lastFrameAt, now - last > config.stallTimeout,
                    now - lastRecoveryAt > config.stallReconnectCooldown {
                     lastRecoveryAt = now
                     stall = true
                 }
+                // iOS addition (MP-1): media sockets open but this (re)connection never got its
+                // first frame — e.g. the first 114 came before any picture existed. The dash pulls
+                // in lock-step, so it may never pull again; if it also keeps :10922 open nothing
+                // else would ever recover. Same threshold and cooldown as the stall check.
+                if state == .awaitingMedia, mediaActive, let since = unansweredSince, now - since > config.stallTimeout,
+                   now - lastRecoveryAt > config.stallReconnectCooldown {
+                    lastRecoveryAt = now
+                    noFirstFrame = true
+                }
                 if case let .failed(f) = state, f == .lostLink || f == .dashNotFound || f == .localNetworkDenied,
                    let interval = timings.errorRearmInterval, now - lastRecoveryAt > interval, connections.isEmpty {
                     lastRecoveryAt = now
                     rearm = true
                 }
-                return (state, listeners.count, probeAccepted, mediaActive, stall, rearm)
+                return (state, listeners.count, probeAccepted, mediaActive, stall, noFirstFrame, rearm)
             }
             Log.i("LINK", "hb#\(tick) probed=\(check.probed) video=\(check.media) framesSent=\(stats.framesSinceLastReset) openServers=\(check.open) state=\(check.state) pulls/s=\(String(format: "%.1f", snap.pullRate))")
             if check.stall {
                 let ms = snap.lastFrameAt.map { Int((now - $0) * 1000) } ?? -1
                 Log.w("LINK", "[watchdog] streaming stalled (\(ms)ms, no frames) — recovering")
                 forceReconnect(reason: "stall")
+            }
+            if check.noFirstFrame {
+                let ms = unansweredSince.map { Int((now - $0) * 1000) } ?? -1
+                Log.w("LINK", "[watchdog] media open but no first frame (\(ms)ms since an unanswered 114) — recovering")
+                forceReconnect(reason: "no first frame")
             }
             if check.rearm {
                 Log.i("LINK", "[watchdog] re-arming reconnect after error")
