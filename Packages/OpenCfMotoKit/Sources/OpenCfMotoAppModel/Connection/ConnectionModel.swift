@@ -322,6 +322,17 @@ public final class ConnectionModel {
             issue = .noBikePaired
             return
         }
+        guard !qr.requiresPhoneHotspot else {
+            // A bike saved from a phone-hotspot QR (before pairing refused them): there is no bike Wi-Fi
+            // to join, so never start the join / manual-join flow for its synthetic SSID (review IOS-3).
+            Log.w("APP", "→ '\(bike.name)': this dash joins the phone's hotspot \u{2014} not supported on iPhone")
+            if trigger == .user {
+                let message = SessionText.phoneHotspotUnsupported(l)
+                issue = .other(message)
+                if session == nil { setPhase(.error, detail: message) }
+            }
+            return
+        }
         // Hard switch: the previous projection and link die first; the Wi-Fi association stays
         // (unless the previous session was for another bike).
         let previousSSID = session?.qr.ssid

@@ -304,8 +304,10 @@ final class QRParserTests: XCTestCase {
     }
 
     func testIosHintWording() {
-        XCTAssertEqual(BikeQR.iosFailureHint(for: "CARBITDC0D3024876D"),
-                       "Carbit ID QR \u{2014} enable Personal Hotspot with the SSID/password on the dash, then Connect")
+        // Phone-hotspot dashes (the dash joins the phone's hotspot) are not supported on iPhone (IOS-3).
+        XCTAssertEqual(BikeQR.iosFailureHint(for: "CARBITDC0D3024876D"), BikeQR.iosPhoneHotspotUnsupportedHint)
+        XCTAssertEqual(BikeQR.iosFailureHint(for: "http://www.carbit.com.cn/x?action=1&bm=zz"), BikeQR.iosPhoneHotspotUnsupportedHint)
+        XCTAssertTrue(BikeQR.iosPhoneHotspotUnsupportedHint.contains("iPhone"))
         XCTAssertEqual(BikeQR.iosFailureHint(for: "http://example.com/app"), BikeQR.failureHint(for: "http://example.com/app"))
         XCTAssertNil(BikeQR.iosFailureHint(for: "nothing"))
     }
@@ -351,5 +353,14 @@ final class QRParserTests: XCTestCase {
         XCTAssertEqual(q?.ssid, "Moto é")
         XCTAssertEqual(q?.password, "pässwörd€")
         XCTAssertEqual(q?.name, "Mi moto \u{1F3CD}")
+    }
+
+    func testPhoneHotspotOnlyQRs() throws {
+        let zontes = try XCTUnwrap(BikeQR.parse("http://www.carbit.com.cn/down6/645/644/_ylqxos?modelid=21322&sn=t6J4&action=128&bm=DD%3A0D%3A30%3A24%3A87%3A6D"))
+        XCTAssertTrue(zontes.requiresPhoneHotspot)
+        XCTAssertTrue(try XCTUnwrap(BikeQR.parse("CARBITDC0D3024876D")).requiresPhoneHotspot)
+        XCTAssertFalse(try XCTUnwrap(BikeQR.parse("http://www.carbit.com.cn/downsdk/657/658/_sdk?modelid=37416&sn=peTz&action=9&ssid=CFMOTO-f46457&pwd=59a9cddc94&auth=wpa2-psk")).requiresPhoneHotspot)
+        // Hotspot-capable but with SoftAP credentials: joinable.
+        XCTAssertFalse(try XCTUnwrap(BikeQR.parse("http://www.carbit.com.cn/x?action=129&ssid=CFMOTO-1&pwd=12345678")).requiresPhoneHotspot)
     }
 }

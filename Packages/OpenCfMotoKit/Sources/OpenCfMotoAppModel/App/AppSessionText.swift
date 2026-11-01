@@ -117,6 +117,11 @@ enum SessionText {
              "Ya se está duplicando: espera al tablero o toca Detener primero")
     }
 
+    /// A saved bike whose dash joins the phone's hotspot (review IOS-3): same text as at pairing.
+    static func phoneHotspotUnsupported(_ l: NavLanguage) -> String {
+        LogicData.Strings(l).qrHint(BikeQR.iosPhoneHotspotUnsupportedHint)
+    }
+
     static func mirrorUnavailable(_ l: NavLanguage) -> String {
         pick(l, "Couldn't start mirroring \u{2014} see Logs", "No se pudo iniciar la duplicación: mira Registros")
     }

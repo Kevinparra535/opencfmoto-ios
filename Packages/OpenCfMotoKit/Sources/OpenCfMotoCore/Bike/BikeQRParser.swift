@@ -84,12 +84,24 @@ public extension BikeQR {
         return nil
     }
 
-    /// `failureHint(for:)` reworded for iPhone users: the phone-hotspot hints say "Personal Hotspot"
-    /// instead of "Android hotspot" (session-network.md §2.11). Other hints are unchanged.
+    /// `failureHint(for:)` reworded for iPhone users: the two phone-hotspot hints (the dash joins the
+    /// PHONE's hotspot) become `iosPhoneHotspotUnsupportedHint` — the iPhone app has no such transport
+    /// (session-network.md §11.11 is not implemented), so "turn on the hotspot, then Connect" would be a
+    /// dead end. Other hints are unchanged ("Android hotspot" → "Personal Hotspot" otherwise).
     static func iosFailureHint(for raw: String) -> String? {
         guard let hint = failureHint(for: raw) else { return nil }
+        if hint == QRHintText.phoneHotspot || hint == QRHintText.carbitToken { return iosPhoneHotspotUnsupportedHint }
         return hint.replacingOccurrences(of: "Android hotspot", with: "Personal Hotspot")
     }
+
+    /// Shown (EN; the app localizes it) for dashes that join the phone's hotspot instead of offering
+    /// their own Wi-Fi (Carbit `action=128` / `bm=` / `CARBIT…` QRs) — at pairing and at Connect.
+    static let iosPhoneHotspotUnsupportedHint =
+        "This dash joins the phone's hotspot instead of offering its own Wi-Fi \u{2014} OpenCfMoto can't connect that way on iPhone yet. If the dash can show a Wi-Fi QR with an SSID and password, scan that one."
+
+    /// The QR only offers the phone-hotspot transport: no SoftAP credentials (synthetic
+    /// `PHONE-HOTSPOT-xxxxxx` SSID, empty password). Such a bike cannot be joined from an iPhone.
+    var requiresPhoneHotspot: Bool { supportsPhoneHotspot && password.isEmpty }
 
     // MARK: - Manual entry (format F)
 
