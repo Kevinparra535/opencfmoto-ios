@@ -34,6 +34,12 @@ struct LogsScreen: View {
             .padding(.horizontal, Theme.padding)
             .padding(.vertical, 10)
 
+            if model.logs.crashReport != nil {
+                LogsCrashCard()
+                    .padding(.horizontal, Theme.padding)
+                    .padding(.bottom, 8)
+            }
+
             LogsDiagnosticsCard()
                 .padding(.horizontal, Theme.padding)
                 .padding(.bottom, 8)
@@ -261,3 +267,28 @@ enum LogsFilter {
     }
     .environment(AppModel.preview())
 }
+
+/// "Recovered after a crash" (app-features §6.4): the previous run crashed; the crash details are
+/// already part of the shared logs and of "Report a problem".
+@MainActor
+struct LogsCrashCard: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("Recovered after a crash", systemImage: "exclamationmark.triangle.fill")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(Theme.busy)
+            Text("The app closed unexpectedly last time. The details are included when you share the logs or report a problem.")
+                .font(.caption)
+                .foregroundStyle(Theme.textSecondary)
+            Button("Dismiss") { model.logs.dismissCrashReport() }
+                .font(.footnote)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.busy.opacity(0.6), lineWidth: 1))
+    }
+}
+

@@ -115,6 +115,7 @@ final class AppPlatform {
             demoPlayer = nil
             e2eHarness = nil
         }
+        CrashReporter.shared.start(model: model)
     }
 
     private static func realServices(flavor: BuildFlavor, clock: MonotonicClock, http: SmartHTTPClient,

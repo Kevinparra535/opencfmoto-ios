@@ -3871,6 +3871,16 @@
         }
       }
     },
+    "Recovered after a crash": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La app se recuperó de un cierre inesperado"
+          }
+        }
+      }
+    },
     "Remaining": {
       "localizations": {
         "es": {
@@ -5037,6 +5047,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ese archivo es demasiado grande."
+          }
+        }
+      }
+    },
+    "The app closed unexpectedly last time. The details are included when you share the logs or report a problem.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La app se cerró inesperadamente la última vez. Los detalles se incluyen al compartir los registros o informar de un problema."
           }
         }
       }
