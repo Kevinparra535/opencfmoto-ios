@@ -55,4 +55,59 @@ final class ConnectionReviewFixTests: XCTestCase {
         h.connection.handleLinkEvent(.state(.streaming), gen: gen, serial: serial)
         XCTAssertEqual(h.connection.phase, .stopped)
     }
+
+    // MARK: Manual join (free flavor) — baseline race seen in the E2E run
+
+    @MainActor
+    func testManualJoinCountsASwitchThatLandsRightAfterThePromptAppears() async {
+        let wifi = RacyManualJoinWifi()
+        let h = AppTestHarness(flavor: .free) { $0.wifi = wifi }
+        h.addBike()
+        h.connection.connect()
+        // The network flips to the bike (SSID unknown) at the 2nd network access after the join: the
+        // old code read its baseline there, AFTER publishing the prompt, and then waited forever.
+        let linked = await eventually { h.connection.link != nil }
+        XCTAssertTrue(linked)
+        XCTAssertNil(h.connection.manualJoin)
+        h.connection.stop()
+    }
+}
+
+/// Free-flavor Wi-Fi whose network switches to the bike (SSID unknown, dash subnet) at the second
+/// network access after `join` — the rider's switch landing just after the manual-join sheet appeared.
+final class RacyManualJoinWifi: WifiJoining, @unchecked Sendable {
+    private let inner = PreviewWifi(supportsAutomaticJoin: false)
+    private let lock = NSLock()
+    private var joined = false
+    private var accesses = 0
+
+    var supportsAutomaticJoin: Bool { false }
+
+    init() { inner.nextJoinResult = .success(.manualJoinRequired) }
+
+    private func touch() {
+        let n: Int = lock.withLock {
+            guard joined else { return 0 }
+            accesses += 1
+            return accesses
+        }
+        if n == 2 { inner.setNetwork(AppTestHarness.bikeNetwork(ssid: nil)) }
+    }
+
+    func join(ssid: String, passphrase: String?) async throws -> WifiJoinResult {
+        lock.withLock { joined = true }
+        return try await inner.join(ssid: ssid, passphrase: passphrase)
+    }
+
+    func forget(ssid: String) { inner.forget(ssid: ssid) }
+
+    func currentNetwork() async -> WifiNetworkInfo {
+        touch()
+        return await inner.currentNetwork()
+    }
+
+    func networkUpdates() -> AsyncStream<WifiNetworkInfo> {
+        touch()
+        return inner.networkUpdates()
+    }
 }

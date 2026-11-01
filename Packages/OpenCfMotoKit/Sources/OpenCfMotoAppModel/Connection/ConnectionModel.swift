@@ -445,7 +445,7 @@ public final class ConnectionModel {
                     endSession(.idle, detail: "", issue: nil)
                     return nil
                 }
-                return await awaitManualJoin(gen, message: SessionText.manualJoinMessage(ssid: s.qr.ssid, l))
+                return await awaitManualJoin(gen, message: SessionText.manualJoinMessage(ssid: s.qr.ssid, l), baseline: current)
             }
         } catch let failure as WifiJoinFailure {
             guard gen == generation else { return nil }
@@ -455,7 +455,9 @@ public final class ConnectionModel {
                 return nil
             }
             if failure.suggestsManualJoin {
-                return await awaitManualJoin(gen, message: failure.message)
+                let baseline = await wifi.currentNetwork()
+                guard gen == generation else { return nil }
+                return await awaitManualJoin(gen, message: failure.message, baseline: baseline)
             }
             endSession(.error, detail: failure.message, issue: .wifiJoinFailed(message: failure.message))
             return nil
@@ -469,15 +471,15 @@ public final class ConnectionModel {
     }
 
     /// Shows the manual-join prompt and waits for the bike network (or the rider's confirmation).
-    private func awaitManualJoin(_ gen: UInt64, message: String) async -> WifiNetworkInfo? {
-        guard let s = session else { return nil }
+    /// `baseline` is the network read BEFORE the prompt is published: read after it, a switch the
+    /// rider makes as soon as the sheet appears could become the baseline and never count as a change.
+    private func awaitManualJoin(_ gen: UInt64, message: String, baseline: WifiNetworkInfo) async -> WifiNetworkInfo? {
+        guard let s = session, gen == generation else { return nil }
         let l = core.language
         manualJoin = ManualWifiJoinPrompt(ssid: s.qr.ssid, password: s.qr.password.isEmpty ? nil : s.qr.password,
                                           message: message)
         setPhase(.joiningWifi, detail: SessionText.joinInSettings(ssid: s.qr.ssid, l))
         Log.i("WIFI", "[wifi] waiting for the rider to join \(s.qr.ssid) in Settings \u{25B8} Wi-Fi")
-        let baseline = await core.services.wifi.currentNetwork()
-        guard gen == generation else { return nil }
         let info = await waitForManualJoin(ssid: s.qr.ssid, baseline: baseline)
         guard gen == generation, let info else { return nil }
         manualJoin = nil
