@@ -7,7 +7,8 @@
 // - the onboarding gate (`permissions.hasCompletedOnboarding`),
 // - the app-wide overlays: transient banner, ConnectionIssue alerts, the "Import settings?"
 //   confirmation of a pack opened from another app, the manual Wi-Fi join sheet, the root QR
-//   scanner sheet and the Ride Mode full-screen cover.
+//   scanner sheet and the Ride Mode full-screen cover,
+// - the dash's "type on phone" request when the top screen has no search field (back to Home).
 // Alerts are attached to exactly one level at a time (the root when nothing is presented, else
 // inside the presented sheet / cover) because a view that is already presenting cannot present an
 // alert on iOS.
@@ -18,6 +19,7 @@ import OpenCfMotoCore
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var scenePhase
     @State private var router = MainRouter()
     /// `-uiScreen` / `-uiOrientation` launch arguments (CI screenshots); nil / false in normal use.
     private let launchScreen: RootLaunchScreen?
@@ -79,7 +81,21 @@ struct RootView: View {
                 router.scan(then: .connect)
             }
         }
+        .onChange(of: typeOnPhoneNeedsHome, initial: true) { _, needsHome in
+            // The dash asked to type on the phone but the top screen has no search field.
+            if needsHome { router.path.removeAll() }
+        }
         .task { await applyLaunchOptions() }
+    }
+
+    /// The dash's "type on phone" request can be shown now, but the top screen (Settings, Trips,
+    /// Controls, Garage, Logs, About, Mirror) has no search field: go back to Home, whose field takes
+    /// it (MainTypeOnPhone.swift). The Map hub and the Dash view — or the one of them they pushed —
+    /// take it themselves.
+    private var typeOnPhoneNeedsHome: Bool {
+        guard model.permissions.hasCompletedOnboarding, let top = router.path.last,
+              MainTypeOnPhone.isActionable(model: model, router: router, scenePhase: scenePhase) else { return false }
+        return top != .navigate && top != .dashPreview
     }
 
     // MARK: - Launch arguments (CI screenshots)

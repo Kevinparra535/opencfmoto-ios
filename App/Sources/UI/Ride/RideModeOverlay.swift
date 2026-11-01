@@ -3,6 +3,10 @@
 // the app stays frontmost with the idle timer disabled (RideModel), the screen is black (OLED
 // pixels off) and swallows touches, and the dash keeps streaming. Minimal, static large text:
 // connection phase, speed, the next maneuver. No animations. Long-press 1.5 s to exit.
+// The dash's "type on phone" request is NOT taken under this cover (the search field is hidden by
+// it — review finding UI-2): it stays pending with a hint here and the visible screen takes it
+// once the rider long-presses out; never answered within 2 minutes, it is dropped. Ride Mode does
+// not leave by itself: in a pocket a lit screen with a keyboard would take stray touches.
 
 import SwiftUI
 import OpenCfMotoAppModel
@@ -89,6 +93,16 @@ struct RideModeOverlay: View {
 
                 Spacer(minLength: 0)
 
+                if model.navigation.typeOnPhoneRequested {
+                    // The dash asked to type the search on the phone: the field is under this cover.
+                    Label("Bike search open — long-press to exit Ride Mode, then type your search",
+                          systemImage: "keyboard")
+                        .font(.headline)
+                        .foregroundStyle(Theme.brand)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 Label("Long-press to exit", systemImage: "hand.tap")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(Color.white.opacity(0.4))
@@ -99,6 +113,15 @@ struct RideModeOverlay: View {
         .contentShape(Rectangle())
         .onLongPressGesture(minimumDuration: 1.5) {
             MainRideMode.exit(model.ride)
+        }
+        .task(id: model.navigation.typeOnPhoneRequested) { @MainActor in
+            // A request left unanswered under Ride Mode goes stale: drop it so leaving Ride Mode at
+            // the end of the ride does not pop the keyboard out of context.
+            guard model.navigation.typeOnPhoneRequested else { return }
+            try? await Task.sleep(for: .seconds(MainTypeOnPhone.rideModeLifetime))
+            guard !Task.isCancelled, model.navigation.typeOnPhoneRequested, model.ride.isRideModeActive else { return }
+            Log.i("UI", "type-on-phone request expired under Ride Mode")
+            model.navigation.acknowledgeTypeOnPhone()
         }
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
