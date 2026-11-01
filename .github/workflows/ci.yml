@@ -28,6 +28,33 @@ jobs:
           apt-get update -qq && apt-get install -y -qq python3 >/dev/null 2>&1 || true
           python3 tools/ci/annotate.py swift-test.log "Linux swift test"
 
+  # tools/testflight/asc.py (App Store Connect helper of the TestFlight workflow) against an
+  # in-process fake App Store Connect: no secrets, no network. Failing tests become annotations.
+  testflight-helper:
+    name: testflight-helper (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: TestFlight helper tests
+        run: |
+          python3 --version && openssl version
+          python3 tools/testflight/test_asc.py
+
+  # The same tests with what signs the build in the TestFlight workflow on a macOS runner when
+  # /usr/bin comes first: Apple's python3 (3.9) and /usr/bin/openssl (LibreSSL).
+  testflight-helper-macos:
+    name: testflight-helper (macOS, LibreSSL)
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: TestFlight helper tests (LibreSSL)
+        run: |
+          export PATH="/usr/bin:$PATH"
+          python3 --version && openssl version
+          python3 tools/testflight/test_asc.py
+
   apple:
     name: Package tests (macOS) + iOS app build
     runs-on: macos-15
