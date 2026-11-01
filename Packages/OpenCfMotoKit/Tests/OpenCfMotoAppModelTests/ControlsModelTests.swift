@@ -79,18 +79,63 @@ final class ControlsModelTests: XCTestCase {
                        "\(SessionText.gestureLabel(.navFwdDouble, h.language)) \u{2192} \(SessionText.actionLabel(.home, h.language))")
     }
 
+    /// input-controls §7.9: capture off = the bars control media normally. The remote is not even
+    /// claimed (its silent non-mixable audio would keep the music paused while the engine drops every
+    /// press) — review SPEC:CL-9.
     @MainActor
-    func testHandlebarControlOffSwallowsPresses() async {
+    func testHandlebarControlOffLeavesTheButtonsToMusic() async {
         let h = AppTestHarness()
         h.core.settings.setHandlebarControl(false, forBike: nil)
         await settle()
         h.controls.setRemoteEnabled(true)
+        XCTAssertTrue(h.controls.isRemoteEnabled) // the opt-in is remembered
+        XCTAssertFalse(h.handlebar.isEnabled)
         h.ride.flushModel()
         let before = h.ride.ui.state.focusedId
         signal(h, .forward)
-        XCTAssertEqual(h.controls.lastRawEvent, "forward")
+        XCTAssertNil(h.controls.lastRawEvent)
         XCTAssertNil(h.controls.lastCommand)
         XCTAssertEqual(h.ride.ui.state.focusedId, before)
+        // Capture back on (Controls screen): the rider's explicit claim takes effect (via the store
+        // subscription here: the store write above bypassed SettingsModel, so `current` did not change).
+        h.model.settings.setHandlebarControl(true)
+        let claimed = await eventually { h.handlebar.isEnabled }
+        XCTAssertTrue(claimed)
+        signal(h, .forward)
+        XCTAssertEqual(h.controls.lastRawEvent, "forward")
+    }
+
+    @MainActor
+    func testARememberedOptInDoesNotClaimTheRemoteForABikeWithCaptureOff() async {
+        let h = AppTestHarness { services in
+            services.keyValueStore.set(true, forKey: ControlsModel.remoteOptInKey)
+        }
+        h.addBike()
+        h.model.settings.setHandlebarControl(false) // per bike: a touch dash
+        h.connection.connect()
+        XCTAssertFalse(h.handlebar.isEnabled)
+        h.connection.stop()
+        XCTAssertFalse(h.handlebar.isEnabled)
+    }
+
+    @MainActor
+    func testTogglingCaptureMidRideReleasesAndReclaimsTheRemote() async {
+        let h = AppTestHarness { services in
+            services.keyValueStore.set(true, forKey: ControlsModel.remoteOptInKey)
+        }
+        h.addBike()
+        h.connection.connect()
+        XCTAssertTrue(h.handlebar.isEnabled)
+        h.model.settings.setHandlebarControl(false)
+        XCTAssertFalse(h.handlebar.isEnabled) // the bars control music again
+        h.model.settings.setHandlebarControl(true)
+        XCTAssertTrue(h.handlebar.isEnabled)
+        // A write straight to the store (e.g. a settings pack) is followed too.
+        h.core.settings.setHandlebarControl(false, forBike: h.core.garage.selected?.id)
+        let released = await eventually { !h.handlebar.isEnabled }
+        XCTAssertTrue(released)
+        h.connection.stop()
+        XCTAssertFalse(h.handlebar.isEnabled)
     }
 
     @MainActor
