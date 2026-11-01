@@ -187,8 +187,8 @@ GitHub Actions (`.github/workflows/ci.yml`) ejecuta las pruebas en Linux, las vu
 macOS compilando los adaptadores de Apple, genera el proyecto con XcodeGen y compila la app para
 el Simulador de iOS y para iPhone (también con el Xcode más reciente). Además ensaya el flujo de
 TestFlight sin credenciales: pruebas de `asc.py` contra un App Store Connect simulado, ajustes de
-firma, archivo sin firmar revisado por `lint_bundle.py` y el llavero temporal. Las traducciones se
-reúnen con `python3 tools/l10n/build_strings.py`.
+firma, archivo sin firmar revisado por `lint_bundle.py`, el llavero temporal y la limpieza tras una
+cancelación. Las traducciones se reúnen con `python3 tools/l10n/build_strings.py`.
 
 ## Privacidad
 
@@ -400,8 +400,8 @@ Actions (`.github/workflows/ci.yml`) runs the tests on Linux, runs them again on
 compiling the Apple adapters, generates the project with XcodeGen and builds the app for the iOS
 Simulator and for iPhone (also with the newest Xcode). It also rehearses the TestFlight pipeline
 without credentials: `asc.py` tests against a fake App Store Connect, the signing settings, an
-unsigned archive checked by `lint_bundle.py`, and the temporary keychain. Translations are merged
-with `python3 tools/l10n/build_strings.py`.
+unsigned archive checked by `lint_bundle.py`, the temporary keychain and the clean-up after a
+cancel. Translations are merged with `python3 tools/l10n/build_strings.py`.
 
 ## Privacy
 
