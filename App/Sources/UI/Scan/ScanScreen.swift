@@ -26,6 +26,9 @@ struct ScanScreen: View {
 
     @State private var camera: ScanCameraState = .checking
     @State private var zoom: Double = 1
+    /// Counts zoom-button taps: the camera re-applies the button's zoom on a tap (undoing a pinch),
+    /// never on other re-renders.
+    @State private var zoomRequest = 0
     @State private var maxZoom: Double = 3
     @State private var hint: String?
     @State private var lastRejected: ScanRejectedCode?
@@ -147,7 +150,7 @@ struct ScanScreen: View {
             ProgressView()
                 .tint(.white)
         case .dataScanner:
-            QRDataScannerView(zoom: zoom, maxZoom: $maxZoom, isActive: scanning) { text in
+            QRDataScannerView(zoom: zoom, zoomRequest: zoomRequest, maxZoom: $maxZoom, isActive: scanning) { text in
                 handle(text, fromPhoto: false)
             }
             .ignoresSafeArea(edges: .bottom)
@@ -206,6 +209,7 @@ struct ScanScreen: View {
                         let label = "\(Int(factor))x"
                         Button {
                             zoom = factor
+                            zoomRequest &+= 1
                         } label: {
                             Text(verbatim: label)
                                 .font(.subheadline.weight(.bold))

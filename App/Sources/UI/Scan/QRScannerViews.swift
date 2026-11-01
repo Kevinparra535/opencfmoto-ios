@@ -18,6 +18,8 @@ import CoreImage
 
 struct QRDataScannerView: UIViewControllerRepresentable {
     var zoom: Double
+    /// Bumped on every tap of a zoom button, so tapping the selected one again undoes a pinch.
+    var zoomRequest: Int = 0
     @Binding var maxZoom: Double
     var isActive: Bool
     var onCode: (String) -> Void
@@ -47,9 +49,16 @@ struct QRDataScannerView: UIViewControllerRepresentable {
 
         let low = scanner.minZoomFactor
         let high = max(scanner.maxZoomFactor, low)
-        let target = min(max(zoom, low), high)
-        if abs(scanner.zoomFactor - target) > 0.01 {
-            scanner.zoomFactor = target
+        // Apply the 1x/2x/3x choice only when it was made (or the camera's range just became known),
+        // never on an unrelated re-render (a rejected-QR hint, a photo import, the scene phase…):
+        // that would undo the rider's pinch (review finding UI-5).
+        let choice = QRZoomChoice(zoom: zoom, request: zoomRequest, range: high)
+        if coordinator.appliedZoom != choice {
+            coordinator.appliedZoom = choice
+            let target = min(max(zoom, low), high)
+            if abs(scanner.zoomFactor - target) > 0.01 {
+                scanner.zoomFactor = target
+            }
         }
         if abs(high - maxZoom) > 0.01 {
             DispatchQueue.main.async { maxZoom = high }
@@ -69,10 +78,18 @@ struct QRDataScannerView: UIViewControllerRepresentable {
         }
     }
 
+    /// The zoom button state last pushed to the camera (pinches change the zoom in between).
+    struct QRZoomChoice: Equatable {
+        var zoom: Double
+        var request: Int
+        var range: Double
+    }
+
     /// Delegate callbacks arrive on the main thread (DataScannerViewController is main-actor bound).
     final class Coordinator: NSObject, DataScannerViewControllerDelegate {
         var onCode: (String) -> Void
         var wantsScanning = false
+        var appliedZoom: QRZoomChoice?
         private var retryScheduled = false
 
         init(onCode: @escaping (String) -> Void) {
