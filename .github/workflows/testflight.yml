@@ -365,7 +365,11 @@ jobs:
           {
             echo "## TestFlight — resultado / result"
             echo
-            if [ "$UPLOADED" != true ]; then
+            if [ "$UPLOADED" != true ] && [ "$TEARDOWN" != "done" ]; then
+              echo "El trabajo «Build, sign and upload (macOS)» terminó sin su paso «Clean up» (se perdió el runner o se forzó la cancelación), así que no se sabe si llegó a subir la build. El paso «Revoke the temporary certificate and profiles» de este trabajo borra los restos (si no puede, deja un aviso con los pasos). Lanza una ejecución nueva: **Actions ▸ TestFlight ▸ Run workflow**."
+              echo
+              echo "The «Build, sign and upload (macOS)» job ended without its «Clean up» step (lost runner or force cancel), so it is unknown whether the build was uploaded. This job's «Revoke the temporary certificate and profiles» step removes the leftovers (if it cannot, a warning gives the steps). Start a new run: **Actions ▸ TestFlight ▸ Run workflow**."
+            elif [ "$UPLOADED" != true ]; then
               echo "No hay build que esperar: el trabajo «Build, sign and upload (macOS)» no subió ninguna (mira sus anotaciones). Cuando lo hayas corregido, lanza una ejecución nueva: **Actions ▸ TestFlight ▸ Run workflow**."
               echo
               echo "No build to wait for: the «Build, sign and upload (macOS)» job uploaded none (see its annotations). Once that is fixed, start a new run: **Actions ▸ TestFlight ▸ Run workflow**."

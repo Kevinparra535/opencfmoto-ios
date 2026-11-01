@@ -361,13 +361,13 @@ signing_hints() {
     annotate error "TestFlight: App Group" "El perfil no incluye el App Group ${APP_GROUP:-}: créalo y asígnalo a los DOS App IDs en developer.apple.com ▸ Identifiers; después $NEW_RUN_ES. Guía: $DOCS_URL"$'\n'"The profile lacks App Group ${APP_GROUP:-}: create it and assign it to BOTH App IDs on developer.apple.com ▸ Identifiers, then $NEW_RUN_EN. Guide: $DOCS_URL"
   fi
   if grep -q -E "Provisioning profile .*(doesn't include|doesn't match).*(HotspotConfiguration|wifi-info)" "$log"; then
-    annotate error "TestFlight: capabilities" "Al App ID le falta Hotspot o Access Wi-Fi Information (la preparación las activa; ¿se desactivaron a mano?)."$'\n'"The App ID lacks Hotspot or Access Wi-Fi Information (the prepare job enables them; were they turned off by hand?)."
+    annotate error "TestFlight: capabilities" "Al App ID le falta Hotspot o Access Wi-Fi Information (¿se desactivaron a mano?). Lanza una ejecución nueva (Actions ▸ TestFlight ▸ Run workflow): el trabajo «Prepare (App Store Connect)» las vuelve a activar."$'\n'"The App ID lacks Hotspot or Access Wi-Fi Information (turned off by hand?). Start a new run (Actions ▸ TestFlight ▸ Run workflow): the «Prepare (App Store Connect)» job turns them on again."
   fi
   if grep -q -E "No profiles? for|couldn't find any .*provisioning profiles" "$log"; then
-    annotate error "TestFlight: profiles" "Xcode no encontró los perfiles de CI instalados (nombre o equipo distintos)."$'\n'"Xcode did not find the installed CI profiles (name or team mismatch)."
+    annotate error "TestFlight: profiles" "Xcode no encontró los perfiles de CI instalados (nombre o equipo distintos). Lanza una ejecución nueva; si vuelve a pasar, pide ayuda con este mensaje (por ejemplo, en un issue del repositorio)."$'\n'"Xcode did not find the installed CI profiles (name or team mismatch). Start a new run; if it happens again, ask for help with this message (for example in an issue of the repository)."
   fi
   if grep -q "errSecInternalComponent" "$log"; then
-    annotate error "TestFlight: keychain" "codesign no pudo usar la clave privada (llavero bloqueado o lista de particiones)."$'\n'"codesign could not use the private key (locked keychain or key partition list)."
+    annotate error "TestFlight: keychain" "codesign no pudo usar la clave privada (llavero bloqueado o lista de particiones). Lanza una ejecución nueva; si vuelve a pasar, pide ayuda con este mensaje (por ejemplo, en un issue del repositorio)."$'\n'"codesign could not use the private key (locked keychain or key partition list). Start a new run; if it happens again, ask for help with this message (for example in an issue of the repository)."
   fi
   return 0
 }
@@ -583,7 +583,7 @@ stop_leftovers() {
     if [ "$waited" -eq "$KILL_WAIT_SEC" ]; then
       for p in "${patterns[@]}"; do pkill -KILL -f "$p" > /dev/null 2>&1; done
     elif [ "$waited" -gt $((KILL_WAIT_SEC + 5)) ]; then
-      annotate warning "TestFlight (teardown)" "Un paso anterior sigue en marcha y no se pudo parar."$'\n'"An earlier step is still running and could not be stopped."
+      annotate warning "TestFlight (teardown)" "Un paso anterior sigue en marcha y no se pudo parar; GitHub lo detiene al terminar este trabajo (no hace falta hacer nada)."$'\n'"An earlier step is still running and could not be stopped; GitHub stops it when this job ends (nothing to do)."
       return 0
     fi
     sleep 1
@@ -631,10 +631,10 @@ cmd_teardown() {
   # outlive this job: the finish job revokes it after Apple's processing.
   if [ -f "$WORK/uploaded" ]; then
     uploaded=true
-    note "the build was uploaded: the finish job revokes the CI certificate and profiles after Apple's processing"
+    note "the build was uploaded: the «Processing, TestFlight group, revoke the certificate» job revokes the CI certificate and profiles after Apple's processing"
   elif [ -f "$WORK/committed" ]; then
     uploaded=true
-    note "Apple has the whole file although the upload step did not finish: the finish job waits for the build, then revokes the CI certificate and profiles"
+    note "Apple has the whole file although the upload step did not finish: the «Processing, TestFlight group, revoke the certificate» job waits for the build, then revokes the CI certificate and profiles"
   elif [ -f "$SIGNING_DIR/state.json" ] && [ ! -f "$WORK/apple-cleanup-done" ]; then
     if [ -n "${ASC_KEY_ID:-}" ] && [ -n "${ASC_ISSUER_ID:-}" ] && [ -n "${ASC_PRIVATE_KEY:-}" ]; then
       note "the build was not uploaded: revoking the CI certificate and profiles now"
