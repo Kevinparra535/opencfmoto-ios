@@ -185,6 +185,112 @@ final class ConnectionReviewFixTests: XCTestCase {
         h.connection.stop()
         second.forEach { $0() }
     }
+
+    // MARK: CON:CL-3 / SPEC:CL-5 / SEC:SEC-3 — SSID unknown: the bike network fingerprint
+
+    nonisolated static let homeNoSSID = WifiNetworkInfo(isWifiAvailable: true, interfaceName: "en0",
+                                                         phoneIPv4: "10.20.30.44", gateway: "10.20.30.1",
+                                                         dashHostCandidates: ["10.20.30.1"])
+
+    /// Free flavor, manual join to the bike (SSID unknown, 192.168.0.2 / gw .1); returns once linked.
+    @MainActor
+    private func freeFlavorSessionOnTheBike(_ h: AppTestHarness) async {
+        h.wifi.nextJoinResult = .success(.manualJoinRequired)
+        h.addBike()
+        h.connection.connect()
+        _ = await eventually { h.connection.manualJoin != nil }
+        h.wifi.setNetwork(AppTestHarness.bikeNetwork(ssid: nil))
+        _ = await eventually { h.connection.link != nil }
+    }
+
+    @MainActor
+    func testFreeFlavorCafeWifiAfterTheBikeIsGoneNeverHostsTheLink() async {
+        let net = LinkMemoryNetwork(phoneHost: "192.168.0.2")
+        let h = AppTestHarness(flavor: .free, network: net)
+        await freeFlavorSessionOnTheBike(h)
+        XCTAssertEqual(h.connection.sessionNetwork, AppTestHarness.bikeNetwork(ssid: nil))
+
+        h.wifi.setNetwork(.unavailable)
+        _ = await eventually { h.connection.phase == .reconnecting }
+        h.wifi.setNetwork(Self.homeNoSSID) // the phone joins a café / home Wi-Fi: not the bike
+        let parked = await eventually { h.connection.phase == .waitingForBike }
+        XCTAssertTrue(parked)
+        XCTAssertTrue(h.connection.isParked)
+        XCTAssertNil(h.connection.link)
+        XCTAssertNil(h.connection.unconfirmedNetwork)
+        let closed = await linkEventually { net.openListenerPorts.isEmpty }
+        XCTAssertTrue(closed) // no PXC listener open on the café network
+        XCTAssertFalse(net.connectLog.contains { $0.hasPrefix("10.20.30.") }, "\(net.connectLog)")
+        await settle(0.5)
+        XCTAssertNil(h.connection.link)
+        XCTAssertTrue(h.connection.isSessionActive) // still watching for the bike (Stop is offered)
+        h.connection.stop()
+    }
+
+    @MainActor
+    func testFreeFlavorALookAlikeNetworkWithoutADashParksAgainAfterItsGrace() async {
+        let h = AppTestHarness(flavor: .free)
+        await freeFlavorSessionOnTheBike(h)
+        h.wifi.setNetwork(.unavailable)
+        _ = await eventually { h.connection.phase == .waitingForBike }
+        XCTAssertNil(h.connection.link)
+
+        // Same gateway and /24 (e.g. a home router on the dash's address plan): try the dash, but stay
+        // parked until it streams. PreviewNetwork never answers.
+        var lookAlike = AppTestHarness.bikeNetwork(ssid: nil)
+        lookAlike.phoneIPv4 = "192.168.0.9"
+        h.wifi.setNetwork(lookAlike)
+        let attempting = await eventually { h.connection.link != nil }
+        XCTAssertTrue(attempting)
+        XCTAssertEqual(h.connection.unconfirmedNetwork, lookAlike)
+        XCTAssertTrue(h.connection.isParked)
+        let parkedAgain = await eventually { h.connection.link == nil && h.connection.phase == .waitingForBike }
+        XCTAssertTrue(parkedAgain)
+        XCTAssertNil(h.connection.unconfirmedNetwork)
+        XCTAssertTrue(h.connection.isParked)
+        // The same network reported again starts no new attempt.
+        let serial = h.connection.linkSerial
+        h.wifi.setNetwork(lookAlike)
+        await settle(0.2)
+        XCTAssertNil(h.connection.link)
+        XCTAssertEqual(h.connection.linkSerial, serial)
+        // The bike network itself (another address) is tried again.
+        h.wifi.setNetwork(AppTestHarness.bikeNetwork(ssid: nil))
+        let retried = await eventually { h.connection.link != nil }
+        XCTAssertTrue(retried)
+        h.connection.stop()
+    }
+
+    @MainActor
+    func testFreeFlavorALookAlikeNetworkIsConfirmedWhenTheDashStreamsOnIt() async throws {
+        let net = LinkMemoryNetwork(phoneHost: "192.168.0.2")
+        let dash = LinkFakeDash(network: net, host: "192.168.0.1")
+        dash.installProbeServer()
+        let h = AppTestHarness(flavor: .free, network: net, frameSource: TestFrameSource())
+        await freeFlavorSessionOnTheBike(h)
+        _ = await eventually { dash.acceptedCount.current == 1 }
+        let first = try await streamFromFakeDash(dash)
+        _ = await eventually { h.connection.phase == .streaming }
+
+        h.wifi.setNetwork(.unavailable)
+        first.forEach { $0() }
+        _ = await eventually { h.connection.phase == .waitingForBike }
+        let accepted = dash.acceptedCount.current
+        h.wifi.setNetwork(AppTestHarness.bikeNetwork(ssid: nil))
+        _ = await eventually { dash.acceptedCount.current > accepted }
+        XCTAssertNotNil(h.connection.unconfirmedNetwork)
+        let second = try await streamFromFakeDash(dash)
+        let resumed = await eventually { h.connection.phase == .streaming }
+        XCTAssertTrue(resumed)
+        XCTAssertFalse(h.connection.isParked)
+        XCTAssertNil(h.connection.unconfirmedNetwork)
+        XCTAssertTrue(h.ride.isProjecting)
+        // Confirmed: the grace timer is gone, the session stays live.
+        await settle(0.5)
+        XCTAssertEqual(h.connection.phase, .streaming)
+        h.connection.stop()
+        second.forEach { $0() }
+    }
 }
 
 /// Free-flavor Wi-Fi whose network switches to the bike (SSID unknown, dash subnet) at the second

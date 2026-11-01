@@ -461,6 +461,24 @@ final class ConnectionModelTests: XCTestCase {
         XCTAssertTrue(ConnectionModel.isOnBikeNetwork(AppTestHarness.bikeNetwork(ssid: nil), ssid: ssid))
         XCTAssertFalse(ConnectionModel.isOnBikeNetwork(AppTestHarness.bikeNetwork(ssid: "Home"), ssid: ssid))
         XCTAssertFalse(ConnectionModel.isOnBikeNetwork(.unavailable, ssid: ssid))
+        // SSID unknown: never "any Wi-Fi with an address" (review CON:CL-3 / SEC-3).
+        let homeNoSSID = WifiNetworkInfo(isWifiAvailable: true, interfaceName: "en0", phoneIPv4: "10.0.0.5", gateway: "10.0.0.1")
+        XCTAssertFalse(ConnectionModel.isOnBikeNetwork(homeNoSSID, ssid: ssid))
+        // With the joined network as the fingerprint: same /24 and gateway only.
+        let joined = AppTestHarness.bikeNetwork(ssid: nil)
+        var renewed = joined
+        renewed.phoneIPv4 = "192.168.0.7"
+        XCTAssertTrue(ConnectionModel.isOnBikeNetwork(renewed, ssid: ssid, joined: joined))
+        XCTAssertFalse(ConnectionModel.isOnBikeNetwork(homeNoSSID, ssid: ssid, joined: joined))
+        var otherGateway = joined
+        otherGateway.gateway = "192.168.0.254"
+        XCTAssertFalse(ConnectionModel.isOnBikeNetwork(otherGateway, ssid: ssid, joined: joined))
+        let wifiDirect = WifiNetworkInfo(isWifiAvailable: true, phoneIPv4: "192.168.49.132", gateway: "192.168.49.1")
+        XCTAssertFalse(ConnectionModel.isOnBikeNetwork(wifiDirect, ssid: ssid, joined: joined))
+        XCTAssertTrue(ConnectionModel.isOnBikeNetwork(AppTestHarness.bikeNetwork(ssid: ssid), ssid: ssid, joined: homeNoSSID))
+        XCTAssertEqual(ConnectionModel.subnet24("192.168.0.23"), "192.168.0")
+        XCTAssertNil(ConnectionModel.subnet24("fe80::1"))
+        XCTAssertNil(ConnectionModel.subnet24("192.168.0"))
         XCTAssertFalse(ConnectionModel.isConfirmedBikeNetwork(AppTestHarness.bikeNetwork(ssid: nil), ssid: ssid))
         let home = WifiNetworkInfo(isWifiAvailable: true, phoneIPv4: "10.0.0.5", gateway: "10.0.0.1")
         XCTAssertFalse(ConnectionModel.matchesManualJoin(home, ssid: ssid, baseline: .unavailable))
