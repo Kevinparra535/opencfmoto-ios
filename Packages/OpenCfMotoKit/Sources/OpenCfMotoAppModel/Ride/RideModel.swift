@@ -370,7 +370,7 @@ public final class RideModel {
         }
         projection.setTileURLTemplate(cachedSettings.tileURLTemplate)
         projection.setThermalCapsEnabled(cachedSettings.powerMode != .auto)
-        projection.onCanvasPrepared = { [weak self] canvas in
+        projection.onCanvasPrepared = { @Sendable [weak self] canvas in
             Task { @MainActor [weak self] in self?.canvasPrepared(canvas) }
         }
     }
