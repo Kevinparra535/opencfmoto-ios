@@ -19,7 +19,14 @@ final class MirrorAdapter: MirrorHosting, @unchecked Sendable {
 
     init() {
         if let path = MirrorRelaySocket.defaultPath() ?? AppGroup.socketPath() {
-            server = MirrorRelayServer(socketPath: path)
+            let relay = MirrorRelayServer(socketPath: path)
+            // Until the broadcast sends a picture for the negotiated canvas, the dash's pulls are
+            // answered with a "start the screen broadcast" card (rendered + encoded here, in the
+            // foreground host) instead of being left open (MP-1).
+            relay.placeholderProvider = { canvas, parameters in
+                MirrorRelayPlaceholder.frames(canvas: canvas, parameters: parameters)
+            }
+            server = relay
         } else {
             server = nil
             Log.w("MIRROR", "no App Group container: mirroring is unavailable in this build")

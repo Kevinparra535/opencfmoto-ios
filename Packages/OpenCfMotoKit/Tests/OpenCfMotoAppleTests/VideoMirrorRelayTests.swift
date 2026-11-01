@@ -378,4 +378,98 @@ final class VideoMirrorRelayTests: XCTestCase {
         ok = await waitUntil(15) { client.isConnected && server.isClientConnected }
         XCTAssertTrue(ok, "the extension reconnects to the restarted host")
     }
+
+    // MARK: placeholder before the broadcast (MP-1)
+
+    func testPlaceholderPictureIsLocalizedAndFitsTheCanvas() {
+        for canvas in [VideoCanvas(width: 800, height: 384), VideoCanvas(width: 800, height: 944), VideoCanvas(width: 1280, height: 576)] {
+            let list = MirrorPlaceholderPicture.displayList(canvas: canvas, language: .en)
+            XCTAssertEqual(list.size, DashSize(width: Double(canvas.width), height: Double(canvas.height)))
+            let texts = list.commands.compactMap { c -> (String, DashRect)? in if case let .text(t, r, _) = c { return (t, r) }; return nil }
+            XCTAssertEqual(texts.map(\.0), [MirrorPlaceholderPicture.title(.en), MirrorPlaceholderPicture.hint(.en)])
+            for (_, r) in texts {
+                XCTAssertGreaterThanOrEqual(r.minX, 0)
+                XCTAssertLessThanOrEqual(r.maxX, Double(canvas.width))
+                XCTAssertGreaterThanOrEqual(r.minY, 0)
+                XCTAssertLessThanOrEqual(r.maxY, Double(canvas.height))
+            }
+        }
+        XCTAssertEqual(MirrorPlaceholderPicture.title(.es), "Inicia la transmisión de pantalla en tu iPhone")
+        XCTAssertTrue(MirrorPlaceholderPicture.displayList(canvas: VideoCanvas(width: 800, height: 384), language: .es).commands
+            .contains { if case let .text(t, _, _) = $0 { return t == MirrorPlaceholderPicture.hint(.es) }; return false })
+    }
+
+    /// The mirror flow links the dash first; the broadcast starts seconds later. The dash's first
+    /// 114 used to wait 2.85 s and get nothing — and the dash never pulled again. Now the pull is
+    /// answered with the placeholder at the keep-alive cadence until the extension's IDR arrives.
+    func testPlaceholderAnswersPullsUntilTheBroadcastStarts() async throws {
+        let path = try socketPath()
+        let server = MirrorRelayServer(socketPath: path)
+        let tallPlaceholder = [idr(Self.sps800x944, seq: 100), idr(Self.sps800x944, seq: 101)]
+        let widePlaceholder = [idr(Self.sps800x384, seq: 200), idr(Self.sps800x384, seq: 201)]
+        let built = Locked<[VideoCanvas]>([])
+        server.placeholderProvider = { canvas, _ in
+            built.withLock { $0.append(canvas) }
+            return canvas.height == 944 ? tallPlaceholder : widePlaceholder
+        }
+        try server.start()
+        defer { server.stop() }
+        let tall = VideoCanvas(width: 800, height: 944, requestedWidth: 800, requestedHeight: 951)
+        server.prepare(canvas: tall, parameters: .default)
+        server.resynchronize()
+        let t0 = Date()
+        let a = await server.nextFrame(timeout: 3)
+        XCTAssertEqual(a?.sequence, 100)
+        XCTAssertTrue(a?.isKeyframe ?? false)
+        XCTAssertLessThan(Date().timeIntervalSince(t0), 2.0, "answered at the 0.9 s cadence, not after the pull timeout")
+        let b = await server.nextFrame(timeout: 3)
+        XCTAssertEqual(b?.sequence, 101, "the two placeholder IDRs alternate")
+        XCTAssertEqual(server.stats.placeholderFramesServed, 2)
+        XCTAssertEqual(built.current, [tall])
+
+        // The broadcast starts: its IDR replaces the placeholder at once…
+        let client = MirrorRelayClient(socketPath: path)
+        client.retryInterval = 0.05
+        defer { client.stop() }
+        client.start()
+        var ok = await waitUntil { client.isConnected && server.isClientConnected }
+        XCTAssertTrue(ok)
+        client.send(frame: idr(Self.sps800x944, seq: 7))
+        let live = await server.nextFrame(timeout: 3)
+        XCTAssertEqual(live?.sequence, 7)
+        // …and from then on a late frame is answered with the live IDR, never the placeholder.
+        let fallback = await server.nextFrame(timeout: 0.4)
+        XCTAssertEqual(fallback?.sequence, 7)
+
+        // Another canvas: a new placeholder for it; the old one is never served for it.
+        let wide = VideoCanvas(width: 800, height: 384, requestedWidth: 800, requestedHeight: 386)
+        server.prepare(canvas: wide, parameters: .default)
+        ok = await waitUntil { built.current.count == 2 }
+        XCTAssertTrue(ok)
+        let w1 = await server.nextFrame(timeout: 3)
+        XCTAssertEqual(w1?.sequence ?? 0, 200, "placeholder of the new canvas")
+
+        // The broadcast ends: the dash is asked to start it again (no frozen last screen).
+        server.prepare(canvas: tall, parameters: .default)
+        client.send(frame: idr(Self.sps800x944, seq: 9))
+        let nine = await server.nextFrame(timeout: 3)
+        XCTAssertEqual(nine?.sequence, 9)
+        client.stop()
+        ok = await waitUntil { !server.isClientConnected }
+        XCTAssertTrue(ok)
+        let after = await server.nextFrame(timeout: 3)
+        XCTAssertTrue([100, 101].contains(after?.sequence ?? 0), "\(String(describing: after?.sequence))")
+        XCTAssertEqual(built.current, [tall, wide], "each canvas is rendered once")
+    }
+
+    func testWithoutAPlaceholderPullsStillWaitForTheExtension() async throws {
+        let path = try socketPath()
+        let server = MirrorRelayServer(socketPath: path)
+        try server.start()
+        defer { server.stop() }
+        server.prepare(canvas: VideoCanvas(width: 800, height: 384), parameters: .default)
+        let none = await server.nextFrame(timeout: 0.4)
+        XCTAssertNil(none)
+        XCTAssertEqual(server.stats.placeholderFramesServed, 0)
+    }
 }

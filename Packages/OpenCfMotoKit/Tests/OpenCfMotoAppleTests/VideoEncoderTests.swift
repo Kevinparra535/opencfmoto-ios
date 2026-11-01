@@ -151,6 +151,16 @@ final class VideoEncoderTests: XCTestCase {
         }
     }
 
+    /// MP-1: the mirror host's "start the screen broadcast" card, pre-encoded at the canvas.
+    func testMirrorPlaceholderIsEncodedAtTheCanvas() throws {
+        try requireEncoder(width: 800, height: 384)
+        let frames = MirrorRelayPlaceholder.frames(canvas: VideoCanvas(width: 800, height: 384), parameters: .default)
+        XCTAssertEqual(frames.count, 2)
+        XCTAssertTrue(frames.allSatisfy { $0.isKeyframe })
+        XCTAssertEqual(H264SPS.parse(accessUnit: frames[0].accessUnit).map { [$0.width, $0.height] }, [800, 384])
+        XCTAssertEqual(MirrorRelayPlaceholder.frames(canvas: VideoCanvas(width: 0, height: 384), parameters: .default), [])
+    }
+
     func testSoftwareRequestIsReported() throws {
         try requireEncoder()
         let enc = H264Encoder(label: "sw")
