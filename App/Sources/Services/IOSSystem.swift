@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // `SystemControlling` on iOS: UIKit idle timer, thermal / Low Power Mode notifications, the app's
-// Settings page, a light haptic, the Local Network permission (TN3179 probe from OpenCfMotoApple)
-// and the device / build identity used in logs and problem reports.
+// Settings page, a light haptic, the Local Network permission (TN3179 probe from OpenCfMotoApple),
+// the phone's own light / dark appearance (dash map AUTO theme) and the device / build identity
+// used in logs and problem reports.
 
 import Foundation
 import UIKit
@@ -57,6 +58,28 @@ final class IOSSystem: SystemControlling {
 
     var thermalLevel: ThermalLevel {
         ThermalLevel.fromProcessInfoThermalState(rawValue: ProcessInfo.processInfo.thermalState.rawValue)
+    }
+
+    /// The PHONE's appearance (Settings ▸ Display & Brightness: Dark, or Automatic after sunset) for
+    /// the dash map's AUTO theme: night = phone dark mode OR 19:00–06:59 (navigation-dash §10.3,
+    /// app-features §2.2; review finding CL-10). Read from the screen's traits: the app forces its own
+    /// UI dark (`preferredColorScheme(.dark)` overrides the window, not the screen), so window or view
+    /// traits would always say dark. In the background UIKit renders light AND dark app snapshots,
+    /// briefly flipping traits, so the last foreground answer is kept until the scene is back.
+    /// Cheap enough for RideModel to poll on its UI tick.
+    var isSystemDarkMode: Bool {
+        guard let scene = Self.foregroundWindowScene() else { return lastSystemDarkMode }
+        let dark = scene.screen.traitCollection.userInterfaceStyle == .dark
+        lastSystemDarkMode = dark
+        return dark
+    }
+
+    private var lastSystemDarkMode = false
+
+    private static func foregroundWindowScene() -> UIWindowScene? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        return scenes.first { $0.activationState == .foregroundActive }
+            ?? scenes.first { $0.activationState == .foregroundInactive }
     }
 
     func openAppSettings() {
