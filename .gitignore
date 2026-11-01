@@ -15,6 +15,9 @@ Package.resolved
 Config/Local.xcconfig
 # macOS
 .DS_Store
+# Python (tools/)
+__pycache__/
+*.pyc
 # Gradle (golden-vector tool)
 tools/kotlin-golden/.gradle/
 tools/kotlin-golden/build/
