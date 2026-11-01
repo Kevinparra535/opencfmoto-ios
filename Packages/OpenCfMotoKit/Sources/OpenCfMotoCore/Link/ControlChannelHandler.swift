@@ -105,7 +105,8 @@ public final class ControlChannelHandler: @unchecked Sendable {
             Log.e("LINK", "[\(tag)] !! CLIENT_INFO parse failed — NOT replying (Android parity); the dash will likely stall. len=\(frame.payload.count) hex=\(frame.payload.prefix(48).hexString)")
             return ControlChannelResponse(events: [.clientInfoUnparsable(text)])
         }
-        Log.i("LINK", "[\(tag)] carHuid=\(info.huid ?? "null") HUName=\(info.huName) channel=\(info.channel)")
+        // Masked here: the bare-serial redaction rule only matches alphanumeric HUIDs (review SEC-5).
+        Log.i("LINK", "[\(tag)] carHuid=\(info.huid.map(LogRedactor.maskTail) ?? "null") HUName=\(info.huName) channel=\(info.channel)")
         Log.i("LINK", "[\(tag)] bike touch=\(info.supportsScreenTouch) supportHID=\(info.optBoolean("supportHID")) supportMirrorOverlayTouch=\(info.optBoolean("supportMirrorOverlayTouch")) socketTimeoutPeriodWifi=\(info.socketTimeoutSeconds.map(String.init) ?? "-")")
         let (profile, reply, dash) = context.applyClientInfo(info, tag: tag)
         let replyFrame = PhoneClientInfoReply.frame(reply)
@@ -117,7 +118,9 @@ public final class ControlChannelHandler: @unchecked Sendable {
         Log.i("LINK", "[\(tag)] CHECK_SN from bike: \(frame.payloadText)")
         let serial = CheckSn.serial(from: frame.payload)
         let result = CheckSn.result(serial: serial)
-        Log.i("LINK", "[\(tag)] → CHECK_SN_RESULT \(result.jsonString)")
+        // The reply echoes the serial under "id", which no redaction rule covers: log it masked (the
+        // wire payload is unchanged; the request line above is masked by the "sn" rule) — review SEC-5.
+        Log.i("LINK", "[\(tag)] → CHECK_SN_RESULT \(CheckSn.result(serial: LogRedactor.maskTail(serial)).jsonString)")
         return ControlChannelResponse(
             replies: [PxcFrame(cmd: PxcCmd.checkSnAck), PxcFrame(cmd: PxcCmd.checkSnResult, payload: result.jsonData)],
             events: [.checkSnCompleted(serial: serial)])

@@ -587,6 +587,34 @@ final class ConnectionReviewFixTests: XCTestCase {
         XCTAssertEqual(mirror.fits.count, pushed)
         h.connection.stop()
     }
+
+    // MARK: SEC:SEC-5 — the dash serial never reaches the redacted logs
+
+    @MainActor
+    func testDashIdentifiedLogMasksTheHUIDWhenTheDashHasNoName() async throws {
+        LogRedactor.install(on: .shared, includeSecrets: false)
+        let net = LinkMemoryNetwork(phoneHost: "192.168.0.2")
+        let dash = LinkFakeDash(network: net, host: "192.168.0.1")
+        dash.installProbeServer()
+        let h = AppTestHarness(network: net)
+        h.addBike()
+        let before = Log.shared.lines().last?.id ?? 0
+        h.connection.connect()
+        _ = await eventually { dash.acceptedCount.current == 1 }
+        let ctrl = try dash.openControl()
+        try await ctrl.send(PxcFrame(cmd: 0x10000))
+        _ = try await ctrl.nextRaw()
+        let unnamed = LinkDashSamples.cfdl16ClientInfo.replacingOccurrences(of: "\"HUName\":\"CFDL16-6GUV\"", with: "\"HUName\":\"\"")
+        try await ctrl.send(cmd: 0x10010, json: unnamed)
+        _ = try await ctrl.next()
+        let identified = await eventually { h.connection.diagnostics.dashInfo != nil }
+        XCTAssertTrue(identified)
+        let lines = Log.shared.lines().filter { $0.id > before }.map { $0.formatted(redactor: Log.shared.redactor) }
+        XCTAssertTrue(lines.contains { $0.contains("dash identified: 6GUV\u{2026}") }, lines.joined(separator: "\n"))
+        XCTAssertFalse(lines.contains { $0.contains("6GUVA2C00100055") })
+        h.connection.stop()
+        ctrl.close()
+    }
 }
 
 /// Free-flavor Wi-Fi whose network switches to the bike (SSID unknown, dash subnet) at the second

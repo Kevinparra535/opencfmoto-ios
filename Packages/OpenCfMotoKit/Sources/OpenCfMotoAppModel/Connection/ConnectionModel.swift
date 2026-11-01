@@ -870,7 +870,8 @@ public final class ConnectionModel {
             garage.reload()
             let st = core.currentSettings
             core.dashMemory.setLastDashTouch(!st.forceNonTouch && (st.forceTouch || profile.supportsScreenTouch))
-            Log.i("APP", "dash identified: \(info.huName.isEmpty ? info.huid : info.huName) \u{2192} \(profile.name)")
+            // No key prefix for the redactor to match: mask the serial itself (review SEC-5).
+            Log.i("APP", "dash identified: \(info.huName.isEmpty ? LogRedactor.maskTail(info.huid) : info.huName) \u{2192} \(profile.name)")
             if s.mode == .dashUI { ride.profileIdentified(profile) } else { applyMirrorFit(profile: profile) }
         case let .canvas(c):
             diagnostics.canvas = c
