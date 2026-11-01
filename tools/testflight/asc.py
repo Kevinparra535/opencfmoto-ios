@@ -10,9 +10,12 @@ LibreSSL as macOS /usr/bin/openssl), using only flags both understand.
 
   asc.py check-auth
   asc.py prepare --prefix PREFIX [--setup-only]
+  asc.py next-build --app-id ID
+  asc.py janitor
   asc.py create-signing --app-bundle-resource-id ID --mirror-bundle-resource-id ID \\
                         --app-bundle-id X --mirror-bundle-id Y --app-group G --out DIR --suffix S
-  asc.py upload --ipa PATH --app-id ID --version 1.2.3 --build N [--timeout-min 30]
+  asc.py upload --ipa PATH --app-id ID --version 1.2.3 --build N [--timeout-min 30] \\
+                [--committed-marker PATH]
   asc.py wait-build --app-id ID --build N [--timeout-min 90] [--poll-sec 60]
   asc.py cleanup [--state DIR/state.json] [--cert-id C] [--profile-ids P1,P2]
 
@@ -34,6 +37,7 @@ from __future__ import annotations
 import argparse
 import base64
 import binascii
+import calendar
 import email.utils
 import hashlib
 import http.client
@@ -55,10 +59,14 @@ import urllib.request
 DEFAULT_API_BASE = "https://api.appstoreconnect.apple.com"
 USER_AGENT = "opencfmoto-testflight/1"
 API_TIMEOUT = 60            # seconds per API request
+COMMIT_TIMEOUT = 300        # the upload commit: Apple checks the whole file before it answers
 UPLOAD_TIMEOUT = 600        # seconds per upload operation (one slice of the .ipa)
-API_RETRIES = 5             # retries for 429 / 5xx / network errors
+API_RETRIES = 5             # retries for 429, and for 5xx / network errors when safe to repeat
 UPLOAD_OP_RETRIES = 3       # retries per upload operation
 UPLOAD_POLL_SEC = 15
+COMMIT_CHECK_MIN = 2        # after a commit with no clear answer, look for it this long
+RECHECK_SEC = 5             # pause before looking for what an unanswered POST may have created
+FALSE_404_PAUSES = (3, 6, 12)   # Apple's transient 404 on Build Upload API reads
 # Apple refuses tokens whose `exp` is more than 20 minutes ahead (clock skew included): use 19.
 JWT_LIFETIME = 19 * 60
 JWT_REFRESH_MARGIN = 120    # mint a new token when less than this is left
@@ -70,7 +78,8 @@ MIRROR_BUNDLE_NAME = "OpenCfMoto Mirror"
 APP_CAPABILITIES = ("APP_GROUPS", "HOT_SPOT", "ACCESS_WIFI_INFORMATION")
 MIRROR_CAPABILITIES = ("APP_GROUPS",)
 BETA_GROUP_NAME = "OpenCfMoto (interno)"
-ADMIN_ROLES = {"ACCOUNT_HOLDER", "ADMIN"}
+TESTER_ROLE = "ACCOUNT_HOLDER"            # only the owner becomes a tester
+CI_PROFILE_PREFIX = "OpenCfMoto CI "      # create-signing names its profiles like this
 ENT_APP_GROUPS = "com.apple.security.application-groups"
 ENT_HOTSPOT = "com.apple.developer.networking.HotspotConfiguration"
 ENT_WIFI_INFO = "com.apple.developer.networking.wifi-info"
@@ -82,6 +91,20 @@ URL_PROFILES = "https://developer.apple.com/account/resources/profiles/list"
 URL_ASC_APPS = "https://appstoreconnect.apple.com/apps"
 URL_APPLE_STATUS = "https://developer.apple.com/system-status/"
 GUIDE = "docs/TESTFLIGHT.md"
+
+# How to try again after fixing something: a re-run repeats the old commit (and its options).
+NEW_RUN_ES = ("lanza una ejecución nueva: Actions ▸ TestFlight ▸ Run workflow (el botón «Re-run» "
+              "repite el mismo commit)")
+NEW_RUN_EN = "start a new run: Actions ▸ TestFlight ▸ Run workflow (a «Re-run» repeats the same commit)"
+# GitHub masks each line of a multi-line secret, so the exact PEM armor lines would print as ***.
+PASTE_KEY_ES = ("Abre AuthKey_XXXXXXXXXX.p8 con un editor de texto y pega TODO su contenido en el "
+                "secreto ASC_PRIVATE_KEY, incluidas la primera línea (la de BEGIN PRIVATE KEY, con sus "
+                f"guiones) y la última (la de END PRIVATE KEY); ver el paso 2 de {GUIDE}. Después "
+                f"{NEW_RUN_ES}.")
+PASTE_KEY_EN = ("Open AuthKey_XXXXXXXXXX.p8 in a text editor and paste ALL of it into the "
+                "ASC_PRIVATE_KEY secret, including the first line (the BEGIN PRIVATE KEY one, with "
+                f"its dashes) and the last one (END PRIVATE KEY); see step 2 of {GUIDE}. Then "
+                f"{NEW_RUN_EN}.")
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OPENSSL = os.environ.get("ASC_OPENSSL") or "openssl"
@@ -131,12 +154,15 @@ def set_output(name: str, value) -> None:
     log(f"{name}={text}")
 
 
+_REPORT_LABELS = {"error": ("ERROR", "Error"), "warning": ("AVISO / WARNING", "Aviso / Warning"),
+                  "notice": ("NOTA / NOTE", "Nota / Note")}
+
+
 def report(level: str, title: str, es: str, en: str) -> None:
     """Annotation + plain paragraphs in the log + step summary; Spanish first, then English."""
     annotate(level, title, f"{es}\n\n{en}")
-    label = "ERROR" if level == "error" else "AVISO / WARNING"
+    label, head = _REPORT_LABELS[level]
     log(f"\n{label}: {title}\n\n{es}\n\n{en}\n")
-    head = "Error" if level == "error" else "Aviso / Warning"
     append_summary(f"#### {head}: {title}\n\n{es}\n\n{en}")
 
 
@@ -322,11 +348,11 @@ def sign_es256(key_pem: str, data: bytes) -> bytes:
         raise Failure(
             "ASC_PRIVATE_KEY no válida / invalid",
             "openssl no pudo firmar con ASC_PRIVATE_KEY. Debe ser el contenido completo del archivo "
-            "AuthKey_XXXXXXXXXX.p8 que descargaste al crear la clave de la API (una clave EC P-256), "
-            "incluidas las líneas -----BEGIN PRIVATE KEY----- y -----END PRIVATE KEY-----.",
+            "AuthKey_XXXXXXXXXX.p8 que descargaste al crear la clave de la API (una clave EC "
+            f"P-256). {PASTE_KEY_ES}",
             "openssl could not sign with ASC_PRIVATE_KEY. It must be the whole content of the "
-            "AuthKey_XXXXXXXXXX.p8 file downloaded when the API key was created (an EC P-256 key), "
-            "including the -----BEGIN PRIVATE KEY----- and -----END PRIVATE KEY----- lines.")
+            "AuthKey_XXXXXXXXXX.p8 file downloaded when the API key was created (an EC P-256 "
+            f"key). {PASTE_KEY_EN}")
     return proc.stdout
 
 
@@ -367,20 +393,18 @@ def load_credentials() -> Credentials:
         raise Failure(
             "Faltan secretos / Missing secrets",
             f"Faltan los secretos {names}. Créalos en GitHub ▸ Settings ▸ Secrets and variables ▸ "
-            f"Actions ▸ New repository secret (pasos en {GUIDE}).",
+            f"Actions ▸ New repository secret (pasos en {GUIDE}). Después {NEW_RUN_ES}.",
             f"The secrets {names} are missing. Add them at GitHub ▸ Settings ▸ Secrets and "
-            f"variables ▸ Actions ▸ New repository secret (steps in {GUIDE}).")
+            f"variables ▸ Actions ▸ New repository secret (steps in {GUIDE}). Then {NEW_RUN_EN}.")
     try:
         pem = normalize_private_key(raw)
     except ValueError as exc:
         raise Failure(
             "ASC_PRIVATE_KEY no válida / invalid",
-            f"El secreto ASC_PRIVATE_KEY no parece el contenido de un archivo .p8 ({exc}). Abre "
-            "AuthKey_XXXXXXXXXX.p8 con un editor de texto y pega TODO su contenido, incluidas las "
-            "líneas -----BEGIN PRIVATE KEY----- y -----END PRIVATE KEY-----.",
+            f"El secreto ASC_PRIVATE_KEY no parece el contenido de un archivo .p8 ({exc}). "
+            f"{PASTE_KEY_ES}",
             f"The ASC_PRIVATE_KEY secret does not look like the content of a .p8 file ({exc}). "
-            "Open AuthKey_XXXXXXXXXX.p8 in a text editor and paste ALL of it, including the "
-            "-----BEGIN PRIVATE KEY----- and -----END PRIVATE KEY----- lines.") from None
+            f"{PASTE_KEY_EN}") from None
     return Credentials(key_id, issuer, pem)
 
 
@@ -395,6 +419,22 @@ class ApiError(Exception):
     def text(self) -> str:
         return " ".join(str(e.get(k) or "") for e in self.errors
                         for k in ("code", "title", "detail")).lower()
+
+    @property
+    def ambiguous(self) -> bool:
+        """No clear answer (network error, timeout, 408, 5xx, or a success whose body was lost):
+        Apple may or may not have done what was asked."""
+        return self.status in (0, 408) or self.status >= 500 or 200 <= self.status < 300
+
+    @property
+    def false_404(self) -> bool:
+        """Apple's transient 404 on Build Upload API reads for an app that exists
+        ("There is no resource of type 'apps' with id …"; fastlane#29908)."""
+        return self.status == 404 and "type 'apps'" in self.text()
+
+    def pointers(self) -> list:
+        return [str(e["source"].get("pointer") or "") for e in self.errors
+                if isinstance(e.get("source"), dict)]
 
     def describe(self, details: bool = True) -> str:
         """`details=False` keeps only the error codes (Apple's detail texts can quote an e-mail)."""
@@ -437,11 +477,20 @@ def attrs(resource) -> dict:
     return (resource or {}).get("attributes") or {}
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Apple's API does not redirect: a 3xx becomes an error and the token never follows it."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 class Client:
     def __init__(self, creds: Credentials, base: str = None):
         self.creds = creds
         self.base = (base or os.environ.get("ASC_API_BASE") or DEFAULT_API_BASE).rstrip("/")
         self.ssl = ssl_context()
+        self.opener = urllib.request.build_opener(_NoRedirect,
+                                                  urllib.request.HTTPSHandler(context=self.ssl))
         self._token, self._token_exp = "", 0.0
 
     def token(self, fresh: bool = False) -> str:
@@ -463,20 +512,26 @@ class Client:
             url += ("&" if "?" in url else "?") + urllib.parse.urlencode(params, safe="[],")
         return url
 
-    def request(self, method: str, path: str, body: dict = None, params: dict = None) -> dict:
+    def request(self, method: str, path: str, body: dict = None, params: dict = None,
+                idempotent: bool = None, timeout: float = API_TIMEOUT) -> dict:
+        """One API call. 429 (nothing was done) and one 401 (fresh token) are always repeated.
+        A network error, 408 or 5xx is repeated only for GET/DELETE or when `idempotent` (a
+        repeat is harmless): Apple may already have done what an unanswered POST asked."""
+        if idempotent is None:
+            idempotent = method in ("GET", "DELETE")
         url = self.url(path, params)
         shown = url[len(self.base):]
         data = json.dumps(body).encode("utf-8") if body is not None else None
         attempt, refreshed = 0, False
         while True:
-            headers = {"Authorization": f"Bearer {self.token()}", "Accept": "application/json",
-                       "User-Agent": USER_AGENT}
+            headers = {"Accept": "application/json", "User-Agent": USER_AGENT}
             if data is not None:
                 headers["Content-Type"] = "application/json"
             request = urllib.request.Request(url, data=data, method=method, headers=headers)
+            request.add_unredirected_header("Authorization", f"Bearer {self.token()}")
             retry_after, network_error = None, ""
             try:
-                with urllib.request.urlopen(request, timeout=API_TIMEOUT, context=self.ssl) as resp:
+                with self.opener.open(request, timeout=timeout) as resp:
                     status, raw = resp.status, resp.read()
             except urllib.error.HTTPError as exc:
                 status = exc.code
@@ -501,10 +556,8 @@ class Client:
                 refreshed = True                  # e.g. a token minted on a skewed clock
                 self.token(fresh=True)
                 continue
-            # 429 (nothing was done) and 5xx (Apple's gateway, nearly always before anything was
-            # done) are repeated. A POST cut off by a network error is not: Apple may have created
-            # the resource, and a second distribution certificate would be left behind unrevoked.
-            retryable = status == 429 or status >= 500 or (status == 0 and method != "POST")
+            unclear = status in (0, 408) or status >= 500
+            retryable = status == 429 or (idempotent and unclear)
             if retryable and attempt < API_RETRIES:
                 delay = retry_delay(attempt, retry_after)
                 attempt += 1
@@ -529,10 +582,34 @@ class Client:
             pages += 1
 
 
+def read_uploads(client: Client, path: str, params: dict = None, every_page: bool = False):
+    """A Build Upload API read (buildUploads, buildUploadFiles). Apple sometimes answers these
+    with a false 404 for an app that exists: try again a few times before giving up."""
+    for delay in FALSE_404_PAUSES + (None,):
+        try:
+            if every_page:
+                return client.get_all(path, params)
+            return client.request("GET", path, params=params)
+        except ApiError as err:
+            if delay is None or not err.false_404:
+                raise
+            log(f"    Apple's transient 404 (type 'apps'): trying again in {delay:g} s")
+            pause(delay)
+
+
 def explain(err: ApiError, context_es: str = "", context_en: str = "") -> Failure:
     detail = err.describe()
     pre_es = f"{context_es}: " if context_es else ""
     pre_en = f"{context_en}: " if context_en else ""
+    if err.false_404:
+        return Failure(
+            "Fallo temporal de Apple / Temporary Apple error (404)",
+            f"{pre_es}App Store Connect respondió varias veces que la app no existe (HTTP 404), "
+            "aunque existe: es un fallo temporal conocido de la API de subidas de Apple. No tienes "
+            f"que cambiar nada: espera unos minutos y {NEW_RUN_ES}. Detalle: {detail}",
+            f"{pre_en}App Store Connect answered several times that the app does not exist (HTTP "
+            "404), although it does: a known temporary fault of Apple's upload API. Nothing to "
+            f"change: wait a few minutes and {NEW_RUN_EN}. Detail: {detail}")
     if err.status == 401:
         return Failure(
             "Clave de API rechazada / API key rejected (401)",
@@ -541,25 +618,25 @@ def explain(err: ApiError, context_es: str = "", context_en: str = "") -> Failur
             "ID» de 10 caracteres; ASC_ISSUER_ID = el «Issuer ID» (un UUID) que aparece encima de "
             "la lista de claves en App Store Connect ▸ Usuarios y acceso ▸ Integraciones ▸ App "
             "Store Connect API ▸ «Claves de equipo»; ASC_PRIVATE_KEY = el archivo .p8 completo. "
-            "Debe ser una clave de equipo (no individual) y no estar revocada. "
+            f"Debe ser una clave de equipo (no individual) y no estar revocada. Después {NEW_RUN_ES}. "
             f"Detalle: {detail}",
             f"{pre_en}App Store Connect rejected the API key (HTTP 401). Check the three secrets "
             "(GitHub ▸ Settings ▸ Secrets and variables ▸ Actions): ASC_KEY_ID = the 10-character "
             "Key ID; ASC_ISSUER_ID = the Issuer ID (a UUID) shown above the key list in App Store "
             "Connect ▸ Users and Access ▸ Integrations ▸ App Store Connect API ▸ Team Keys; "
             "ASC_PRIVATE_KEY = the whole .p8 file. It must be a Team key (not an Individual key) "
-            f"and not revoked. Detail: {detail}")
+            f"and not revoked. Then {NEW_RUN_EN}. Detail: {detail}")
     if err.status == 403 and "agreement" in err.text():
         return Failure(
             "Acuerdos pendientes / Agreements to accept (403)",
             f"{pre_es}Apple exige aceptar acuerdos pendientes antes de usar la API (HTTP 403). "
             "Entra con la cuenta del titular (Account Holder) en https://developer.apple.com/account "
             "y en App Store Connect ▸ Negocios (Business), acepta los acuerdos o términos nuevos y "
-            f"vuelve a ejecutar el workflow. Detalle: {detail}",
+            f"después {NEW_RUN_ES}. Detalle: {detail}",
             f"{pre_en}Apple requires pending agreements to be accepted before the API can be used "
             "(HTTP 403). Sign in as the Account Holder at https://developer.apple.com/account and "
-            "App Store Connect ▸ Business, accept the new agreements or terms and run the workflow "
-            f"again. Detail: {detail}")
+            f"App Store Connect ▸ Business, accept the new agreements or terms, then {NEW_RUN_EN}. "
+            f"Detail: {detail}")
     if err.status == 403:
         return Failure(
             "Permiso denegado / Not allowed (403)",
@@ -567,34 +644,34 @@ def explain(err: ApiError, context_es: str = "", context_en: str = "") -> Failur
             "clave con el rol «Admin» (App Store Connect ▸ Usuarios y acceso ▸ Integraciones ▸ App "
             "Store Connect API ▸ Claves de equipo; los certificados y perfiles necesitan Admin) y "
             "actualiza ASC_KEY_ID y ASC_PRIVATE_KEY. Si ya es Admin, mira si hay acuerdos "
-            f"pendientes en App Store Connect ▸ Negocios. Detalle: {detail}",
+            f"pendientes en App Store Connect ▸ Negocios. Después {NEW_RUN_ES}. Detalle: {detail}",
             f"{pre_en}The API key is not allowed to do this (HTTP 403). Create a key with the "
             "«Admin» role (App Store Connect ▸ Users and Access ▸ Integrations ▸ App Store Connect "
             "API ▸ Team Keys; certificates and profiles need Admin) and update ASC_KEY_ID and "
             "ASC_PRIVATE_KEY. If it already is Admin, check for pending agreements in App Store "
-            f"Connect ▸ Business. Detail: {detail}")
+            f"Connect ▸ Business. Then {NEW_RUN_EN}. Detail: {detail}")
     if err.status == 429:
         return Failure(
             "Límite de peticiones / Rate limited (429)",
             f"{pre_es}Apple limita las peticiones a la API (HTTP 429) y siguió rechazándolas tras "
-            f"{API_RETRIES} reintentos. Espera una hora y vuelve a ejecutar. Detalle: {detail}",
+            f"{API_RETRIES} reintentos. Espera una hora y {NEW_RUN_ES}. Detalle: {detail}",
             f"{pre_en}Apple rate-limits the API (HTTP 429) and kept refusing after {API_RETRIES} "
-            f"retries. Wait an hour and run again. Detail: {detail}")
+            f"retries. Wait an hour, then {NEW_RUN_EN}. Detail: {detail}")
     if err.status == 0:
         return Failure(
             "Error de red / Network error",
             f"{pre_es}No se pudo hablar con App Store Connect (error de red). Suele ser temporal: "
-            f"vuelve a ejecutar el workflow. Detalle: {detail}",
+            f"{NEW_RUN_ES}. Detalle: {detail}",
             f"{pre_en}Could not reach App Store Connect (network error). This is usually "
-            f"temporary: run the workflow again. Detail: {detail}")
+            f"temporary: {NEW_RUN_EN}. Detail: {detail}")
     if err.status >= 500:
         return Failure(
             f"App Store Connect no responde / not responding ({err.status})",
-            f"{pre_es}App Store Connect devolvió errores internos (HTTP {err.status}) varias veces "
-            f"seguidas. Suele ser temporal: mira {URL_APPLE_STATUS} y vuelve a ejecutar más "
-            f"tarde. Detalle: {detail}",
-            f"{pre_en}App Store Connect kept returning internal errors (HTTP {err.status}). This is "
-            f"usually temporary: check {URL_APPLE_STATUS} and run again later. Detail: {detail}")
+            f"{pre_es}App Store Connect devolvió errores internos (HTTP {err.status}). Suele ser "
+            f"temporal: mira {URL_APPLE_STATUS} y, más tarde, {NEW_RUN_ES}. Detalle: {detail}",
+            f"{pre_en}App Store Connect returned internal errors (HTTP {err.status}). This is "
+            f"usually temporary: check {URL_APPLE_STATUS} and later {NEW_RUN_EN}. "
+            f"Detail: {detail}")
     return Failure(
         f"App Store Connect: HTTP {err.status}",
         f"{pre_es}App Store Connect rechazó la petición. Detalle: {detail}",
@@ -629,8 +706,10 @@ def app_record_step(app_bid: str, number: int):
     return es, en
 
 
-RUN_AGAIN_ES = "Después vuelve a ejecutar el workflow TestFlight sin marcar «Solo preparar»."
-RUN_AGAIN_EN = "Then run the TestFlight workflow again without ticking «Solo preparar»."
+RUN_AGAIN_ES = ("Después lanza una ejecución nueva sin marcar «Solo preparar»: Actions ▸ TestFlight "
+                "▸ Run workflow (el botón «Re-run» repite el mismo commit y las mismas opciones).")
+RUN_AGAIN_EN = ("Then start a new run without ticking «Solo preparar»: Actions ▸ TestFlight ▸ Run "
+                "workflow (a «Re-run» repeats the same commit and options).")
 
 MANUAL_REVOKE_ES = (
     f"Revoca a mano lo que quede: en {URL_CERTIFICATES} el certificado «Apple Distribution» creado "
@@ -706,7 +785,8 @@ def ensure_bundle_id(client: Client, identifier: str, name: str):
     body = {"data": {"type": "bundleIds",
                      "attributes": {"identifier": identifier, "name": name, "platform": "IOS"}}}
     try:
-        return client.request("POST", "/v1/bundleIds", body)["data"], True
+        # A repeat after a lost answer gets 409 and the lookup below finds the new App ID.
+        return client.request("POST", "/v1/bundleIds", body, idempotent=True)["data"], True
     except ApiError as err:
         if err.status != 409:
             raise explain(err, f"Registrar el App ID {identifier}",
@@ -718,16 +798,18 @@ def ensure_bundle_id(client: Client, identifier: str, name: str):
         "Bundle ID no disponible / Bundle ID not available",
         f"Apple no deja registrar `{identifier}`: ya lo usa otro equipo de desarrollador. Define "
         "la variable del repositorio BUNDLE_ID_PREFIX (GitHub ▸ Settings ▸ Secrets and variables ▸ "
-        "Actions ▸ Variables) con un prefijo propio, p. ej. `com.tunombre`.",
+        f"Actions ▸ Variables) con un prefijo propio, p. ej. `com.tunombre`. Después {NEW_RUN_ES}.",
         f"Apple will not register `{identifier}`: another developer team already uses it. Set "
         "the repository variable BUNDLE_ID_PREFIX (GitHub ▸ Settings ▸ Secrets and variables ▸ "
-        "Actions ▸ Variables) to a prefix of your own, e.g. `com.yourname`.")
+        f"Actions ▸ Variables) to a prefix of your own, e.g. `com.yourname`. Then {NEW_RUN_EN}.")
 
 
 def ensure_capabilities(client: Client, bundle: dict, wanted) -> list:
     """Enable the capabilities missing on an App ID; returns the ones enabled now."""
     path = f"/v1/bundleIds/{bundle['id']}/bundleIdCapabilities"
-    existing = {attrs(c).get("capabilityType") for c in client.get_all(path, {"limit": "200"})}
+    # No `limit`: the live API answers 400 PARAMETER_ERROR.ILLEGAL for it on this relationship,
+    # although the OpenAPI spec lists it.
+    existing = {attrs(c).get("capabilityType") for c in client.get_all(path)}
     added = []
     for capability in wanted:
         if capability in existing:
@@ -737,7 +819,7 @@ def ensure_capabilities(client: Client, bundle: dict, wanted) -> list:
                          "relationships": {"bundleId": {"data": {"type": "bundleIds",
                                                                  "id": bundle["id"]}}}}}
         try:
-            client.request("POST", "/v1/bundleIdCapabilities", body)
+            client.request("POST", "/v1/bundleIdCapabilities", body, idempotent=True)
             added.append(capability)
         except ApiError as err:
             if err.status == 409:   # already enabled
@@ -765,8 +847,9 @@ def next_build_number(client: Client, app_id: str) -> int:
     """1 + the highest build number Apple has seen (processed builds and raw uploads)."""
     numbers = [_first_int(attrs(b).get("version"))
                for b in client.get_all("/v1/builds", {"filter[app]": app_id, "limit": "200"})]
-    numbers += [_first_int(attrs(u).get("cfBundleVersion"))
-                for u in client.get_all(f"/v1/apps/{app_id}/buildUploads", {"limit": "200"})]
+    uploads = read_uploads(client, f"/v1/apps/{app_id}/buildUploads", {"limit": "200"},
+                           every_page=True)
+    numbers += [_first_int(attrs(u).get("cfBundleVersion")) for u in uploads]
     numbers = [n for n in numbers if n is not None]
     return max(numbers) + 1 if numbers else 1
 
@@ -776,9 +859,11 @@ def cmd_prepare(args) -> int:
     if not PREFIX_RE.fullmatch(prefix):
         raise Failure("Prefijo no válido / Invalid prefix",
                       f"«{prefix}» no sirve como prefijo de Bundle ID (solo letras, cifras, guiones y "
-                      "puntos, p. ej. com.tunombre). Revisa la variable BUNDLE_ID_PREFIX.",
+                      "puntos, p. ej. com.tunombre). Revisa la variable BUNDLE_ID_PREFIX y después "
+                      f"{NEW_RUN_ES}.",
                       f"«{prefix}» is not a valid bundle ID prefix (letters, digits, hyphens and dots "
-                      "only, e.g. com.yourname). Check the BUNDLE_ID_PREFIX variable.",
+                      f"only, e.g. com.yourname). Check the BUNDLE_ID_PREFIX variable, then "
+                      f"{NEW_RUN_EN}.",
                       code=EXIT_USAGE)
     app_bid = f"{prefix}.opencfmoto"
     mirror_bid = f"{app_bid}.mirror"
@@ -790,20 +875,17 @@ def cmd_prepare(args) -> int:
     mirror_bundle, mirror_new = ensure_bundle_id(client, mirror_bid, MIRROR_BUNDLE_NAME)
     app_added = ensure_capabilities(client, app_bundle, APP_CAPABILITIES)
     mirror_added = ensure_capabilities(client, mirror_bundle, MIRROR_CAPABILITIES)
+    janitor(client)    # the key works: remove what an interrupted run left (warnings only)
     team_id = attrs(app_bundle).get("seedId") or ""   # App ID prefix = team ID on modern teams
     app = find_app(client, app_bid)
     app_id = app["id"] if app else ""
-    build_number = ""
-    if app and not args.setup_only:
-        build_number = str(next_build_number(client, app_id))
     ready = bool(app) and not args.setup_only
 
     for key, value in (("ready", "true" if ready else "false"), ("team_id", team_id),
                        ("app_bundle_id", app_bid), ("mirror_bundle_id", mirror_bid),
                        ("app_bundle_resource_id", app_bundle["id"]),
                        ("mirror_bundle_resource_id", mirror_bundle["id"]), ("app_group", group),
-                       ("app_id", app_id), ("build_number", build_number),
-                       ("marketing_version", marketing)):
+                       ("app_id", app_id), ("marketing_version", marketing)):
         set_output(key, value)
 
     def state(new):
@@ -818,7 +900,7 @@ def cmd_prepare(args) -> int:
             ("App Group", f"`{group}` (la API no puede comprobarlo / the API cannot check it)"),
             ("App en App Store Connect / app record",
              f"`{app_id}`" if app else "falta / missing"),
-            ("Versión / version", marketing + (f" (build {build_number})" if build_number else ""))]
+            ("Versión / version", marketing)]
     summary = "### TestFlight · preparar / prepare\n\n" + md_table(rows)
 
     if not app:
@@ -837,17 +919,116 @@ def cmd_prepare(args) -> int:
         append_summary(summary)
         raise Failure("Falta la app en App Store Connect / App record missing", es, en)
     if args.setup_only:
-        es = ("Todo listo, ejecuta sin «Solo preparar». (Si aún no creaste el App Group "
+        es = ("Todo listo. (Si aún no creaste el App Group "
               f"`{group}` y lo asignaste a los dos App IDs, hazlo antes; la ejecución completa lo "
-              "comprueba y te dice cómo.)")
-        en = ("All set: run again without «Solo preparar». (If you have not created the App Group "
+              f"comprueba y te dice cómo.) {RUN_AGAIN_ES}")
+        en = ("All set. (If you have not created the App Group "
               f"`{group}` and assigned it to both App IDs yet, do that first; the full run checks "
-              "it and tells you how.)")
+              f"it and tells you how.) {RUN_AGAIN_EN}")
         log("todo listo, ejecuta sin Solo preparar / all set, run without 'Solo preparar'")
         append_summary(f"{summary}\n\n{es}\n\n{en}")
         return EXIT_OK
-    append_summary(f"{summary}\n\nSe compila, firma y sube la build {build_number}. / Build "
-                   f"{build_number} is now compiled, signed and uploaded.")
+    append_summary(f"{summary}\n\nSe compila, firma y sube la versión {marketing}. / Version "
+                   f"{marketing} is now compiled, signed and uploaded.")
+    return EXIT_OK
+
+
+# ---------------------------------------------------------------- next-build
+
+def cmd_next_build(args) -> int:
+    """Chosen in the build job, not in prepare: a re-run of that job then gets a fresh number."""
+    client = Client(load_credentials())
+    try:
+        number = next_build_number(client, args.app_id)
+    except ApiError as err:
+        raise explain(err, "Elegir el número de build", "Choosing the build number") from None
+    set_output("build_number", number)
+    env_file = os.environ.get("GITHUB_ENV")
+    if env_file:    # later steps of the job see BUILD_NUMBER
+        with open(env_file, "a", encoding="utf-8") as fh:
+            fh.write(f"BUILD_NUMBER={number}\n")
+    log(f"Build number / número de build: {number}")
+    return EXIT_OK
+
+
+# ---------------------------------------------------------------- janitor (leftovers)
+
+def profile_certificate_ids(client: Client, profile: dict) -> list:
+    """Certificate ids a profile listed with include=certificates refers to. When the linkage is
+    missing or cut short (meta.paging.total), the relationship is read in full (no `limit`)."""
+    rel = (profile.get("relationships") or {}).get("certificates") or {}
+    data = rel.get("data")
+    total = ((rel.get("meta") or {}).get("paging") or {}).get("total")
+    ids = [str(d.get("id")) for d in data or [] if isinstance(d, dict) and d.get("id")]
+    if not isinstance(data, list) or (isinstance(total, int) and total > len(ids)):
+        path = f"/v1/profiles/{profile['id']}/relationships/certificates"
+        ids = [str(d.get("id")) for d in client.get_all(path) if d.get("id")]
+    return _unique(ids)
+
+
+def sweep_leftovers(client: Client):
+    """Delete every «OpenCfMoto CI …» profile and revoke the certificates they use that no other
+    profile uses. Safe because the workflow's concurrency group `testflight` never runs two
+    TestFlight runs at once: no other run can be using them. Returns (removed, problems)."""
+    profiles = [p for p in client.get_all("/v1/profiles", {"include": "certificates",
+                                                           "limit": "200"})
+                if RESOURCE_ID_RE.fullmatch(str(p.get("id") or ""))]
+    ci = [p for p in profiles if str(attrs(p).get("name") or "").startswith(CI_PROFILE_PREFIX)]
+    if not ci:
+        return [], []
+    ci_ids = {p["id"] for p in ci}
+    in_use = set()          # certificates that other (non-CI) profiles still need
+    for profile in profiles:
+        if profile["id"] not in ci_ids:
+            in_use.update(profile_certificate_ids(client, profile))
+    certs = _unique(c for p in ci for c in profile_certificate_ids(client, p)
+                    if RESOURCE_ID_RE.fullmatch(c))
+    removed, problems = [], []      # removed: (Spanish, English) labels
+    for kind, path, items in (
+            (("perfil", "profile"), "/v1/profiles/{}",
+             [(p["id"], attrs(p).get("name") or p["id"]) for p in ci]),
+            (("certificado", "certificate"), "/v1/certificates/{}", [(c, c) for c in certs])):
+        for resource_id, label in items:
+            if kind[1] == "certificate" and resource_id in in_use:
+                log(f"Certificate {resource_id} is also in another profile: not revoked")
+                continue
+            try:
+                client.request("DELETE", path.format(resource_id))
+                removed.append((f"{kind[0]} «{label}»", f"{kind[1]} «{label}»"))
+            except ApiError as err:
+                if err.status != 404:      # 404: already gone
+                    problems.append(f"{kind[1]} {resource_id}: {err.describe()}")
+    return removed, problems
+
+
+def janitor(client: Client = None) -> None:
+    """The leftover sweep, best effort: a problem is a warning, never a failure."""
+    try:
+        removed, problems = sweep_leftovers(client or Client(load_credentials()))
+    except Exception as exc:  # never fail the caller: say what to check by hand
+        reason = exc.en if isinstance(exc, Failure) else (
+            exc.describe() if isinstance(exc, ApiError) else f"{type(exc).__name__}: {exc}")
+        removed, problems = [], [reason]
+    if removed:
+        report("notice", "Restos borrados / Leftovers removed",
+               "Se borraron restos que una ejecución de TestFlight no había limpiado (perfiles "
+               "«OpenCfMoto CI …» y su certificado temporal): "
+               f"{', '.join(r[0] for r in removed)}. No tienes que hacer nada.",
+               "Removed what a TestFlight run had not cleaned up (the «OpenCfMoto CI …» profiles "
+               f"and their temporary certificate): {', '.join(r[1] for r in removed)}. Nothing to "
+               "do.")
+    elif not problems:
+        log("No leftovers from earlier runs / no quedan restos de ejecuciones anteriores")
+    if problems:
+        listing = "; ".join(problems)
+        report("warning", "Limpieza incompleta / Cleanup incomplete",
+               f"No se pudo terminar de borrar los restos de TestFlight ({listing}). "
+               f"{MANUAL_REVOKE_ES}",
+               f"Could not finish removing the TestFlight leftovers ({listing}). {MANUAL_REVOKE_EN}")
+
+
+def cmd_janitor(args) -> int:
+    janitor()
     return EXIT_OK
 
 
@@ -890,14 +1071,216 @@ def cert_limit_failure(err: ApiError) -> Failure:
         "Apple no deja crear otro certificado de distribución: el equipo ya tiene el máximo de "
         f"certificados «Apple Distribution». Entra en {URL_CERTIFICATES}, revoca los «Apple "
         "Distribution» que no uses (por ejemplo los que dejó un workflow interrumpido: los crea "
-        "la clave de la API) y vuelve a ejecutar. Si otro workflow TestFlight está en marcha, "
+        f"la clave de la API) y después {NEW_RUN_ES}. Si otro workflow TestFlight está en marcha, "
         f"espera a que termine: revoca su certificado al final. Detalle: {err.describe()}",
         "Apple will not create another distribution certificate: the team already has the "
         f"maximum number of «Apple Distribution» certificates. Open {URL_CERTIFICATES}, revoke the "
         "«Apple Distribution» certificates you do not use (e.g. ones left by an interrupted "
-        "workflow: the API key creates them) and run again. If another TestFlight workflow is "
-        "running, wait for it to finish: it revokes its certificate at the end. "
+        f"workflow: the API key creates them), then {NEW_RUN_EN}. If another TestFlight workflow "
+        "is running, wait for it to finish: it revokes its certificate at the end. "
         f"Detail: {err.describe()}")
+
+
+def is_cert_limit(err: ApiError) -> bool:
+    """A full team: 409, or a 422 that says so (an invalid CSR is a 422 too)."""
+    text = err.text()
+    return err.status == 409 or (err.status == 422 and any(
+        word in text for word in ("already have", "maximum", "pending certificate", "limit")))
+
+
+def certificate_refused(err: ApiError) -> Failure:
+    if is_cert_limit(err):
+        return cert_limit_failure(err)
+    return explain(err, "Crear el certificado de distribución", "Creating the distribution certificate")
+
+
+def lost_certificate_failure(err: ApiError, cause=None) -> Failure:
+    why = ""
+    if isinstance(cause, Failure):
+        why = f" ({cause.en})"
+    elif isinstance(cause, ApiError):
+        why = f" ({cause.describe()})"
+    return Failure(
+        "Certificado sin confirmar / Certificate not confirmed",
+        "Apple no respondió con claridad al crear el certificado de distribución "
+        f"({err.describe()}) y no se pudo comprobar si llegó a crearlo{why}. {MANUAL_REVOKE_ES} "
+        f"Después {NEW_RUN_ES}.",
+        "Apple gave no clear answer when creating the distribution certificate "
+        f"({err.describe()}) and it could not be checked whether it was created{why}. "
+        f"{MANUAL_REVOKE_EN} Then {NEW_RUN_EN}.")
+
+
+def _pem_public_key(text: bytes) -> bytes:
+    """The DER of the first PUBLIC KEY block in openssl's output, b"" if there is none."""
+    match = re.search(rb"-----BEGIN PUBLIC KEY-----(.*?)-----END PUBLIC KEY-----", text or b"", re.S)
+    if not match:
+        return b""
+    try:
+        return base64.b64decode(re.sub(rb"\s+", b"", match.group(1)), validate=True)
+    except (binascii.Error, ValueError):
+        return b""
+
+
+def public_key_of(path: str) -> bytes:
+    """The public key (DER) of this run's private key or CSR. Same flags in OpenSSL 3 and LibreSSL."""
+    with open(path, "rb") as fh:
+        is_csr = b"CERTIFICATE REQUEST" in fh.read(256)
+    args = ["req", "-in", path, "-noout", "-pubkey"] if is_csr else ["pkey", "-in", path, "-pubout"]
+    key = _pem_public_key(run_openssl(args).stdout)
+    if not key:
+        name = os.path.basename(path)
+        raise Failure("Clave ilegible / Unreadable key",
+                      f"openssl no dio la clave pública de {name}.",
+                      f"openssl gave no public key for {name}.")
+    return key
+
+
+def my_certificates(client: Client, key_file: str) -> list:
+    """The team's distribution certificates made from this run's key. The key is new for every
+    run, so only certificates this run asked for can match."""
+    mine, found = public_key_of(key_file), []
+    for cert in client.get_all("/v1/certificates", {"filter[certificateType]": "DISTRIBUTION",
+                                                    "limit": "200"}):
+        cert_id = str(cert.get("id") or "")
+        if not RESOURCE_ID_RE.fullmatch(cert_id):
+            continue
+        if not attrs(cert).get("certificateContent"):
+            cert = client.request("GET", f"/v1/certificates/{cert_id}").get("data") or {}
+        try:
+            der = base64.b64decode(attrs(cert).get("certificateContent") or "")
+        except (binascii.Error, ValueError):
+            continue
+        proc = run_openssl(["x509", "-inform", "der", "-noout", "-pubkey"], data=der, check=False)
+        if der and proc.returncode == 0 and _pem_public_key(proc.stdout) == mine:
+            found.append(cert)
+    return found
+
+
+def adopt_certificate(client: Client, mine: list, chosen: dict = None) -> dict:
+    """Keep one certificate made from this run's key and revoke any other (a lost answer plus a
+    second request can make two)."""
+    chosen = chosen or mine[0]
+    for extra in mine:
+        if extra.get("id") == chosen.get("id"):
+            continue
+        try:
+            client.request("DELETE", f"/v1/certificates/{extra['id']}")
+            log(f"Revoked the duplicate certificate {extra['id']}")
+        except ApiError as err:
+            if err.status != 404:
+                report("warning", "Limpieza incompleta / Cleanup incomplete",
+                       f"No se pudo revocar el certificado duplicado {extra['id']} "
+                       f"({err.describe()}). {MANUAL_REVOKE_ES}",
+                       f"Could not revoke the duplicate certificate {extra['id']} "
+                       f"({err.describe()}). {MANUAL_REVOKE_EN}")
+    return chosen
+
+
+def request_certificate(client: Client, csr: str, key_path: str, state: dict,
+                        state_path: str) -> dict:
+    """POST /v1/certificates, never repeated blindly: Apple may have created a certificate whose
+    answer was lost, and a second one would take another of the team's few slots. After an
+    unclear answer, look for a certificate made from this run's key before asking again."""
+    body = {"data": {"type": "certificates",
+                     "attributes": {"csrContent": csr, "certificateType": "DISTRIBUTION"}}}
+    state["cert_pending"] = True    # while set, cleanup looks for this run's certificates
+    save_state(state_path, state)
+
+    def settled(cert):
+        state.pop("cert_pending", None)
+        if cert is not None:
+            state["cert_id"] = cert["id"]
+        save_state(state_path, state)
+        return cert
+
+    def look(unclear: ApiError) -> list:
+        try:
+            return my_certificates(client, key_path)
+        except (ApiError, Failure) as exc:
+            raise lost_certificate_failure(unclear, exc) from None
+
+    unclear = None
+    for _ in range(2):
+        try:
+            cert = client.request("POST", "/v1/certificates", body)["data"]
+        except ApiError as err:
+            if err.ambiguous:
+                unclear = err
+                log(f"  no clear answer ({err.describe()}): looking for a certificate made from "
+                    "this run's key")
+                pause(RECHECK_SEC)
+                mine = look(err)
+                if mine:
+                    return settled(adopt_certificate(client, mine))
+                continue            # nothing was created: ask once more
+            if unclear is not None:
+                # Refused after an unanswered request, which may have made the certificate that
+                # now fills the team's limit.
+                mine = look(unclear)
+                if mine:
+                    return settled(adopt_certificate(client, mine))
+            settled(None)
+            raise certificate_refused(err) from None
+        if unclear is None:
+            return settled(cert)
+        # Created on the second try: the unanswered first request may have made one too.
+        try:
+            mine = my_certificates(client, key_path)
+        except (ApiError, Failure) as exc:
+            log(f"  (could not look for a second certificate: {exc}; cleanup looks again)")
+            state["cert_id"] = cert["id"]       # cert_pending stays set for cleanup
+            save_state(state_path, state)
+            return cert
+        return settled(adopt_certificate(client, mine, cert))
+    raise lost_certificate_failure(unclear)
+
+
+def profile_failure(err: ApiError, name: str) -> Failure:
+    if err.status == 409:
+        return Failure(
+            "No se pudo crear el perfil / Profile not created",
+            f"Apple no aceptó el perfil «{name}» (HTTP 409). Si ya existe uno con ese nombre, "
+            f"bórralo en {URL_PROFILES} y después {NEW_RUN_ES}. Detalle: {err.describe()}",
+            f"Apple refused the profile «{name}» (HTTP 409). If one with that name already "
+            f"exists, remove it at {URL_PROFILES}, then {NEW_RUN_EN}. Detail: {err.describe()}")
+    failure = explain(err, f"Crear el perfil «{name}»", f"Creating the profile «{name}»")
+    if err.ambiguous:
+        failure.es += " Si Apple llegó a crear el perfil, la próxima ejecución lo borra sola."
+        failure.en += " If Apple did create the profile, the next run removes it by itself."
+    return failure
+
+
+def find_profile(client: Client, name: str):
+    # Exact comparison here: filter[name] semantics (exact, prefix, substring) do not matter.
+    for profile in client.get_all("/v1/profiles", {"filter[name]": name, "limit": "200"}):
+        if attrs(profile).get("name") == name and RESOURCE_ID_RE.fullmatch(str(profile.get("id"))):
+            return profile
+    return None
+
+
+def request_profile(client: Client, body: dict, name: str) -> dict:
+    """POST /v1/profiles, not repeated blindly either: after an unclear answer the profile is
+    looked up by its name, which is unique per run."""
+    unclear = None
+    for _ in range(2):
+        try:
+            return client.request("POST", "/v1/profiles", body)["data"]
+        except ApiError as err:
+            if not err.ambiguous and (unclear is None or err.status != 409):
+                raise profile_failure(err, name) from None
+            if err.ambiguous:
+                unclear = err
+                pause(RECHECK_SEC)
+            log(f"  «{name}»: {err.describe()}; looking the profile up by name")
+            try:
+                found = find_profile(client, name)
+            except ApiError:
+                raise profile_failure(unclear, name) from None
+            if found:
+                return found
+            if not err.ambiguous:   # 409 after an unanswered request, and still not visible
+                raise profile_failure(err, name) from None
+    raise profile_failure(unclear, name)
 
 
 def cmd_create_signing(args) -> int:
@@ -925,15 +1308,7 @@ def cmd_create_signing(args) -> int:
 
     # 2. Distribution certificate, recorded at once so cleanup can revoke it whatever happens.
     log("Requesting an Apple Distribution certificate")
-    body = {"data": {"type": "certificates",
-                     "attributes": {"csrContent": csr, "certificateType": "DISTRIBUTION"}}}
-    try:
-        cert = client.request("POST", "/v1/certificates", body)["data"]
-    except ApiError as err:
-        if err.status == 409:
-            raise cert_limit_failure(err) from None
-        raise explain(err, "Crear el certificado de distribución",
-                      "Creating the distribution certificate") from None
+    cert = request_certificate(client, csr, key_path, state, state_path)
     cert_id = cert["id"]
     state["cert_id"] = cert_id
     save_state(state_path, state)
@@ -969,19 +1344,7 @@ def cmd_create_signing(args) -> int:
                          "relationships": {
                              "bundleId": {"data": {"type": "bundleIds", "id": resource_id}},
                              "certificates": {"data": [{"type": "certificates", "id": cert_id}]}}}}
-        try:
-            profile = client.request("POST", "/v1/profiles", body)["data"]
-        except ApiError as err:
-            if err.status == 409:
-                raise Failure(
-                    "No se pudo crear el perfil / Profile not created",
-                    f"Apple no aceptó el perfil «{name}» (HTTP 409). Si ya existe uno con ese "
-                    f"nombre, bórralo en {URL_PROFILES} y vuelve a ejecutar. Detalle: "
-                    f"{err.describe()}",
-                    f"Apple refused the profile «{name}» (HTTP 409). If one with that name "
-                    f"already exists, remove it at {URL_PROFILES} and run again. Detail: "
-                    f"{err.describe()}") from None
-            raise explain(err, f"Crear el perfil «{name}»", f"Creating the profile «{name}»") from None
+        profile = request_profile(client, body, name)
         state["profile_ids"].append(profile["id"])
         save_state(state_path, state)
         set_output(f"profile_{role}_id", profile["id"])
@@ -1053,13 +1416,14 @@ def cmd_create_signing(args) -> int:
                             f"App Groups; do it once on the web:\n\n{steps_en}")
         if missing_other:
             listed = "; ".join(missing_other)
-            es_parts.append(f"Faltan capacidades en el perfil de la app ({listed}). Vuelve a "
-                            "ejecutar el workflow (el paso «prepare» activa Hotspot y Access WiFi "
-                            f"Information) o actívalas en {URL_IDENTIFIERS} ▸ `{args.app_bundle_id}`.")
-            en_parts.append(f"Capabilities are missing in the app profile ({listed}). Run the "
-                            "workflow again (the «prepare» step enables Hotspot and Access WiFi "
-                            f"Information) or enable them at {URL_IDENTIFIERS} ▸ "
-                            f"`{args.app_bundle_id}`.")
+            es_parts.append(f"Faltan capacidades en el perfil de la app ({listed}). Una ejecución "
+                            "nueva las activa (el trabajo «Prepare (App Store Connect)» activa "
+                            "Hotspot y Access WiFi Information); también puedes activarlas en "
+                            f"{URL_IDENTIFIERS} ▸ `{args.app_bundle_id}`.")
+            en_parts.append(f"Capabilities are missing in the app profile ({listed}). A new run "
+                            "enables them (the «Prepare (App Store Connect)» job enables Hotspot "
+                            f"and Access WiFi Information); you can also enable them at "
+                            f"{URL_IDENTIFIERS} ▸ `{args.app_bundle_id}`.")
         es_parts.append("Los perfiles se generan de nuevo en cada ejecución. " + RUN_AGAIN_ES)
         en_parts.append("The profiles are generated again on every run. " + RUN_AGAIN_EN)
         append_summary(summary)
@@ -1160,9 +1524,12 @@ def _state_detail(item) -> str:
     return f"{code}: {description}" if code and description else str(code or description)
 
 
-def upload_refused(client: Client, upload_id: str, reason: str, err: ApiError = None) -> int:
-    """Exit 3: nothing was committed, so the workflow can retry with `xcrun altool`. The
-    dangling build upload is deleted first."""
+def upload_refused(client: Client, upload_id: str, reason: str, err: ApiError = None,
+                   marker: str = "") -> int:
+    """Exit 3: nothing was committed (or the upload is given up), so the workflow can retry with
+    `xcrun altool`. The dangling build upload is deleted first."""
+    if marker:
+        remove_if_present(marker)       # nothing left for the finish job to wait for
     if upload_id:
         try:
             client.request("DELETE", f"/v1/buildUploads/{upload_id}")
@@ -1181,6 +1548,83 @@ def upload_refused(client: Client, upload_id: str, reason: str, err: ApiError = 
     return EXIT_UPLOAD_REFUSED
 
 
+def is_duplicate_build(err: ApiError) -> bool:
+    """Apple already has this build number: 409 ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE on
+    /data/attributes/cfBundleVersion. altool would be refused the same way."""
+    if err.status != 409:
+        return False
+    codes = [str(e.get("code") or "") for e in err.errors]
+    return (any(c.startswith("ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE") for c in codes)
+            or "/data/attributes/cfBundleVersion" in err.pointers()
+            or "previously uploaded" in err.text())
+
+
+def duplicate_build_failure(build: str, detail: str) -> Failure:
+    return Failure(
+        "La build ya existe / Build already exists",
+        f"App Store Connect ya tiene una build con el número {build} (de una ejecución anterior) y "
+        f"no acepta otra igual. No tienes que cambiar nada: {NEW_RUN_ES}; cada ejecución nueva "
+        f"elige un número libre. Detalle: {detail}",
+        f"App Store Connect already has a build numbered {build} (from an earlier run) and will "
+        f"not take another one. Nothing to change: {NEW_RUN_EN}; every new run picks a free "
+        f"number. Detail: {detail}")
+
+
+def upload_rejected(build: str, errors: list) -> Failure:
+    """Apple refused the uploaded file (state FAILED): no build will appear. Each of Apple's
+    errors gets its own ::error annotation as well."""
+    for item in errors:
+        annotate("error", "App Store Connect", _state_detail(item))
+    listing = "; ".join(_state_detail(e) for e in errors) or "sin detalles / no details"
+    if any(re.search(r"\b90189\b", _state_detail(e)) for e in errors):   # redundant binary
+        return duplicate_build_failure(build, listing)
+    return Failure("Apple rechazó la subida / Apple rejected the upload",
+                   f"App Store Connect marcó la subida de la build {build} como FAILED: {listing}. "
+                   f"No aparecerá en TestFlight. Corrige lo indicado y después {NEW_RUN_ES}.",
+                   f"App Store Connect marked the upload of build {build} as FAILED: {listing}. "
+                   f"It will not appear in TestFlight. Fix what it reports, then {NEW_RUN_EN}.")
+
+
+def upload_state(upload) -> str:
+    return str((attrs(upload).get("state") or {}).get("state") or "")
+
+
+def mark_committed(marker: str) -> None:
+    """Apple has the file: a build may appear even if this step is stopped now, so the
+    certificate stays until the finish job has waited for it."""
+    set_output("committed", "true")
+    if marker:
+        try:
+            with open(marker, "w", encoding="utf-8"):
+                pass
+        except OSError as exc:
+            log(f"(could not create {marker}: {exc.strerror})")
+
+
+def commit_went_through(client: Client, upload_id: str, file_id: str) -> bool:
+    """After a commit PATCH with no clear answer (timeout, 5xx): did Apple take the file? Just
+    after a commit a read can still say AWAITING_UPLOAD, so keep looking for a while."""
+    deadline = deadline_after(COMMIT_CHECK_MIN)
+    while True:
+        try:
+            doc = read_uploads(client, f"/v1/buildUploadFiles/{file_id}")
+            delivery = str((attrs(doc.get("data")).get("assetDeliveryState") or {}).get("state")
+                           or "")
+            if delivery in ("UPLOAD_COMPLETE", "COMPLETE"):
+                return True
+            if delivery == "FAILED":
+                return False
+            state = upload_state(read_uploads(client, f"/v1/buildUploads/{upload_id}").get("data"))
+            if state in ("PROCESSING", "COMPLETE", "FAILED"):
+                return True
+            log(f"  file {delivery or '?'}, upload {state or '?'}")
+        except ApiError as err:
+            log(f"  (check failed: {err.describe()})")
+        if time.monotonic() >= deadline:
+            return False
+        pause(UPLOAD_POLL_SEC)
+
+
 def cmd_upload(args) -> int:
     for label, value in (("--version", args.version), ("--build", args.build)):
         if not VERSION_RE.fullmatch(value):
@@ -1192,6 +1636,9 @@ def cmd_upload(args) -> int:
         raise Failure("No hay .ipa / No .ipa",
                       f"No existe el archivo {ipa} (o está vacío): la exportación no produjo la .ipa.",
                       f"{ipa} does not exist (or is empty): the export produced no .ipa.")
+    marker = os.path.abspath(args.committed_marker) if args.committed_marker else ""
+    if marker:
+        remove_if_present(marker)       # only this upload's commit may create it
     size, digest, file_name = os.path.getsize(ipa), md5_of(ipa), os.path.basename(ipa)
     log(f"Uploading {file_name}: {size} bytes, MD5 {digest}, version {args.version} "
         f"build {args.build}")
@@ -1204,6 +1651,9 @@ def cmd_upload(args) -> int:
     try:
         upload = client.request("POST", "/v1/buildUploads", body)["data"]
     except ApiError as err:
+        if is_duplicate_build(err):
+            set_output("uploaded", "false")
+            raise duplicate_build_failure(args.build, err.describe()) from None
         return upload_refused(client, "", err.describe(), err)
     upload_id = upload["id"]
     set_output("upload_id", upload_id)
@@ -1227,24 +1677,34 @@ def cmd_upload(args) -> int:
         if problem:
             return upload_refused(client, upload_id, problem)
 
-    # Commit: Apple checks the MD5 of the whole file.
-    body = {"data": {"type": "buildUploadFiles", "id": upload_file["id"],
+    # Commit: Apple checks the MD5 of the whole file before it answers (long timeout). Never
+    # repeated: a repeat can be refused after a commit that worked.
+    file_id = upload_file["id"]
+    body = {"data": {"type": "buildUploadFiles", "id": file_id,
                      "attributes": {"uploaded": True,
                                     "sourceFileChecksums": {"file": {"hash": digest,
                                                                      "algorithm": "MD5"}}}}}
     try:
-        client.request("PATCH", f"/v1/buildUploadFiles/{upload_file['id']}", body)
+        client.request("PATCH", f"/v1/buildUploadFiles/{file_id}", body, timeout=COMMIT_TIMEOUT)
     except ApiError as err:
-        return upload_refused(client, upload_id, err.describe(), err)
-    return wait_for_upload(client, upload_id, args)
+        if not err.ambiguous:           # a clear refusal (e.g. 409/422 checksum)
+            return upload_refused(client, upload_id, err.describe(), err)
+        log(f"The commit got no clear answer ({err.describe()}): asking Apple whether it has "
+            "the file")
+        if not commit_went_through(client, upload_id, file_id):
+            return upload_refused(client, upload_id,
+                                  f"{err.describe()}; Apple never showed the file as received")
+        log("Apple has the file: the commit went through")
+    mark_committed(marker)
+    return wait_for_upload(client, upload_id, args, marker)
 
 
-def wait_for_upload(client: Client, upload_id: str, args) -> int:
+def wait_for_upload(client: Client, upload_id: str, args, marker: str = "") -> int:
     deadline = deadline_after(args.timeout_min)
-    state, details = "AWAITING_UPLOAD", {}
+    state, details = "", {}         # "": no answer yet (the commit itself was accepted)
     while True:
         try:
-            doc = client.request("GET", f"/v1/buildUploads/{upload_id}")
+            doc = read_uploads(client, f"/v1/buildUploads/{upload_id}")
             details = attrs(doc.get("data")).get("state") or {}
             state = details.get("state") or state
         except ApiError as err:
@@ -1253,7 +1713,7 @@ def wait_for_upload(client: Client, upload_id: str, args) -> int:
             log(f"  (status check failed, trying again: {err.describe()})")
         if state in ("COMPLETE", "FAILED") or time.monotonic() >= deadline:
             break
-        log(f"  build upload {upload_id}: {state}")
+        log(f"  build upload {upload_id}: {state or '?'}")
         pause(UPLOAD_POLL_SEC)
     for info in details.get("infos") or []:
         log(f"  info: {_state_detail(info)}")
@@ -1268,24 +1728,22 @@ def wait_for_upload(client: Client, upload_id: str, args) -> int:
                        "it.")
         return EXIT_OK
     if state == "FAILED":
-        errors = details.get("errors") or []
-        for item in errors:
-            annotate("error", "App Store Connect", _state_detail(item))
+        if marker:
+            remove_if_present(marker)   # refused for good: no build will appear
         set_output("uploaded", "false")
-        listing = "; ".join(_state_detail(e) for e in errors) or "sin detalles / no details"
-        raise Failure("Apple rechazó la subida / Apple rejected the upload",
-                      f"App Store Connect marcó la subida de la build {args.build} como FAILED: "
-                      f"{listing}. Corrige lo indicado y vuelve a ejecutar el workflow.",
-                      f"App Store Connect marked the upload of build {args.build} as FAILED: "
-                      f"{listing}. Fix what it reports and run the workflow again.")
+        raise upload_rejected(args.build, details.get("errors") or [])
     if state == "AWAITING_UPLOAD":
         return upload_refused(client, upload_id,
-                              f"after {args.timeout_min:g} min Apple still had not received the file")
+                              f"after {args.timeout_min:g} min Apple still had not received the file",
+                              marker=marker)
+    # PROCESSING, or no readable answer at all after an accepted commit: never delete that.
     report("warning", "Apple sigue procesando la subida / Upload still processing",
-           f"Tras {args.timeout_min:g} min Apple sigue procesando la subida (estado {state}). El "
-           "archivo ya está en Apple: el siguiente paso espera a la build.",
-           f"After {args.timeout_min:g} min Apple is still processing the upload (state {state}). "
-           "The file is with Apple already: the next step waits for the build.")
+           f"Tras {args.timeout_min:g} min Apple sigue procesando la subida (estado "
+           f"{state or '?'}). El archivo ya está en Apple: el trabajo «Processing, TestFlight "
+           "group, revoke the certificate» espera a la build.",
+           f"After {args.timeout_min:g} min Apple is still processing the upload (state "
+           f"{state or '?'}). The file is with Apple already: the «Processing, TestFlight group, "
+           "revoke the certificate» job waits for the build.")
     set_output("uploaded", "true")
     set_output("upload_id", upload_id)
     return EXIT_OK
@@ -1302,36 +1760,53 @@ def find_build(client: Client, app_id: str, number: str):
     return None
 
 
+def _internal_group(groups):
+    """An internal group, preferably one that sees every build."""
+    internal = [g for g in groups if attrs(g).get("isInternalGroup")]
+    return (next((g for g in internal if attrs(g).get("hasAccessToAllBuilds")), None)
+            or (internal[0] if internal else None))
+
+
 def setup_testers(client: Client, app_id: str, build):
-    """Best effort: an internal group with every Admin / Account Holder as tester. Returns
-    (group name, testers added); failures only warn. E-mails are never printed (public log)."""
+    """Best effort: an internal group with the Account Holder (the owner) as its tester. Nobody
+    else is added, admins included. Returns (group name, testers added); problems only warn.
+    E-mails are never printed (public log)."""
     group_name, added, problems = "", 0, []
+    groups_path = f"/v1/apps/{app_id}/betaGroups"
     try:
-        groups = client.get_all(f"/v1/apps/{app_id}/betaGroups", {"limit": "200"})
-        internal = [g for g in groups if attrs(g).get("isInternalGroup")]
-        group = (next((g for g in internal if attrs(g).get("hasAccessToAllBuilds")), None)
-                 or (internal[0] if internal else None))
+        group = _internal_group(client.get_all(groups_path, {"limit": "200"}))
         if group is None:
             body = {"data": {"type": "betaGroups",
                              "attributes": {"name": BETA_GROUP_NAME, "isInternalGroup": True,
                                             "hasAccessToAllBuilds": True},
                              "relationships": {"app": {"data": {"type": "apps", "id": app_id}}}}}
-            group = client.request("POST", "/v1/betaGroups", body)["data"]
+            try:
+                group = client.request("POST", "/v1/betaGroups", body)["data"]
+            except ApiError as err:
+                if not err.ambiguous:
+                    raise
+                pause(RECHECK_SEC)      # the answer was lost: the group may exist anyway
+                group = _internal_group(client.get_all(groups_path, {"limit": "200"}))
+                if group is None:
+                    raise
             log(f"Created the internal TestFlight group «{BETA_GROUP_NAME}»")
         group_id = group["id"]
         group_name = attrs(group).get("name") or BETA_GROUP_NAME
         if build is not None and not attrs(group).get("hasAccessToAllBuilds"):
-            try:
+            try:    # adding a member twice is harmless (JSON:API relationship)
                 client.request("POST", f"/v1/betaGroups/{group_id}/relationships/builds",
-                               {"data": [{"type": "builds", "id": build["id"]}]})
+                               {"data": [{"type": "builds", "id": build["id"]}]}, idempotent=True)
             except ApiError as err:
                 if err.status != 409:
-                    problems.append(err.describe())
+                    problems.append((err.describe(), err.describe()))
         users = client.get_all("/v1/users", {"limit": "200"})
-        admins = [u for u in users if ADMIN_ROLES & set(attrs(u).get("roles") or [])]
+        holders = [u for u in users if TESTER_ROLE in (attrs(u).get("roles") or [])]
+        if not holders:
+            problems.append(("no se ve al titular de la cuenta (Account Holder) entre los usuarios",
+                             "the Account Holder is not among the users the API key can see"))
         testers = client.get_all(f"/v1/betaGroups/{group_id}/betaTesters", {"limit": "200"})
         present = {str(attrs(t).get("email") or "").lower() for t in testers}
-        for user in admins:
+        for user in holders:
             info = attrs(user)
             mail = str(info.get("username") or "").strip()
             if not mail or mail.lower() in present:
@@ -1341,29 +1816,61 @@ def setup_testers(client: Client, app_id: str, build):
                                             "lastName": info.get("lastName") or ""},
                              "relationships": {"betaGroups": {"data": [{"type": "betaGroups",
                                                                         "id": group_id}]}}}}
-            try:
-                client.request("POST", "/v1/betaTesters", body)
+            try:    # a repeat after a lost answer gets 409, which is fine
+                client.request("POST", "/v1/betaTesters", body, idempotent=True)
                 added += 1
             except ApiError as err:
                 if err.status != 409:   # 409: already a tester
-                    problems.append(err.describe(details=False))
-        log(f"TestFlight group «{group_name}»: {len(admins)} admin user(s), {added} tester(s) added")
+                    problems.append((err.describe(details=False),) * 2)
+        log(f"TestFlight group «{group_name}»: {added} tester(s) added (the Account Holder only)")
     except ApiError as err:
-        problems.append(err.describe(details=False))
+        problems.append((err.describe(details=False),) * 2)
     except Failure as failure:
-        problems.append(failure.en)
+        problems.append((failure.es, failure.en))
     if problems:
-        listing = "; ".join(problems)
+        where_es = f"«{group_name}»" if group_name else "«+» (crea un grupo interno)"
+        where_en = f"«{group_name}»" if group_name else "«+» (create an internal group)"
         report("warning", "TestFlight: añade el tester a mano / add the tester by hand",
-               f"No se pudo dejar listo el grupo de TestFlight ({listing}). La build está subida "
-               "igualmente. Para instalarla: App Store Connect ▸ Apps ▸ OpenCfMoto ▸ TestFlight ▸ "
-               "Pruebas internas ▸ «+» ▸ crea un grupo y añade tu usuario; después abre la app "
-               "TestFlight en el iPhone con ese Apple ID.",
-               f"Could not finish the TestFlight group ({listing}). The build is uploaded anyway. "
-               "To install it: App Store Connect ▸ Apps ▸ OpenCfMoto ▸ TestFlight ▸ Internal "
-               "Testing ▸ «+» ▸ create a group and add your user; then open the TestFlight app "
-               "on the iPhone with that Apple ID.")
+               f"No se pudo dejar listo el grupo de TestFlight ({'; '.join(p[0] for p in problems)}). "
+               "La build está subida igualmente. Para instalarla, añádete tú: App Store Connect ▸ "
+               f"Apps ▸ OpenCfMoto ▸ TestFlight ▸ Pruebas internas ▸ {where_es} ▸ Testers «+» ▸ tu "
+               "usuario; después abre la app TestFlight en el iPhone con ese Apple ID.",
+               f"Could not finish the TestFlight group ({'; '.join(p[1] for p in problems)}). The "
+               "build is uploaded anyway. To install it, add yourself: App Store Connect ▸ Apps ▸ "
+               f"OpenCfMoto ▸ TestFlight ▸ Internal Testing ▸ {where_en} ▸ Testers «+» ▸ your "
+               "user; then open the TestFlight app on the iPhone with that Apple ID.")
     return group_name, added
+
+
+_ISO_DATE = re.compile(r"(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)(?:\.\d+)?(Z|[+-]\d\d:?\d\d)?$")
+
+
+def _timestamp(text) -> float:
+    """Seconds since 1970 for an ISO 8601 date with any offset; 0 when unreadable."""
+    match = _ISO_DATE.match(str(text or "").strip())
+    if not match:
+        return 0.0
+    zone = match.group(7) or "Z"
+    offset = 0 if zone == "Z" else (
+        (1 if zone[0] == "+" else -1) * (int(zone[1:3]) * 60 + int(zone[-2:])) * 60)
+    fields = tuple(int(v) for v in match.groups()[:6])
+    return calendar.timegm(fields + (0, 0, 0)) - offset
+
+
+def newest_upload(client: Client, app_id: str, number: str):
+    """The newest upload of build `number` that reached Apple (altool uploads are listed too),
+    or None. Filtered here rather than with filter[]: the relationship endpoint may not support
+    it. AWAITING_UPLOAD records are skipped: Apple leaves those next to good uploads."""
+    uploads = read_uploads(client, f"/v1/apps/{app_id}/buildUploads", {"limit": "200"},
+                           every_page=True)
+    found = [(i, u) for i, u in enumerate(uploads)
+             if str(attrs(u).get("cfBundleVersion")) == str(number)
+             and upload_state(u) not in ("", "AWAITING_UPLOAD")]
+    if not found:
+        return None
+    return max(found, key=lambda pair: (_timestamp(attrs(pair[1]).get("createdDate")
+                                                   or attrs(pair[1]).get("uploadedDate")),
+                                        pair[0]))[1]
 
 
 def cmd_wait_build(args) -> int:
@@ -1373,7 +1880,7 @@ def cmd_wait_build(args) -> int:
                       f"--build «{args.build}» must look like 1 or 1.2.3.", code=EXIT_USAGE)
     client = Client(load_credentials())
     deadline = deadline_after(args.timeout_min)
-    build, state = None, ""
+    build, state, refused = None, "", None
     while True:
         try:
             build = find_build(client, args.app_id, args.build) or build
@@ -1382,11 +1889,30 @@ def cmd_wait_build(args) -> int:
                 raise
             log(f"  (build check failed, trying again: {err.describe()})")
         state = str(attrs(build).get("processingState") or "") if build else ""
-        if state in ("VALID", "INVALID", "FAILED") or time.monotonic() >= deadline:
+        if state in ("VALID", "INVALID", "FAILED"):
+            break
+        if build is None:
+            # No build yet: did Apple refuse the file? Then none will ever appear.
+            try:
+                newest = newest_upload(client, args.app_id, args.build)
+            except ApiError as err:
+                if err.status in (401, 403):
+                    raise
+                log(f"  (upload check failed, trying again: {err.describe()})")
+                newest = None
+            if newest is not None and upload_state(newest) == "FAILED":
+                refused = newest
+                break
+        if time.monotonic() >= deadline:
             break
         log(f"  build {args.build}: {state or 'not visible yet / aún no aparece'}; next check in "
             f"{args.poll_sec:g} s")
         pause(args.poll_sec)
+    if refused is not None:
+        for key, value in (("build_id", ""), ("processing_state", "FAILED"), ("processed", "true"),
+                           ("beta_group", "")):
+            set_output(key, value)
+        raise upload_rejected(args.build, (attrs(refused).get("state") or {}).get("errors") or [])
     set_output("build_id", build["id"] if build else "")
     set_output("processing_state", state or "NOT_FOUND")
     # processed=true: Apple finished processing (processing_state says whether it is VALID).
@@ -1395,17 +1921,21 @@ def cmd_wait_build(args) -> int:
         set_output("beta_group", "")
         raise Failure("Apple rechazó la build / Apple rejected the build",
                       f"Apple rechazó la build {args.build}; revisa el correo de App Store Connect "
-                      "(códigos ITMS) para ver el motivo, corrígelo y vuelve a ejecutar.",
+                      "(códigos ITMS) para ver el motivo. No aparecerá en TestFlight. Corrígelo y "
+                      f"después {NEW_RUN_ES}.",
                       f"Apple rejected build {args.build}; check the App Store Connect e-mail (ITMS "
-                      "codes) for the reason, fix it and run again.")
+                      "codes) for the reason. It will not appear in TestFlight. Fix it, then "
+                      f"{NEW_RUN_EN}.")
     if state != "VALID":
         report("warning", "La build sigue en proceso / Build still processing",
                f"Tras {args.timeout_min:g} min Apple aún no terminó de procesar la build "
-               f"{args.build} (estado: {state or 'aún no aparece'}). Suele tardar más algunos "
-               "días; cuando termine llegará un correo y aparecerá en la app TestFlight.",
+               f"{args.build} (estado: {state or 'aún no aparece'}). A veces Apple tarda más; "
+               "cuando termine, la build aparecerá en la app TestFlight (Apple suele avisar por "
+               "correo).",
                f"After {args.timeout_min:g} min Apple has not finished processing build "
-               f"{args.build} (state: {state or 'not visible yet'}). It sometimes takes longer; "
-               "an e-mail arrives when it is done and it shows up in the TestFlight app.")
+               f"{args.build} (state: {state or 'not visible yet'}). Apple sometimes takes longer; "
+               "when it is done the build shows up in the TestFlight app (Apple usually sends an "
+               "e-mail).")
     group_name, added = setup_testers(client, args.app_id, build if state == "VALID" else None)
     set_output("beta_group", group_name)
     lines = [f"### TestFlight · build {args.build}", ""]
@@ -1446,7 +1976,7 @@ def cmd_cleanup(args) -> int:
 
 
 def _cleanup(args) -> int:
-    cert_ids, profile_ids = [], []
+    cert_ids, profile_ids, key_file, pending = [], [], "", False
     if args.state:
         state = {}
         try:
@@ -1463,18 +1993,41 @@ def _cleanup(args) -> int:
         if state.get("cert_id"):
             cert_ids.append(str(state["cert_id"]))
         profile_ids += [str(p) for p in state.get("profile_ids") or [] if p]
+        if os.path.isfile(args.state):
+            # The CSR stays next to state.json (teardown deletes key.pem only): a certificate made
+            # from its key is this run's, even one whose id was never recorded (a lost answer, a
+            # cancelled step).
+            folder = os.path.dirname(os.path.abspath(args.state))
+            key_file = next((p for p in (os.path.join(folder, "csr.pem"),
+                                         os.path.join(folder, "key.pem")) if os.path.isfile(p)), "")
+            pending = bool(state.get("cert_pending"))
     cert_ids += [c for c in re.split(r"[,\s]+", args.cert_id or "") if c]
     profile_ids += [p for p in re.split(r"[,\s]+", args.profile_ids or "") if p]
     cert_ids, profile_ids = _unique(cert_ids), _unique(profile_ids)
     bad = [i for i in cert_ids + profile_ids if not RESOURCE_ID_RE.fullmatch(i)]
     cert_ids = [i for i in cert_ids if i not in bad]
     profile_ids = [i for i in profile_ids if i not in bad]
-    if not cert_ids and not profile_ids and not bad:
+    if not cert_ids and not profile_ids and not bad and not key_file and not pending:
         log("Nothing to clean up / nada que limpiar")
         append_summary("**Limpieza / cleanup:** nada que revocar / nothing to revoke.")
         return EXIT_OK
     client = Client(load_credentials())
     done, failed = [], [f"invalid id «{i}»" for i in bad]
+    if key_file:
+        try:
+            for cert in my_certificates(client, key_file):
+                if cert["id"] not in cert_ids:
+                    log(f"Certificate {cert['id']} was made from this run's key: revoking it too")
+                    cert_ids.append(cert["id"])
+            pending = False             # every certificate of this run is known now
+        except (ApiError, Failure) as exc:
+            log(f"(could not look for this run's certificates: {exc})")
+    if pending:
+        report("warning", "Certificado sin confirmar / Certificate not confirmed",
+               "Una petición de certificado de esta ejecución quedó sin respuesta clara y no se "
+               f"pudo comprobar si Apple llegó a crearlo. {MANUAL_REVOKE_ES}",
+               "A certificate request of this run got no clear answer and it could not be checked "
+               f"whether Apple created the certificate. {MANUAL_REVOKE_EN}")
     # Profiles first: they reference the certificate.
     for kind, template, ids in (("profile", "/v1/profiles/{}", profile_ids),
                                 ("certificate", "/v1/certificates/{}", cert_ids)):
@@ -1495,6 +2048,9 @@ def _cleanup(args) -> int:
     if done:
         append_summary("**Limpieza / cleanup:** revocado o borrado / revoked or deleted: "
                        + ", ".join(done) + ".")
+    elif not failed:
+        log("Nothing to clean up / nada que limpiar")
+        append_summary("**Limpieza / cleanup:** nada que revocar / nothing to revoke.")
     return EXIT_OK
 
 
@@ -1520,12 +2076,19 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("check-auth", help="check the API key (GET /v1/bundleIds)")
     p.set_defaults(func=cmd_check_auth)
 
-    p = sub.add_parser("prepare", help="App IDs, capabilities, app record, next build number")
+    p = sub.add_parser("prepare", help="App IDs, capabilities, app record, leftover sweep")
     p.add_argument("--prefix", required=True, help="bundle ID prefix, e.g. com.example")
     p.add_argument("--setup-only", action="store_true", help="register and explain; never ready")
     p.add_argument("--project-yml", default=os.path.join(REPO_ROOT, "project.yml"),
                    help=argparse.SUPPRESS)
     p.set_defaults(func=cmd_prepare)
+
+    p = sub.add_parser("next-build", help="the next free build number (CFBundleVersion)")
+    p.add_argument("--app-id", required=True, type=_resource_id)
+    p.set_defaults(func=cmd_next_build)
+
+    p = sub.add_parser("janitor", help="remove CI profiles and certificates a run left behind")
+    p.set_defaults(func=cmd_janitor)
 
     p = sub.add_parser("create-signing", help="distribution certificate + App Store profiles")
     p.add_argument("--app-bundle-resource-id", required=True, type=_resource_id)
@@ -1543,6 +2106,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--version", required=True, help="CFBundleShortVersionString")
     p.add_argument("--build", required=True, help="CFBundleVersion")
     p.add_argument("--timeout-min", type=float, default=30)
+    p.add_argument("--committed-marker", help="file created once Apple has the file (removed "
+                                              "again if Apple then refuses it)")
     p.set_defaults(func=cmd_upload)
 
     p = sub.add_parser("wait-build", help="wait for processing, then set up internal testers")
