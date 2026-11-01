@@ -103,6 +103,27 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      # Every workflow file: syntax, expressions, contexts, job outputs (shellcheck off there: the
+      # older jobs predate it). The TestFlight workflow and its script also go through shellcheck
+      # (warnings and errors). Findings become annotations.
+      - name: actionlint (workflow files)
+        run: |
+          set -uo pipefail
+          if ! brew install actionlint shellcheck > brew-actionlint.log 2>&1; then
+            echo "::error title=actionlint::brew install actionlint shellcheck failed: $(tail -n 5 brew-actionlint.log | tr '\n' ' ')"
+            exit 1
+          fi
+          echo "actionlint $(actionlint -version | head -n 1), shellcheck $(shellcheck --version | sed -n 's/^version: //p')"
+          fmt='{{range $err := .}}::error file={{$err.Filepath}},line={{$err.Line}},col={{$err.Column}},title=actionlint {{$err.Kind}}::{{$err.Message}}\n{{end}}'
+          status=0
+          actionlint -shellcheck= -pyflakes= -format "$fmt" .github/workflows/*.yml || status=1
+          SHELLCHECK_OPTS="--severity=warning" actionlint -pyflakes= -format "$fmt" .github/workflows/testflight.yml || status=1
+          if ! shellcheck --severity=warning --format=gcc tools/testflight/build_and_sign.sh > shellcheck.log 2>&1; then
+            cat shellcheck.log
+            sed -n -E 's/^([^:]+):([0-9]+):([0-9]+): [a-z]+: (.*)$/::error file=\1,line=\2,col=\3,title=shellcheck::\4/p' shellcheck.log | head -n 9
+            status=1
+          fi
+          exit "$status"
       - name: Select the newest stable Xcode
         run: |
           installed=$(ls -d /Applications/Xcode*.app | xargs -n1 basename | tr '\n' ' ')
@@ -137,6 +158,107 @@ jobs:
             fi
           done
           grep -h -E "xcodebuild: error|is not installed|Unable to find a destination" build-device-*.log 2>/dev/null | head -5 | while read -r line; do echo "::error title=xcodebuild::$line"; done
+      # TestFlight dry run (no secrets, nothing leaves the runner) for .github/workflows/testflight.yml:
+      # the signing variables resolve as that workflow expects, an unsigned Release archive passes
+      # tools/testflight/lint_bundle.py (privacy manifests, versions, extension layout...), and the
+      # keychain plumbing of tools/testflight/build_and_sign.sh works with a throw-away identity.
+      - name: TestFlight dry run — signing settings (developer defaults, then the CI Local.xcconfig)
+        run: |
+          set -euo pipefail
+          rm -f Config/Local.xcconfig
+          python3 tools/testflight/assert_build_settings.py --project OpenCfMoto.xcodeproj \
+            --label "Signing, developer defaults (no Local.xcconfig)" \
+            "OpenCfMoto:CODE_SIGN_STYLE=Automatic" "OpenCfMoto:CODE_SIGN_IDENTITY=Apple Development" \
+            "OpenCfMoto:PROVISIONING_PROFILE_SPECIFIER=" "OpenCfMoto:PRODUCT_BUNDLE_IDENTIFIER=com.example.opencfmoto" \
+            "OpenCfMotoMirror:CODE_SIGN_STYLE=Automatic" "OpenCfMotoMirror:CODE_SIGN_IDENTITY=Apple Development" \
+            "OpenCfMotoMirror:PROVISIONING_PROFILE_SPECIFIER=" "OpenCfMotoMirror:PRODUCT_BUNDLE_IDENTIFIER=com.example.opencfmoto.mirror"
+          # The Local.xcconfig the TestFlight build writes (build_and_sign.sh configure), fake team and profiles.
+          d="$RUNNER_TEMP/tf-dry-run-settings"
+          rm -rf "$d" && mkdir -p "$d"
+          printf '%s\n' "S_TEAM_ID=ABCDE12345" "S_PROFILE_APP_NAME='CI dry run app'" "S_PROFILE_MIRROR_NAME='CI dry run mirror'" > "$d/state.env"
+          TF_WORK="$d" BUNDLE_ID_PREFIX=com.cidryrun bash tools/testflight/build_and_sign.sh configure
+          cat Config/Local.xcconfig
+          python3 tools/testflight/assert_build_settings.py --project OpenCfMoto.xcodeproj \
+            --label "Signing, TestFlight Local.xcconfig" \
+            "OpenCfMoto:CODE_SIGN_STYLE=Manual" "OpenCfMoto:CODE_SIGN_IDENTITY=Apple Distribution" \
+            "OpenCfMoto:PROVISIONING_PROFILE_SPECIFIER=CI dry run app" "OpenCfMoto:DEVELOPMENT_TEAM=ABCDE12345" \
+            "OpenCfMoto:PRODUCT_BUNDLE_IDENTIFIER=com.cidryrun.opencfmoto" "OpenCfMoto:APP_GROUP_ID=group.com.cidryrun.opencfmoto" \
+            "OpenCfMoto:CODE_SIGN_ENTITLEMENTS=App/Entitlements/full.entitlements" \
+            "OpenCfMotoMirror:CODE_SIGN_STYLE=Manual" "OpenCfMotoMirror:CODE_SIGN_IDENTITY=Apple Distribution" \
+            "OpenCfMotoMirror:PROVISIONING_PROFILE_SPECIFIER=CI dry run mirror" "OpenCfMotoMirror:DEVELOPMENT_TEAM=ABCDE12345" \
+            "OpenCfMotoMirror:PRODUCT_BUNDLE_IDENTIFIER=com.cidryrun.opencfmoto.mirror"
+          TF_WORK="$d" bash tools/testflight/build_and_sign.sh teardown
+          if [ -e Config/Local.xcconfig ]; then echo "::error title=TestFlight dry run::teardown left Config/Local.xcconfig behind"; exit 1; fi
+      - name: TestFlight dry run — unsigned Release archive + bundle lint
+        run: |
+          set -uo pipefail
+          rm -f Config/Local.xcconfig
+          archive="$RUNNER_TEMP/tf-dry-run/OpenCfMoto.xcarchive"
+          rm -rf "$RUNNER_TEMP/tf-dry-run"
+          xcodebuild -project OpenCfMoto.xcodeproj -scheme OpenCfMoto -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$archive" \
+            CODE_SIGNING_ALLOWED=NO CURRENT_PROJECT_VERSION=1 archive > archive-dry-run.log 2>&1 || true
+          grep -E "error:|\*\* ARCHIVE (SUCCEEDED|FAILED) \*\*" archive-dry-run.log || true
+          if ! grep -q "ARCHIVE SUCCEEDED" archive-dry-run.log; then
+            python3 tools/ci/annotate.py archive-dry-run.log "TestFlight dry run archive"
+            exit 1
+          fi
+          python3 tools/testflight/lint_bundle.py --archive "$archive" --unsigned --expect-build 1 --min-sdk-major 26
+      - name: TestFlight dry run — keychain plumbing (self-signed identity)
+        run: |
+          set -euo pipefail
+          d="$RUNNER_TEMP/tf-keychain-dry-run"
+          rm -rf "$d" && mkdir -p "$d/signing"
+          # A throw-away self-signed code-signing identity named like a real distribution one.
+          cat > "$d/openssl.cnf" << 'EOF'
+          [req]
+          distinguished_name = dn
+          prompt = no
+          [dn]
+          CN = Apple Distribution: CI Dry Run (ABCDE12345)
+          OU = ABCDE12345
+          O = CI Dry Run
+          C = US
+          [codesign]
+          basicConstraints = critical,CA:FALSE
+          keyUsage = critical,digitalSignature
+          extendedKeyUsage = critical,codeSigning
+          EOF
+          if ! /usr/bin/openssl req -x509 -new -newkey rsa:2048 -nodes -days 2 -config "$d/openssl.cnf" -extensions codesign \
+               -keyout "$d/signing/key.pem" -out "$d/signing/cert.pem" > "$d/openssl.log" 2>&1; then
+            echo "::error title=TestFlight dry run (keychain)::openssl req failed: $(tr '\n' ' ' < "$d/openssl.log")"
+            exit 1
+          fi
+          /usr/bin/openssl x509 -in "$d/signing/cert.pem" -outform DER -out "$d/signing/cert.cer"
+          export TF_WORK="$d" TF_SIGNING_DIR="$d/signing" TF_ALLOW_UNTRUSTED_IDENTITY=1
+          bash tools/testflight/build_and_sign.sh setup-keychain
+          kc="$d/testflight.keychain-db"
+          fail() {
+            echo "::error title=TestFlight dry run (keychain)::$1"
+            bash tools/testflight/build_and_sign.sh teardown > /dev/null 2>&1 || true
+            exit 1
+          }
+          # (Outputs go through variables: `cmd | grep -q` can fail on SIGPIPE under pipefail.)
+          search=$(security list-keychains -d user)
+          grep -q -F "$kc" <<< "$search" || fail "the temporary keychain is not in the user search list: $search"
+          identities=$(security find-identity -p codesigning "$kc")
+          sha=$(awk '/"Apple Distribution: CI Dry Run \(ABCDE12345\)"/ { print $2; exit }' <<< "$identities")
+          if [ -z "$sha" ]; then fail "find-identity -p codesigning does not list the identity: $identities"; fi
+          cp /usr/bin/true "$d/scratch"
+          # set-key-partition-list must spare codesign the key-access dialog: a hang fails after 60 s.
+          status=0
+          perl -e 'alarm shift; exec @ARGV' 60 codesign --force --timestamp=none --sign "$sha" --keychain "$kc" "$d/scratch" > "$d/codesign.log" 2>&1 || status=$?
+          if [ "$status" -eq 142 ]; then fail "codesign hung for 60 s (waiting for a key-access prompt?)"; fi
+          if [ "$status" -ne 0 ]; then fail "codesign failed ($status): $(tr '\n' ' ' < "$d/codesign.log")"; fi
+          codesign -dvv "$d/scratch" > "$d/verify.log" 2>&1 || true
+          grep -q -F "Authority=Apple Distribution: CI Dry Run (ABCDE12345)" "$d/verify.log" \
+            || fail "the scratch binary is not signed by the dry-run identity: $(tr '\n' ' ' < "$d/verify.log")"
+          bash tools/testflight/build_and_sign.sh teardown
+          if [ -e "$kc" ]; then fail "teardown left the keychain behind"; fi
+          search=$(security list-keychains -d user)
+          if grep -q -F "$kc" <<< "$search"; then fail "teardown left the keychain in the search list: $search"; fi
+          if [ -e "$d/signing/key.pem" ]; then fail "teardown left the private key behind"; fi
+          echo "::notice title=TestFlight dry run (keychain)::identity $sha imported; codesign signed without a prompt; teardown removed keychain, search-list entry and key"
 
   # The REAL app in the iOS Simulator: screenshots of every screen (demo services + demo content)
   # and end-to-end runs against tools/fakedash/fakedash.py on 127.0.0.1 (real sockets, link,

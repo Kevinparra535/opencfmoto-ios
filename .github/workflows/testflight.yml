@@ -1,0 +1,322 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# TestFlight: build, sign and upload the app from GitHub Actions with nothing but an App Store
+# Connect API key (no Mac needed). Run it by hand: Actions ▸ TestFlight ▸ Run workflow.
+# Owner guide (Spanish): docs/TESTFLIGHT.md
+#
+#   prepare (Linux)  check the key; register the bundle ids and capabilities; find the App Store
+#                    Connect app; choose the next build number           (tools/testflight/asc.py)
+#   build (macOS)    temporary distribution certificate + profiles, keychain, archive, lint,
+#                    export, upload                         (tools/testflight/build_and_sign.sh)
+#   finish (Linux)   wait for Apple's processing, put the build in an internal TestFlight group,
+#                    then revoke the temporary certificate and profiles
+#
+# This repository is public, so its logs are too: secrets reach only the steps that need them, in
+# the environment; nothing secret is printed; the IPA / archive are never uploaded as artifacts.
+name: TestFlight
+
+on:
+  workflow_dispatch:
+    inputs:
+      setup_only:
+        description: "Solo preparar: registra los identificadores y muestra los pasos que faltan; no compila"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  prepare:
+    name: Prepare (App Store Connect)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      ready: ${{ steps.prepare.outputs.ready }}
+      prefix: ${{ steps.prefix.outputs.prefix }}
+      team_id: ${{ steps.prepare.outputs.team_id }}
+      app_bundle_id: ${{ steps.prepare.outputs.app_bundle_id }}
+      mirror_bundle_id: ${{ steps.prepare.outputs.mirror_bundle_id }}
+      app_bundle_resource_id: ${{ steps.prepare.outputs.app_bundle_resource_id }}
+      mirror_bundle_resource_id: ${{ steps.prepare.outputs.mirror_bundle_resource_id }}
+      app_group: ${{ steps.prepare.outputs.app_group }}
+      app_id: ${{ steps.prepare.outputs.app_id }}
+      build_number: ${{ steps.prepare.outputs.build_number }}
+      marketing_version: ${{ steps.prepare.outputs.marketing_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Check that the API key secrets exist
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          missing=""
+          if [ -z "$ASC_KEY_ID" ]; then missing="$missing ASC_KEY_ID"; fi
+          if [ -z "$ASC_ISSUER_ID" ]; then missing="$missing ASC_ISSUER_ID"; fi
+          if [ -z "$ASC_PRIVATE_KEY" ]; then missing="$missing ASC_PRIVATE_KEY"; fi
+          if [ -n "$missing" ]; then
+            guide="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/main/docs/TESTFLIGHT.md"
+            echo "::error title=Faltan secretos / Missing secrets::Faltan los secretos del repositorio:$missing. Créalos en Settings ▸ Secrets and variables ▸ Actions ▸ New repository secret (guía: $guide).%0AMissing repository secrets:$missing. Add them under Settings ▸ Secrets and variables ▸ Actions ▸ New repository secret (guide: $guide)."
+            {
+              echo "## TestFlight: faltan secretos / missing secrets"
+              echo
+              echo "Faltan:$missing. Créalos en **Settings ▸ Secrets and variables ▸ Actions** con los datos de tu clave de API de App Store Connect y vuelve a ejecutar. Guía: $guide"
+              echo
+              echo "Missing:$missing. Add them under **Settings ▸ Secrets and variables ▸ Actions** from your App Store Connect API key, then run again. Guide: $guide"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "The three API key secrets are set."
+
+      - name: Bundle id prefix
+        id: prefix
+        env:
+          PREFIX_VARIABLE: ${{ vars.BUNDLE_ID_PREFIX }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          if [ -n "$PREFIX_VARIABLE" ]; then
+            prefix="$PREFIX_VARIABLE"
+          else
+            # com.<owner>, lower case, only [a-z0-9.-]: Kevinparra535 -> com.kevinparra535
+            prefix="com.$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9.-')"
+          fi
+          if ! printf '%s' "$prefix" | grep -Eq '^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$'; then
+            echo "::error title=BUNDLE_ID_PREFIX::El prefijo «$prefix» no es válido (ejemplo: com.tunombre). Corrige la variable BUNDLE_ID_PREFIX en Settings ▸ Secrets and variables ▸ Actions ▸ Variables.%0AThe prefix \"$prefix\" is not valid (example: com.yourname). Fix the BUNDLE_ID_PREFIX repository variable."
+            exit 1
+          fi
+          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+          echo "Bundle id prefix: $prefix"
+
+      - name: Check the API key with App Store Connect
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: python3 tools/testflight/asc.py check-auth
+
+      - name: Register identifiers, find the app, choose the build number
+        id: prepare
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          PREFIX: ${{ steps.prefix.outputs.prefix }}
+          SETUP_ONLY: ${{ inputs.setup_only }}
+        run: |
+          if [ "$SETUP_ONLY" = true ]; then
+            python3 tools/testflight/asc.py prepare --prefix "$PREFIX" --setup-only
+          else
+            python3 tools/testflight/asc.py prepare --prefix "$PREFIX"
+          fi
+
+      - name: Summary
+        if: always()
+        env:
+          READY: ${{ steps.prepare.outputs.ready }}
+          OUTCOME: ${{ steps.prepare.outcome }}
+          SETUP_ONLY: ${{ inputs.setup_only }}
+          APP_BUNDLE_ID: ${{ steps.prepare.outputs.app_bundle_id }}
+          BUILD_NUMBER: ${{ steps.prepare.outputs.build_number }}
+          MARKETING_VERSION: ${{ steps.prepare.outputs.marketing_version }}
+        run: |
+          {
+            echo "## TestFlight — preparación / prepare"
+            echo
+            if [ "$READY" = true ]; then
+              echo "Todo listo: ahora se compila y se sube la versión **$MARKETING_VERSION ($BUILD_NUMBER)** de \`$APP_BUNDLE_ID\` (trabajo «build», unos 15–25 minutos)."
+              echo
+              echo "All set: version **$MARKETING_VERSION ($BUILD_NUMBER)** of \`$APP_BUNDLE_ID\` is built and uploaded next (job \"build\", about 15–25 minutes)."
+            elif [ "$SETUP_ONLY" = true ] && [ "$OUTCOME" = success ]; then
+              echo "Modo «Solo preparar»: no se compila nada. Haz los pasos que faltan (arriba, si los hay) y vuelve a ejecutar el flujo **sin** «Solo preparar»."
+              echo
+              echo "Setup-only mode: nothing is built. Do the remaining steps (above, if any), then run the workflow again **without** \"setup only\"."
+            else
+              echo "La preparación no terminó: lee los errores de arriba (guía: docs/TESTFLIGHT.md)."
+              echo
+              echo "Preparation did not finish: read the errors above (guide: docs/TESTFLIGHT.md)."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: Build, sign and upload (macOS)
+    needs: prepare
+    if: needs.prepare.outputs.ready == 'true'
+    runs-on: macos-15
+    timeout-minutes: 60
+    outputs:
+      uploaded: ${{ steps.upload.outputs.uploaded }}
+      cert_id: ${{ steps.signing.outputs.cert_id }}
+      profile_ids: ${{ steps.signing.outputs.profile_ids }}
+      build_number: ${{ needs.prepare.outputs.build_number }}
+    env:
+      BUNDLE_ID_PREFIX: ${{ needs.prepare.outputs.prefix }}
+      APP_BUNDLE_ID: ${{ needs.prepare.outputs.app_bundle_id }}
+      MIRROR_BUNDLE_ID: ${{ needs.prepare.outputs.mirror_bundle_id }}
+      APP_BUNDLE_RESOURCE_ID: ${{ needs.prepare.outputs.app_bundle_resource_id }}
+      MIRROR_BUNDLE_RESOURCE_ID: ${{ needs.prepare.outputs.mirror_bundle_resource_id }}
+      APP_GROUP: ${{ needs.prepare.outputs.app_group }}
+      APP_ID: ${{ needs.prepare.outputs.app_id }}
+      BUILD_NUMBER: ${{ needs.prepare.outputs.build_number }}
+      MARKETING_VERSION: ${{ needs.prepare.outputs.marketing_version }}
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+      HOMEBREW_NO_ENV_HINTS: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # App Store Connect only accepts builds made with Xcode 26 / the iOS 26 SDK (since 2026-04-28).
+      - name: Select the newest stable Xcode (26 or newer)
+        run: |
+          newest=$(find /Applications -maxdepth 1 -name 'Xcode_*.app' | grep -v -i -E 'beta|_rc|release_candidate' | sort -V | tail -n 1)
+          if [ -n "$newest" ]; then sudo xcode-select -s "$newest/Contents/Developer"; fi
+          version=$(xcodebuild -version | head -n 1 | awk '{print $2}')
+          echo "::notice title=Xcode::$(xcodebuild -version | tr '\n' ' ')"
+          if [ "${version%%.*}" -lt 26 ] 2> /dev/null || [ -z "$version" ]; then
+            echo "::error title=Xcode 26 necesario / Xcode 26 required::El runner solo tiene Xcode ${version:-?}; App Store Connect exige Xcode 26 o posterior. Vuelve a intentarlo cuando GitHub actualice la imagen macos-15.%0AThe runner only has Xcode ${version:-?}; App Store Connect requires Xcode 26 or newer. Try again once GitHub updates the macos-15 image."
+            exit 1
+          fi
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Create the temporary signing certificate and App Store profiles
+        id: signing
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: bash tools/testflight/build_and_sign.sh create-signing
+
+      - name: Temporary keychain with the signing identity
+        run: bash tools/testflight/build_and_sign.sh setup-keychain
+
+      - name: Install the profiles; configure the project for manual signing
+        run: |
+          bash tools/testflight/build_and_sign.sh install-profiles
+          bash tools/testflight/build_and_sign.sh configure
+
+      - name: Archive (Release, iPhone) and lint the archive
+        run: bash tools/testflight/build_and_sign.sh archive
+
+      - name: Export the IPA and lint it
+        run: bash tools/testflight/build_and_sign.sh export
+
+      - name: Upload to App Store Connect
+        id: upload
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: bash tools/testflight/build_and_sign.sh upload
+
+      # Always: deletes keychain and key files; when nothing was uploaded it also revokes the
+      # temporary certificate and profiles right away (otherwise the finish job does it).
+      - name: Clean up
+        if: always()
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: bash tools/testflight/build_and_sign.sh teardown
+
+      - name: Summary
+        if: always()
+        env:
+          UPLOADED: ${{ steps.upload.outputs.uploaded }}
+          METHOD: ${{ steps.upload.outputs.upload_method }}
+        run: |
+          {
+            echo "## TestFlight — compilación / build"
+            echo
+            if [ "$UPLOADED" = true ]; then
+              echo "Subida la versión **$MARKETING_VERSION ($BUILD_NUMBER)** a App Store Connect (${METHOD:-rest}). Apple la procesa ahora; el trabajo «finish» espera, la añade a tu grupo interno de TestFlight y revoca el certificado temporal."
+              echo
+              echo "Uploaded version **$MARKETING_VERSION ($BUILD_NUMBER)** to App Store Connect (${METHOD:-rest}). Apple is processing it; the finish job waits, adds it to your internal TestFlight group and revokes the temporary certificate."
+            else
+              echo "No se subió ninguna build: lee las anotaciones de error de este trabajo. El paso «Clean up» revoca el certificado y los perfiles temporales."
+              echo
+              echo "Nothing was uploaded: read this job's error annotations. The \"Clean up\" step revokes the temporary certificate and profiles."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  finish:
+    name: Processing, TestFlight group, revoke the certificate
+    needs: [prepare, build]
+    if: always() && needs.prepare.outputs.ready == 'true' && needs.build.outputs.uploaded == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      APP_ID: ${{ needs.prepare.outputs.app_id }}
+      BUILD_NUMBER: ${{ needs.prepare.outputs.build_number }}
+      MARKETING_VERSION: ${{ needs.prepare.outputs.marketing_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Wait for Apple's processing; add the build to the internal group
+        id: wait
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: python3 tools/testflight/asc.py wait-build --app-id "$APP_ID" --build "$BUILD_NUMBER" --timeout-min 90
+
+      # Only now, after processing: Apple's processing never sees a revoked certificate. Builds
+      # already in TestFlight keep working after the revocation.
+      - name: Revoke the temporary certificate and profiles
+        if: always()
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          CERT_ID: ${{ needs.build.outputs.cert_id }}
+          PROFILE_IDS: ${{ needs.build.outputs.profile_ids }}
+        run: |
+          args=()
+          if [ -n "$CERT_ID" ]; then args+=(--cert-id "$CERT_ID"); fi
+          if [ -n "$PROFILE_IDS" ]; then args+=(--profile-ids "$PROFILE_IDS"); fi
+          if [ ${#args[@]} -eq 0 ]; then
+            echo "::warning title=Revocar / Revoke::No llegaron los identificadores del certificado: revisa developer.apple.com ▸ Certificates y revoca los «Apple Distribution» creados por CI.%0AThe certificate ids did not arrive: check developer.apple.com ▸ Certificates and revoke the CI-created \"Apple Distribution\" ones."
+            exit 0
+          fi
+          python3 tools/testflight/asc.py cleanup "${args[@]}"
+
+      - name: Summary
+        if: always()
+        env:
+          PROCESSED: ${{ steps.wait.outputs.processed }}
+          STATE: ${{ steps.wait.outputs.processing_state }}
+          GROUP: ${{ steps.wait.outputs.beta_group }}
+          OUTCOME: ${{ steps.wait.outcome }}
+        run: |
+          {
+            echo "## TestFlight — resultado / result"
+            echo
+            if [ "$PROCESSED" = true ]; then
+              echo "La versión **$MARKETING_VERSION ($BUILD_NUMBER)** está lista en TestFlight (grupo interno: ${GROUP:-?}). Abre la app **TestFlight** en tu iPhone, con el Apple ID de tu cuenta de App Store Connect, e instala OpenCfMoto. Si no aparece, mira el correo de Apple y la guía docs/TESTFLIGHT.md."
+              echo
+              echo "Version **$MARKETING_VERSION ($BUILD_NUMBER)** is ready in TestFlight (internal group: ${GROUP:-?}). Open the **TestFlight** app on your iPhone, signed in with your App Store Connect Apple ID, and install OpenCfMoto. If it is not there, check Apple's e-mail and docs/TESTFLIGHT.md."
+            elif [ "$OUTCOME" = success ]; then
+              echo "Apple todavía procesa la build ${STATE:+(estado: $STATE)}; aparecerá en la app TestFlight en cuanto termine (te llegará un correo)."
+              echo
+              echo "Apple is still processing the build ${STATE:+(state: $STATE)}; it shows up in the TestFlight app as soon as that ends (Apple e-mails you)."
+            else
+              echo "Apple no aceptó la build o la espera falló: lee las anotaciones de error y el correo de App Store Connect (códigos ITMS)."
+              echo
+              echo "Apple did not accept the build or waiting failed: read the error annotations and App Store Connect's e-mail (ITMS codes)."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

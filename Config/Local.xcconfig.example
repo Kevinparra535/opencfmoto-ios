@@ -4,6 +4,8 @@
 //   cp Config/Local.xcconfig.example Config/Local.xcconfig
 //
 // Config/OpenCfMoto.xcconfig includes Local.xcconfig last, so everything here overrides it.
+// Signing stays automatic (OCM_CODE_SIGN_* in Config/OpenCfMoto.xcconfig): nothing to add for it here;
+// only the TestFlight workflow overrides those keys, in the Local.xcconfig it writes on the runner.
 
 // Your Apple Developer team ID (Xcode ▸ Settings ▸ Accounts, or developer.apple.com ▸ Membership).
 DEVELOPMENT_TEAM = ABCDE12345

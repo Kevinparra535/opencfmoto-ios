@@ -16,7 +16,6 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     IPHONEOS_DEPLOYMENT_TARGET: "17.0"
     TARGETED_DEVICE_FAMILY: "1"
-    CODE_SIGN_STYLE: Automatic
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     SWIFT_EMIT_LOC_STRINGS: YES
 packages:
@@ -95,6 +94,13 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         DEVELOPMENT_TEAM: $(DEVELOPMENT_TEAM)
+        # Signing comes from Config/OpenCfMoto.xcconfig: Automatic + Apple Development on a
+        # developer's Mac; the TestFlight workflow's Config/Local.xcconfig switches to Manual +
+        # Apple Distribution + its App Store profiles (tools/testflight/build_and_sign.sh).
+        CODE_SIGN_STYLE: $(OCM_CODE_SIGN_STYLE)
+        CODE_SIGN_IDENTITY: $(OCM_CODE_SIGN_IDENTITY)
+        "CODE_SIGN_IDENTITY[sdk=iphoneos*]": $(OCM_CODE_SIGN_IDENTITY)
+        PROVISIONING_PROFILE_SPECIFIER: $(OCM_PROFILE_APP)
   OpenCfMotoMirror:
     type: app-extension
     platform: iOS
@@ -124,6 +130,11 @@ targets:
         CODE_SIGN_ENTITLEMENTS: MirrorExtension/OpenCfMotoMirror.entitlements
         DEVELOPMENT_TEAM: $(DEVELOPMENT_TEAM)
         APPLICATION_EXTENSION_API_ONLY: YES
+        # Same signing variables as the app (see there), with the extension's own profile.
+        CODE_SIGN_STYLE: $(OCM_CODE_SIGN_STYLE)
+        CODE_SIGN_IDENTITY: $(OCM_CODE_SIGN_IDENTITY)
+        "CODE_SIGN_IDENTITY[sdk=iphoneos*]": $(OCM_CODE_SIGN_IDENTITY)
+        PROVISIONING_PROFILE_SPECIFIER: $(OCM_PROFILE_MIRROR)
 schemes:
   OpenCfMoto:
     build:

@@ -5,6 +5,9 @@
 //   BUNDLE_ID_PREFIX = com.yourname
 //   OCM_FLAVOR = free        // only if you use a free Personal Team (no Hotspot / Wi-Fi info entitlements)
 //
+// The TestFlight workflow (.github/workflows/testflight.yml) writes its own Local.xcconfig with the
+// same keys plus the OCM_CODE_SIGN_* / OCM_PROFILE_* signing overrides below.
+//
 BUNDLE_ID_PREFIX = com.example
 DEVELOPMENT_TEAM =
 APP_GROUP_ID = group.$(BUNDLE_ID_PREFIX).opencfmoto
@@ -16,5 +19,13 @@ APP_GROUP_ID = group.$(BUNDLE_ID_PREFIX).opencfmoto
 OCM_FLAVOR = full
 OCM_SWIFT_FLAGS_full =
 OCM_SWIFT_FLAGS_free = OCM_NO_HOTSPOT
+
+// Signing (project.yml uses these for both targets). Defaults = Xcode's automatic signing with your
+// development certificate, as before. Only the TestFlight workflow overrides them (Manual, Apple
+// Distribution and the App Store profiles it creates); you normally leave them alone.
+OCM_CODE_SIGN_STYLE = Automatic
+OCM_CODE_SIGN_IDENTITY = Apple Development
+OCM_PROFILE_APP =
+OCM_PROFILE_MIRROR =
 
 #include? "Local.xcconfig"
