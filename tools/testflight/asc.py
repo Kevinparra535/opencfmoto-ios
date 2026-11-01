@@ -1006,6 +1006,7 @@ def cmd_create_signing(args) -> int:
 
     profile_teams = [str((plist.get("TeamIdentifier") or [""])[0]) for *_, plist in created]
     if not team:
+        log("(team ID not found in the certificate subject; using the profile's TeamIdentifier)")
         team = next((t for t in profile_teams if t), "")
         if not team:
             raise Failure("Sin Team ID / No team ID",

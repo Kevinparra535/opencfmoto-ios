@@ -669,6 +669,11 @@ class JwtTest(unittest.TestCase):
             f"subject= /UID={TEAM}/CN=Apple Distribution: Test Owner ({TEAM})/OU={TEAM}/O=Test Owner/C=US"), TEAM)
         self.assertEqual(asc.team_from_subject("subject=CN = x, O = Org"), "")
 
+    def test_team_from_the_subject_printed_by_this_openssl(self):
+        # The real output of whichever openssl is first on PATH (LibreSSL in the macOS CI job).
+        subject = openssl("x509", "-noout", "-subject", "-in", KEYS.path("apple.pem")).decode("utf-8")
+        self.assertEqual(asc.team_from_subject(subject), TEAM, subject)
+
     def test_profile_plist_and_retry_delay(self):
         plist = plistlib.dumps({"UUID": "u", "Entitlements": {"a": True}})
         self.assertEqual(asc.profile_plist(CMS_HEAD + plist + CMS_TAIL)["UUID"], "u")
@@ -942,6 +947,7 @@ class CreateSigningTest(AscTest):
         out = self.outputs()
         cert_id = next(iter(self.fake.certificates))
         self.assertEqual((out["cert_id"], out["cert_team_id"]), (cert_id, TEAM))
+        self.assertNotIn("team ID not found in the certificate subject", proc.stdout)   # from the OU
         bodies = [c.json()["data"] for c in self.calls("POST", "/v1/profiles")]
         self.assertEqual([b["attributes"] for b in bodies],
                          [{"name": "OpenCfMoto CI 4242-1 app", "profileType": "IOS_APP_STORE"},
