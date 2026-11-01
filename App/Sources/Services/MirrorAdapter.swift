@@ -55,6 +55,13 @@ final class MirrorAdapter: MirrorHosting, @unchecked Sendable {
     func setFit(_ fit: ScreenFit, margins: ScreenMargins) {
         server?.setFit(fit, margins: margins)
     }
+
+    func startWireDump(to url: URL, maxFrames: Int) throws {
+        guard let server else { throw Failure.appGroupUnavailable }
+        try server.startWireDump(to: url, maxFrames: maxFrames)
+    }
+
+    func stopWireDump() { server?.stopWireDump() }
 }
 
 /// A frame source that never produces a frame (no relay available).

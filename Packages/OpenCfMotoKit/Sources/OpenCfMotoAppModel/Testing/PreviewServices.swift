@@ -250,6 +250,13 @@ public final class PreviewProjection: DashProjecting, @unchecked Sendable {
     public func enterForeground() { lock.lock(); mode = "foreground"; lock.unlock() }
     public func stop() { lock.lock(); mode = "stopped"; lock.unlock() }
     public func requestTiles(_ tiles: [DashMapTile]) { lock.lock(); requestedTiles = tiles; lock.unlock() }
+    /// ADDITION (fix-media, MED:MP-7): the wire-dump requests (file URLs) and whether one is open.
+    public private(set) var wireDumps: [URL] = []
+    public private(set) var isWireDumping = false
+    public func startWireDump(to url: URL, maxFrames: Int) throws {
+        lock.lock(); wireDumps.append(url); isWireDumping = true; lock.unlock()
+    }
+    public func stopWireDump() { lock.lock(); isWireDumping = false; lock.unlock() }
     public func prefetchCorridor(_ points: [GeoPoint]) {}
     public func setTileURLTemplate(_ template: String) { lock.lock(); tileURLTemplate = template; lock.unlock() }
     public func clearTileCache() {}
@@ -273,6 +280,13 @@ public final class PreviewMirror: MirrorHosting, @unchecked Sendable {
     public func start() throws { lock.lock(); _running = true; lock.unlock() }
     public func stop() { lock.lock(); _running = false; _connected = false; lock.unlock() }
     public func setFit(_ fit: ScreenFit, margins: ScreenMargins) {}
+    /// ADDITION (fix-media, MED:MP-7): the wire-dump requests (file URLs) and whether one is open.
+    public private(set) var wireDumps: [URL] = []
+    public private(set) var isWireDumping = false
+    public func startWireDump(to url: URL, maxFrames: Int) throws {
+        lock.lock(); wireDumps.append(url); isWireDumping = true; lock.unlock()
+    }
+    public func stopWireDump() { lock.lock(); isWireDumping = false; lock.unlock() }
 
     /// Simulates the broadcast extension connecting / leaving (tests).
     public func setExtensionConnected(_ connected: Bool) {

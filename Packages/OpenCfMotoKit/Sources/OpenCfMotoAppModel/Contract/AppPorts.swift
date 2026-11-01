@@ -291,6 +291,12 @@ public protocol DashProjecting: AnyObject, Sendable {
     /// dash that negotiates while the phone is locked still gets a picture. Default: forwards to
     /// `prepareHoldPicture()`.
     func prepareHoldPicture(expectedCanvas: VideoCanvas)
+    /// ADDITION (fix-media, MED:MP-7): records every access unit served to the dash as a raw
+    /// Annex-B `.h264` file (the first `maxFrames`) — the day-one diagnostic of media-video.md
+    /// §15.8, "shareable from the app". Default: throws (unsupported).
+    func startWireDump(to url: URL, maxFrames: Int) throws
+    /// Closes the recording (the file keeps what was written).
+    func stopWireDump()
 }
 
 public extension DashProjecting {
@@ -300,6 +306,8 @@ public extension DashProjecting {
     }
 
     func prepareHoldPicture(expectedCanvas: VideoCanvas) { prepareHoldPicture() }
+    func startWireDump(to url: URL, maxFrames: Int) throws { throw CocoaError(.featureUnsupported) }
+    func stopWireDump() {}
 }
 
 // MARK: - Mirror (ReplayKit broadcast extension → App Group socket → host)
@@ -314,6 +322,15 @@ public protocol MirrorHosting: AnyObject, Sendable {
     func start() throws
     func stop()
     func setFit(_ fit: ScreenFit, margins: ScreenMargins)
+    /// ADDITION (fix-media, MED:MP-7): records every access unit the relay serves to the dash (raw
+    /// Annex-B `.h264`, the first `maxFrames`). Default: throws (unsupported).
+    func startWireDump(to url: URL, maxFrames: Int) throws
+    func stopWireDump()
+}
+
+public extension MirrorHosting {
+    func startWireDump(to url: URL, maxFrames: Int) throws { throw CocoaError(.featureUnsupported) }
+    func stopWireDump() {}
 }
 
 // MARK: - The bundle

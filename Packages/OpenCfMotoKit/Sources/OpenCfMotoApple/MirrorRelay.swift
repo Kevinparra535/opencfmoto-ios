@@ -428,6 +428,8 @@ public final class MirrorRelayServer: VideoFrameSource, @unchecked Sendable {
     private var placeholderIndex = 0
     private var placeholderBuilding: (width: Int, height: Int)?
     private let placeholderQueue = DispatchQueue(label: "ocm.mirror.placeholder", qos: .userInitiated)
+    /// Records the served access units (diagnostics, MP-7).
+    private var dump: H264WireDump?
 
     public init(socketPath: String, queueCapacity: Int = 3) {
         self.socketPath = socketPath
@@ -451,6 +453,26 @@ public final class MirrorRelayServer: VideoFrameSource, @unchecked Sendable {
     public var placeholderProvider: (@Sendable (VideoCanvas, EncoderParameters) -> [EncodedFrame])? {
         get { lock.lock(); defer { lock.unlock() }; return _placeholderProvider }
         set { lock.lock(); _placeholderProvider = newValue; lock.unlock() }
+    }
+
+    /// Records every access unit served to the dash to `url` (raw Annex-B), up to `maxFrames`
+    /// (media-video.md §15.8 wire dump, the mirror counterpart of DashProjectionEngine's).
+    public func startWireDump(to url: URL, maxFrames: Int = 600) throws {
+        let d = try H264WireDump(url: url, maxFrames: maxFrames)
+        lock.lock()
+        let old = dump
+        dump = d
+        lock.unlock()
+        old?.close()
+        Log.i("DUMP", "recording mirror H.264 → \(url.lastPathComponent) (first \(maxFrames) frames)")
+    }
+
+    public func stopWireDump() {
+        lock.lock()
+        let old = dump
+        dump = nil
+        lock.unlock()
+        old?.close()
     }
 
     public var isClientConnected: Bool { lock.lock(); defer { lock.unlock() }; return connection != nil }
@@ -540,13 +562,13 @@ public final class MirrorRelayServer: VideoFrameSource, @unchecked Sendable {
             // No broadcast picture for this canvas yet: answer at the keep-alive cadence with the
             // placeholder instead of leaving the dash's lock-step pull open (MP-1).
             let wait = min(max(0.05, timeout - FramePull.safetyMargin), interval)
-            if let f = await frameQueue.next(timeout: wait) { return f }
+            if let f = await frameQueue.next(timeout: wait) { return served(f) }
             if isRunning, let p = nextPlaceholder() {
                 frameQueue.resynchronize() // the decoder's reference is the placeholder: next live frame = IDR
                 lock.withLock { _stats.placeholderFramesServed += 1 }
                 Log.shared.throttled("mirror-placeholder", interval: 10, .info, "MIRROR",
                                      "no screen broadcast picture for this canvas yet → placeholder")
-                return p
+                return served(p)
             }
         }
         let remaining = max(0.01, timeout - (ProcessInfo.processInfo.systemUptime - started))
@@ -558,7 +580,14 @@ public final class MirrorRelayServer: VideoFrameSource, @unchecked Sendable {
             lock.withLock { _stats.fallbackKeyframesServed += 1 }
             Log.shared.throttled("mirror-fallback", interval: 5, .warn, "MIRROR", "no mirror frame in time → re-sent the last IDR")
         }
-        return r.frame
+        return r.frame.map { served($0) }
+    }
+
+    /// A frame handed to the link (wire dump).
+    private func served(_ f: EncodedFrame) -> EncodedFrame {
+        let d = lock.withLock { dump }
+        d?.write(f)
+        return f
     }
 
     public func mediaStopped() {

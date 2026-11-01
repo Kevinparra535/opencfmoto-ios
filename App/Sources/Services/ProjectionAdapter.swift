@@ -70,6 +70,8 @@ final class ProjectionAdapter: DashProjecting, @unchecked Sendable {
     func invalidate() { engine.invalidate() }
     func prepareHoldPicture() { engine.prepareHoldPicture() }
     func prepareHoldPicture(expectedCanvas: VideoCanvas) { engine.prepareHoldPicture(expectedCanvas: expectedCanvas) }
+    func startWireDump(to url: URL, maxFrames: Int) throws { try engine.startWireDump(to: url, maxFrames: maxFrames) }
+    func stopWireDump() { engine.stopWireDump() }
     func enterBackground() { engine.enterBackground() }
     func enterForeground() { engine.enterForeground() }
     func stop() { engine.stop() }

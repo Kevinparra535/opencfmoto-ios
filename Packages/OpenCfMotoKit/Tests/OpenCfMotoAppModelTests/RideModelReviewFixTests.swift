@@ -294,6 +294,46 @@ final class RideModelReviewFixTests: XCTestCase {
         ctrl.close(); mctl.close(); mdata.close()
     }
 
+    // MARK: MED:MP-7 — record the dash video stream from the app
+
+    @MainActor
+    func testDashVideoRecordingFollowsTheSourceSentToTheDash() async throws {
+        let h = AppTestHarness()
+        let mirror = try XCTUnwrap(h.mirror as? PreviewMirror)
+        XCTAssertFalse(h.ride.isRecordingDashVideo)
+        h.ride.setDashVideoRecording(true)
+        XCTAssertTrue(h.ride.isRecordingDashVideo)
+        let first = try XCTUnwrap(h.ride.dashVideoRecordingURL)
+        XCTAssertEqual(h.projection.wireDumps, [first], "own UI by default")
+        XCTAssertTrue(h.projection.isWireDumping)
+        XCTAssertEqual(first.deletingLastPathComponent().standardizedFileURL,
+                       h.core.services.files.exportsDirectory.standardizedFileURL)
+        XCTAssertTrue(first.lastPathComponent.hasPrefix("opencfmoto-wire-"))
+        XCTAssertEqual(first.pathExtension, "h264")
+        // A mirror session starts: the recording moves to what the dash now receives.
+        h.ride.sessionChanged(active: true, mirror: true)
+        XCTAssertFalse(h.projection.isWireDumping)
+        XCTAssertTrue(mirror.isWireDumping)
+        XCTAssertEqual(mirror.wireDumps.count, 1)
+        XCTAssertEqual(h.ride.dashVideoRecordingURL, mirror.wireDumps.first)
+        // Off: closed, the file stays shareable.
+        h.ride.setDashVideoRecording(false)
+        XCTAssertFalse(h.ride.isRecordingDashVideo)
+        XCTAssertFalse(mirror.isWireDumping)
+        XCTAssertEqual(h.ride.dashVideoRecordingURL, mirror.wireDumps.first)
+        h.ride.setDashVideoRecording(false) // idempotent
+        XCTAssertEqual(RideModel.dashVideoRecordingFrameLimit, 600)
+    }
+
+    @MainActor
+    func testDashVideoRecordingUnavailableStaysOff() async {
+        let spy = RideSpyProjection() // no wire dump: the port's default refuses
+        let h = AppTestHarness { $0.projection = spy }
+        h.ride.setDashVideoRecording(true)
+        XCTAssertFalse(h.ride.isRecordingDashVideo)
+        XCTAssertNil(h.ride.dashVideoRecordingURL)
+    }
+
     // MARK: SPEC:CL-10 — theme AUTO follows the phone's dark mode
 
     private func fix(lat: Double = 4.6584, lon: Double = -74.0930) -> LocationFix {

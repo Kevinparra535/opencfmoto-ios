@@ -186,6 +186,9 @@ struct LogsDiagnosticsCard: View {
             .font(.caption.monospacedDigit())
             .foregroundStyle(Theme.text)
             .padding(.top, 6)
+
+            LogsDashVideoRecorderRow()
+                .padding(.top, 10)
         } label: {
             Label("Link diagnostics", systemImage: "waveform.path.ecg")
                 .font(.subheadline.weight(.semibold))
@@ -194,6 +197,34 @@ struct LogsDiagnosticsCard: View {
         .padding(12)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.outline, lineWidth: 1))
+    }
+}
+
+/// Diagnostics (media-video.md §15.8): record the H.264 stream exactly as sent to the dash (the
+/// first 600 access units, raw Annex-B) and share the file — how the black-screen bug was found.
+@MainActor
+struct LogsDashVideoRecorderRow: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let ride = model.ride
+        VStack(alignment: .leading, spacing: 6) {
+            Toggle(isOn: Binding(get: { ride.isRecordingDashVideo }, set: { ride.setDashVideoRecording($0) })) {
+                Text("Record the dash video stream")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Theme.text)
+            }
+            .toggleStyle(.switch)
+            Text("Saves the first 600 frames sent to the dash (raw H.264) for a problem report.")
+                .font(.caption2)
+                .foregroundStyle(Theme.textSecondary)
+            if let url = ride.dashVideoRecordingURL, !ride.isRecordingDashVideo {
+                ShareLink(item: url) {
+                    Label("Share the recording", systemImage: "square.and.arrow.up")
+                        .font(.footnote)
+                }
+            }
+        }
     }
 }
 

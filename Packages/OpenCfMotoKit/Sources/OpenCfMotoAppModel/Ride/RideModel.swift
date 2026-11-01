@@ -93,6 +93,14 @@ public final class RideModel {
     public private(set) var speedText: String = ""
     /// Status of the location permission / GPS for the UI ("Waiting for GPS…").
     public private(set) var gpsStatus: String = ""
+    /// Logs ▸ diagnostics (MP-7): the access units sent to the dash are being recorded to
+    /// `dashVideoRecordingURL` (raw Annex-B H.264, the first `dashVideoRecordingFrameLimit`) — the
+    /// day-one wire dump of media-video.md §15.8.
+    public private(set) var isRecordingDashVideo = false
+    /// The current / last recording (share it once recording is off).
+    public private(set) var dashVideoRecordingURL: URL?
+    /// Access units kept per recording (Android DUMP_H264's cap).
+    public static let dashVideoRecordingFrameLimit = 600
 
     // MARK: Internal state
 
@@ -142,6 +150,8 @@ public final class RideModel {
     @ObservationIgnored private var placesListener: UUID?
     @ObservationIgnored private let tileRefreshPending = Locked(false)
     @ObservationIgnored private var scenePhase: AppScenePhase = .active
+    /// Which source the running recording is attached to (true = mirror relay).
+    @ObservationIgnored private var dashVideoSourceIsMirror: Bool?
 
     public init(core: AppCore, settings: SettingsModel, navigation: NavigationModel, trips: TripsModel) {
         self.core = core
@@ -203,6 +213,56 @@ public final class RideModel {
         updateLoops()
     }
 
+    // MARK: Dash video recording (diagnostics)
+
+    /// Starts / stops recording what is sent to the dash (MP-7): the own-UI projection, or the
+    /// mirror relay during a mirror session. Each recording is a new file in the exports folder.
+    public func setDashVideoRecording(_ on: Bool) {
+        guard on != isRecordingDashVideo else { return }
+        if on {
+            startDashVideoRecording(mirror: sessionIsMirror)
+        } else {
+            stopDashVideoRecording()
+            Log.i("RIDE", "dash video recording stopped (\(dashVideoRecordingURL?.lastPathComponent ?? "-"))")
+        }
+    }
+
+    private func startDashVideoRecording(mirror: Bool) {
+        let services = core.services
+        let url = services.files.exportsDirectory.appendingPathComponent("opencfmoto-wire-\(Self.fileStamp(services.now())).h264")
+        do {
+            try FileManager.default.createDirectory(at: services.files.exportsDirectory, withIntermediateDirectories: true)
+            if mirror {
+                try services.mirror.startWireDump(to: url, maxFrames: Self.dashVideoRecordingFrameLimit)
+            } else {
+                try services.projection.startWireDump(to: url, maxFrames: Self.dashVideoRecordingFrameLimit)
+            }
+        } catch {
+            Log.w("RIDE", "dash video recording unavailable: \(error)")
+            return
+        }
+        dashVideoSourceIsMirror = mirror
+        dashVideoRecordingURL = url
+        isRecordingDashVideo = true
+        Log.i("RIDE", "recording the dash video stream (\(mirror ? "mirror" : "own UI"), first \(Self.dashVideoRecordingFrameLimit) frames) → \(url.lastPathComponent)")
+    }
+
+    private func stopDashVideoRecording() {
+        if let mirror = dashVideoSourceIsMirror {
+            if mirror { core.services.mirror.stopWireDump() } else { core.services.projection.stopWireDump() }
+        }
+        dashVideoSourceIsMirror = nil
+        isRecordingDashVideo = false
+    }
+
+    /// "20261101-142530" (POSIX, local time) for file names.
+    private static func fileStamp(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyyMMdd-HHmmss"
+        return f.string(from: date)
+    }
+
     /// Starts GPS + navigation session use without a dash (preview / testing on the phone).
     public func startLocationPreview() {
         previewRequests += 1
@@ -238,6 +298,11 @@ public final class RideModel {
         sessionIsMirror = active && mirror
         guard changed else { return }
         autoLogSuppressed = false
+        if isRecordingDashVideo, active, let wasMirror = dashVideoSourceIsMirror, wasMirror != sessionIsMirror {
+            // The recording follows what is sent to the dash: a new file on the other source.
+            stopDashVideoRecording()
+            startDashVideoRecording(mirror: sessionIsMirror)
+        }
         if active {
             encoderPlan.adaptive.reset()
             lastPushedParameters = nil

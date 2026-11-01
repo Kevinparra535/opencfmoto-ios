@@ -472,4 +472,33 @@ final class VideoMirrorRelayTests: XCTestCase {
         XCTAssertNil(none)
         XCTAssertEqual(server.stats.placeholderFramesServed, 0)
     }
+
+    /// MP-7: the mirror relay records exactly what it serves (raw Annex-B), like the own-UI engine.
+    func testWireDumpRecordsTheServedAccessUnits() async throws {
+        let path = try socketPath()
+        let server = MirrorRelayServer(socketPath: path)
+        try server.start()
+        defer { server.stop() }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("ocm-mirror-dump-\(UUID().uuidString).h264")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try server.startWireDump(to: url, maxFrames: 2)
+        let client = MirrorRelayClient(socketPath: path)
+        client.retryInterval = 0.05
+        defer { client.stop() }
+        client.start()
+        let ok = await waitUntil { client.isConnected && server.isClientConnected }
+        XCTAssertTrue(ok)
+        server.prepare(canvas: VideoCanvas(width: 800, height: 384, requestedWidth: 800, requestedHeight: 386), parameters: .default)
+        let a = idr(Self.sps800x384, seq: 1), b = pFrame(2), c = pFrame(3)
+        client.send(frame: a)
+        client.send(frame: b)
+        client.send(frame: c)
+        let f1 = await server.nextFrame(timeout: 3)
+        let f2 = await server.nextFrame(timeout: 3)
+        let f3 = await server.nextFrame(timeout: 3)
+        XCTAssertEqual([f1, f2, f3].map { $0?.sequence }, [1, 2, 3])
+        server.stopWireDump()
+        let dumped = try Data(contentsOf: url)
+        XCTAssertEqual(dumped, a.accessUnit + b.accessUnit, "first 2 access units, byte for byte")
+    }
 }
