@@ -296,11 +296,12 @@ public final class RideModel {
         setNeedsModelUpdate()
     }
 
-    /// Link state for TripAutoLogPolicy.
+    /// Link state for TripAutoLogPolicy and the idle timer (no screen kept awake while parked).
     func linkPhaseChanged(_ phase: ConnectionPhase) {
         guard phase != linkPhase else { return }
         linkPhase = phase
         evaluateTripAutoLog()
+        applyIdleTimer()
     }
 
     func scenePhaseChanged(_ phase: AppScenePhase) {
@@ -665,8 +666,12 @@ public final class RideModel {
         if status != gpsStatus { gpsStatus = status }
     }
 
+    /// "Keep screen on while projecting" (session-network §11.4) holds only while the dash can be
+    /// linked: not while the session is parked waiting for the bike (§11.6, the iOS battery park)
+    /// or sits in an error. Ride Mode always keeps the screen awake.
     private func applyIdleTimer() {
-        let keepAwake = isRideModeActive || (sessionActive && cachedSettings.keepScreenOn)
+        let linked = sessionActive && linkPhase != .waitingForBike && linkPhase != .error
+        let keepAwake = isRideModeActive || (linked && cachedSettings.keepScreenOn)
         let system = core.services.system
         if system.isIdleTimerDisabled != keepAwake { system.isIdleTimerDisabled = keepAwake }
     }
