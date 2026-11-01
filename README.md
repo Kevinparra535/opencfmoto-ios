@@ -170,7 +170,10 @@ Packages/OpenCfMotoKit/         Paquete Swift
   Tests/                          Pruebas XCTest
 docs/ARCHITECTURE.md            Arquitectura y reglas del proyecto
 docs/spec/                      Especificaciones de comportamiento extraídas de la app Android
-tools/                          Herramientas (traducciones, CI)
+docs/TESTFLIGHT.md              Instalar sin Mac: compilar y subir a TestFlight desde GitHub
+.github/workflows/              ci.yml (pruebas y compilaciones) y testflight.yml (TestFlight)
+tools/                          Herramientas: traducciones, CI, tablero simulado (fakedash)
+  testflight/                     App Store Connect (asc.py), firma y subida, revisión del IPA
 ```
 
 ## Pruebas e integración continua
@@ -182,7 +185,10 @@ swift test --package-path Packages/OpenCfMotoKit
 El núcleo y los modelos de la app (unas mil pruebas) se ejecutan en Linux y macOS. En cada push,
 GitHub Actions (`.github/workflows/ci.yml`) ejecuta las pruebas en Linux, las vuelve a ejecutar en
 macOS compilando los adaptadores de Apple, genera el proyecto con XcodeGen y compila la app para
-el Simulador de iOS. Las traducciones se reúnen con `python3 tools/l10n/build_strings.py`.
+el Simulador de iOS y para iPhone (también con el Xcode más reciente). Además ensaya el flujo de
+TestFlight sin credenciales: pruebas de `asc.py` contra un App Store Connect simulado, ajustes de
+firma, archivo sin firmar revisado por `lint_bundle.py` y el llavero temporal. Las traducciones se
+reúnen con `python3 tools/l10n/build_strings.py`.
 
 ## Privacidad
 
@@ -377,7 +383,10 @@ Packages/OpenCfMotoKit/         Swift package
   Tests/                          XCTest suites
 docs/ARCHITECTURE.md            Architecture and project rules
 docs/spec/                      Behaviour specs extracted from the Android app
-tools/                          Tooling (translations, CI)
+docs/TESTFLIGHT.md              No Mac: build and upload to TestFlight from GitHub
+.github/workflows/              ci.yml (tests and builds) and testflight.yml (TestFlight)
+tools/                          Tooling: translations, CI, simulated dash (fakedash)
+  testflight/                     App Store Connect (asc.py), signing and upload, IPA checks
 ```
 
 ## Tests and CI
@@ -389,7 +398,10 @@ swift test --package-path Packages/OpenCfMotoKit
 The core and the app models (about a thousand tests) run on Linux and macOS. On every push GitHub
 Actions (`.github/workflows/ci.yml`) runs the tests on Linux, runs them again on macOS while
 compiling the Apple adapters, generates the project with XcodeGen and builds the app for the iOS
-Simulator. Translations are merged with `python3 tools/l10n/build_strings.py`.
+Simulator and for iPhone (also with the newest Xcode). It also rehearses the TestFlight pipeline
+without credentials: `asc.py` tests against a fake App Store Connect, the signing settings, an
+unsigned archive checked by `lint_bundle.py`, and the temporary keychain. Translations are merged
+with `python3 tools/l10n/build_strings.py`.
 
 ## Privacy
 
