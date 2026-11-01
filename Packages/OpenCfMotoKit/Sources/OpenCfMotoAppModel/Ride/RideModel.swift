@@ -429,11 +429,22 @@ public final class RideModel {
         let key = Self.routeKey(snap.route)
         if key != lastRouteKey {
             lastRouteKey = key
-            if let route = snap.route, route.points.count >= 2 {
-                core.services.projection.prefetchCorridor(Self.sampled(route.points.map(\.point), max: 400))
+            if let route = snap.route {
+                // Route points come from untrusted GPX files / imports: never hand NaN, ±∞ or
+                // out-of-range coordinates to the tile maths (SEC-1).
+                let corridor = Self.corridorPoints(route)
+                if corridor.count >= 2 {
+                    core.services.projection.prefetchCorridor(Self.sampled(corridor, max: 400))
+                }
             }
         }
         setNeedsModelUpdate()
+    }
+
+    /// The usable vertices of a route for the tile-corridor prefetch: finite, latitude −90…90,
+    /// longitude −180…180 (`MapProjection.isUsable`).
+    nonisolated static func corridorPoints(_ route: Route) -> [GeoPoint] {
+        Array(route.points.lazy.map(\.point).filter(MapProjection.isUsable))
     }
 
     private func handleNavEffect(_ effect: NavEffect) {
@@ -946,9 +957,12 @@ public final class RideModel {
                                        learnedCanvas: core.dashMemory.learnedCanvas(forSSID: qr.ssid))
     }
 
-    private static func routeKey(_ route: Route?) -> String? {
+    /// Identity of a route for "apply once" work (corridor prefetch). Never traps on a corrupt
+    /// route: the distance is converted with Kotlin `toInt()` semantics (NaN → 0, saturating).
+    nonisolated static func routeKey(_ route: Route?) -> String? {
         guard let r = route, let first = r.points.first, let last = r.points.last else { return nil }
-        return "\(r.points.count)|\(first.lat),\(first.lon)|\(last.lat),\(last.lon)|\(Int(r.distanceM))|\(r.label)"
+        let metres = NavNumberFormat.truncateToInt(r.distanceM)
+        return "\(r.points.count)|\(first.lat),\(first.lon)|\(last.lat),\(last.lon)|\(metres)|\(r.label)"
     }
 
     /// At most `max` points, evenly spaced, always keeping the last one.

@@ -125,6 +125,42 @@ final class VideoTileCacheTests: XCTestCase {
         XCTAssertLessThan(tiles.firstIndex(of: ka)!, tiles.firstIndex(of: kb)!)
     }
 
+    /// SEC-1: a GPX / import with NaN, ±∞ or out-of-range coordinates reaches the corridor prefetch
+    /// on the main actor. It used to trap ("Double value cannot be converted to Int because it is
+    /// either infinite or NaN"); now bad points are skipped and the good ones are still covered.
+    func testCorridorCoverageNeverTrapsOnCorruptCoordinates() {
+        let good = [GeoPoint(lat: 45.10, lon: 25.00), GeoPoint(lat: 45.13, lon: 25.03)]
+        let poison: [GeoPoint] = [
+            GeoPoint(lat: 45.1, lon: 1e300), GeoPoint(lat: .nan, lon: 25.01), GeoPoint(lat: 45.11, lon: .infinity),
+            GeoPoint(lat: 200, lon: 25.02), GeoPoint(lat: 45.12, lon: 1e20), GeoPoint(lat: -.infinity, lon: -.infinity),
+            GeoPoint(lat: 45.1, lon: -181),
+        ]
+        let mixed = [good[0]] + poison + [good[1]]
+        for z in [0, 14, 17, 24] {
+            let tiles = TileCoverage.tiles(corridor: mixed, zoom: z, radiusMeters: 250, limit: 400)
+            let clean = TileCoverage.tiles(corridor: good, zoom: z, radiusMeters: 250, limit: 400)
+            XCTAssertEqual(tiles, clean, "z\(z): bad points are skipped, the route between the good ones is kept")
+            XCTAssertTrue(tiles.allSatisfy { $0.isValid })
+        }
+        XCTAssertEqual(TileCoverage.tiles(corridor: poison, zoom: 15, radiusMeters: 250, limit: 400), [])
+        // Absurd radii and zooms are clamped / rejected, never converted unchecked.
+        XCTAssertFalse(TileCoverage.tiles(corridor: good, zoom: 3, radiusMeters: 1e300, limit: 50).isEmpty)
+        XCTAssertFalse(TileCoverage.tiles(corridor: good, zoom: 15, radiusMeters: .nan, limit: 50).isEmpty)
+        XCTAssertEqual(TileCoverage.tiles(corridor: good, zoom: 25, radiusMeters: 250, limit: 50), [])
+        // An antipodal segment is sampled within the cap and stops at the limit.
+        let far = TileCoverage.tiles(corridor: [GeoPoint(lat: 0, lon: -179.9), GeoPoint(lat: 0.1, lon: 179.9)],
+                                     zoom: 17, radiusMeters: 250, limit: 400)
+        XCTAssertEqual(far.count, 400)
+        // The tile index helpers clamp instead of trapping.
+        XCTAssertEqual(TileCoverage.tileX(lon: .nan, zoom: 3), 4)
+        XCTAssertEqual(TileCoverage.tileX(lon: 1e300, zoom: 3), 7)
+        XCTAssertEqual(TileCoverage.tileX(lon: -.infinity, zoom: 3), 0)
+        XCTAssertEqual(TileCoverage.tileY(lat: .nan, zoom: 3), 4)
+        XCTAssertEqual(TileCoverage.tileY(lat: .infinity, zoom: 3), 0)
+        XCTAssertFalse(TileCoverage.isUsable(GeoPoint(lat: 91, lon: 0)))
+        XCTAssertTrue(TileCoverage.isUsable(GeoPoint(lat: -90, lon: 180)))
+    }
+
     func testCorridorCoverageRespectsTheLimit() {
         let route = (0 ..< 50).map { GeoPoint(lat: 45 + Double($0) * 0.01, lon: 25 + Double($0) * 0.01) }
         let tiles = TileCoverage.tiles(corridor: route, zoom: 16, radiusMeters: 500, limit: 37)
