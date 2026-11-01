@@ -73,7 +73,9 @@ duplicadas, la pantalla debe estar encendida y la emisión se detiene al bloquea
 
 ## Requisitos
 
-- Un **Mac con Xcode 16** o posterior y un **iPhone con iOS 17** o posterior.
+- Un **iPhone con iOS 17** o posterior y, para compilarla tú, un **Mac con Xcode 16** o posterior.
+  **Sin Mac**: con la cuenta de pago, GitHub la compila y la sube a TestFlight
+  ([docs/TESTFLIGHT.md](docs/TESTFLIGHT.md)).
 - Una **cuenta de Apple Developer**:
   - **De pago** (Apple Developer Program) para la variante `full`: la app se une sola al Wi-Fi de
     la moto (*Hotspot Configuration*) y lee el SSID actual (*Access WiFi Information*).
@@ -111,6 +113,13 @@ Para la prueba en la moto compílala en **Release** (Product ▸ Scheme ▸ Edit
 Configuration ▸ Release), que va más fluida que Debug. Después no necesitas el Mac: abre la app desde
 la pantalla de inicio. Con la cuenta de pago la instalación dura hasta un año (con la gratuita, 7 días).
 
+### Sin Mac: TestFlight
+
+Con la cuenta de pago, el workflow **TestFlight** de GitHub Actions compila la app en un Mac en la
+nube, la firma y la sube a TestFlight; tú la instalas con la app TestFlight. Solo hay que crear una
+clave de la API de App Store Connect, guardarla como secreto en GitHub y hacer dos pasos en la web
+de Apple. Guía paso a paso: [docs/TESTFLIGHT.md](docs/TESTFLIGHT.md).
+
 ### Modo demostración
 
 Para probar sin moto (por ejemplo en el **Simulador**), añade el argumento de arranque `-demo`
@@ -137,9 +146,10 @@ Sigue la guía paso a paso [docs/PRUEBA-EN-LA-MOTO.md](docs/PRUEBA-EN-LA-MOTO.md
   no es detectable en iOS; los ▲/▼ de volumen solo funcionan con la opción experimental.
 - **App Store**: el audio silencioso para los botones y la lectura del volumen podrían no ser
   aceptados en la revisión de Apple. Además, la licencia **AGPL** es difícil de compatibilizar con
-  las condiciones de la App Store: distribuir esta app (o un derivado) en la App Store o TestFlight
-  requiere el permiso de los titulares del proyecto original. Hoy la forma prevista es compilarla
-  tú mismo.
+  las condiciones de la App Store: distribuir esta app (o un derivado) a otras personas, ya sea en
+  la App Store o con pruebas externas o un enlace público de TestFlight, requiere el permiso de los
+  titulares del proyecto original. La forma prevista es instalarla tú mismo, con Xcode o con las
+  pruebas internas de TestFlight (solo para ti).
 - Los servicios públicos de OpenStreetMap (teselas, Photon, Nominatim, Overpass, OSRM, Valhalla)
   tienen políticas de uso justo; para un uso intensivo configura tu propio servidor de teselas o
   una clave de OpenRouteService en Ajustes.
@@ -277,7 +287,9 @@ on and the broadcast stops when the phone locks.
 
 ## Requirements
 
-- A **Mac with Xcode 16** or later and an **iPhone with iOS 17** or later.
+- An **iPhone with iOS 17** or later and, to build it yourself, a **Mac with Xcode 16** or later.
+  **No Mac**: with a paid account, GitHub builds it and uploads it to TestFlight
+  ([docs/TESTFLIGHT.md](docs/TESTFLIGHT.md)).
 - An **Apple Developer account**:
   - **Paid** (Apple Developer Program) for the `full` flavor: the app joins the bike Wi-Fi by itself
     (*Hotspot Configuration*) and reads the current SSID (*Access WiFi Information*).
@@ -314,6 +326,13 @@ For the bike test build it in **Release** (Product ▸ Scheme ▸ Edit Scheme �
 Configuration ▸ Release), which runs smoother than Debug. After that you do not need the Mac: open the
 app from the Home Screen. With a paid account the install lasts up to a year (7 days with a free one).
 
+### No Mac: TestFlight
+
+With a paid account, the **TestFlight** GitHub Actions workflow builds the app on a cloud Mac, signs
+it and uploads it to TestFlight; you install it with the TestFlight app. You only create an App Store
+Connect API key, store it as GitHub secrets and do two steps on Apple's website. Step-by-step guide:
+[docs/TESTFLIGHT.md](docs/TESTFLIGHT.md#english).
+
 ### Demo mode
 
 To try it without a bike (in the **Simulator**, for example), add the `-demo` launch argument
@@ -336,8 +355,9 @@ no Wi-Fi or dash, and a demo GPS route so you can watch the dash UI on the phone
   work with the experimental option.
 - **App Store**: the silent audio for the buttons and the volume observation may not pass Apple's
   review. The **AGPL** is also hard to reconcile with the App Store terms: distributing this app (or
-  a derivative) on the App Store or TestFlight needs permission from the upstream copyright
-  holders. Building it yourself is the intended way today.
+  a derivative) to other people — on the App Store, or through TestFlight external testing or a
+  public link — needs permission from the upstream copyright holders. The intended way is to install
+  it yourself, with Xcode or with TestFlight internal testing (only you).
 - The public OpenStreetMap services (tiles, Photon, Nominatim, Overpass, OSRM, Valhalla) have
   fair-use policies; for heavy use set your own tile server or an OpenRouteService key in Settings.
 
