@@ -219,31 +219,6 @@ jobs:
             "OpenCfMoto:TARGETED_DEVICE_FAMILY=1" "OpenCfMotoMirror:TARGETED_DEVICE_FAMILY=1"
           TF_WORK="$d" bash tools/testflight/build_and_sign.sh teardown
           if [ -e Config/Local.xcconfig ]; then echo "::error title=TestFlight dry run::teardown left Config/Local.xcconfig behind"; exit 1; fi
-      # ONE-OFF (removed in the next commit): what XcodeGen makes of the old project.yml, where only
-      # the project level set TARGETED_DEVICE_FAMILY. Reports, never fails.
-      - name: One-off — device family without the per-target setting
-        run: |
-          set -uo pipefail
-          python3 - << 'PY'
-          s = open("project.yml", encoding="utf-8").read()
-          s = s.replace('        TARGETED_DEVICE_FAMILY: "1" # same devices as the app (see there)\n', "")
-          s = s.replace('        TARGETED_DEVICE_FAMILY: "1"\n', "")
-          s = s.replace('    IPHONEOS_DEPLOYMENT_TARGET: "17.0"\n', '    IPHONEOS_DEPLOYMENT_TARGET: "17.0"\n    TARGETED_DEVICE_FAMILY: "1"\n', 1)
-          open("project-before.yml", "w", encoding="utf-8").write(s)
-          PY
-          grep -n 'TARGETED_DEVICE_FAMILY' project-before.yml || true
-          rm -rf before && mkdir before
-          xcodegen generate --spec project-before.yml --project before > before.log 2>&1 || cat before.log
-          grep -E 'TARGETED_DEVICE_FAMILY|name = (Debug|Release);' before/OpenCfMoto.xcodeproj/project.pbxproj | tr -s ' \t' ' ' | head -n 20 || true
-          report=""
-          for proj in before/OpenCfMoto.xcodeproj OpenCfMoto.xcodeproj; do
-            for t in OpenCfMoto OpenCfMotoMirror; do
-              v=$(xcodebuild -project "$proj" -target "$t" -configuration Release -sdk iphoneos -showBuildSettings 2> /dev/null | sed -n 's/^ *TARGETED_DEVICE_FAMILY = //p' | head -n 1)
-              report="$report ${proj%%/*}:$t=${v:-?};"
-            done
-          done
-          echo "::notice title=One-off: TARGETED_DEVICE_FAMILY (old project.yml = before/, current = OpenCfMoto.xcodeproj)::$report"
-          rm -rf before before.log project-before.yml
       - name: TestFlight dry run — lint_bundle.py self-test (synthetic signed archive and IPA)
         run: |
           if ! python3 tools/testflight/test_lint_bundle.py > lint-selftest.log 2>&1; then
