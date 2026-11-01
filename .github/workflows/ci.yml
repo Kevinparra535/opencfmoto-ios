@@ -198,7 +198,8 @@ jobs:
             "OpenCfMoto:CODE_SIGN_STYLE=Automatic" "OpenCfMoto:CODE_SIGN_IDENTITY=Apple Development" \
             "OpenCfMoto:PROVISIONING_PROFILE_SPECIFIER=" "OpenCfMoto:PRODUCT_BUNDLE_IDENTIFIER=com.example.opencfmoto" \
             "OpenCfMotoMirror:CODE_SIGN_STYLE=Automatic" "OpenCfMotoMirror:CODE_SIGN_IDENTITY=Apple Development" \
-            "OpenCfMotoMirror:PROVISIONING_PROFILE_SPECIFIER=" "OpenCfMotoMirror:PRODUCT_BUNDLE_IDENTIFIER=com.example.opencfmoto.mirror"
+            "OpenCfMotoMirror:PROVISIONING_PROFILE_SPECIFIER=" "OpenCfMotoMirror:PRODUCT_BUNDLE_IDENTIFIER=com.example.opencfmoto.mirror" \
+            "OpenCfMoto:TARGETED_DEVICE_FAMILY=1" "OpenCfMotoMirror:TARGETED_DEVICE_FAMILY=1"
           # The Local.xcconfig the TestFlight build writes (build_and_sign.sh configure), fake team and profiles.
           d="$RUNNER_TEMP/tf-dry-run-settings"
           rm -rf "$d" && mkdir -p "$d"
@@ -213,7 +214,8 @@ jobs:
             "OpenCfMoto:CODE_SIGN_ENTITLEMENTS=App/Entitlements/full.entitlements" \
             "OpenCfMotoMirror:CODE_SIGN_STYLE=Manual" "OpenCfMotoMirror:CODE_SIGN_IDENTITY=Apple Distribution" \
             "OpenCfMotoMirror:PROVISIONING_PROFILE_SPECIFIER=CI dry run mirror" "OpenCfMotoMirror:DEVELOPMENT_TEAM=ABCDE12345" \
-            "OpenCfMotoMirror:PRODUCT_BUNDLE_IDENTIFIER=com.cidryrun.opencfmoto.mirror"
+            "OpenCfMotoMirror:PRODUCT_BUNDLE_IDENTIFIER=com.cidryrun.opencfmoto.mirror" \
+            "OpenCfMoto:TARGETED_DEVICE_FAMILY=1" "OpenCfMotoMirror:TARGETED_DEVICE_FAMILY=1"
           TF_WORK="$d" bash tools/testflight/build_and_sign.sh teardown
           if [ -e Config/Local.xcconfig ]; then echo "::error title=TestFlight dry run::teardown left Config/Local.xcconfig behind"; exit 1; fi
       - name: TestFlight dry run — lint_bundle.py self-test (synthetic signed archive and IPA)
@@ -239,7 +241,16 @@ jobs:
             python3 tools/ci/annotate.py archive-dry-run.log "TestFlight dry run archive"
             exit 1
           fi
-          python3 tools/testflight/lint_bundle.py --archive "$archive" --unsigned --expect-build 1 --min-sdk-major 26
+          status=0
+          python3 tools/testflight/lint_bundle.py --archive "$archive" --unsigned --expect-build 1 --min-sdk-major 26 \
+            --expect-device-family 1 || status=1
+          # iPhone only: no iPad renditions of the app icon either (actool makes them for iPad builds).
+          ipad=$(find "$archive/Products/Applications/OpenCfMoto.app" -maxdepth 1 -name '*~ipad*' | sed 's|.*/||' | tr '\n' ' ')
+          if [ -n "$ipad" ]; then
+            echo "::error title=TestFlight dry run (devices)::The archived app has iPad files ($ipad): it is built for iPad too (TARGETED_DEVICE_FAMILY)."
+            status=1
+          fi
+          exit "$status"
       - name: TestFlight dry run — keychain and profile plumbing (self-signed identity)
         run: |
           set -euo pipefail

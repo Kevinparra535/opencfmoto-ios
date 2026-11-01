@@ -15,6 +15,8 @@ options:
                       OCMAppGroupIdentifier Info.plist value)
   --expect-version V  CFBundleShortVersionString the app and the extension must have
   --expect-build N    CFBundleVersion the app and the extension must have
+  --expect-device-family F  UIDeviceFamily the app and the extension must have, e.g. 1
+                      (iPhone only) or 1,2 (iPhone and iPad)
   --min-sdk-major N   the app must be built with the iOS N SDK or newer (App Store Connect: 26)
   --appex NAME        extension bundle inside PlugIns/ (default OpenCfMotoMirror.appex)
 
@@ -24,7 +26,9 @@ checks:
   bundles  PlugIns/<appex> exists; no Frameworks/ inside the .appex (ITMS-90206); the same
            CFBundleVersion and CFBundleShortVersionString in app and extension; extension id is
            <app id>.<name>; CFBundleIconName/CFBundleIcons + Assets.car; ITSAppUsesNonExemptEncryption;
-           built for iPhoneOS
+           built for iPhoneOS; the same UIDeviceFamily in app and extension; an app that runs on
+           iPad (UIDeviceFamily has 2) supports all four iPad orientations unless it sets
+           UIRequiresFullScreen (ITMS-90474)
   privacy  each bundle has a PrivacyInfo.xcprivacy that declares, with valid reasons, every
            "required reason" API category its binary uses (ITMS-91053). Evidence: undefined symbols
            (`xcrun nm -u`) and Objective-C selectors (`xcrun otool -v -s __TEXT __objc_methname`).
@@ -67,8 +71,11 @@ REQUIRED_REASON_APIS = {
          "_NSURLContentModificationDateKey", "_NSURLCreationDateKey"},
         {"fileModificationDate", "fileCreationDate"},
     ),
+    # Apple lists getattrlist, fgetattrlist and getattrlistat under file timestamps AND disk space
+    # (not getattrlistbulk): one symbol may require both categories.
     "DiskSpace": (
-        {"_statfs", "_statvfs", "_fstatfs", "_fstatvfs", "_NSURLVolumeAvailableCapacityKey",
+        {"_statfs", "_statvfs", "_fstatfs", "_fstatvfs", "_getattrlist", "_fgetattrlist",
+         "_getattrlistat", "_NSURLVolumeAvailableCapacityKey",
          "_NSURLVolumeAvailableCapacityForImportantUsageKey",
          "_NSURLVolumeAvailableCapacityForOpportunisticUsageKey", "_NSURLVolumeTotalCapacityKey",
          "_NSFileSystemFreeSize", "_NSFileSystemSize"},
@@ -116,6 +123,12 @@ PURPOSE_STRINGS = [
      ("NFCReaderUsageDescription",)),
 ]
 
+# An app that runs on iPad must support every orientation there, or App Store Connect rejects the
+# upload: "ITMS-90474: Invalid Bundle. iPad Multitasking support requires these orientations".
+IPAD_ORIENTATIONS = {"UIInterfaceOrientationPortrait", "UIInterfaceOrientationPortraitUpsideDown",
+                     "UIInterfaceOrientationLandscapeLeft", "UIInterfaceOrientationLandscapeRight"}
+DEVICE_NAMES = {1: "iPhone", 2: "iPad"}
+
 ENT_GROUPS = "com.apple.security.application-groups"
 ENT_HOTSPOT = "com.apple.developer.networking.HotspotConfiguration"
 ENT_WIFI = "com.apple.developer.networking.wifi-info"
@@ -155,6 +168,7 @@ class Report:
         self.warnings: list = []
         self.rows: list = []      # (bundle, used categories with evidence, declared, verdict)
         self.contents: list = []  # (bundle, files)
+        self.facts: list = []     # (bundle, device family and orientations)
 
     def error(self, msg: str) -> None:
         self.errors.append(msg)
@@ -194,6 +208,44 @@ def list_bundle(path: str) -> list:
     except OSError:
         return []
     return [n + "/" if os.path.isdir(os.path.join(path, n)) else n for n in names]
+
+
+def device_family(info: dict):
+    """UIDeviceFamily as a sorted list of ints (1 iPhone, 2 iPad), or None when the key is missing."""
+    raw = info.get("UIDeviceFamily")
+    if raw is None:
+        return None
+    family = set()
+    for item in raw if isinstance(raw, list) else [raw]:
+        try:
+            family.add(int(item))
+        except (TypeError, ValueError):
+            pass
+    return sorted(family)
+
+
+def fmt_family(family) -> str:
+    if family is None:
+        return "(no UIDeviceFamily)"
+    return f"{family} ({', '.join(DEVICE_NAMES.get(f, str(f)) for f in family) or 'none'})"
+
+
+def parse_family(text: str) -> list:
+    try:
+        family = sorted({int(part) for part in text.split(",") if part.strip()})
+    except ValueError:
+        family = []
+    if not family:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a device family list (e.g. 1 or 1,2)")
+    return family
+
+
+def string_list(value) -> list:
+    return [v for v in value if isinstance(v, str)] if isinstance(value, list) else []
+
+
+def short_orientations(values: list) -> str:
+    return ", ".join(v.replace("UIInterfaceOrientation", "") for v in values) or "none"
 
 
 def normalize_symbol(name: str) -> str:
@@ -447,6 +499,27 @@ def lint_app(rep: Report, app: str, args, signed: bool, is_ipa: bool) -> None:
     platforms = info.get("CFBundleSupportedPlatforms") or []
     if "iPhoneOS" not in platforms:
         rep.error(f"{app_label}: built for {platforms!r}, not iPhoneOS (a simulator build cannot be uploaded)")
+
+    # Devices: on iPad, App Store Connect wants every orientation unless the app opts out of
+    # multitasking (UIRequiresFullScreen).
+    family = device_family(info)
+    orientations = string_list(info.get("UISupportedInterfaceOrientations"))
+    ipad_orientations = string_list(info.get("UISupportedInterfaceOrientations~ipad")) or orientations
+    if family and 2 in family and info.get("UIRequiresFullScreen") is not True:
+        missing = sorted(IPAD_ORIENTATIONS - set(ipad_orientations))
+        if missing:
+            rep.error(f"{app_label}: UIDeviceFamily {fmt_family(family)} includes iPad, but the iPad "
+                      f"orientations lack {short_orientations(missing)}: App Store Connect rejects the "
+                      f"upload (ITMS-90474). Set TARGETED_DEVICE_FAMILY = 1 on both targets in "
+                      f"project.yml (iPhone only), or support all four orientations on iPad")
+    if args.expect_device_family and family != args.expect_device_family:
+        rep.error(f"{app_label}: UIDeviceFamily is {fmt_family(family)}, expected "
+                  f"{fmt_family(args.expect_device_family)} (TARGETED_DEVICE_FAMILY of both targets in "
+                  f"project.yml)")
+    fact = f"UIDeviceFamily {fmt_family(family)}; orientations {short_orientations(orientations)}"
+    if "UISupportedInterfaceOrientations~ipad" in info:
+        fact += f"; iPad orientations {short_orientations(ipad_orientations)}"
+    rep.facts.append((app_label, fact))
     if args.min_sdk_major:
         sdk = str(info.get("DTSDKName", ""))
         m = re.match(r"^iphoneos([0-9]+)", sdk)
@@ -474,6 +547,13 @@ def lint_app(rep: Report, app: str, args, signed: bool, is_ipa: bool) -> None:
             if info.get(key) != appex_info.get(key):
                 rep.error(f"{key} differs: app {info.get(key)!r}, extension {appex_info.get(key)!r} "
                           f"(App Store Connect rejects mismatched extension versions)")
+        # The extension must target the same devices as the app (iPhone only here).
+        appex_family = device_family(appex_info)
+        if appex_family is not None and family is not None and appex_family != family:
+            rep.error(f"{appex_label}: UIDeviceFamily {fmt_family(appex_family)} differs from the app's "
+                      f"{fmt_family(family)}: set the same TARGETED_DEVICE_FAMILY on both targets in "
+                      f"project.yml")
+        rep.facts.append((appex_label, f"UIDeviceFamily {fmt_family(appex_family)}"))
 
     # Versions.
     for key, expected in (("CFBundleShortVersionString", args.expect_version),
@@ -599,6 +679,8 @@ def print_report(rep: Report) -> None:
         print(" | ".join(row))
     for name, files in rep.contents:
         print(f"{name}: {' '.join(files)}")
+    for name, fact in rep.facts:
+        print(f"{name}: {fact}")
     for w in rep.warnings:
         print(f"warning: {w}")
     for e in rep.errors:
@@ -607,8 +689,10 @@ def print_report(rep: Report) -> None:
     # Annotations: raw logs may be unreadable, so the findings travel as annotations too.
     for label, used, declared, verdict in rep.rows:
         files = next((f for n, f in rep.contents if n == label), [])
+        devices = next((f for n, f in rep.facts if n == label), "?")
         annotate("notice", f"Privacy manifest check: {label}",
-                 f"uses: {used}\ndeclared: {declared}\nresult: {verdict}\nbundle files: {', '.join(files)}")
+                 f"uses: {used}\ndeclared: {declared}\nresult: {verdict}\ndevices: {devices}\n"
+                 f"bundle files: {', '.join(files)}")
     if rep.warnings:
         annotate("warning", f"Bundle lint ({rep.label}): {len(rep.warnings)} warning(s)", "\n".join(rep.warnings))
     if rep.errors:
@@ -620,6 +704,8 @@ def print_report(rep: Report) -> None:
           "| " + " | ".join(header) + " |\n", "|---|---|---|---|\n"]
     for row in rep.rows:
         md.append("| " + " | ".join(c.replace("|", "\\|") for c in row) + " |\n")
+    if rep.facts:
+        md.append("\n" + "".join(f"- {name}: {fact}\n" for name, fact in rep.facts))
     if rep.errors:
         md.append(f"\n**{len(rep.errors)} problema(s) / problem(s):**\n\n")
         md.extend(f"- {e}\n" for e in rep.errors)
@@ -640,6 +726,8 @@ def main(argv=None) -> int:
     parser.add_argument("--app-group", help="App Group the signed entitlements must contain")
     parser.add_argument("--expect-version", help="expected CFBundleShortVersionString")
     parser.add_argument("--expect-build", help="expected CFBundleVersion")
+    parser.add_argument("--expect-device-family", type=parse_family,
+                        help="expected UIDeviceFamily, e.g. 1 (iPhone only) or 1,2")
     parser.add_argument("--min-sdk-major", type=int, help="minimum iOS SDK major version (e.g. 26)")
     parser.add_argument("--appex", default=DEFAULT_APPEX, help=f"extension bundle name (default {DEFAULT_APPEX})")
     args = parser.parse_args(argv)

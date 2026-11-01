@@ -26,6 +26,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import lint_bundle  # noqa: E402
 
 GROUP = "group.com.x.opencfmoto"
+# project.yml's orientations (no upside down): fine on iPhone, not enough on iPad (ITMS-90474).
+THREE_ORIENTATIONS = ("UIInterfaceOrientationPortrait", "UIInterfaceOrientationLandscapeLeft",
+                      "UIInterfaceOrientationLandscapeRight")
+FOUR_ORIENTATIONS = THREE_ORIENTATIONS + ("UIInterfaceOrientationPortraitUpsideDown",)
 
 # Fake tools: `xcrun nm|otool ... <bin>` prints <bin>.nm / <bin>.otool; `codesign -d` prints
 # <bundle>/.ents.xml; `codesign --verify` fails when <bundle>/.badsig exists.
@@ -70,9 +74,11 @@ class Fixture:
                      "CFBundleShortVersionString": "0.1.0", "CFBundleVersion": "7", "CFBundleIconName": "AppIcon",
                      "ITSAppUsesNonExemptEncryption": False, "CFBundleSupportedPlatforms": ["iPhoneOS"],
                      "DTSDKName": "iphoneos26.2", "NSCameraUsageDescription": "camera",
-                     "NSLocationWhenInUseUsageDescription": "location", "OCMAppGroupIdentifier": GROUP}
+                     "NSLocationWhenInUseUsageDescription": "location", "OCMAppGroupIdentifier": GROUP,
+                     "UIDeviceFamily": [1], "UISupportedInterfaceOrientations": list(THREE_ORIENTATIONS)}
         self.xinfo = {"CFBundleExecutable": "OpenCfMotoMirror", "CFBundleIdentifier": "com.x.opencfmoto.mirror",
-                      "CFBundleShortVersionString": "0.1.0", "CFBundleVersion": "7", "OCMAppGroupIdentifier": GROUP}
+                      "CFBundleShortVersionString": "0.1.0", "CFBundleVersion": "7", "OCMAppGroupIdentifier": GROUP,
+                      "UIDeviceFamily": [1]}
         self.app_manifest = manifest("UserDefaults", "SystemBootTime", "FileTimestamp")
         self.appex_manifest = manifest("SystemBootTime", "FileTimestamp")
         self.app_symbols = ["_OBJC_CLASS_$_NSUserDefaults", "_lstat", "_NSFileModificationDate",
@@ -220,6 +226,51 @@ class LintBundleTests(unittest.TestCase):
         self.fx.write()
         self.assertError("must start with the app's", "--archive", self.fx.archive, "--unsigned")
 
+    # ---- devices (ITMS-90474)
+    def test_iphone_only_app_passes_and_reports_its_device_family(self):
+        self.fx.write()
+        text = self.assertClean("--archive", self.fx.archive, "--unsigned", "--expect-device-family", "1")
+        self.assertIn("devices: UIDeviceFamily [1] (iPhone); orientations Portrait, LandscapeLeft, "
+                      "LandscapeRight", text.replace("%0A", "\n"))
+
+    def test_ipad_without_all_four_orientations_is_rejected(self):
+        self.fx.info["UIDeviceFamily"] = self.fx.xinfo["UIDeviceFamily"] = [1, 2]
+        self.fx.write()
+        for args in (("--archive", self.fx.archive, "--unsigned"), ("--ipa", self.fx.ipa(), "--app-group", GROUP)):
+            with self.subTest(source=args[0]):
+                status, errors, _w, text = self.lint(*args)
+                self.assertEqual(status, 1, text)
+                self.assertTrue(any("ITMS-90474" in e and "PortraitUpsideDown" in e for e in errors), text)
+
+    def test_ipad_with_all_four_orientations_or_full_screen_passes(self):
+        cases = ({"UISupportedInterfaceOrientations~ipad": list(FOUR_ORIENTATIONS)},
+                 {"UISupportedInterfaceOrientations": list(FOUR_ORIENTATIONS)},
+                 {"UIRequiresFullScreen": True})
+        for extra in cases:
+            with self.subTest(extra=sorted(extra)):
+                self.tearDown()
+                self.setUp()
+                self.fx.info.update(extra, UIDeviceFamily=[1, 2])
+                self.fx.xinfo["UIDeviceFamily"] = [1, 2]
+                self.fx.write()
+                self.assertClean("--archive", self.fx.archive, "--unsigned")
+                # ...but an iPhone-only build is what this project wants.
+                self.assertError("expected [1] (iPhone)", "--archive", self.fx.archive, "--unsigned",
+                                 "--expect-device-family", "1")
+
+    def test_extension_device_family_must_match_the_app(self):
+        self.fx.xinfo["UIDeviceFamily"] = [1, 2]
+        self.fx.write()
+        self.assertError("differs from the app's [1] (iPhone)", "--archive", self.fx.archive, "--unsigned")
+
+    def test_expect_device_family_needs_a_list(self):
+        self.fx.write()
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as ctx:
+            lint_bundle.main(["--archive", self.fx.archive, "--expect-device-family", "phone"])
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertIn("not a device family list", err.getvalue())
+
     # ---- privacy
     def test_missing_privacy_manifest(self):
         self.fx.appex_manifest = None
@@ -230,6 +281,30 @@ class LintBundleTests(unittest.TestCase):
         self.fx.appex_symbols.append("_statfs")
         self.fx.write()
         self.assertError("required-reason API category DiskSpace", "--archive", self.fx.archive, "--unsigned")
+
+    def test_getattrlist_needs_disk_space_too(self):
+        # Apple lists getattrlist / fgetattrlist / getattrlistat under file timestamps AND disk space.
+        self.fx.appex_symbols.append("_getattrlist")
+        self.fx.app_symbols.append("_fgetattrlist")
+        self.fx.write()
+        status, errors, _w, text = self.lint("--archive", self.fx.archive, "--unsigned")
+        self.assertEqual(status, 1, text)
+        for needle in ("OpenCfMoto.app: the binary uses required-reason API category DiskSpace (_fgetattrlist)",
+                       "OpenCfMotoMirror.appex: the binary uses required-reason API category DiskSpace (_getattrlist)"):
+            self.assertTrue(any(needle in e for e in errors), f"no error containing {needle!r} in:\n{text}")
+        self.assertFalse(any("FileTimestamp" in e for e in errors), text)  # already declared
+
+        self.tearDown()
+        self.setUp()
+        self.fx.appex_symbols.append("_getattrlist")
+        self.fx.appex_manifest = manifest("SystemBootTime", "FileTimestamp", "DiskSpace")
+        self.fx.write()
+        self.assertClean("--archive", self.fx.archive, "--unsigned")
+
+    def test_getattrlistbulk_is_only_a_file_timestamp_api(self):
+        self.fx.appex_symbols.append("_getattrlistbulk")
+        self.fx.write()
+        self.assertClean("--archive", self.fx.archive, "--unsigned")
 
     def test_declared_but_unused_is_only_a_warning(self):
         self.fx.appex_manifest = manifest("UserDefaults", "SystemBootTime", "FileTimestamp")
