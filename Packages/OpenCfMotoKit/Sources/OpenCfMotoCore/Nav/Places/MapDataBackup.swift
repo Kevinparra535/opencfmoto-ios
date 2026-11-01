@@ -198,7 +198,7 @@ public final class SavedPlaceSlots: @unchecked Sendable {
         guard parts.count == 2,
               let lat = Double(parts[0].trimmingCharacters(in: .whitespaces)),
               let lon = Double(parts[1].trimmingCharacters(in: .whitespaces)),
-              (-90 ... 90).contains(lat), (-180 ... 180).contains(lon) else { return nil }
+              GeoMath.isValidCoordinate(lat: lat, lon: lon) else { return nil }
         return GeoPoint(lat: lat, lon: lon)
     }
 }

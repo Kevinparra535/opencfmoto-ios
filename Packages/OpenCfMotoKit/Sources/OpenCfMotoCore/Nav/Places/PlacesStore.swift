@@ -224,8 +224,11 @@ public final class PlacesStore: @unchecked Sendable {
         return root.elements.compactMap { parsePlace($0) }
     }
 
+    /// nil without numeric, valid coordinates: imported map data and entries persisted before the check
+    /// are dropped (review SEC-1).
     static func parsePlace(_ o: NavJSON) -> Place? {
-        guard o.object != nil, let lat = o["lat"].doubleOrNil, let lon = o["lon"].doubleOrNil else { return nil }
+        guard o.object != nil, let lat = o["lat"].doubleOrNil, let lon = o["lon"].doubleOrNil,
+              GeoMath.isValidCoordinate(lat: lat, lon: lon) else { return nil }
         return Place(name: o["name"].string(""), lat: lat, lon: lon, category: o["category"].string(""),
                      subtitle: o["subtitle"].string(""))
     }

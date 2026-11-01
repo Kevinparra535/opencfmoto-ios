@@ -137,6 +137,7 @@ public final class PlaceSearch: @unchecked Sendable {
                   let lat = f["geometry"]["coordinates"][1].doubleOrNil else {
                 throw NavServiceError.invalidJSON("Photon feature without coordinates")
             }
+            guard GeoMath.isValidCoordinate(lat: lat, lon: lon) else { continue } // review SEC-1
             let p = f["properties"]
             guard p.object != nil else { throw NavServiceError.invalidJSON("Photon feature without properties") }
             var name = p["name"].string("")
@@ -159,6 +160,7 @@ public final class PlaceSearch: @unchecked Sendable {
             guard o.object != nil, let lat = o["lat"].doubleOrNil, let lon = o["lon"].doubleOrNil else {
                 throw NavServiceError.invalidJSON("Nominatim result without lat/lon")
             }
+            guard GeoMath.isValidCoordinate(lat: lat, lon: lon) else { continue } // review SEC-1
             let display = o["display_name"].string("")
             var name = o["name"].string("")
             if name.isNavBlank {

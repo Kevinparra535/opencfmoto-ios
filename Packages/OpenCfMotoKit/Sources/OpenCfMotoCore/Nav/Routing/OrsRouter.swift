@@ -135,7 +135,9 @@ public struct OrsRouter: Sendable {
         var pts: [TrackPoint] = []
         pts.reserveCapacity(coords.count)
         for c in coords.elements {
-            guard let lon = c[0].doubleOrNil, let lat = c[1].doubleOrNil else { return nil }
+            // A garbage coordinate rejects the geometry like a missing one (review SEC-1).
+            guard let lon = c[0].doubleOrNil, let lat = c[1].doubleOrNil,
+                  GeoMath.isValidCoordinate(lat: lat, lon: lon) else { return nil }
             pts.append(TrackPoint(lat: lat, lon: lon))
         }
         if pts.count < 2 { return nil }

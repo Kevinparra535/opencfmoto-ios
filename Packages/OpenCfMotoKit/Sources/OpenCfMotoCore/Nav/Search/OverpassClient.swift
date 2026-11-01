@@ -112,6 +112,7 @@ public struct OverpassClient: Sendable {
             } else {
                 continue
             }
+            guard GeoMath.isValidCoordinate(lat: plat, lon: plon) else { continue } // review SEC-1
             let tags = o["tags"]
             func tag(_ k: String) -> String? {
                 let v = tags[k].string("")
@@ -162,7 +163,8 @@ public struct OverpassClient: Sendable {
         let root = try await post(q)
         var out: [Place] = []
         for o in root["elements"].elements {
-            guard o.has("lat"), o.has("lon"), let lat = o["lat"].doubleOrNil, let lon = o["lon"].doubleOrNil else { continue }
+            guard o.has("lat"), o.has("lon"), let lat = o["lat"].doubleOrNil, let lon = o["lon"].doubleOrNil,
+                  GeoMath.isValidCoordinate(lat: lat, lon: lon) else { continue }
             let tags = o["tags"]
             guard tags.object != nil else { continue }
             let amenity = tags["amenity"].string("")
