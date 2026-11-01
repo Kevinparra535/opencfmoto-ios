@@ -135,6 +135,53 @@ final class VideoPacingTests: XCTestCase {
         XCTAssertEqual(ProjectionFallback.keyframe(foreground: false, hold: { nil }, live: { live })?.sequence, 9)
     }
 
+    // MARK: keyframe coalescing (E2E: 3–4 IDRs in the first 200 ms of a session)
+
+    func testKeyframeRequestsAreCoalescedIntoTheIDRInFlight() {
+        var k = KeyframeCoalescer()
+        XCTAssertFalse(k.shouldForce(now: 0, outputs: 0), "nothing requested")
+        k.request(outputs: 0) // REQ 16: prepare
+        XCTAssertTrue(k.shouldForce(now: 0, outputs: 0))
+        k.forced(now: 0, outputs: 0)
+        XCTAssertFalse(k.shouldForce(now: 0.01, outputs: 0), "in flight: no second IDR")
+        k.request(outputs: 0) // REQ 112 resync while that IDR is still inside the encoder
+        k.request(outputs: 0) // …and the queue asking again
+        XCTAssertFalse(k.shouldForce(now: 0.02, outputs: 0), "coalesced into the IDR in flight")
+        XCTAssertFalse(k.shouldForce(now: 0.03, outputs: 1), "it came out after the requests: satisfied")
+        XCTAssertFalse(k.pending)
+    }
+
+    func testARequestAfterTheIDRWasOutputForcesANewOne() {
+        var k = KeyframeCoalescer()
+        k.request(outputs: 0)
+        XCTAssertTrue(k.shouldForce(now: 0, outputs: 0))
+        k.forced(now: 0, outputs: 0)
+        // The IDR came out and was queued — then the resync flushed it and asked again.
+        k.request(outputs: 1)
+        XCTAssertTrue(k.shouldForce(now: 0.05, outputs: 1), "the flushed IDR does not count")
+        k.forced(now: 0.05, outputs: 1)
+        XCTAssertFalse(k.shouldForce(now: 0.06, outputs: 2))
+    }
+
+    func testAPeriodicIDRSatisfiesAPendingRequest() {
+        var k = KeyframeCoalescer()
+        k.request(outputs: 4)
+        XCTAssertFalse(k.shouldForce(now: 0, outputs: 5), "a keyframe output after the request")
+        XCTAssertFalse(k.pending)
+    }
+
+    func testALostForcedIDRIsRetried() {
+        var k = KeyframeCoalescer()
+        k.request(outputs: 0)
+        XCTAssertTrue(k.shouldForce(now: 0, outputs: 0))
+        k.forced(now: 0, outputs: 0)
+        XCTAssertFalse(k.shouldForce(now: 0.3, outputs: 0))
+        XCTAssertTrue(k.shouldForce(now: 0.6, outputs: 0), "dropped by VideoToolbox: retried after the timeout")
+        k.forced(now: 0.6, outputs: 0)
+        k.encoderReset() // session recreated: nothing in flight any more
+        XCTAssertTrue(k.shouldForce(now: 0.61, outputs: 0))
+    }
+
     // MARK: RateMeter
 
     func testRateMeterWindow() {

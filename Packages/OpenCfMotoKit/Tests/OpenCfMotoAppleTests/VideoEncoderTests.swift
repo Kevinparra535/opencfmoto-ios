@@ -344,6 +344,31 @@ final class VideoEngineTests: XCTestCase {
         XCTAssertEqual(held?.accessUnit, engine.frameQueue.lastKeyframe?.accessUnit, "the last live IDR, not the blip's hold IDR")
     }
 
+    /// E2E: REQ 16 then 112 used to put 3–4 IDRs on the wire in the first 200 ms (prepare IDR,
+    /// resync asking twice, a second IDR at +200 ms). Now one IDR per 112 (periodic IDR at 1 s).
+    func testSessionStartPutsOneIDROnTheWire() async throws {
+        try requireEncoder(width: 320, height: 160)
+        let engine = DashProjectionEngine() // default secondKeyframeDelay (off)
+        XCTAssertNil(engine.secondKeyframeDelay)
+        engine.displayListProvider = { now in
+            DashDisplayList(size: DashSize(width: 320, height: 160), background: DashColor(rgb: 0x101418), commands: [
+                .fill(.rect(DashRect(x: (now * 200).truncatingRemainder(dividingBy: 200), y: 40, width: 60, height: 60)),
+                      DashColor(rgb: 0x1A73E8), .nonZero),
+            ])
+        }
+        defer { engine.stop() }
+        engine.prepare(canvas: canvas, parameters: EncoderParameters(bitrate: 1_000_000, frameRate: 30))
+        engine.resynchronize()
+        var frames: [EncodedFrame] = []
+        let start = Date()
+        while Date().timeIntervalSince(start) < 0.6 {
+            if let f = await engine.nextFrame(timeout: 1) { frames.append(f) }
+        }
+        XCTAssertTrue(frames.first?.isKeyframe ?? false, "the first frame after 112 is an IDR")
+        XCTAssertGreaterThan(frames.count, 3)
+        XCTAssertEqual(frames.filter(\.isKeyframe).count, 1, "one IDR, then P-frames: \(frames.map(\.isKeyframe))")
+    }
+
     func testStopWakesPullsWithNil() async throws {
         try requireEncoder(width: 320, height: 160)
         let engine = makeEngine()

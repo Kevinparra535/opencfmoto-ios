@@ -281,6 +281,7 @@ public final class RideModel {
     /// REQ 16 negotiated a canvas.
     func canvasNegotiated(_ canvas: VideoCanvas) {
         negotiatedCanvas = canvas
+        linkBanner = nil // the dash is talking again: no "Reconnecting…" in its next picture
         flushModel() // the next frame must be laid out for exactly this canvas
     }
 
@@ -294,9 +295,12 @@ public final class RideModel {
         canvasNegotiated(canvas)
     }
 
-    /// Dash identified: profile default margins / touch support.
+    /// Dash identified: profile default margins / touch support. CLIENT_INFO also means the dash
+    /// is back after a reconnect — well before it re-opens media and asks for the resync IDR — so
+    /// the "Reconnecting…" banner goes now and is not in the first picture after the reconnect.
     func profileIdentified(_ profile: BikeProfile) {
         identifiedProfile = profile
+        linkBanner = nil
         flushModel()
         pushEncoderPlan(force: false)
     }

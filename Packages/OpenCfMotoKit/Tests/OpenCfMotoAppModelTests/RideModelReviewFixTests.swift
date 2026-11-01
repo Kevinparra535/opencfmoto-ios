@@ -211,6 +211,89 @@ final class RideModelReviewFixTests: XCTestCase {
         XCTAssertEqual(h.ride.canvasSize, DashSize(width: 800, height: 384))
     }
 
+    // MARK: E2E — the first picture after a reconnect has no "Reconnecting…" banner
+
+    private func texts(_ list: DashDisplayList) -> [String] {
+        list.commands.compactMap { if case let .text(s, _, _) = $0 { return s }; return nil }
+    }
+
+    @MainActor
+    func testTheDashCallingBackClearsTheReconnectingBanner() async {
+        let h = AppTestHarness()
+        let banner = SessionText.reconnectingBanner(h.language)
+        let clock = h.core.services.clock
+        h.ride.sessionChanged(active: true, mirror: false)
+        h.ride.setLinkBanner(banner)
+        h.ride.flushModel()
+        XCTAssertTrue(texts(h.ride.displayList(now: clock.now())).contains(banner))
+        // CLIENT_INFO again: cleared at once (synchronously in the model the engine renders).
+        h.ride.profileIdentified(.legacy)
+        XCTAssertFalse(texts(h.ride.displayList(now: clock.now())).contains(banner))
+        // Same for a dash that only re-opens media (REQ 16 without a control handshake).
+        h.ride.setLinkBanner(banner)
+        h.ride.flushModel()
+        h.ride.canvasNegotiated(VideoCanvas(width: 800, height: 384, requestedWidth: 800, requestedHeight: 386))
+        XCTAssertFalse(texts(h.ride.displayList(now: clock.now())).contains(banner))
+    }
+
+    /// End to end: the dash drops every socket, then calls back. The banner is gone as soon as it
+    /// negotiates — BEFORE its 112 asks for the resync IDR — not only after the first frame.
+    @MainActor
+    func testReconnectBannerIsGoneBeforeTheResyncIDR() async throws {
+        let net = LinkMemoryNetwork(phoneHost: "192.168.0.2")
+        let dash = LinkFakeDash(network: net, host: "192.168.0.1")
+        dash.installProbeServer()
+        let frames = TestFrameSource()
+        let h = AppTestHarness(network: net, frameSource: frames)
+        h.addBike()
+        let banner = SessionText.reconnectingBanner(h.language)
+        let clock = h.core.services.clock
+        h.connection.connect()
+        var ok = await eventually { dash.acceptedCount.current == 1 }
+        XCTAssertTrue(ok)
+        var ctrl = try dash.openControl()
+        try await ctrl.send(PxcFrame(cmd: 0x10000))
+        _ = try await ctrl.nextRaw()
+        try await ctrl.send(cmd: 0x10010, json: LinkDashSamples.cfdl16ClientInfo)
+        _ = try await ctrl.next()
+        var mctl = try dash.openMedia(port: 10921)
+        try await mctl.send(cmd: 16, body: LinkDashSamples.configCaptureBody(width: 800, height: 386))
+        _ = try await mctl.reply()
+        try await mctl.send(cmd: 112)
+        _ = try await mctl.reply()
+        var mdata = try dash.openMedia(port: 10920)
+        try await mdata.send(cmd: 114)
+        _ = try await mdata.frame()
+        ok = await eventually { h.connection.phase == .streaming }
+        XCTAssertTrue(ok)
+
+        // Every socket drops: "Reconnecting…" on the dash picture while the link re-probes.
+        ctrl.close(); mctl.close(); mdata.close()
+        ok = await eventually { self.texts(h.ride.displayList(now: clock.now())).contains(banner) }
+        XCTAssertTrue(ok)
+        ok = await eventually { dash.acceptedCount.current >= 2 }
+        XCTAssertTrue(ok)
+
+        // The dash calls back and negotiates; the banner clears before it sends 112.
+        ctrl = try dash.openControl()
+        try await ctrl.send(PxcFrame(cmd: 0x10000))
+        _ = try await ctrl.nextRaw()
+        mctl = try dash.openMedia(port: 10921)
+        try await mctl.send(cmd: 16, body: LinkDashSamples.configCaptureBody(width: 800, height: 386))
+        _ = try await mctl.reply()
+        ok = await eventually { !self.texts(h.ride.displayList(now: clock.now())).contains(banner) }
+        XCTAssertTrue(ok, "cleared on REQ 16, before the resync IDR")
+        XCTAssertNotEqual(h.connection.phase, .streaming, "no frame sent yet")
+        try await mctl.send(cmd: 112)
+        _ = try await mctl.reply()
+        mdata = try dash.openMedia(port: 10920)
+        try await mdata.send(cmd: 114)
+        let first = try await mdata.frame()
+        XCTAssertTrue(AnnexB.containsIDR(annexB: first.accessUnit))
+        h.connection.stop()
+        ctrl.close(); mctl.close(); mdata.close()
+    }
+
     // MARK: SPEC:CL-10 — theme AUTO follows the phone's dark mode
 
     private func fix(lat: Double = 4.6584, lon: Double = -74.0930) -> LocationFix {

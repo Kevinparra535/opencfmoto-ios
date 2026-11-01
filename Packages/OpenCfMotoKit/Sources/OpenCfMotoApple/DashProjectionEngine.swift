@@ -86,6 +86,48 @@ enum FramePull {
     }
 }
 
+/// Coalesces keyframe requests (E2E: a session used to start with 3–4 IDRs in its first 200 ms —
+/// the prepare-time IDR, the 112 resync asking twice, a second IDR 200 ms later). A request is
+/// satisfied by ANY keyframe the encoder outputs after it (a forced or a periodic IDR pushed after
+/// a resync's flush opens the queue's gate all the same), and while a forced IDR is in flight
+/// (submitted, not output yet) no second one is forced. A forced IDR that never comes out (dropped
+/// by VideoToolbox, session lost) is retried after `inFlightTimeout`.
+struct KeyframeCoalescer: Equatable {
+    var inFlightTimeout: TimeInterval = 0.5
+    /// An IDR is still needed.
+    private(set) var pending = false
+    /// Keyframes output when the newest request was made (only later outputs satisfy it).
+    private var pendingMark: UInt64 = 0
+    private var forcedAt: TimeInterval?
+    private var forcedMark: UInt64 = 0
+
+    /// A keyframe is needed; `outputs` = keyframes the encoder had output at that moment.
+    mutating func request(outputs: UInt64) {
+        pendingMark = pending ? max(pendingMark, outputs) : outputs
+        pending = true
+    }
+
+    /// Whether to force an IDR now (`outputs` = keyframes output so far).
+    mutating func shouldForce(now: TimeInterval, outputs: UInt64) -> Bool {
+        if pending, outputs > pendingMark {
+            pending = false // a keyframe came out after the request: satisfied (coalesced)
+            forcedAt = nil
+        }
+        guard pending else { return false }
+        if let at = forcedAt, outputs <= forcedMark, now - at < inFlightTimeout { return false }
+        return true
+    }
+
+    /// A forced IDR was submitted to the encoder.
+    mutating func forced(now: TimeInterval, outputs: UInt64) {
+        forcedAt = now
+        forcedMark = outputs
+    }
+
+    /// The encoder session was replaced: nothing is in flight any more.
+    mutating func encoderReset() { forcedAt = nil }
+}
+
 /// Which cached IDR a 114 falls back to when the encoder produced nothing in time (CL-5): in the
 /// foreground only the last live keyframe — never the pre-encoded "Phone locked" hold picture,
 /// which may linger after an inactive blip (Control Center, a banner) — and in the background
@@ -263,6 +305,10 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
         var thermalLevel: ThermalLevel = .none
         var lowPowerMode = false
         var keyframeRequested = false
+        /// `keyframesOutput` when the newest `requestKeyframe()` was made.
+        var keyframeRequestMark: UInt64 = 0
+        /// Keyframes output by the live encoder(s) so far (coalescing, `KeyframeCoalescer`).
+        var keyframesOutput: UInt64 = 0
         var invalidated = false
         var mode: Mode = .idle
         var holdFrames: [EncodedFrame] = []
@@ -300,7 +346,9 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
     public var allowsSoftwareEncodingInBackground: Bool {
         get { flags.current.software } set { flags.withLock { $0.software = newValue } }
     }
-    /// Second forced IDR after a resync ("after the first map paint", EasyConnProber.kt:286-292); nil = off.
+    /// Second forced IDR after a resync ("after the first map paint", EasyConnProber.kt:286-292); nil
+    /// = off (default). Android sends it only for the soft AA → map switch without a new 112
+    /// (media-video.md §6.1); a regular 112 gets ONE IDR, and the periodic 1 s IDR covers the rest.
     public var secondKeyframeDelay: TimeInterval? { get { flags.current.secondIDR } set { flags.withLock { $0.secondIDR = newValue } } }
     /// Maximum preview rate (frames per second).
     public var previewMaxFPS: Double { get { flags.current.previewFps } set { flags.withLock { $0.previewFps = max(0.1, newValue) } } }
@@ -310,7 +358,7 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
         var lowPower = true
         var backgroundFps = 8
         var software = true
-        var secondIDR: TimeInterval? = 0.2
+        var secondIDR: TimeInterval?
         var previewFps = 5.0
     }
     private let flags = Locked(Flags())
@@ -325,7 +373,7 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
     private var lastPixelBuffer: CVPixelBuffer?
     private var pictureNotEncoded = false
     private var pendingDirty = false
-    private var keyframePending = false
+    private var keyframes = KeyframeCoalescer()
     private var lastEncodeAt: TimeInterval?
     private var lastPreviewAt: TimeInterval = -.greatestFiniteMagnitude
     private var renderMsAverage: Double = 0
@@ -459,19 +507,18 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
     }
 
     public func resynchronize() {
-        // Gate closed BEFORE flushing (FrameQueue), then an IDR of the current picture.
+        // Re-render for the resync IDR (not just re-encode the last picture): it may predate a
+        // change made while the dash was away — e.g. the "Reconnecting…" banner cleared when the
+        // dash identified itself again. Then gate closed BEFORE flushing (FrameQueue) and ONE IDR
+        // request (FrameQueue.onKeyframeNeeded → requestKeyframe), coalesced with any in flight.
+        shared.withLock { $0.invalidated = true }
         frameQueue.resynchronize()
-        Log.d("VIDEO", "resynchronize: keyframe gate closed, queue flushed, IDR forced")
-        renderQueue.async { [weak self] in
-            guard let self else { return }
-            self.keyframePending = true
-            self.tick()
-            if let delay = self.secondKeyframeDelay, delay > 0 {
-                self.renderQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
-                    guard let self, self.isEncodingMode else { return }
-                    self.keyframePending = true
-                    self.tick()
-                }
+        Log.d("VIDEO", "resynchronize: keyframe gate closed, queue flushed, IDR requested")
+        if let delay = secondKeyframeDelay, delay > 0 {
+            renderQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, self.isEncodingMode else { return }
+                self.markKeyframePending()
+                self.tick()
             }
         }
     }
@@ -636,7 +683,7 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
         } else if shared.current.mode != .hold, encoder == nil {
             encoder = makeEncoder(software: shared.current.mode == .backgroundSoftware)
         }
-        keyframePending = true
+        markKeyframePending()
         applyEffectiveParameters()
         shared.withLock { $0.stats.canvas = newCanvas }
         Log.i("VIDEO", "own display \(newCanvas.width)x\(newCanvas.height) prepared (mode \(shared.current.mode.rawValue))")
@@ -646,11 +693,12 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
         guard let c = canvas else { return nil }
         let enc = H264Encoder(label: software ? "own-sw" : "own")
         let size = PictureSize(c)
+        keyframes.encoderReset() // a forced IDR of the previous session will never come out
         enc.onFrame = { [weak self] f in self?.encoderOutput(f, size: size) }
         enc.onError = { [weak self] e in
             self?.shared.withLock { $0.stats.encoderErrors += 1 }
             if let s = e.status, H264EncoderStatus.requiresSessionRecreation(s) {
-                self?.renderQueue.async { [weak self] in self?.keyframePending = true }
+                self?.renderQueue.async { [weak self] in self?.markKeyframePending(sessionLost: true) }
             }
         }
         do {
@@ -670,6 +718,7 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
             $0.stats.outputFrames += 1
             if frame.isKeyframe {
                 $0.stats.outputKeyframes += 1
+                $0.keyframesOutput &+= 1 // counted before the push: see KeyframeCoalescer
                 $0.lastLiveKeyframe = (frame, size)
             }
             $0.outputMeter.add(now)
@@ -687,8 +736,18 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
 
     /// Called from FrameQueue (overflow / resync) and encoder errors.
     private func requestKeyframe() {
-        shared.withLock { $0.keyframeRequested = true }
+        shared.withLock {
+            $0.keyframeRequested = true
+            $0.keyframeRequestMark = $0.keyframesOutput
+        }
         renderQueue.async { [weak self] in self?.tick() }
+    }
+
+    /// An IDR is needed (render queue). `sessionLost`: the encoder session was invalidated, so an
+    /// IDR in flight will never come out.
+    private func markKeyframePending(sessionLost: Bool = false) {
+        if sessionLost { keyframes.encoderReset() }
+        keyframes.request(outputs: shared.current.keyframesOutput)
     }
 
     private func applyEffectiveParameters() {
@@ -726,14 +785,17 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
     private func tick() {
         guard isEncodingMode, let canvas, let factory else { return }
         let now = clock.now()
-        let (provider, keyframeFlag, invalidated, previewHandler) = shared.withLock { s -> (DisplayListProvider?, Bool, Bool, (@Sendable (CGImage) -> Void)?) in
-            let r = (s.displayListProvider, s.keyframeRequested, s.invalidated, s.previewHandler)
+        let (provider, keyframeFlag, requestMark, outputs, invalidated, previewHandler) = shared.withLock {
+            s -> (DisplayListProvider?, Bool, UInt64, UInt64, Bool, (@Sendable (CGImage) -> Void)?) in
+            let r = (s.displayListProvider, s.keyframeRequested, s.keyframeRequestMark, s.keyframesOutput, s.invalidated,
+                     s.previewHandler)
             s.keyframeRequested = false
             s.invalidated = false
             return r
         }
-        if keyframeFlag { keyframePending = true }
+        if keyframeFlag { keyframes.request(outputs: requestMark) }
         if invalidated { pendingDirty = true }
+        let forceIDR = keyframes.shouldForce(now: now, outputs: outputs)
 
         let list = provider?(now) ?? DashDisplayList(size: DashSize(width: Double(canvas.width), height: Double(canvas.height)),
                                                      background: .black)
@@ -745,7 +807,7 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
             now: now,
             encoderReady: enc?.isConfigured ?? false,
             contentChanged: changed,
-            keyframeRequested: keyframePending,
+            keyframeRequested: forceIDR,
             queuedFrames: frameQueue.pendingCount,
             framesInFlight: enc?.framesInFlight ?? 0,
             lastEncodeAt: lastEncodeAt,
@@ -782,7 +844,7 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
             if enc.encode(pixelBuffer: buffer, pts: now, forceKeyframe: decision.forceKeyframe) {
                 lastEncodeAt = now
                 pictureNotEncoded = false
-                if decision.forceKeyframe { keyframePending = false }
+                if decision.forceKeyframe { keyframes.forced(now: now, outputs: outputs) }
                 shared.withLock {
                     $0.stats.encodeSubmissions += 1
                     if decision.isRepeat { $0.stats.repeatedFrames += 1 }
@@ -885,7 +947,7 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
             }
         }
         factory?.flush()
-        keyframePending = true
+        markKeyframePending(sessionLost: true)
         applyEffectiveParameters() // re-arms (or cancels) the timer for the new mode
         let holdCount = shared.current.holdFrames.count
         Log.i("VIDEO", "background → \(nextMode.rawValue)" + (nextMode == .hold ? " (\(holdCount) hold IDR(s))" : " @\(currentEffective().frameRate)fps"))
@@ -905,7 +967,7 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
         shared.withLock { $0.mode = .foreground }
         encoder = makeEncoder(software: false)
         frameQueue.resynchronize() // the dash decoder's reference is the hold / software picture
-        keyframePending = true
+        markKeyframePending(sessionLost: true)
         lastEncodeAt = nil
         pendingDirty = true
         shared.withLock { $0.holdFrames = []; $0.holdCanvas = nil }
