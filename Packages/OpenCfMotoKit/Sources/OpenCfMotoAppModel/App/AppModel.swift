@@ -14,8 +14,9 @@
 // - `scenePhaseChanged`: forward to ride + connection; on `.active` refresh permissions and retry
 //   auto-connect (Android onResume).
 // - `handleOpenURL`: `.gpx` files → `navigation.loadGpx`; opencfmoto pairing URLs / Wi-Fi URLs
-//   → `garage.pair(rawQR:)`; settings packs (`.json` with format "opencfmoto.settings") →
-//   `settings.importSettings`. Returns a localized message for a toast.
+//   → `garage.pair(rawQR:)`; settings / map packs (`.json` with format "opencfmoto.settings" /
+//   "opencfmoto.map") → `pendingImport`, applied only by `confirmPendingImport()`. The copy iOS
+//   puts in Documents/Inbox is deleted once read. Returns a localized message for a toast.
 //
 // Ported from OpenCfMoto (Android) OpenCfMotoApp.kt (process start) and MainActivity.kt
 // (onCreate / onResume / intent handling).
@@ -51,6 +52,10 @@ public final class AppModel {
 
     /// How long `banner` stays visible.
     @ObservationIgnored var bannerDuration: TimeInterval = 3.5
+    /// Where iOS copies documents opened from Mail / Files / AirDrop ("copy, don't open in place"):
+    /// `Documents/Inbox`. The copies are deleted once read (review IOS-6 / SEC-6). nil outside iOS
+    /// (never touch a desktop's ~/Documents); tests set a temp directory.
+    @ObservationIgnored var inboxDirectory: URL? = AppModel.defaultInboxDirectory()
     @ObservationIgnored private var started = false
     @ObservationIgnored private var bannerTask: Task<Void, Never>?
 
@@ -87,6 +92,9 @@ public final class AppModel {
             }
         }
         Task { [weak self] in await self?.permissions.refresh() }
+        // Exports of a previous run (trip GPX, logs, settings / map packs) are not needed any more.
+        let purged = LogicData.purgeExports(in: core.services.files.exportsDirectory, olderThan: 0)
+        if purged > 0 { Log.i("APP", "removed \(purged) old share export(s)") }
         Log.i("APP", "Ready. Tap Connect to project the map to your dash.")
         if permissions.hasCompletedOnboarding { connection.maybeAutoConnect() }
     }
@@ -94,6 +102,12 @@ public final class AppModel {
     public func scenePhaseChanged(_ phase: AppScenePhase) {
         ride.scenePhaseChanged(phase)
         connection.scenePhaseChanged(phase)
+        if phase == .background {
+            // No share sheet is open once the app left the foreground (review SEC-6 / IOS-6).
+            LogicData.purgeExports(in: core.services.files.exportsDirectory, olderThan: LogicData.backgroundExportAge,
+                                   now: Date())
+            purgeInbox()
+        }
         guard phase == .active else { return }
         Task { [weak self] in await self?.permissions.refresh() }
         if started, permissions.hasCompletedOnboarding { connection.maybeAutoConnect() }
@@ -159,7 +173,9 @@ public final class AppModel {
             return pairingMessage(url.absoluteString)
         }
         let ext = url.pathExtension.lowercased()
-        guard let data = Self.readFile(url) else {
+        let data = Self.readFile(url)
+        removeInboxCopy(url) // read into memory (or unreadable): the system's copy is not needed
+        guard let data else {
             Log.w("APP", "open: cannot read \(url.lastPathComponent)")
             return SessionText.cannotReadFile(l)
         }
@@ -171,15 +187,17 @@ public final class AppModel {
             return SessionText.gpxLoaded(url.deletingPathExtension().lastPathComponent, l)
         }
         let text = String(decoding: data, as: UTF8.self)
+        // Packs overwrite the bike tuning / map data: like Settings ▸ Import, they wait for the rider's
+        // "Import settings?" / "Import map data?" confirmation (app-features §3.5; review SPEC:CL-11).
         if text.contains("opencfmoto.settings") {
-            let result = settings.importSettings(text)
-            Log.i("APP", "open: settings pack \(result.ok ? "imported" : "rejected")")
-            return result.message.isEmpty ? nil : result.message
+            Log.i("APP", "open: settings pack \(url.lastPathComponent) \u{2014} waiting for confirmation")
+            requestImportConfirmation(PendingImport(kind: .settings, fileName: url.lastPathComponent, text: text))
+            return nil
         }
         if text.contains("opencfmoto.map") {
-            let result = settings.importMapData(text)
-            Log.i("APP", "open: map data \(result.ok ? "imported" : "rejected")")
-            return result.message.isEmpty ? nil : result.message
+            Log.i("APP", "open: map data \(url.lastPathComponent) \u{2014} waiting for confirmation")
+            requestImportConfirmation(PendingImport(kind: .mapData, fileName: url.lastPathComponent, text: text))
+            return nil
         }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if ext == "txt", !trimmed.isEmpty, trimmed.count < 2048, !trimmed.contains("\n") {
@@ -204,6 +222,42 @@ public final class AppModel {
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         #endif
         return try? Data(contentsOf: url)
+    }
+
+    /// Deletes the copy iOS put in `Documents/Inbox` for an opened document (nothing else would).
+    private func removeInboxCopy(_ url: URL) {
+        guard Self.isInboxCopy(url, inbox: inboxDirectory) else { return }
+        if (try? FileManager.default.removeItem(at: url)) != nil {
+            Log.d("APP", "open: removed the Inbox copy of \(url.lastPathComponent)")
+        }
+    }
+
+    /// Leftover Inbox copies (e.g. from versions that kept them) go when the app leaves the foreground.
+    private func purgeInbox() {
+        guard let inbox = inboxDirectory else { return }
+        let removed = LogicData.purgeExports(in: inbox, olderThan: 0, now: Date())
+        if removed > 0 { Log.i("APP", "removed \(removed) opened-file cop(ies) from the Inbox") }
+    }
+
+    /// True when `url` is a file directly inside `inbox` (symlinks and the /private prefix ignored).
+    nonisolated static func isInboxCopy(_ url: URL, inbox: URL?) -> Bool {
+        guard let inbox, url.isFileURL else { return false }
+        func normalized(_ u: URL) -> String {
+            var p = u.standardizedFileURL.resolvingSymlinksInPath().path
+            if p.hasPrefix("/private/") { p.removeFirst("/private".count) }
+            while p.count > 1, p.hasSuffix("/") { p.removeLast() }
+            return p
+        }
+        return normalized(url.deletingLastPathComponent()) == normalized(inbox)
+    }
+
+    nonisolated static func defaultInboxDirectory() -> URL? {
+        #if os(iOS)
+        return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("Inbox", isDirectory: true)
+        #else
+        return nil
+        #endif
     }
 
     private static func looksLikeGPX(_ data: Data) -> Bool {

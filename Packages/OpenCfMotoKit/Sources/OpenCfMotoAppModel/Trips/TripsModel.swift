@@ -124,6 +124,12 @@ public final class TripsModel {
 
     public func delete(_ trip: Trip) {
         core.tripStore.delete(id: trip.id)
+        // A GPX exported for sharing holds every fix of the trip: it goes with the trip (review SEC-6).
+        let export = core.services.files.exportsDirectory
+            .appendingPathComponent(TripGpx.suggestedFileName(trip, timeZone: timeZone), isDirectory: false)
+        if (try? FileManager.default.removeItem(at: export)) != nil {
+            Log.i(Self.tag, "deleted the trip's exported GPX")
+        }
         trips.removeAll { $0.id == trip.id }
         thumbnailCache = thumbnailCache.filter { !$0.key.hasPrefix(trip.id + "|") }
         Log.i(Self.tag, "deleted trip \(trip.id)")

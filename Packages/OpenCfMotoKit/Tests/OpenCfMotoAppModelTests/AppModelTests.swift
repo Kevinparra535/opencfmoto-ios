@@ -133,6 +133,123 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(message, h.model.navigation.lastError ?? SessionText.gpxLoaded("Loop", h.language))
     }
 
+    // MARK: Opened packs wait for confirmation (SPEC:CL-11), Inbox copies are deleted (IOS:IOS-6)
+
+    static let settingsPack = #"{"format":"opencfmoto.settings","version":1,"settings":{"powerMode":"SAVER"}}"#
+
+    @MainActor
+    func testOpeningASettingsPackWaitsForTheRidersConfirmation() async throws {
+        let h = AppTestHarness()
+        h.addBike()
+        let before = h.core.currentSettings.powerMode
+        XCTAssertNotEqual(before, .saver)
+        let url = try tempFile("nk_adv-settings.json", Self.settingsPack)
+        XCTAssertNil(h.model.handleOpenURL(url)) // no banner: the UI shows the confirmation instead
+        XCTAssertNil(h.model.banner)
+        XCTAssertEqual(h.model.pendingImport, PendingImport(kind: .settings, fileName: "nk_adv-settings.json", text: Self.settingsPack))
+        XCTAssertEqual(h.core.currentSettings.powerMode, before) // nothing applied yet
+
+        h.model.cancelPendingImport()
+        XCTAssertNil(h.model.pendingImport)
+        XCTAssertEqual(h.core.currentSettings.powerMode, before)
+
+        _ = h.model.handleOpenURL(url)
+        h.model.confirmPendingImport()
+        XCTAssertNil(h.model.pendingImport)
+        XCTAssertEqual(h.core.currentSettings.powerMode, .saver)
+        XCTAssertNotNil(h.model.banner) // the import result
+    }
+
+    @MainActor
+    func testOpeningMapDataWaitsForTheRidersConfirmation() async throws {
+        let h = AppTestHarness()
+        h.core.places.setHome(Place(name: "Casa", lat: 4.65, lon: -74.05))
+        let exported = try h.model.settings.exportMapData()
+        let text = try String(contentsOf: exported.url, encoding: .utf8)
+        h.core.places.clearHome()
+        let url = try tempFile("map.json", text)
+        XCTAssertNil(h.model.handleOpenURL(url))
+        XCTAssertEqual(h.model.pendingImport?.kind, .mapData)
+        XCTAssertNil(h.core.places.home())
+        h.model.confirmPendingImport()
+        XCTAssertEqual(h.core.places.home()?.name, "Casa")
+    }
+
+    @MainActor
+    func testOpenedInboxCopiesAreDeletedOnceRead() async throws {
+        let h = AppTestHarness()
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("ocm-inbox-\(UUID().uuidString)")
+        let inbox = root.appendingPathComponent("Documents/Inbox", isDirectory: true)
+        try FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        h.model.inboxDirectory = inbox
+        let gpx = #"<?xml version="1.0"?><gpx version="1.1"><trk><trkseg><trkpt lat="4.65" lon="-74.09"/><trkpt lat="4.66" lon="-74.08"/></trkseg></trk></gpx>"#
+        let copy = inbox.appendingPathComponent("Route.gpx")
+        try Data(gpx.utf8).write(to: copy)
+        _ = h.model.handleOpenURL(copy)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: copy.path))
+        let pack = inbox.appendingPathComponent("pack.json")
+        try Data(Self.settingsPack.utf8).write(to: pack)
+        _ = h.model.handleOpenURL(pack)
+        XCTAssertEqual(h.model.pendingImport?.kind, .settings) // the text is kept in memory
+        XCTAssertFalse(FileManager.default.fileExists(atPath: pack.path))
+        // Files opened in place (outside the Inbox) are never touched.
+        let outside = try tempFile("Elsewhere.gpx", gpx)
+        _ = h.model.handleOpenURL(outside)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: outside.path))
+        // Leftovers are purged when the app leaves the foreground.
+        let leftover = inbox.appendingPathComponent("old.gpx")
+        try Data(gpx.utf8).write(to: leftover)
+        h.model.scenePhaseChanged(.background)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: leftover.path))
+        XCTAssertTrue(AppModel.isInboxCopy(URL(fileURLWithPath: "/private/var/x/Documents/Inbox/a.gpx"),
+                                           inbox: URL(fileURLWithPath: "/var/x/Documents/Inbox/")))
+        XCTAssertFalse(AppModel.isInboxCopy(URL(fileURLWithPath: "/var/x/Documents/a.gpx"),
+                                            inbox: URL(fileURLWithPath: "/var/x/Documents/Inbox")))
+        XCTAssertFalse(AppModel.isInboxCopy(copy, inbox: nil))
+    }
+
+    // MARK: Stale share exports (SEC:SEC-6)
+
+    @MainActor
+    func testShareExportsArePurgedAtLaunchAndWhenTheAppLeaves() async throws {
+        let h = AppTestHarness()
+        let exports = h.core.services.files.exportsDirectory
+        let fm = FileManager.default
+        func write(_ name: String, age: TimeInterval) throws -> URL {
+            let url = exports.appendingPathComponent(name)
+            try Data("secret".utf8).write(to: url)
+            try fm.setAttributes([.modificationDate: Date().addingTimeInterval(-age)], ofItemAtPath: url.path)
+            return url
+        }
+        let fresh = try write("opencfmoto-log-new.txt", age: 0)
+        let old = try write("opencfmoto-log-old.txt", age: 3_600)
+        h.model.start() // a previous run's exports: all gone
+        XCTAssertFalse(fm.fileExists(atPath: fresh.path))
+        XCTAssertFalse(fm.fileExists(atPath: old.path))
+
+        let recent = try write("opencfmoto_trip_1.gpx", age: 10)
+        let stale = try write("opencfmoto_trip_2.gpx", age: LogicData.backgroundExportAge + 5)
+        h.model.scenePhaseChanged(.background)
+        XCTAssertTrue(fm.fileExists(atPath: recent.path)) // may still be on its way through a share sheet
+        XCTAssertFalse(fm.fileExists(atPath: stale.path))
+    }
+
+    func testWritingAnExportDeletesStaleOnes() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("ocm-exports-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let stale = dir.appendingPathComponent("opencfmoto-log-stale.txt")
+        let recent = dir.appendingPathComponent("opencfmoto-log-recent.txt")
+        for url in [stale, recent] { try Data("x".utf8).write(to: url) }
+        try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(-LogicData.staleExportAge - 1)],
+                                              ofItemAtPath: stale.path)
+        let file = try LogicData.writeExport("new", fileName: "new.txt", typeIdentifier: "public.plain-text", in: dir)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: stale.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: recent.path))
+        XCTAssertEqual(try String(contentsOf: file.url, encoding: .utf8), "new")
+    }
+
     @MainActor
     func testBannerCanBeDismissed() async {
         let h = AppTestHarness()

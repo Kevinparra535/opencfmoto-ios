@@ -95,13 +95,39 @@ enum LogicData {
     // MARK: - Exports
 
     /// Writes UTF-8 `text` atomically to `directory/fileName` (creating the directory) and
-    /// describes it for the share sheet.
+    /// describes it for the share sheet. Older exports are deleted first (review SEC-6).
     static func writeExport(_ text: String, fileName: String, typeIdentifier: String,
                             in directory: URL) throws -> ExportedFile {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        purgeExports(in: directory, olderThan: staleExportAge, except: fileName)
         let url = directory.appendingPathComponent(fileName, isDirectory: false)
         try Data(text.utf8).write(to: url, options: .atomic)
         return ExportedFile(url: url, fileName: fileName, typeIdentifier: typeIdentifier)
+    }
+
+    /// A share sheet is long done with an export older than this: it is deleted when the next one is
+    /// written. AppModel also clears every export at launch and those older than
+    /// `backgroundExportAge` when the app leaves the foreground.
+    static let staleExportAge: TimeInterval = 10 * 60
+    static let backgroundExportAge: TimeInterval = 2 * 60
+
+    /// Deletes the share-sheet exports (trip GPX, logs — unredacted when "Include secrets" was on —,
+    /// settings / map packs with home and history) last modified `age` seconds or more before `now`:
+    /// the share sheet only copies them and nothing else removes them (review SEC-6). Returns how many
+    /// files were removed. `except` keeps one file name.
+    @discardableResult
+    static func purgeExports(in directory: URL, olderThan age: TimeInterval, now: Date = Date(),
+                             except keep: String? = nil) -> Int {
+        let fm = FileManager.default
+        guard let names = try? fm.contentsOfDirectory(atPath: directory.path) else { return 0 }
+        var removed = 0
+        for name in names where name != keep {
+            let url = directory.appendingPathComponent(name, isDirectory: false)
+            let modified = (try? fm.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date ?? .distantPast
+            guard now.timeIntervalSince(modified) >= age else { continue }
+            if (try? fm.removeItem(at: url)) != nil { removed += 1 }
+        }
+        return removed
     }
 
     /// `yyyyMMdd-HHmmss`-style stamps for file names (POSIX, never the user locale).
