@@ -357,10 +357,13 @@ final class VideoEngineTests: XCTestCase {
             ])
         }
         defer { engine.stop() }
-        engine.prepare(canvas: canvas, parameters: EncoderParameters(bitrate: 1_000_000, frameRate: 30))
+        // Long GOP: this test is about the session-START burst only. With the 1 s default, a slow CI
+        // runner (15 pulls taking > 1 s) legitimately gets the periodic IDR inside the loop.
+        engine.prepare(canvas: canvas, parameters: EncoderParameters(bitrate: 1_000_000, frameRate: 30,
+                                                                     keyframeIntervalSeconds: 10))
         engine.resynchronize()
         // A 30 fps dash pulling for ~0.5 s: fewer frames than one GOP (VideoToolbox also counts
-        // MaxKeyFrameInterval in frames — 30 here — so an unpaced loop would see periodic IDRs).
+        // MaxKeyFrameInterval in frames, so an unpaced loop would see periodic IDRs).
         var frames: [EncodedFrame] = []
         for _ in 0 ..< 15 {
             if let f = await engine.nextFrame(timeout: 1) { frames.append(f) }
