@@ -28,8 +28,15 @@ final class SearchPlaceTests: XCTestCase {
         }
     }
 
+    /// iOS deviation (review SEC-7): the Kotlin golden URLs carry the exact fix (44.4268, 26.1025);
+    /// iOS sends it rounded to 2 decimals (Photon lat/lon, Nominatim viewbox edges).
+    static func iosRoundedBias(_ url: String) -> String {
+        url.replacingOccurrences(of: "lat=44.4268&lon=26.1025", with: "lat=44.43&lon=26.1")
+            .replacingOccurrences(of: "viewbox=24.502499999999998,46.0268,27.7025,42.8268", with: "viewbox=24.5,46.03,27.7,42.83")
+    }
+
     private func compareURLs(_ c: NavFakeHTTPClient, _ g: NavGJ, _ tag: String, file: StaticString = #filePath, line: UInt = #line) {
-        let exp = g["requests"].array.map { $0["url"].string ?? "" }
+        let exp = g["requests"].array.map { Self.iosRoundedBias($0["url"].string ?? "") }
         XCTAssertEqual(c.requests.map(\.navURLText), exp, tag, file: file, line: line)
         for (r, e) in zip(c.requests, g["requests"].array) where !e["body"].isNull {
             XCTAssertEqual(r.navBodyText, e["body"].string, tag, file: file, line: line)
@@ -98,8 +105,12 @@ final class SearchPlaceTests: XCTestCase {
     }
 
     func testURLBuilders() {
+        // The exact fix never leaves the phone: ~1 km is enough for a location bias (review SEC-7).
         XCTAssertEqual(PlaceSearch.photonURL(query: "Câmpina", near: near, limit: 12, settlementsOnly: false).absoluteString,
-                       "https://photon.komoot.io/api/?q=C%C3%A2mpina&lat=44.4268&lon=26.1025&limit=12&location_bias_scale=0.2&lang=default")
+                       "https://photon.komoot.io/api/?q=C%C3%A2mpina&lat=44.43&lon=26.1&limit=12&location_bias_scale=0.2&lang=default")
+        XCTAssertEqual(PlaceSearch.nominatimURL(query: "a", near: near).absoluteString,
+                       "https://nominatim.openstreetmap.org/search?q=a&format=jsonv2&addressdetails=1&limit=20&viewbox=24.5,46.03,27.7,42.83&bounded=0")
+        XCTAssertEqual(PlaceSearch.biasPosition(GeoPoint(lat: -33.86882, lon: 151.20929)), GeoPoint(lat: -33.87, lon: 151.21))
         XCTAssertEqual(PlaceSearch.cacheKey(query: "Câmpina", near: near), "câmpina|44.43,26.10")
         XCTAssertEqual(PlaceSearch.cacheKey(query: "X", near: nil), "x|-")
     }
@@ -140,6 +151,12 @@ final class SearchPlaceTests: XCTestCase {
 final class OverpassClientTests: XCTestCase {
     private lazy var golden = NavGJ(NavFixtures.json("golden_search.json"))
 
+    /// iOS deviation (review SEC-7): nearby-POI queries send the centre rounded to 3 decimals; the
+    /// 25 m maxspeed query stays exact.
+    static func iosRoundedCentre(_ body: String) -> String {
+        body.replacingOccurrences(of: "%2C44.4268%2C26.1025%29", with: "%2C44.427%2C26.103%29")
+    }
+
     func testNearbyByTagGolden() async throws {
         let c = NavFakeHTTPClient { _ in .navOK(fixture: "overpass_fuel.json") }
         let got = try await OverpassClient(http: c).nearbyByTag("amenity=fuel", lat: 44.4268, lon: 26.1025)
@@ -147,10 +164,10 @@ final class OverpassClientTests: XCTestCase {
         XCTAssertEqual(got.map(\.name), exp.map { $0["name"].string! })
         XCTAssertEqual(got.map(\.subtitle), exp.map { $0["subtitle"].string! })
         XCTAssertEqual(got.map(\.category), exp.map { $0["category"].string! })
-        XCTAssertEqual(c.requests.map(\.navBodyText), golden["fuel"]["requests"].array.map { $0["body"].string! })
-        // Spec example body for fuel at (44.4268, 26.1025).
+        XCTAssertEqual(c.requests.map(\.navBodyText), golden["fuel"]["requests"].array.map { Self.iosRoundedCentre($0["body"].string!) })
+        // Spec example body for fuel at (44.4268, 26.1025), centre rounded to 3 decimals on iOS (SEC-7).
         XCTAssertEqual(c.requests[0].navBodyText,
-                       "data=%5Bout%3Ajson%5D%5Btimeout%3A25%5D%3B%0A%28%0A++node%5B%22amenity%22%3D%22fuel%22%5D%28around%3A6000%2C44.4268%2C26.1025%29%3B%0A++way%5B%22amenity%22%3D%22fuel%22%5D%28around%3A6000%2C44.4268%2C26.1025%29%3B%0A%29%3B%0Aout+center+60%3B")
+                       "data=%5Bout%3Ajson%5D%5Btimeout%3A25%5D%3B%0A%28%0A++node%5B%22amenity%22%3D%22fuel%22%5D%28around%3A6000%2C44.427%2C26.103%29%3B%0A++way%5B%22amenity%22%3D%22fuel%22%5D%28around%3A6000%2C44.427%2C26.103%29%3B%0A%29%3B%0Aout+center+60%3B")
         XCTAssertEqual(c.requests[0].headers["Content-Type"], "application/x-www-form-urlencoded; charset=UTF-8")
         XCTAssertEqual(c.requests[0].method, "POST")
         XCTAssertEqual(c.requests[0].navURLText, "https://overpass-api.de/api/interpreter")
@@ -164,7 +181,7 @@ final class OverpassClientTests: XCTestCase {
         }
         let got = try await OverpassClient(http: c).nearbyByTag(" amenity = fuel ", lat: 44.4268, lon: 26.1025, maxResults: 2)
         XCTAssertEqual(got.map(\.name), golden["fuelWiden"]["places"].array.map { $0["name"].string! })
-        XCTAssertEqual(c.requests.map(\.navBodyText), golden["fuelWiden"]["requests"].array.map { $0["body"].string! })
+        XCTAssertEqual(c.requests.map(\.navBodyText), golden["fuelWiden"]["requests"].array.map { Self.iosRoundedCentre($0["body"].string!) })
         let bad = try await OverpassClient(http: c).nearbyByTag("amenity", lat: 0, lon: 0)
         XCTAssertEqual(bad, [])
     }
