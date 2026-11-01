@@ -143,7 +143,9 @@ final class ConnectionModelTests: XCTestCase {
     func testConfirmManualJoinProceedsWithTheCurrentNetwork() async {
         let h = AppTestHarness(flavor: .free)
         h.wifi.nextJoinResult = .success(.manualJoinRequired)
-        h.wifi.setNetwork(AppTestHarness.bikeNetwork(ssid: nil)) // already there, nothing will change
+        // Already there (a dash on an address plan the app does not know), nothing will change.
+        h.wifi.setNetwork(WifiNetworkInfo(isWifiAvailable: true, interfaceName: "en0", phoneIPv4: "172.16.5.20",
+                                          gateway: "172.16.5.1"))
         h.addBike()
         h.connection.connect()
         let prompted = await eventually { h.connection.manualJoin != nil }
@@ -230,7 +232,8 @@ final class ConnectionModelTests: XCTestCase {
     @MainActor
     func testAutoConnectRunsOncePerProcess() async {
         let h = AppTestHarness()
-        h.addBike()
+        let (_, qr) = h.addBike()
+        h.wifi.setNetwork(AppTestHarness.bikeNetwork(ssid: qr.ssid)) // iOS already joined the bike (§11.8)
         h.connection.maybeAutoConnect()
         XCTAssertTrue(h.connection.autoConnectLatched)
         XCTAssertNil(h.connection.session) // only after the delay
@@ -249,7 +252,8 @@ final class ConnectionModelTests: XCTestCase {
         let h = AppTestHarness()
         h.connection.maybeAutoConnect()
         XCTAssertFalse(h.connection.autoConnectLatched) // no bike: not latched, retried on the next foreground
-        h.addBike()
+        let (_, qr) = h.addBike()
+        h.wifi.setNetwork(AppTestHarness.bikeNetwork(ssid: qr.ssid))
         h.core.settings.update(forBike: h.core.garage.selected?.id) { $0.autoConnect = false }
         h.connection.maybeAutoConnect()
         XCTAssertFalse(h.connection.autoConnectLatched)
@@ -264,7 +268,8 @@ final class ConnectionModelTests: XCTestCase {
     @MainActor
     func testAutoConnectIsPostponedWhenTheAppLeavesTheForeground() async {
         let h = AppTestHarness()
-        h.addBike()
+        let (_, qr) = h.addBike()
+        h.wifi.setNetwork(AppTestHarness.bikeNetwork(ssid: qr.ssid))
         h.connection.tuning.autoConnectDelay = 0.3
         h.connection.maybeAutoConnect()
         h.connection.scenePhaseChanged(.background)
@@ -284,8 +289,13 @@ final class ConnectionModelTests: XCTestCase {
         h.wifi.nextJoinResult = .success(.manualJoinRequired)
         h.addBike()
         h.connection.maybeAutoConnect()
-        let ended = await eventually { h.connection.autoConnectLatched && h.connection.session == nil && h.connection.phase == .idle }
-        XCTAssertTrue(ended)
+        XCTAssertTrue(h.connection.autoConnectLatched)
+        // Not on the bike Wi-Fi: no session, no join, no prompt; unlatched for the next foreground.
+        let checked = await eventually { !h.connection.autoConnectLatched }
+        XCTAssertTrue(checked)
+        XCTAssertNil(h.connection.session)
+        XCTAssertEqual(h.connection.phase, .idle)
+        XCTAssertTrue(h.wifi.joinedSSIDs.isEmpty)
         XCTAssertNil(h.connection.manualJoin)
         XCTAssertNil(h.connection.issue)
     }

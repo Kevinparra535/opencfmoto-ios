@@ -14,7 +14,8 @@ final class AppModelTests: XCTestCase {
         let h = AppTestHarness { services in
             services.keyValueStore.set(true, forKey: PermissionsModel.onboardingDoneKey)
         }
-        h.addBike()
+        let (_, qr) = h.addBike()
+        h.wifi.setNetwork(AppTestHarness.bikeNetwork(ssid: qr.ssid)) // iOS already joined the bike
         XCTAssertTrue(h.model.permissions.hasCompletedOnboarding)
         h.model.start()
         h.model.start() // idempotent
@@ -27,7 +28,8 @@ final class AppModelTests: XCTestCase {
     @MainActor
     func testStartDoesNotAutoConnectBeforeOnboarding() async {
         let h = AppTestHarness()
-        h.addBike()
+        let (_, qr) = h.addBike()
+        h.wifi.setNetwork(AppTestHarness.bikeNetwork(ssid: qr.ssid))
         h.model.start()
         await settle(0.2)
         XCTAssertNil(h.connection.session)
@@ -47,7 +49,8 @@ final class AppModelTests: XCTestCase {
         h.model.start() // no bike yet → not latched
         await settle(0.1)
         XCTAssertNil(h.connection.session)
-        h.addBike()
+        let (_, qr) = h.addBike()
+        h.wifi.setNetwork(AppTestHarness.bikeNetwork(ssid: qr.ssid))
         h.model.scenePhaseChanged(.background)
         XCTAssertEqual(h.projection.stats.mode, "hold")
         h.model.scenePhaseChanged(.active)

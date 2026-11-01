@@ -291,6 +291,153 @@ final class ConnectionReviewFixTests: XCTestCase {
         h.connection.stop()
         second.forEach { $0() }
     }
+
+    // MARK: CON:CL-4 / SPEC:CL-4 — auto-connect only on the bike Wi-Fi; free flavor "already joined"
+
+    @MainActor
+    func testFullFlavorAutoConnectAtHomeNeverAppliesAHotspotConfiguration() async {
+        let h = AppTestHarness()
+        let (_, qr) = h.addBike()
+        h.wifi.setNetwork(WifiNetworkInfo(isWifiAvailable: true, ssid: "HomeWiFi", interfaceName: "en0",
+                                          phoneIPv4: "10.0.0.5", gateway: "10.0.0.1"))
+        h.connection.maybeAutoConnect()
+        let checked = await eventually { !h.connection.autoConnectLatched }
+        XCTAssertTrue(checked)
+        await settle(0.1)
+        XCTAssertTrue(h.wifi.joinedSSIDs.isEmpty) // no NEHotspotConfiguration.apply → no system prompt
+        XCTAssertNil(h.connection.session)
+        XCTAssertEqual(h.connection.phase, .idle)
+        XCTAssertNil(h.connection.issue)
+
+        // Later iOS auto-joins the bike: the next foreground starts the session.
+        h.wifi.setNetwork(AppTestHarness.bikeNetwork(ssid: qr.ssid))
+        h.connection.scenePhaseChanged(.active)
+        h.connection.maybeAutoConnect()
+        let started = await eventually { h.connection.session != nil }
+        XCTAssertTrue(started)
+        XCTAssertEqual(h.connection.session?.trigger, .auto)
+        h.connection.stop()
+    }
+
+    @MainActor
+    func testFreeFlavorAutoConnectStartsWhenIOSAlreadyJoinedTheBike() async {
+        let h = AppTestHarness(flavor: .free)
+        h.wifi.nextJoinResult = .success(.manualJoinRequired)
+        h.wifi.setNetwork(AppTestHarness.bikeNetwork(ssid: nil)) // SSID never known in the free flavor
+        h.addBike()
+        h.connection.maybeAutoConnect()
+        let linked = await eventually { h.connection.link != nil }
+        XCTAssertTrue(linked)
+        XCTAssertNil(h.connection.manualJoin)
+        XCTAssertEqual(h.connection.session?.trigger, .auto)
+        h.connection.stop()
+    }
+
+    @MainActor
+    func testFreeFlavorConnectAndModeSwitchSkipTheManualJoinOnTheBikeWifi() async {
+        let h = AppTestHarness(flavor: .free)
+        h.wifi.nextJoinResult = .success(.manualJoinRequired)
+        h.wifi.setNetwork(AppTestHarness.bikeNetwork(ssid: nil))
+        h.addBike()
+        h.connection.connect()
+        let linked = await eventually { h.connection.link != nil }
+        XCTAssertTrue(linked)
+        XCTAssertNil(h.connection.manualJoin)
+        // Own UI → Mirror keeps the Wi-Fi and skips the re-join (session-network §3.6).
+        h.connection.startMirror()
+        let mirrorLinked = await eventually { h.connection.mode == .mirror && h.connection.link != nil }
+        XCTAssertTrue(mirrorLinked)
+        XCTAssertNil(h.connection.manualJoin)
+        h.connection.stop()
+    }
+
+    @MainActor
+    func testFreeFlavorConnectOffTheBikeWifiStillShowsTheManualJoin() async {
+        let h = AppTestHarness(flavor: .free)
+        h.wifi.nextJoinResult = .success(.manualJoinRequired)
+        h.wifi.setNetwork(Self.homeNoSSID)
+        h.addBike()
+        h.connection.connect()
+        let prompted = await eventually { h.connection.manualJoin != nil }
+        XCTAssertTrue(prompted)
+        XCTAssertNil(h.connection.link)
+        h.connection.cancelManualJoin()
+    }
+
+    // MARK: SPEC:CL-2 — a failed auto-connect stays idle and retries after the next background
+
+    @MainActor
+    func testAFailedAutoJoinStaysIdleAndRetriesOnTheNextForeground() async {
+        let h = AppTestHarness()
+        let (_, qr) = h.addBike()
+        h.wifi.setNetwork(AppTestHarness.bikeNetwork(ssid: qr.ssid))
+        h.wifi.nextJoinResult = .failure(WifiJoinFailure(message: "The phone did not join \u{201C}\(qr.ssid)\u{201D}."))
+        h.connection.maybeAutoConnect()
+        let ended = await eventually { h.wifi.joinedSSIDs.count == 1 && h.connection.session == nil && h.connection.retryAutoConnectAfterBackground }
+        XCTAssertTrue(ended)
+        XCTAssertEqual(h.connection.phase, .idle) // no stale red error
+        XCTAssertEqual(h.connection.detail, "")
+        XCTAssertNil(h.connection.issue)
+        XCTAssertTrue(h.connection.autoConnectLatched)
+
+        // An inactive → active bounce (the iOS join alert) does not retry: never loop.
+        h.connection.scenePhaseChanged(.inactive)
+        h.connection.scenePhaseChanged(.active)
+        h.connection.maybeAutoConnect()
+        await settle(0.2)
+        XCTAssertEqual(h.wifi.joinedSSIDs.count, 1)
+
+        // A real trip to the background releases the latch: the next foreground retries once.
+        h.wifi.nextJoinResult = .success(.joined)
+        h.connection.scenePhaseChanged(.background)
+        XCTAssertFalse(h.connection.autoConnectLatched)
+        h.connection.scenePhaseChanged(.active)
+        h.connection.maybeAutoConnect()
+        let started = await eventually { h.connection.session != nil }
+        XCTAssertTrue(started)
+        XCTAssertEqual(h.wifi.joinedSSIDs.count, 2)
+        h.connection.stop()
+    }
+
+    @MainActor
+    func testACancelledAutoJoinPromptIsNotRepeated() async {
+        let h = AppTestHarness()
+        let (_, qr) = h.addBike()
+        h.wifi.setNetwork(AppTestHarness.bikeNetwork(ssid: qr.ssid))
+        h.wifi.nextJoinResult = .failure(WifiJoinFailure(message: "Joining was not approved.", userCancelled: true))
+        h.connection.maybeAutoConnect()
+        let ended = await eventually { h.connection.phase == .error }
+        XCTAssertTrue(ended)
+        XCTAssertFalse(h.connection.retryAutoConnectAfterBackground)
+        h.connection.scenePhaseChanged(.background)
+        XCTAssertTrue(h.connection.autoConnectLatched)
+        h.connection.scenePhaseChanged(.active)
+        h.connection.maybeAutoConnect()
+        await settle(0.2)
+        XCTAssertEqual(h.wifi.joinedSSIDs.count, 1)
+    }
+
+    @MainActor
+    func testAFreeFlavorAutoConnectWithoutADashEndsQuietlyInsteadOfReArming() async {
+        let h = AppTestHarness(flavor: .free) // PreviewNetwork: no dash ever answers
+        h.wifi.nextJoinResult = .success(.manualJoinRequired)
+        h.wifi.setNetwork(AppTestHarness.bikeNetwork(ssid: nil)) // or a home LAN on the dash's plan
+        h.addBike()
+        h.connection.maybeAutoConnect()
+        _ = await eventually { h.connection.link != nil }
+        let ended = await eventually { h.connection.session == nil }
+        XCTAssertTrue(ended)
+        XCTAssertEqual(h.connection.phase, .idle)
+        XCTAssertNil(h.connection.issue)
+        XCTAssertTrue(h.connection.retryAutoConnectAfterBackground)
+        XCTAssertNil(h.connection.link)
+        // A user Connect on the same network keeps re-arming (the rider asked for it).
+        h.connection.connect()
+        let armed = await eventually { h.connection.phase == .error }
+        XCTAssertTrue(armed)
+        XCTAssertTrue(h.connection.isSessionActive)
+        h.connection.stop()
+    }
 }
 
 /// Free-flavor Wi-Fi whose network switches to the bike (SSID unknown, dash subnet) at the second

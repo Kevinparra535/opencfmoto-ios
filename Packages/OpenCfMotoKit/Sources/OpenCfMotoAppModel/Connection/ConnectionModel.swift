@@ -150,6 +150,14 @@ public final class ConnectionModel {
     @ObservationIgnored private var resumeToken: UInt64 = 0
     @ObservationIgnored private var lastFrameSentAt: TimeInterval?
     @ObservationIgnored private(set) var autoConnectLatched = false
+    /// An auto-connect ended quietly (join failed / no dash on an unconfirmed network): the latch is
+    /// released when the app goes to the background, so the next foreground retries once (§13.12:
+    /// "stay idle and retry on scenePhase == .active; never loop"). The iOS join alert's own
+    /// inactive → active bounce never passes through .background.
+    @ObservationIgnored private(set) var retryAutoConnectAfterBackground = false
+    @ObservationIgnored private var loggedNotOnBikeWifi = false
+    /// The session reached STREAMING at least once.
+    @ObservationIgnored private var sessionEverStreamed = false
     /// `issue = .localNetworkDenied` was raised in this episode (since the session began or last
     /// streamed). The link re-arms every 20 s while auto-recovery is on and fails the same way each
     /// time: raising the issue again would bring the dialog back after every Dismiss (CON:CL-1).
@@ -241,7 +249,7 @@ public final class ConnectionModel {
         guard !autoConnectLatched else { return }
         guard core.currentSettings.autoConnect else { return }
         guard !phase.isBusy, !phase.isLive, session == nil else { return }
-        guard let bike = core.garage.selected else {
+        guard core.garage.selected != nil else {
             if !loggedAutoConnectIdle {
                 loggedAutoConnectIdle = true
                 Log.i("APP", "→ Auto-connect idle: no bike paired.")
@@ -249,14 +257,30 @@ public final class ConnectionModel {
             return
         }
         autoConnectLatched = true
-        Log.i("APP", "→ Auto-connect: '\(bike.name)' (range unknown \u{2014} trying anyway). Disable in Setup \u{25B8} Startup.")
+        retryAutoConnectAfterBackground = false
         let delay = tuning.autoConnectDelay
+        let wifi = core.services.wifi
         autoConnectTask?.cancel()
         autoConnectTask = Task { [weak self] in
             await sleepSeconds(delay)
+            guard !Task.isCancelled else { return }
+            // §11.8: iOS cannot scan, and applying the hotspot configuration at every launch prompts
+            // (and fails after ~15 s when the bike is off). Auto-start only when iOS already joined
+            // the bike Wi-Fi; otherwise stay idle and check again on the next foreground.
+            let current = await wifi.currentNetwork()
             guard !Task.isCancelled, let self else { return }
             self.autoConnectTask = nil
             guard !self.phase.isBusy, !self.phase.isLive, self.session == nil else { return }
+            guard let bike = self.core.garage.selected, let qr = self.core.garage.qr(for: bike.id) else { return }
+            guard Self.isAlreadyOnBikeNetwork(current, ssid: qr.ssid) else {
+                self.autoConnectLatched = false
+                if !self.loggedNotOnBikeWifi {
+                    self.loggedNotOnBikeWifi = true
+                    Log.i("APP", "→ Auto-connect idle: '\(bike.name)' \u{2014} not on its Wi-Fi (\(Self.describe(current))). Tap Connect, or open the app on the bike Wi-Fi.")
+                }
+                return
+            }
+            Log.i("APP", "→ Auto-connect: '\(bike.name)' \u{2014} already on its Wi-Fi (\(Self.describe(current))). Disable in Setup \u{25B8} Startup.")
             self.begin(mode: .dashUI, trigger: .auto)
         }
     }
@@ -266,6 +290,11 @@ public final class ConnectionModel {
         case .background:
             // Android unlatches when the activity died before the delayed connect ran.
             cancelAutoConnect(unlatch: true)
+            if retryAutoConnectAfterBackground, session == nil {
+                retryAutoConnectAfterBackground = false
+                autoConnectLatched = false
+                Log.i("APP", "→ Auto-connect will retry when the app returns")
+            }
             // A failed session's bike Wi-Fi must not keep auto-joining once the rider left the app.
             if session == nil { forgetLingeringWifi(except: nil) }
         case .active:
@@ -323,6 +352,9 @@ public final class ConnectionModel {
         let gen = generation
         issue = nil
         localNetworkIssueRaised = false
+        sessionEverStreamed = false
+        loggedNotOnBikeWifi = false
+        if trigger == .user { retryAutoConnectAfterBackground = false }
         manualJoin = nil
         wifiLostAt = nil
         isParked = false
@@ -459,8 +491,13 @@ public final class ConnectionModel {
             case .manualJoinRequired:
                 let current = await wifi.currentNetwork()
                 guard gen == generation else { return nil }
-                if Self.isConfirmedBikeNetwork(current, ssid: s.qr.ssid) {
-                    Log.i("WIFI", "Wi-Fi already joined: \(s.qr.ssid) \u{2014} skipping re-join")
+                if Self.isAlreadyOnBikeNetwork(current, ssid: s.qr.ssid) {
+                    // The free flavor never knows the SSID: an address on a known dash subnet means
+                    // iOS already joined the bike (a mode switch, a retry, an auto-join at ignition).
+                    // Discovery confirms it (and fails fast when this is not the dash).
+                    Log.i("WIFI", current.ssid == nil
+                          ? "Wi-Fi already on a dash network (\(Self.describe(current)), SSID unknown) \u{2014} skipping the manual join"
+                          : "Wi-Fi already joined: \(s.qr.ssid) \u{2014} skipping re-join")
                     return current
                 }
                 if s.trigger == .auto {
@@ -473,6 +510,12 @@ public final class ConnectionModel {
         } catch let failure as WifiJoinFailure {
             guard gen == generation else { return nil }
             Log.w("WIFI", "[wifi] join failed: \(failure.message)")
+            if s.trigger == .auto, !failure.userCancelled {
+                // §13.12: an auto-connect that cannot join stays idle (no stale red error) and retries
+                // on the next foreground. A cancelled system prompt is not repeated (latched).
+                endAutoConnectQuietly("join failed (\(failure.message))")
+                return nil
+            }
             if failure.userCancelled || s.trigger == .auto {
                 endSession(.error, detail: failure.message, issue: nil)
                 return nil
@@ -487,10 +530,23 @@ public final class ConnectionModel {
         } catch {
             guard gen == generation, !(error is CancellationError) else { return nil }
             Log.e("WIFI", "[wifi] join error: \(error)")
-            let message = s.trigger == .auto ? SessionText.autoConnectFailed(l) : SessionText.connectFailed(l)
-            endSession(.error, detail: message, issue: s.trigger == .auto ? nil : .other(message))
+            if s.trigger == .auto {
+                endAutoConnectQuietly("join error")
+                return nil
+            }
+            let message = SessionText.connectFailed(l)
+            endSession(.error, detail: message, issue: .other(message))
             return nil
         }
+    }
+
+    /// An auto-connect that failed with "not found" / "cannot join": back to idle without a dialog or
+    /// a stale error, retried once on the next foreground (app-features §13.12, Android "retry on
+    /// next resume").
+    private func endAutoConnectQuietly(_ reason: String) {
+        Log.i("APP", "→ Auto-connect: \(reason) \u{2014} staying idle; will retry when the app returns")
+        retryAutoConnectAfterBackground = true
+        endSession(.idle, detail: "", issue: nil)
     }
 
     /// Shows the manual-join prompt and waits for the bike network (or the rider's confirmation).
@@ -808,6 +864,7 @@ public final class ConnectionModel {
             ride.setLinkBanner(nil)
             if s.mode == .dashUI { ride.projectionChanged(active: true) }
             localNetworkIssueRaised = false
+            sessionEverStreamed = true
             switch issue {
             case .dashNotFound?, .lostLink?, .localNetworkDenied?, .wifiUnavailable?: issue = nil
             default: break
@@ -844,7 +901,15 @@ public final class ConnectionModel {
             endSession(.error, detail: SessionText.noWifiAddress(l), issue: .wifiUnavailable)
         case .dashNotFound:
             let d = SessionText.easyConnOffline(l)
-            if recovery { setPhase(.error, detail: d) } else { endSession(.error, detail: d, issue: .dashNotFound) }
+            if s.trigger == .auto, !sessionEverStreamed, sessionNetwork?.ssid == nil {
+                // An auto-connect on a network recognised only by its address plan (SSID unknown) may
+                // be a home LAN on the dash's plan: never re-arm there unattended (§13.12, SEC-3).
+                endAutoConnectQuietly("no dash answered on this Wi-Fi (SSID unknown)")
+            } else if recovery {
+                setPhase(.error, detail: d)
+            } else {
+                endSession(.error, detail: d, issue: .dashNotFound)
+            }
         case .lostLink:
             let d = SessionText.lostLink(l)
             if recovery { setPhase(.error, detail: d) } else { endSession(.error, detail: d, issue: .lostLink) }
@@ -916,6 +981,16 @@ public final class ConnectionModel {
     /// Positively on the bike Wi-Fi (the SSID is known and matches).
     nonisolated static func isConfirmedBikeNetwork(_ info: WifiNetworkInfo, ssid: String) -> Bool {
         info.isWifiAvailable && info.phoneIPv4 != nil && info.ssid == ssid
+    }
+
+    /// iOS already joined the bike Wi-Fi: the SSID is known and matches, or (SSID unknown: free flavor,
+    /// no precise location) the phone has an address on a known dash subnet. Auto-connect starts only
+    /// then (§11.8), and a Connect skips the manual-join sheet (review CON:CL-4, SPEC:CL-4). Known
+    /// limitation: an SSID-less home LAN on the dash's address plan looks the same — discovery then
+    /// finds no dash, and an auto-connect ends quietly instead of re-arming there.
+    nonisolated static func isAlreadyOnBikeNetwork(_ info: WifiNetworkInfo, ssid: String) -> Bool {
+        if isConfirmedBikeNetwork(info, ssid: ssid) { return true }
+        return info.ssid == nil && info.isWifiAvailable && info.phoneIPv4 != nil && isOnDashSubnet(info)
     }
 
     /// The rider joined the bike network in Settings: the SSID matches, or (SSID unknown) a NEW
