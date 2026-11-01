@@ -120,10 +120,14 @@ public final class ConnectionModel {
     @ObservationIgnored var tuning = ConnectionTuning()
     @ObservationIgnored private let phone: PhoneIdentity
     @ObservationIgnored private(set) var session: ConnectionSession?
-    @ObservationIgnored private var generation: UInt64 = 0
+    @ObservationIgnored private(set) var generation: UInt64 = 0
     @ObservationIgnored private var sessionTask: Task<Void, Never>?
     @ObservationIgnored private(set) var link: EasyConnLink?
     @ObservationIgnored private var linkEventsTask: Task<Void, Never>?
+    /// Identifies the current link's events. Bumped for every new link and by `stopLink()`: a Wi-Fi-back
+    /// restart keeps the session generation, and a freed link's ObjectIdentifier can be reused by its
+    /// replacement, so an event already dequeued by the old consumer must not pass for the new link's.
+    @ObservationIgnored private(set) var linkSerial: UInt64 = 0
     @ObservationIgnored private var wifiWatchTask: Task<Void, Never>?
     @ObservationIgnored private var parkTask: Task<Void, Never>?
     @ObservationIgnored private var autoConnectTask: Task<Void, Never>?
@@ -625,12 +629,14 @@ public final class ConnectionModel {
         link = newLink
         linkState = .idle
         diagnostics = LinkDiagnostics(profileName: newLink.currentProfile.name, projection: projectionSummary())
-        let id = ObjectIdentifier(newLink)
+        linkSerial &+= 1
+        let serial = linkSerial
         let events = newLink.events
         linkEventsTask = Task { [weak self] in
             for await event in events {
-                guard let self else { return }
-                self.handleLinkEvent(event, gen: gen, linkID: id)
+                // Cancelling does not stop an element already handed to this consumer.
+                guard !Task.isCancelled, let self else { return }
+                self.handleLinkEvent(event, gen: gen, serial: serial)
             }
         }
         Log.i("LINK", "→ starting PXC link (\(ownUI ? "own dash UI" : "mirror")) on \(Self.describe(info))")
@@ -640,6 +646,7 @@ public final class ConnectionModel {
     private func stopLink() {
         linkEventsTask?.cancel()
         linkEventsTask = nil
+        linkSerial &+= 1
         if let l = link {
             link = nil
             l.stop()
@@ -647,8 +654,9 @@ public final class ConnectionModel {
         linkState = .idle
     }
 
-    private func handleLinkEvent(_ event: LinkEvent, gen: UInt64, linkID: ObjectIdentifier) {
-        guard gen == generation, let link, ObjectIdentifier(link) == linkID, let s = session else { return }
+    /// Internal for tests (stale-event filtering).
+    func handleLinkEvent(_ event: LinkEvent, gen: UInt64, serial: UInt64) {
+        guard gen == generation, serial == linkSerial, let link, let s = session else { return }
         switch event {
         case let .state(st):
             linkStateChanged(st, session: s)
