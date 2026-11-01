@@ -60,6 +60,30 @@ jobs:
       - name: Annotate iOS build errors
         if: failure()
         run: python3 tools/ci/annotate.py build.log "iOS build"
+      # What a rider installs from Xcode: the iPhone (arm64) slice, in Debug (Run) and Release
+      # (Archive / a faster Run). Unsigned — signing needs the rider's own team — but it compiles
+      # every device-only code path (`#if !targetEnvironment(simulator)`, non-DEBUG code).
+      - name: Build iOS app (iPhone arm64, unsigned) — Debug and Release
+        run: |
+          set -o pipefail
+          for config in Debug Release; do
+            xcodebuild \
+              -project OpenCfMoto.xcodeproj \
+              -scheme OpenCfMoto \
+              -configuration "$config" \
+              -destination 'generic/platform=iOS' \
+              CODE_SIGNING_ALLOWED=NO \
+              build 2>&1 | tee "build-device-$config.log" | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
+            grep -q "BUILD SUCCEEDED" "build-device-$config.log"
+          done
+      - name: Annotate iPhone build errors
+        if: failure()
+        run: |
+          for config in Debug Release; do
+            if [ -f "build-device-$config.log" ]; then
+              python3 tools/ci/annotate.py "build-device-$config.log" "iPhone build ($config)"
+            fi
+          done
       - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -67,6 +91,8 @@ jobs:
           name: ci-logs
           path: |
             build.log
+            build-device-Debug.log
+            build-device-Release.log
             swift-test.log
           if-no-files-found: ignore
 
