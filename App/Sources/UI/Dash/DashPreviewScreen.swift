@@ -141,19 +141,41 @@ struct DashPreviewScreen: View {
             }
 
             if !ride.isProjecting {
-                HStack {
+                // Caption above a full-width menu whose label wraps inside its own frame: the system
+                // menu picker beside the caption wrapped its long label over the keypad (portrait,
+                // landscape and Spanish).
+                VStack(alignment: .leading, spacing: 6) {
                     Text("Preview canvas")
                         .font(.subheadline)
                         .foregroundStyle(Theme.textSecondary)
-                    Spacer(minLength: 8)
-                    Picker(selection: $ride.previewCanvas) {
-                        ForEach(DashPreviewCanvas.allCases) { canvas in
-                            Text(MainStrings.previewCanvasLabel(canvas)).tag(canvas)
+                    Menu {
+                        Picker(selection: $ride.previewCanvas) {
+                            ForEach(DashPreviewCanvas.allCases) { canvas in
+                                Text(MainStrings.previewCanvasLabel(canvas)).tag(canvas)
+                            }
+                        } label: {
+                            Text("Preview canvas")
                         }
+                        .pickerStyle(.inline)
                     } label: {
-                        Text("Preview canvas")
+                        HStack(spacing: 8) {
+                            Text(MainStrings.previewCanvasLabel(ride.previewCanvas))
+                                .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 4)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption.weight(.semibold))
+                                .accessibilityHidden(true)
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Theme.brand)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Theme.surfaceHigh, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                     }
-                    .pickerStyle(.menu)
+                    .accessibilityLabel(Text("Preview canvas"))
+                    .accessibilityValue(Text(MainStrings.previewCanvasLabel(ride.previewCanvas)))
                 }
             }
 

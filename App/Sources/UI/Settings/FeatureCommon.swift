@@ -242,16 +242,37 @@ struct FeatureChoiceRow<Value: Hashable>: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
             } else {
-                Picker(selection: $selection) {
-                    ForEach(options, id: \.self) { option in
-                        label(option).tag(option)
+                // Title above a full-width menu whose label wraps inside its own frame: the system
+                // menu picker squeezed beside the title wrapped long values (Spanish "Igual que el
+                // tablero (recomendado)") over the explanation below.
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.text)
+                Menu {
+                    Picker(selection: $selection) {
+                        ForEach(options, id: \.self) { option in
+                            label(option).tag(option)
+                        }
+                    } label: {
+                        Text(title)
                     }
+                    .pickerStyle(.inline)
                 } label: {
-                    Text(title)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Theme.text)
+                    HStack(spacing: 6) {
+                        label(selection)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 4)
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.caption.weight(.semibold))
+                            .accessibilityHidden(true)
+                    }
+                    .foregroundStyle(Theme.brand)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
-                .pickerStyle(.menu)
+                .accessibilityLabel(Text(title))
+                .accessibilityValue(label(selection))
             }
             if let detail {
                 FeatureNote(detail(selection))
