@@ -7,14 +7,35 @@ import XCTest
 @testable import OpenCfMotoAppModel
 @testable import OpenCfMotoCore
 
+/// Forwards to `inner` and reports every `prepare` like DashProjectionEngine.onPrepared does.
+final class RideNotifyingFrameSource: VideoFrameSource, @unchecked Sendable {
+    let inner: VideoFrameSource
+    let onPrepare: Locked<(@Sendable (VideoCanvas) -> Void)?> = Locked(nil)
+    init(_ inner: VideoFrameSource) { self.inner = inner }
+    func prepare(canvas: VideoCanvas, parameters: EncoderParameters) {
+        inner.prepare(canvas: canvas, parameters: parameters)
+        onPrepare.current?(canvas)
+    }
+    func resynchronize() { inner.resynchronize() }
+    func nextFrame(timeout: TimeInterval) async -> EncodedFrame? { await inner.nextFrame(timeout: timeout) }
+    func mediaStopped() { inner.mediaStopped() }
+}
+
 /// A `DashProjecting` that records what the model asks of it (everything else is the preview fake).
 final class RideSpyProjection: DashProjecting, @unchecked Sendable {
     let base: PreviewProjection
+    let source: RideNotifyingFrameSource
     /// Every `prefetchCorridor` call, in order.
     let corridors = Locked<[[GeoPoint]]>([])
 
     init(frameSource: VideoFrameSource = PreviewFrameSource()) {
-        base = PreviewProjection(frameSource: frameSource)
+        source = RideNotifyingFrameSource(frameSource)
+        base = PreviewProjection(frameSource: source)
+    }
+
+    var onCanvasPrepared: (@Sendable (VideoCanvas) -> Void)? {
+        get { source.onPrepare.current }
+        set { source.onPrepare.set(newValue) }
     }
 
     var frameSource: VideoFrameSource { base.frameSource }
@@ -86,6 +107,58 @@ final class RideModelReviewFixTests: XCTestCase {
         }
         XCTAssertTrue(RideModel.routeKey(Route(points: points, distanceM: 12_345.9, durationSec: 0, label: "x"))?.contains("|12345|") ?? false)
         XCTAssertNil(RideModel.routeKey(nil))
+    }
+
+    // MARK: MED:MP-6 — the layout follows the canvas the encoder was prepared at
+
+    @MainActor
+    func testUnusableReq16LaysTheDashOutForTheKeptCanvas() async throws {
+        let net = LinkMemoryNetwork(phoneHost: "192.168.0.2")
+        let dash = LinkFakeDash(network: net, host: "192.168.0.1")
+        dash.installProbeServer()
+        let frames = TestFrameSource()
+        let spy = RideSpyProjection(frameSource: frames)
+        let h = AppTestHarness(network: net) { $0.projection = spy }
+        let (_, qr) = h.addBike()
+        h.core.dashMemory.observe(ssid: qr.ssid, width: 800, height: 951) // a CFDL26 learned earlier
+        XCTAssertEqual(h.ride.canvasSize, DashSize(width: 800, height: 384), "preview canvas before the link")
+        h.connection.connect()
+        let probed = await eventually { dash.acceptedCount.current == 1 }
+        XCTAssertTrue(probed)
+        let ctrl = try dash.openControl()
+        try await ctrl.send(PxcFrame(cmd: 0x10000))
+        _ = try await ctrl.nextRaw()
+        let mctl = try dash.openMedia(port: 10921)
+        // REQ 16 without a usable size: the link keeps (and replies) the learned 800×944 canvas.
+        try await mctl.send(cmd: 16, body: Data())
+        let rly = try await mctl.reply()
+        XCTAssertEqual(rly.message.cmdType, 17)
+        XCTAssertEqual(Array(rly.message.body.dropFirst(4).prefix(4)), [0x20, 0x03, 0xB0, 0x03], "RLY 17 800×944")
+        let laidOut = await eventually { h.ride.canvasSize == DashSize(width: 800, height: 944) }
+        XCTAssertTrue(laidOut, "the dash UI is laid out for the replied / encoded canvas, not the preview")
+        XCTAssertEqual(h.ride.displayList(now: h.core.services.clock.now()).size, DashSize(width: 800, height: 944))
+        h.connection.stop()
+        let back = await eventually { h.ride.canvasSize == DashSize(width: 800, height: 384) }
+        XCTAssertTrue(back, "link ended → preview canvas again")
+        ctrl.close()
+        mctl.close()
+    }
+
+    @MainActor
+    func testPreparedCanvasIsIgnoredOutsideAnOwnUISession() async {
+        let spy = RideSpyProjection()
+        let h = AppTestHarness { $0.projection = spy }
+        spy.onCanvasPrepared?(VideoCanvas(width: 1280, height: 576))
+        await settle()
+        XCTAssertEqual(h.ride.canvasSize, DashSize(width: 800, height: 384), "no session: preview canvas")
+        h.ride.sessionChanged(active: true, mirror: true)
+        spy.onCanvasPrepared?(VideoCanvas(width: 1280, height: 576))
+        await settle()
+        XCTAssertEqual(h.ride.canvasSize, DashSize(width: 800, height: 384), "mirror: the own UI is not projected")
+        h.ride.sessionChanged(active: true, mirror: false)
+        spy.onCanvasPrepared?(VideoCanvas(width: 1280, height: 576))
+        let applied = await eventually { h.ride.canvasSize == DashSize(width: 1280, height: 576) }
+        XCTAssertTrue(applied)
     }
 
     // MARK: SPEC:CL-10 — theme AUTO follows the phone's dark mode

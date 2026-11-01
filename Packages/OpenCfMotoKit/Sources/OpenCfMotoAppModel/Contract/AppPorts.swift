@@ -280,6 +280,18 @@ public protocol DashProjecting: AnyObject, Sendable {
     func prefetchCorridor(_ points: [GeoPoint])
     func setTileURLTemplate(_ template: String)
     func clearTileCache()
+    /// ADDITION (fix-media, MED:MP-6): called (any thread) with the canvas the encoder was just
+    /// prepared at by the link (`VideoFrameSource.prepare`: REQ 16, a REQ 16 without a usable size
+    /// that keeps the previous canvas, or 112 without any 16). The dash UI must be laid out for
+    /// exactly this canvas (RLY 17, encoder and layout agree). Default: never called.
+    var onCanvasPrepared: (@Sendable (VideoCanvas) -> Void)? { get set }
+}
+
+public extension DashProjecting {
+    var onCanvasPrepared: (@Sendable (VideoCanvas) -> Void)? {
+        get { nil }
+        set {}
+    }
 }
 
 // MARK: - Mirror (ReplayKit broadcast extension → App Group socket → host)

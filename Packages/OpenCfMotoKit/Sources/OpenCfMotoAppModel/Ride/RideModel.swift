@@ -238,6 +238,11 @@ public final class RideModel {
         if active {
             encoderPlan.adaptive.reset()
             lastPushedParameters = nil
+        } else if negotiatedCanvas != nil || identifiedProfile != nil {
+            // Ended before the first frame (no projectionChanged(false)): back to the preview layout.
+            negotiatedCanvas = nil
+            identifiedProfile = nil
+            flushModel()
         }
         applyLocationPolicy()
         applyIdleTimer()
@@ -266,6 +271,16 @@ public final class RideModel {
     func canvasNegotiated(_ canvas: VideoCanvas) {
         negotiatedCanvas = canvas
         flushModel() // the next frame must be laid out for exactly this canvas
+    }
+
+    /// The own-UI encoder was prepared at `canvas` (projection port, MP-6). Usually the same canvas
+    /// as `canvasNegotiated`; it also covers the link's guard paths that never emit a canvas event:
+    /// a REQ 16 without a usable size (the previous canvas is kept and replied) and 112 without 16.
+    func canvasPrepared(_ canvas: VideoCanvas) {
+        guard sessionActive, !sessionIsMirror, canvas.width >= 16, canvas.height >= 16 else { return }
+        guard negotiatedCanvas.map({ $0.width != canvas.width || $0.height != canvas.height }) ?? true else { return }
+        Log.i("RIDE", "laying the dash UI out for the prepared canvas \(canvas.width)x\(canvas.height)")
+        canvasNegotiated(canvas)
     }
 
     /// Dash identified: profile default margins / touch support.
@@ -355,6 +370,9 @@ public final class RideModel {
         }
         projection.setTileURLTemplate(cachedSettings.tileURLTemplate)
         projection.setThermalCapsEnabled(cachedSettings.powerMode != .auto)
+        projection.onCanvasPrepared = { [weak self] canvas in
+            Task { @MainActor [weak self] in self?.canvasPrepared(canvas) }
+        }
     }
 
     private func wireLocation() {

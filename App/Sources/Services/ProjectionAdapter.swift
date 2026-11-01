@@ -46,6 +46,11 @@ final class ProjectionAdapter: DashProjecting, @unchecked Sendable {
         set { lock.withLock { tileLoaded = newValue } }
     }
 
+    var onCanvasPrepared: (@Sendable (VideoCanvas) -> Void)? {
+        get { engine.onPrepared }
+        set { engine.onPrepared = newValue }
+    }
+
     func setDisplayListProvider(_ provider: (@Sendable (TimeInterval) -> DashDisplayList)?) {
         engine.displayListProvider = provider
     }

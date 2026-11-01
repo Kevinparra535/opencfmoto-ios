@@ -241,6 +241,7 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
         var holdDisplayListProvider: DisplayListProvider?
         var previewHandler: (@Sendable (CGImage) -> Void)?
         var onStats: (@Sendable (DashProjectionStats) -> Void)?
+        var onPrepared: (@Sendable (VideoCanvas) -> Void)?
         var requested = EncoderParameters()
         var thermalLevel: ThermalLevel = .none
         var lowPowerMode = false
@@ -350,6 +351,14 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
         set { shared.withLock { $0.onStats = newValue } }
     }
 
+    /// Called (on the link's task, after `prepare` returned) with the canvas the encoder was just
+    /// prepared at — REQ 16, a REQ 16 without a usable size that kept the previous canvas, or 112
+    /// without 16. The app lays the dash UI out for exactly this canvas.
+    public var onPrepared: (@Sendable (VideoCanvas) -> Void)? {
+        get { shared.current.onPrepared }
+        set { shared.withLock { $0.onPrepared = newValue } }
+    }
+
     /// Requested encoder parameters (profile × quality × power mode / adaptive policy). Live:
     /// bitrate and frame-rate cap change without re-creating the session.
     public var parameters: EncoderParameters {
@@ -422,6 +431,7 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
         }
         shared.withLock { $0.requested = parameters }
         onRenderQueueSync { self.applyPrepare(newCanvas) }
+        shared.current.onPrepared?(newCanvas)
     }
 
     public func resynchronize() {

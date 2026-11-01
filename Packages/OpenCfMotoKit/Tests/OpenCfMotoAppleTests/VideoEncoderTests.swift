@@ -277,6 +277,17 @@ final class VideoEngineTests: XCTestCase {
         XCTAssertNil(f)
     }
 
+    /// MP-6: the app learns the canvas the encoder really uses (also for the link's guard paths).
+    func testPrepareReportsThePreparedCanvas() {
+        let engine = makeEngine()
+        defer { engine.stop() }
+        let seen = Locked<[VideoCanvas]>([])
+        engine.onPrepared = { c in seen.withLock { $0.append(c) } }
+        engine.prepare(canvas: VideoCanvas(width: 0, height: 384), parameters: .default) // ignored
+        engine.prepare(canvas: canvas, parameters: .default)
+        XCTAssertEqual(seen.current, [canvas])
+    }
+
     func testInvalidCanvasIsIgnored() {
         let engine = DashProjectionEngine()
         engine.prepare(canvas: VideoCanvas(width: 0, height: 384), parameters: .default)
