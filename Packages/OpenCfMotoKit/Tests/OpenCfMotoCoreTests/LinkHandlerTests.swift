@@ -104,6 +104,23 @@ final class LinkControlHandlerTests: XCTestCase {
         XCTAssertFalse(logged.contains("A2C00100055"), logged)
     }
 
+    /// Review SEC-4: CLIENT_INFO / CHECK_SN payloads far larger than any real one are not parsed (and
+    /// not logged in full).
+    func testOversizedJSONPayloadsAreNotParsed() {
+        let pad = String(repeating: " ", count: ControlChannelHandler.maxJSONPayloadBytes)
+        let info = ControlChannelHandler(context: context()).handle(PxcFrame(cmd: PxcCmd.clientInfo, text: LinkDashSamples.cfdl16ClientInfo + pad))
+        XCTAssertTrue(info.replies.isEmpty) // like an unparsable CLIENT_INFO (Android parity: no reply)
+        guard case let .clientInfoUnparsable(logged)? = info.events.first else { return XCTFail("\(info.events)") }
+        XCTAssertLessThan(logged.count, 3_000)
+        let sn = ControlChannelHandler(context: context()).handle(PxcFrame(cmd: 0x103E0, text: LinkDashSamples.checkSn + pad))
+        XCTAssertEqual(sn.events, [.checkSnCompleted(serial: "")])
+        XCTAssertEqual(sn.replies.count, 2)
+        let before = Log.shared.lines().last?.id ?? 0
+        _ = ControlChannelHandler(context: context()).handle(PxcFrame(cmd: 0x1_2345, text: String(repeating: "A", count: 100_000)))
+        let longest = Log.shared.lines().filter { $0.id > before }.map(\.message.count).max() ?? 0
+        XCTAssertLessThan(longest, 3_000)
+    }
+
     func testClockFrames() {
         let h = ControlChannelHandler(context: context())
         let req = PxcFrame(cmd: 0x10600, payload: LinkDashSamples.timeSyncRequest())

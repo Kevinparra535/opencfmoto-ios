@@ -154,7 +154,14 @@ public enum SettingsBackup {
         return nil
     }
 
+    /// Real packs are a few KiB; anything bigger is refused before parsing (review SEC-4).
+    static let maxPackBytes = 1 << 20
+
     private static func validated(_ text: String) -> Result<(root: OrderedJSONObject, settings: OrderedJSONObject), ImportFailure> {
+        let size = text.utf8.count
+        guard size <= maxPackBytes else {
+            return .failure(ImportFailure(message: "Not valid JSON: file too large (\(size) bytes)"))
+        }
         var t = AppJvmText.trim(text)
         if t.unicodeScalars.first == "\u{FEFF}" { t = String(Substring(t.unicodeScalars.dropFirst())) }
         let root: OrderedJSONObject
