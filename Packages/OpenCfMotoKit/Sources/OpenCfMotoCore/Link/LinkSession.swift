@@ -92,6 +92,9 @@ final class LinkSession: @unchecked Sendable {
     private var controlPeers: Set<String> = []
     /// Foreign connections closed so far (the log line is throttled).
     private var rejectedPeers = 0
+    /// When the oldest 114 left without a frame since the last frame sent (or reconnect) was
+    /// given up (`.pullMissed`): the watchdog's "never got a first frame" check (MP-1).
+    private var firstUnansweredPullAt: TimeInterval?
     /// Log lines produced while holding `lock` (flushed by `withLock`).
     private var pendingLogs: [String] = []
 
@@ -539,7 +542,13 @@ final class LinkSession: @unchecked Sendable {
                     withLock { if state == .handshaking { setStateLocked(.awaitingMedia) } }
                 case .frameSent:
                     // First frame of this (re)connection → STREAMING.
-                    withLock { if state != .streaming { setStateLocked(.streaming) } }
+                    withLock {
+                        firstUnansweredPullAt = nil
+                        if state != .streaming { setStateLocked(.streaming) }
+                    }
+                case .pullMissed:
+                    let now = clock.now()
+                    withLock { if firstUnansweredPullAt == nil { firstUnansweredPullAt = now } }
                 default:
                     break
                 }
@@ -832,7 +841,10 @@ final class LinkSession: @unchecked Sendable {
             Log.i("LINK", "[reconnect] link lost — re-probing (attempt \(step.n)/\(max)) in \(Int(backoff * 1000))ms")
             guard await LinkIO.sleep(backoff), canProbe else { break }
             stats.resetConnectionFrameCount() // the first frame after reconnect re-signals STREAMING
-            withLock { probeAccepted = false }
+            withLock {
+                probeAccepted = false
+                firstUnansweredPullAt = nil
+            }
             let gate = ProbeGate()
             let denied = Locked(false)
             var accepted = false
@@ -882,11 +894,10 @@ final class LinkSession: @unchecked Sendable {
             guard await LinkIO.sleep(timings.watchdogTick), isAlive else { return }
             tick += 1
             let snap = stats.snapshot()
-            let unansweredSince = stats.firstUnansweredPullAt
             owner?.sessionEvent(.stats(snap), generation: generation)
             let now = clock.now()
             let check: (state: LinkState, open: Int, probed: Bool, media: Bool, stall: Bool, noFirstFrame: Bool,
-                        rearm: Bool) = withLock {
+                        rearm: Bool, unansweredSince: TimeInterval?) = withLock {
                 var stall = false
                 var noFirstFrame = false
                 var rearm = false
@@ -899,7 +910,7 @@ final class LinkSession: @unchecked Sendable {
                 // first frame — e.g. the first 114 came before any picture existed. The dash pulls
                 // in lock-step, so it may never pull again; if it also keeps :10922 open nothing
                 // else would ever recover. Same threshold and cooldown as the stall check.
-                if state == .awaitingMedia, mediaActive, let since = unansweredSince, now - since > config.stallTimeout,
+                if state == .awaitingMedia, mediaActive, let since = firstUnansweredPullAt, now - since > config.stallTimeout,
                    now - lastRecoveryAt > config.stallReconnectCooldown {
                     lastRecoveryAt = now
                     noFirstFrame = true
@@ -909,7 +920,7 @@ final class LinkSession: @unchecked Sendable {
                     lastRecoveryAt = now
                     rearm = true
                 }
-                return (state, listeners.count, probeAccepted, mediaActive, stall, noFirstFrame, rearm)
+                return (state, listeners.count, probeAccepted, mediaActive, stall, noFirstFrame, rearm, firstUnansweredPullAt)
             }
             Log.i("LINK", "hb#\(tick) probed=\(check.probed) video=\(check.media) framesSent=\(stats.framesSinceLastReset) openServers=\(check.open) state=\(check.state) pulls/s=\(String(format: "%.1f", snap.pullRate))")
             if check.stall {
@@ -918,7 +929,7 @@ final class LinkSession: @unchecked Sendable {
                 forceReconnect(reason: "stall")
             }
             if check.noFirstFrame {
-                let ms = unansweredSince.map { Int((now - $0) * 1000) } ?? -1
+                let ms = check.unansweredSince.map { Int((now - $0) * 1000) } ?? -1
                 Log.w("LINK", "[watchdog] media open but no first frame (\(ms)ms since an unanswered 114) — recovering")
                 forceReconnect(reason: "no first frame")
             }

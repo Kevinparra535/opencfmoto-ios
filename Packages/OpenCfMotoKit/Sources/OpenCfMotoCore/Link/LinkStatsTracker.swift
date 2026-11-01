@@ -11,8 +11,6 @@ public final class LinkStatsTracker: @unchecked Sendable {
     private var stats = LinkStats()
     private var framesSinceReset = 0
     private var pullTimes: [TimeInterval] = []
-    /// When the oldest 114 that got no frame since the last frame sent (or reset) was given up.
-    private var firstUnansweredAt: TimeInterval?
 
     /// - Parameter window: seconds over which `pullRate` is computed.
     public init(clock: MonotonicClock = SystemMonotonicClock(), window: TimeInterval = 5) {
@@ -41,28 +39,18 @@ public final class LinkStatsTracker: @unchecked Sendable {
         if keyframe { stats.keyframesSent += 1 }
         stats.lastFrameAt = now
         framesSinceReset += 1
-        firstUnansweredAt = nil
         return framesSinceReset
     }
 
     /// A 114 got no frame within the pull timeout (nothing was sent).
     public func recordMissedPull() {
-        let now = clock.now()
-        lock.lock()
-        stats.missedPulls += 1
-        if firstUnansweredAt == nil { firstUnansweredAt = now }
-        lock.unlock()
+        lock.lock(); stats.missedPulls += 1; lock.unlock()
     }
 
     /// Restart the per-(re)connection frame numbering (Android `framesSent = 0`).
     public func resetConnectionFrameCount() {
-        lock.lock(); framesSinceReset = 0; firstUnansweredAt = nil; lock.unlock()
+        lock.lock(); framesSinceReset = 0; lock.unlock()
     }
-
-    /// Monotonic time of the first 114 left without a frame since the last frame sent (or the last
-    /// reset); nil while every pull got one. The watchdog's "never got a first frame" check: the
-    /// dash pulls in lock-step, so after an unanswered 114 it may never pull again (MP-1).
-    public var firstUnansweredPullAt: TimeInterval? { lock.lock(); defer { lock.unlock() }; return firstUnansweredAt }
 
     /// Frames sent since the last `resetConnectionFrameCount()`.
     public var framesSinceLastReset: Int { lock.lock(); defer { lock.unlock() }; return framesSinceReset }

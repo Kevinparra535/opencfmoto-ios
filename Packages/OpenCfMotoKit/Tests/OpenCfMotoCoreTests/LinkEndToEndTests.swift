@@ -465,23 +465,6 @@ final class LinkEndToEndTests: XCTestCase {
         h.link.stop()
     }
 
-    func testFirstUnansweredPullIsTrackedUntilAFrameIsSent() {
-        let clock = LinkManualClock()
-        let stats = LinkStatsTracker(clock: clock)
-        XCTAssertNil(stats.firstUnansweredPullAt)
-        clock.set(1)
-        stats.recordMissedPull()
-        clock.set(3)
-        stats.recordMissedPull()
-        XCTAssertEqual(stats.firstUnansweredPullAt, 1, "the oldest unanswered pull counts")
-        stats.recordFrameSent(wireBytes: 10, keyframe: true)
-        XCTAssertNil(stats.firstUnansweredPullAt)
-        stats.recordMissedPull()
-        XCTAssertEqual(stats.firstUnansweredPullAt, 3)
-        stats.resetConnectionFrameCount()
-        XCTAssertNil(stats.firstUnansweredPullAt)
-    }
-
     // MARK: - Discovery race, restart hygiene
 
     func testBonjourResultIsProbedWhenTheGatewayIsSilent() async {
