@@ -11,12 +11,41 @@ struct NavJSON {
 
     init(_ value: Any?) { self.value = value }
 
-    /// Parses `data`; throws `NavServiceError.invalidJSON` for malformed input.
+    /// Max nesting of service / backup JSON (real responses nest < 10 levels).
+    static let maxDepth = 64
+
+    /// Parses `data`; throws `NavServiceError.invalidJSON` for malformed input, and for input nested
+    /// deeper than `maxDepth` before `JSONSerialization` recurses into it (review SEC-4).
     static func parse(_ data: Data) throws -> NavJSON {
+        guard !exceedsDepth(data, limit: maxDepth) else { throw NavServiceError.invalidJSON("Nesting too deep") }
         do {
             return NavJSON(try JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]))
         } catch {
             throw NavServiceError.invalidJSON("Not valid JSON")
+        }
+    }
+
+    /// Linear scan: true when `[` / `{` nest deeper than `limit` outside string literals.
+    static func exceedsDepth(_ data: Data, limit: Int) -> Bool {
+        data.withUnsafeBytes { (raw: UnsafeRawBufferPointer) -> Bool in
+            var depth = 0
+            var inString = false
+            var escaped = false
+            for b in raw {
+                if inString {
+                    if escaped { escaped = false } else if b == 0x5C { escaped = true } else if b == 0x22 { inString = false }
+                    continue
+                }
+                switch b {
+                case 0x22: inString = true
+                case 0x5B, 0x7B:
+                    depth += 1
+                    if depth > limit { return true }
+                case 0x5D, 0x7D: depth -= 1
+                default: break
+                }
+            }
+            return false
         }
     }
 

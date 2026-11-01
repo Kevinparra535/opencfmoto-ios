@@ -30,7 +30,12 @@ final class SettingsModelTests: XCTestCase {
         env.cleanUp(after: self)
         let (_, settings) = makeModels(env)
         XCTAssertNil(settings.bikeId)
-        XCTAssertEqual(settings.current, env.core.settings.settings(forBike: nil))
+        // `current` shows the iOS effective Screen fit (FIT for mirroring until chosen); the stored /
+        // exported default stays FILL (review MED:MP-4).
+        var expected = env.core.settings.settings(forBike: nil)
+        XCTAssertEqual(expected.screenFit, .fill)
+        expected.screenFit = .fit
+        XCTAssertEqual(settings.current, expected)
         XCTAssertEqual(settings.current.buttonMap, HandlebarPresets.iosDefaultMapping)
         XCTAssertEqual(settings.savedPlaces.count, 3)
         XCTAssertEqual(settings.presence, HandlebarPresence())
@@ -122,8 +127,9 @@ final class SettingsModelTests: XCTestCase {
         settings.setVideoQuality(.smooth)
         XCTAssertEqual(persisted().videoQuality, .smooth)
         XCTAssertEqual(kv.string(forKey: "video_quality#\(bike.id)"), "SMOOTH")
-        settings.setScreenFit(.fit)
-        XCTAssertEqual(persisted().screenFit, .fit)
+        settings.setScreenFit(.stretch)
+        XCTAssertEqual(persisted().screenFit, .stretch)
+        XCTAssertEqual(settings.current.screenFit, .stretch)
         settings.setMirrorOrientation(.portrait)
         XCTAssertEqual(persisted().mirrorOrientation, .portrait)
         settings.setProfileOverride(.cfdl26Portrait)
@@ -517,5 +523,26 @@ final class SettingsModelTests: XCTestCase {
         XCTAssertEqual(es.mapImportMessage("Import failed: favorites contains a non-object entry"),
                        "Error al importar: favorites contains a non-object entry")
         XCTAssertEqual(LogicData.Strings(.en).mapImportMessage("Map data imported"), "Map data imported")
+    }
+
+    /// Review MED:MP-4: mirror mode uses FIT until the rider (or a pack) picks a fit; the picker shows it.
+    @MainActor
+    func testScreenFitShowsTheMirrorDefaultUntilChosen() async throws {
+        let env = LDTestEnv()
+        env.cleanUp(after: self)
+        let (garage, settings) = makeModels(env)
+        guard case let .paired(bike) = garage.pair(rawQR: LDTest.docQR) else { return XCTFail("pairing failed") }
+        XCTAssertEqual(settings.current.screenFit, .fit)
+        XCTAssertFalse(env.core.settings.hasStoredScreenFit(forBike: bike.id))
+        XCTAssertEqual(SettingsModel.mirrorScreenFit(env.core.settings, bikeId: bike.id), .fit)
+        var observed = 0
+        settings.observe { _ in observed += 1 }
+        settings.setScreenFit(.fill) // an explicit FILL is a real change of what mirroring uses
+        XCTAssertEqual(settings.current.screenFit, .fill)
+        XCTAssertEqual(observed, 1)
+        XCTAssertTrue(env.core.settings.hasStoredScreenFit(forBike: bike.id))
+        XCTAssertEqual(SettingsModel.mirrorScreenFit(env.core.settings, bikeId: bike.id), .fill)
+        // The exported pack keeps the stored value (Android compatibility).
+        XCTAssertEqual(env.core.settings.settings(forBike: bike.id).screenFit, .fill)
     }
 }

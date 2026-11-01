@@ -168,8 +168,13 @@ public enum PxcOrgJSON {
     // MARK: - Tokener (UTF-16 based, like Java String.charAt)
 
     struct Tokener {
+        /// Max nesting of objects / arrays. Real dash JSON nests ≤ 3 levels; deeper input is a syntax
+        /// error instead of a recursion that overflows the link task's small stack (review SEC-4).
+        static let maxDepth = 64
+
         private let s: [UInt16]
         private var pos = 0
+        private var depth = 0
 
         init(_ text: String) {
             var units = Array(text.utf16)
@@ -183,8 +188,16 @@ public enum PxcOrgJSON {
             let c = nextCleanInternal()
             switch c {
             case nil: throw PxcOrgJSONError.syntax("End of input")
-            case Tokener.c("{"): return .object(try readObject())
-            case Tokener.c("["): return .array(try readArray())
+            case Tokener.c("{"):
+                depth += 1
+                defer { depth -= 1 }
+                guard depth <= Tokener.maxDepth else { throw PxcOrgJSONError.syntax("Nesting too deep") }
+                return .object(try readObject())
+            case Tokener.c("["):
+                depth += 1
+                defer { depth -= 1 }
+                guard depth <= Tokener.maxDepth else { throw PxcOrgJSONError.syntax("Nesting too deep") }
+                return .array(try readArray())
             case Tokener.c("'"), Tokener.c("\""): return .string(try nextString(quote: c!))
             default:
                 pos -= 1

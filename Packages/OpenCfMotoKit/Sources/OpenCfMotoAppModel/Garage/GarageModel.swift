@@ -165,6 +165,13 @@ public final class GarageModel {
     /// Saves + selects a parsed QR and logs it without secrets.
     private func remember(_ qr: BikeQR, source: String) -> PairingOutcome {
         Log.i(Self.tagQR, qr.parsedLogLine)
+        guard !qr.requiresPhoneHotspot else {
+            // The dash joins the PHONE's hotspot (no SoftAP SSID / password in the QR): the iPhone app
+            // cannot connect that way, so saving it would only lead to a join of a network that does
+            // not exist (review IOS-3).
+            Log.w(Self.tagQR, "phone-hotspot pairing QR refused: not supported on iPhone (ssid=\(qr.ssid))")
+            return .invalid(hint: strings.qrHint(BikeQR.iosPhoneHotspotUnsupportedHint))
+        }
         let existed = core.garage.bike(matching: qr) != nil
         let bike = core.garage.save(qr)
         Log.i(Self.tagGarage, "\(existed ? "updated" : "added") \(bike.name) from \(source) (ssid=\(bike.ssid), id=\(bike.id))")

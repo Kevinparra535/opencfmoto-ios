@@ -23,7 +23,9 @@
 // claims the media remote at once (explicit action, foreground). On later launches the remote is
 // NOT claimed at startup — only while a dash session runs (so other apps' music is not paused when
 // the app is merely opened), and it is released when that session ends. Mirror sessions never
-// claim it (input-controls.md §10.6: the bars must control the rider's music there).
+// claim it (input-controls.md §10.6: the bars must control the rider's music there), and neither
+// does a bike whose "Handlebar buttons drive the dash" is off (§7.9: capture off = the bars control
+// media normally; review SPEC:CL-9) — `syncRemoteClaim()` re-evaluates on every settings change.
 
 import Foundation
 import Observation
@@ -60,8 +62,9 @@ public final class ControlsModel {
     @ObservationIgnored private var probeStreaming = false
     @ObservationIgnored private var sessionActive = false
     @ObservationIgnored private var mirrorMode = false
-    /// The remote was claimed because a session started (released when it ends).
-    @ObservationIgnored private var claimedForSession = false
+    /// The rider claimed the remote explicitly (`setRemoteEnabled(true)`): kept after a ride ends;
+    /// dropped by turning the opt-in off and by mirroring.
+    @ObservationIgnored private var claimedByRider = false
     @ObservationIgnored private var tickTask: Task<Void, Never>?
 
     public init(core: AppCore, settings: SettingsModel) {
@@ -101,11 +104,14 @@ public final class ControlsModel {
                 Log.i("BTN", "[BTN] handlebar capture deferred — mirror mode leaves the buttons to the media app")
                 return
             }
-            if !handlebar.isEnabled { handlebar.enable() }
-            claimedForSession = false // the rider's explicit choice: keep it after the ride
+            claimedByRider = true // the rider's explicit choice: keep it after the ride
+            if !core.currentSettings.handlebarControl {
+                Log.i("BTN", "[BTN] handlebar capture deferred \u{2014} \u{201C}Handlebar buttons drive the dash\u{201D} is off for this bike")
+            }
+            syncRemoteClaim()
         } else {
+            claimedByRider = false
             if handlebar.isEnabled { handlebar.disable() }
-            claimedForSession = false
             engine.reset()
             tickTask?.cancel()
             tickTask = nil
@@ -145,24 +151,17 @@ public final class ControlsModel {
     func sessionChanged(active: Bool, mirror: Bool) {
         sessionActive = active
         mirrorMode = active && mirror
-        let handlebar = core.services.handlebar
         if active {
             if mirror {
                 releaseForMirror()
-            } else if isRemoteEnabled, handlebar.isAvailable, !handlebar.isEnabled {
-                handlebar.enable()
-                claimedForSession = true
-                Log.i("BTN", "[BTN] handlebar capture on for this ride")
+            } else {
+                syncRemoteClaim()
             }
         } else {
             probeStreaming = false
             engine.streamingStopped()
             engine.reset()
-            if claimedForSession, handlebar.isEnabled {
-                handlebar.disable()
-                Log.i("BTN", "[BTN] ride ended — handlebar capture released")
-            }
-            claimedForSession = false
+            syncRemoteClaim() // released unless the rider claimed it explicitly
             tickTask?.cancel()
             tickTask = nil
         }
@@ -214,13 +213,34 @@ public final class ControlsModel {
             handlebar.disable()
             Log.i("BTN", "[BTN] mirror mode — handlebar capture released (the bars control media apps)")
         }
-        claimedForSession = false
+        claimedByRider = false // never reclaimed behind the rider's back once mirroring started
+    }
+
+    /// Claims or releases the phone media remote to match what is wanted right now: opted in, capture
+    /// on for this bike ("Handlebar buttons drive the dash"), not mirroring, and a dash session running
+    /// or the rider's explicit claim. Capture off gives the bars back to music: the engine would drop
+    /// every event, while the claimed remote (silent non-mixable audio) keeps other audio paused.
+    private func syncRemoteClaim() {
+        let handlebar = core.services.handlebar
+        guard handlebar.isAvailable else { return }
+        let capture = core.currentSettings.handlebarControl
+        let wanted = isRemoteEnabled && capture && !mirrorMode && (sessionActive || claimedByRider)
+        if wanted, !handlebar.isEnabled {
+            handlebar.enable()
+            Log.i("BTN", "[BTN] handlebar capture on\(sessionActive ? " for this ride" : "")")
+        } else if !wanted, handlebar.isEnabled {
+            handlebar.disable()
+            let reason = !capture ? "\u{201C}Handlebar buttons drive the dash\u{201D} is off \u{2014} the bars control media"
+                : "ride ended"
+            Log.i("BTN", "[BTN] handlebar capture released (\(reason))")
+        }
     }
 
     private func reloadConfiguration() {
         let store = core.settings
         let bike = core.garage.selected?.id
         engine.configuration = .init(settings: core.currentSettings, snappySingles: store.snappySingles)
+        syncRemoteClaim() // capture switched on / off, or another bike selected
         let stored = store.presence(forBike: bike)
         if bike != bikeId {
             bikeId = bike

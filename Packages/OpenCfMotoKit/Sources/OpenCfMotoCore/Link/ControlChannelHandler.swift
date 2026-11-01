@@ -55,6 +55,19 @@ public final class ControlChannelHandler: @unchecked Sendable {
         self.tag = tag
     }
 
+    /// CLIENT_INFO / CHECK_SN payloads larger than this are not parsed (real ones are < 1 KiB; frames
+    /// may be up to 1 MiB): treated as unparsable (review SEC-4).
+    public static let maxJSONPayloadBytes = 64 * 1024
+    /// Payload text logged per frame (a peer could otherwise fill the log ring with 1 MiB lines).
+    static let maxLoggedPayloadChars = 2048
+
+    /// The payload text for a log line, cut to `maxLoggedPayloadChars`.
+    private static func loggable(_ frame: PxcFrame) -> String {
+        let text = frame.payloadText
+        guard text.count > maxLoggedPayloadChars else { return text }
+        return String(text.prefix(maxLoggedPayloadChars)) + "\u{2026}(\(frame.payload.count) bytes)"
+    }
+
     /// The channel this connection selected (nil until 0x10000 / 0x20000).
     public var channel: PxcChannel? { lock.lock(); defer { lock.unlock() }; return _channel }
 
@@ -68,7 +81,7 @@ public final class ControlChannelHandler: @unchecked Sendable {
         case PxcCmd.clientInfo:
             return onClientInfo(frame)
         case PxcCmd.querySpeed:
-            Log.i("LINK", "[\(tag)] QUERY_SPEED \(frame.payloadText) → reply 0x10691")
+            Log.i("LINK", "[\(tag)] QUERY_SPEED \(Self.loggable(frame)) → reply 0x10691")
             return ControlChannelResponse(replies: [PxcFrame(cmd: PxcCmd.querySpeedReply)])
         case PxcCmd.checkSn:
             return onCheckSn(frame)
@@ -99,13 +112,18 @@ public final class ControlChannelHandler: @unchecked Sendable {
     }
 
     private func onClientInfo(_ frame: PxcFrame) -> ControlChannelResponse {
+        guard frame.payload.count <= Self.maxJSONPayloadBytes else {
+            Log.e("LINK", "[\(tag)] !! CLIENT_INFO of \(frame.payload.count) bytes \u{2014} too large to be real, NOT parsed / NOT replying")
+            return ControlChannelResponse(events: [.clientInfoUnparsable(Self.loggable(frame))])
+        }
         let text = frame.payloadText
         Log.i("LINK", "[\(tag)] *** CLIENT_INFO from bike *** \(text)")
         guard let info = BikeClientInfo.parse(text) else {
             Log.e("LINK", "[\(tag)] !! CLIENT_INFO parse failed — NOT replying (Android parity); the dash will likely stall. len=\(frame.payload.count) hex=\(frame.payload.prefix(48).hexString)")
             return ControlChannelResponse(events: [.clientInfoUnparsable(text)])
         }
-        Log.i("LINK", "[\(tag)] carHuid=\(info.huid ?? "null") HUName=\(info.huName) channel=\(info.channel)")
+        // Masked here: the bare-serial redaction rule only matches alphanumeric HUIDs (review SEC-5).
+        Log.i("LINK", "[\(tag)] carHuid=\(info.huid.map(LogRedactor.maskTail) ?? "null") HUName=\(info.huName) channel=\(info.channel)")
         Log.i("LINK", "[\(tag)] bike touch=\(info.supportsScreenTouch) supportHID=\(info.optBoolean("supportHID")) supportMirrorOverlayTouch=\(info.optBoolean("supportMirrorOverlayTouch")) socketTimeoutPeriodWifi=\(info.socketTimeoutSeconds.map(String.init) ?? "-")")
         let (profile, reply, dash) = context.applyClientInfo(info, tag: tag)
         let replyFrame = PhoneClientInfoReply.frame(reply)
@@ -114,10 +132,13 @@ public final class ControlChannelHandler: @unchecked Sendable {
     }
 
     private func onCheckSn(_ frame: PxcFrame) -> ControlChannelResponse {
-        Log.i("LINK", "[\(tag)] CHECK_SN from bike: \(frame.payloadText)")
-        let serial = CheckSn.serial(from: frame.payload)
+        Log.i("LINK", "[\(tag)] CHECK_SN from bike: \(Self.loggable(frame))")
+        // An oversized payload is answered like an unparsable one (empty id), without parsing it.
+        let serial = frame.payload.count <= Self.maxJSONPayloadBytes ? CheckSn.serial(from: frame.payload) : ""
         let result = CheckSn.result(serial: serial)
-        Log.i("LINK", "[\(tag)] → CHECK_SN_RESULT \(result.jsonString)")
+        // The reply echoes the serial under "id", which no redaction rule covers: log it masked (the
+        // wire payload is unchanged; the request line above is masked by the "sn" rule) — review SEC-5.
+        Log.i("LINK", "[\(tag)] → CHECK_SN_RESULT \(CheckSn.result(serial: LogRedactor.maskTail(serial)).jsonString)")
         return ControlChannelResponse(
             replies: [PxcFrame(cmd: PxcCmd.checkSnAck), PxcFrame(cmd: PxcCmd.checkSnResult, payload: result.jsonData)],
             events: [.checkSnCompleted(serial: serial)])
@@ -138,7 +159,7 @@ public final class ControlChannelHandler: @unchecked Sendable {
     /// burst and newer CFDL16 units gate the media ports on these acks).
     private func ackUnknown(_ frame: PxcFrame) -> ControlChannelResponse {
         let ack = PxcCmd.reply(to: frame.cmd)
-        let body = frame.payload.isEmpty ? "" : frame.payloadText
+        let body = frame.payload.isEmpty ? "" : Self.loggable(frame)
         let hex = frame.payload.isEmpty ? "" : " hex=" + frame.payload.prefix(48).hexString
         let marker = frame.cmd == PxcCmd.screenTouch ? " *** SCREEN_TOUCH ***" : ""
         Log.i("LINK", "[\(tag)] CFDL26 ctrl \(frame.cmdHex) (\(PxcCmd.name(of: frame.cmd)))\(marker) len=\(frame.payload.count) \(body)\(hex) → ack \(PxcCmd.hex(ack)) (empty)")

@@ -25,15 +25,18 @@
 //   `.touch` → `ride.handleDashTouch`; `.stats` → `diagnostics`.
 // - Wi-Fi supervision: bike Wi-Fi lost → `.reconnecting` "waiting for bike Wi-Fi"; after 180 s
 //   → `.waitingForBike` "will resume when the bike is back"; Wi-Fi back → `link.start()` (clean
-//   restart). Auto-recovery off → stop instead.
+//   restart). Auto-recovery off → stop instead. With the SSID unknown, only the network the session
+//   joined counts as the bike's (same gateway + /24), and the loss stays in force until the dash
+//   streams on it (review CON:CL-3 / SEC-3).
 // - `startMirror()`: `services.mirror.start()` (+ setFit from settings) → mode `.mirror`, phase
 //   `.mirroring` (detail bike name) → same join/link flow with `frameSource: services.mirror.frameSource`;
 //   the UI presents the ReplayKit broadcast picker. Duplicate tap guard: ignore if already
 //   mirroring and a frame was sent < 15 s ago (toast text in `detail`).
 // - `stop()`: "Stop everything": link.stop(), projection/mirror stop, ride.projectionChanged(false),
 //   forget the Wi-Fi unless kept, `setPreferCellular(false)`, phase `.stopped`, detail "".
-// - Auto-connect at launch / foreground (§7.5.3): settings.autoConnect && a saved bike && not busy
-//   → after 1.2 s `connect()` once per process (latched); iOS cannot scan Wi-Fi: "range unknown".
+// - Auto-connect at launch / foreground (§7.5.3, iOS §11.8): settings.autoConnect && a saved bike &&
+//   not busy → after 1.2 s, only if iOS already joined the bike Wi-Fi (no hotspot prompt at every
+//   launch), once per process (latched); a quiet failure retries after the next background (§13.12).
 // - Every phase change: `ride.linkPhaseChanged`, `controls.linkStreamingChanged`, log with the
 //   Android labels (`ConnectionPhase` EN log label).
 //
@@ -50,7 +53,10 @@
 // - Errors that the link re-arms by itself (dash not found, lost link, Local Network denied) keep
 //   the session alive while auto-recovery is on; terminal errors end it (Wi-Fi stays associated
 //   until Stop, like Android).
-// - Auto-connect never prompts: a free-flavor manual join or a failed join ends quietly.
+// - Auto-connect never prompts: a free-flavor manual join or a failed join ends quietly (idle, retried
+//   on the next foreground after a background).
+// - Stop must stay reachable: `isSessionActive` is true for every session, including an .error phase
+//   whose link keeps re-arming (the Local Network issue is raised once per such episode).
 
 import Foundation
 import Observation
@@ -120,10 +126,14 @@ public final class ConnectionModel {
     @ObservationIgnored var tuning = ConnectionTuning()
     @ObservationIgnored private let phone: PhoneIdentity
     @ObservationIgnored private(set) var session: ConnectionSession?
-    @ObservationIgnored private var generation: UInt64 = 0
+    @ObservationIgnored private(set) var generation: UInt64 = 0
     @ObservationIgnored private var sessionTask: Task<Void, Never>?
     @ObservationIgnored private(set) var link: EasyConnLink?
     @ObservationIgnored private var linkEventsTask: Task<Void, Never>?
+    /// Identifies the current link's events. Bumped for every new link and by `stopLink()`: a Wi-Fi-back
+    /// restart keeps the session generation, and a freed link's ObjectIdentifier can be reused by its
+    /// replacement, so an event already dequeued by the old consumer must not pass for the new link's.
+    @ObservationIgnored private(set) var linkSerial: UInt64 = 0
     @ObservationIgnored private var wifiWatchTask: Task<Void, Never>?
     @ObservationIgnored private var parkTask: Task<Void, Never>?
     @ObservationIgnored private var autoConnectTask: Task<Void, Never>?
@@ -132,8 +142,36 @@ public final class ConnectionModel {
     @ObservationIgnored private(set) var linkState: LinkState = .idle
     @ObservationIgnored private var wifiLostAt: TimeInterval?
     @ObservationIgnored private(set) var isParked = false
+    /// The Wi-Fi the session actually joined (gateway + phone /24): the fingerprint that recognises the
+    /// bike network when the SSID is unknown (free flavor; no precise location for networks the app
+    /// did not configure). Refreshed by every SSID-confirmed re-acquire.
+    @ObservationIgnored private(set) var sessionNetwork: WifiNetworkInfo?
+    /// A link was started on this network although it only matches the fingerprint (SSID unknown): the
+    /// Wi-Fi loss and its grace / park stay in force until the dash actually streams on it.
+    @ObservationIgnored private(set) var unconfirmedNetwork: WifiNetworkInfo?
+    /// The look-alike network on which the last unconfirmed attempt found no dash: repeated updates of
+    /// the same network start no new attempt (any other network clears it).
+    @ObservationIgnored private var dashlessNetwork: WifiNetworkInfo?
+    /// Invalidates a Wi-Fi-back link start that is still waiting for the signer when the Wi-Fi changes again.
+    @ObservationIgnored private var resumeToken: UInt64 = 0
     @ObservationIgnored private var lastFrameSentAt: TimeInterval?
     @ObservationIgnored private(set) var autoConnectLatched = false
+    /// An auto-connect ended quietly (join failed / no dash on an unconfirmed network): the latch is
+    /// released when the app goes to the background, so the next foreground retries once (§13.12:
+    /// "stay idle and retry on scenePhase == .active; never loop"). The iOS join alert's own
+    /// inactive → active bounce never passes through .background.
+    @ObservationIgnored private(set) var retryAutoConnectAfterBackground = false
+    @ObservationIgnored private var loggedNotOnBikeWifi = false
+    /// The session reached STREAMING at least once.
+    @ObservationIgnored private var sessionEverStreamed = false
+    /// Mirror was tapped while the location permission was undetermined: start once it is answered.
+    @ObservationIgnored private(set) var pendingMirrorAfterPermission = false
+    /// Fit + margins last pushed to the mirror relay this session (no duplicate CONFIG pushes).
+    @ObservationIgnored private var appliedMirrorFit: (fit: ScreenFit, margins: ScreenMargins)?
+    /// `issue = .localNetworkDenied` was raised in this episode (since the session began or last
+    /// streamed). The link re-arms every 20 s while auto-recovery is on and fails the same way each
+    /// time: raising the issue again would bring the dialog back after every Dismiss (CON:CL-1).
+    @ObservationIgnored private var localNetworkIssueRaised = false
     @ObservationIgnored private var loggedAutoConnectIdle = false
     /// Bike Wi-Fi configuration kept after a failed session (Android keeps the network until Stop);
     /// forgotten by Stop, by a session to another bike, or when the app leaves the foreground idle.
@@ -151,6 +189,9 @@ public final class ConnectionModel {
         core.services.mirror.onExtensionConnectionChange = { [weak self] connected in
             Task { @MainActor [weak self] in self?.mirrorExtensionChanged(connected) }
         }
+        // Screen margins (and fit) edited while mirroring apply to the running relay right away, as the
+        // margins screen promises (app-features §2.6; review SPEC:CL-7, MED:MP-4).
+        settings.observe { [weak self] _ in self?.mirrorSettingsChanged() }
     }
 
     /// Home "Connect" (own dash UI). While busy/live the same button means `stop()`.
@@ -169,6 +210,27 @@ public final class ConnectionModel {
                 return
             }
         }
+        // The rider leaves OpenCfMoto to show other apps, but this process owns the PXC link and the
+        // relay: only background location keeps it running then (the handlebar audio loop is released
+        // for mirroring). Without it iOS suspends the app seconds after the switch and the dash drops
+        // the picture (review IOS-2).
+        let location = core.services.location
+        switch location.permission {
+        case .whenInUse, .always:
+            break
+        case .notDetermined:
+            Log.i("MIRROR", "asking for location first \u{2014} it keeps the mirror link alive while other apps are open")
+            pendingMirrorAfterPermission = true
+            location.requestPermission()
+            // Providers may answer synchronously (with or without a callback).
+            if pendingMirrorAfterPermission, location.permission != .notDetermined {
+                locationPermissionChanged(location.permission)
+            }
+            return
+        case .denied, .restricted:
+            refuseMirrorWithoutLocation(location.permission)
+            return
+        }
         cancelAutoConnect(unlatch: false)
         begin(mode: .mirror, trigger: .user)
     }
@@ -176,6 +238,7 @@ public final class ConnectionModel {
     /// "Stop everything".
     public func stop() {
         cancelAutoConnect(unlatch: false)
+        pendingMirrorAfterPermission = false
         let had = session != nil
         teardownSession(keepWifi: false)
         forgetLingeringWifi(except: nil)
@@ -221,7 +284,7 @@ public final class ConnectionModel {
         guard !autoConnectLatched else { return }
         guard core.currentSettings.autoConnect else { return }
         guard !phase.isBusy, !phase.isLive, session == nil else { return }
-        guard let bike = core.garage.selected else {
+        guard core.garage.selected != nil else {
             if !loggedAutoConnectIdle {
                 loggedAutoConnectIdle = true
                 Log.i("APP", "→ Auto-connect idle: no bike paired.")
@@ -229,16 +292,50 @@ public final class ConnectionModel {
             return
         }
         autoConnectLatched = true
-        Log.i("APP", "→ Auto-connect: '\(bike.name)' (range unknown \u{2014} trying anyway). Disable in Setup \u{25B8} Startup.")
+        retryAutoConnectAfterBackground = false
         let delay = tuning.autoConnectDelay
+        let wifi = core.services.wifi
         autoConnectTask?.cancel()
         autoConnectTask = Task { [weak self] in
             await sleepSeconds(delay)
+            guard !Task.isCancelled else { return }
+            // §11.8: iOS cannot scan, and applying the hotspot configuration at every launch prompts
+            // (and fails after ~15 s when the bike is off). Auto-start only when iOS already joined
+            // the bike Wi-Fi; otherwise stay idle and check again on the next foreground.
+            let current = await wifi.currentNetwork()
             guard !Task.isCancelled, let self else { return }
             self.autoConnectTask = nil
             guard !self.phase.isBusy, !self.phase.isLive, self.session == nil else { return }
+            guard let bike = self.core.garage.selected, let qr = self.core.garage.qr(for: bike.id) else { return }
+            guard Self.isAlreadyOnBikeNetwork(current, ssid: qr.ssid) else {
+                self.autoConnectLatched = false
+                if !self.loggedNotOnBikeWifi {
+                    self.loggedNotOnBikeWifi = true
+                    Log.i("APP", "→ Auto-connect idle: '\(bike.name)' \u{2014} not on its Wi-Fi (\(Self.describe(current))). Tap Connect, or open the app on the bike Wi-Fi.")
+                }
+                return
+            }
+            Log.i("APP", "→ Auto-connect: '\(bike.name)' \u{2014} already on its Wi-Fi (\(Self.describe(current))). Disable in Setup \u{25B8} Startup.")
             self.begin(mode: .dashUI, trigger: .auto)
         }
+    }
+
+    /// Location permission changed (AppModel wiring): a Mirror tap waiting for the answer goes on.
+    func locationPermissionChanged(_ permission: LocationPermission) {
+        guard pendingMirrorAfterPermission, permission != .notDetermined else { return }
+        pendingMirrorAfterPermission = false
+        if permission.isAuthorized {
+            Log.i("MIRROR", "location allowed \u{2014} starting the mirror session")
+            cancelAutoConnect(unlatch: false)
+            begin(mode: .mirror, trigger: .user)
+        } else {
+            refuseMirrorWithoutLocation(permission)
+        }
+    }
+
+    private func refuseMirrorWithoutLocation(_ permission: LocationPermission) {
+        Log.w("MIRROR", "location is \(permission.rawValue) \u{2014} mirroring would stop as soon as another app is open; not starting")
+        issue = .other(SessionText.mirrorNeedsLocation(core.language))
     }
 
     func scenePhaseChanged(_ phase: AppScenePhase) {
@@ -246,6 +343,11 @@ public final class ConnectionModel {
         case .background:
             // Android unlatches when the activity died before the delayed connect ran.
             cancelAutoConnect(unlatch: true)
+            if retryAutoConnectAfterBackground, session == nil {
+                retryAutoConnectAfterBackground = false
+                autoConnectLatched = false
+                Log.i("APP", "→ Auto-connect will retry when the app returns")
+            }
             // A failed session's bike Wi-Fi must not keep auto-joining once the rider left the app.
             if session == nil { forgetLingeringWifi(except: nil) }
         case .active:
@@ -273,6 +375,18 @@ public final class ConnectionModel {
             issue = .noBikePaired
             return
         }
+        guard !qr.requiresPhoneHotspot else {
+            // A bike saved from a phone-hotspot QR (before pairing refused them): there is no bike Wi-Fi
+            // to join, so never start the join / manual-join flow for its synthetic SSID (review IOS-3).
+            Log.w("APP", "→ '\(bike.name)': this dash joins the phone's hotspot \u{2014} not supported on iPhone")
+            if trigger == .user {
+                let message = SessionText.phoneHotspotUnsupported(l)
+                issue = .other(message)
+                if session == nil { setPhase(.error, detail: message) }
+            }
+            return
+        }
+        pendingMirrorAfterPermission = false
         // Hard switch: the previous projection and link die first; the Wi-Fi association stays
         // (unless the previous session was for another bike).
         let previousSSID = session?.qr.ssid
@@ -294,17 +408,21 @@ public final class ConnectionModel {
                 setPhase(.error, detail: message)
                 return
             }
-            let st = core.currentSettings
-            let early = BikeProfiles.selectByQR(qr, override: st.profileOverride,
-                                                learnedCanvas: core.dashMemory.learnedCanvas(forSSID: qr.ssid))
-            applyMirrorFit(profile: early)
+            appliedMirrorFit = nil
+            applyMirrorFit(profile: earlyProfile(qr))
         }
         generation &+= 1
         let gen = generation
         issue = nil
+        localNetworkIssueRaised = false
+        sessionEverStreamed = false
+        loggedNotOnBikeWifi = false
+        if trigger == .user { retryAutoConnectAfterBackground = false }
         manualJoin = nil
         wifiLostAt = nil
         isParked = false
+        unconfirmedNetwork = nil
+        dashlessNetwork = nil
         lastFrameSentAt = nil
         linkState = .idle
         diagnostics = LinkDiagnostics()
@@ -332,6 +450,9 @@ public final class ConnectionModel {
         stopLink()
         wifiLostAt = nil
         isParked = false
+        unconfirmedNetwork = nil
+        dashlessNetwork = nil
+        sessionNetwork = nil
         guard let s = session else { return }
         session = nil
         isSessionActive = false
@@ -369,6 +490,7 @@ public final class ConnectionModel {
         guard let s = session, gen == generation else { return }
         if phase != .joiningWifi { setPhase(.joiningWifi, detail: s.bike.name) }
         guard let info = await joinBikeWifi(gen), gen == generation else { return }
+        sessionNetwork = info
         core.services.setPreferCellular(true)
         if info.isLocalNetworkDenied {
             Log.w("WIFI", "[wifi] Local Network access denied for this app \u{2014} the dash cannot be reached")
@@ -432,48 +554,73 @@ public final class ConnectionModel {
             case .manualJoinRequired:
                 let current = await wifi.currentNetwork()
                 guard gen == generation else { return nil }
-                if Self.isConfirmedBikeNetwork(current, ssid: s.qr.ssid) {
-                    Log.i("WIFI", "Wi-Fi already joined: \(s.qr.ssid) \u{2014} skipping re-join")
+                if Self.isAlreadyOnBikeNetwork(current, ssid: s.qr.ssid) {
+                    // The free flavor never knows the SSID: an address on a known dash subnet means
+                    // iOS already joined the bike (a mode switch, a retry, an auto-join at ignition).
+                    // Discovery confirms it (and fails fast when this is not the dash).
+                    Log.i("WIFI", current.ssid == nil
+                          ? "Wi-Fi already on a dash network (\(Self.describe(current)), SSID unknown) \u{2014} skipping the manual join"
+                          : "Wi-Fi already joined: \(s.qr.ssid) \u{2014} skipping re-join")
                     return current
                 }
                 if s.trigger == .auto {
-                    Log.i("APP", "→ Auto-connect: join '\(s.qr.ssid)' in Settings \u{25B8} Wi-Fi, then tap Connect")
-                    endSession(.idle, detail: "", issue: nil)
+                    endAutoConnectQuietly("join '\(s.qr.ssid)' in Settings \u{25B8} Wi-Fi, then tap Connect")
                     return nil
                 }
-                return await awaitManualJoin(gen, message: SessionText.manualJoinMessage(ssid: s.qr.ssid, l))
+                return await awaitManualJoin(gen, message: SessionText.manualJoinMessage(ssid: s.qr.ssid, l), baseline: current)
             }
         } catch let failure as WifiJoinFailure {
             guard gen == generation else { return nil }
             Log.w("WIFI", "[wifi] join failed: \(failure.message)")
+            if s.trigger == .auto, !failure.userCancelled {
+                // §13.12: an auto-connect that cannot join stays idle (no stale red error) and retries
+                // on the next foreground. A cancelled system prompt is not repeated (latched).
+                endAutoConnectQuietly("join failed (\(failure.message))")
+                return nil
+            }
             if failure.userCancelled || s.trigger == .auto {
                 endSession(.error, detail: failure.message, issue: nil)
                 return nil
             }
             if failure.suggestsManualJoin {
-                return await awaitManualJoin(gen, message: failure.message)
+                let baseline = await wifi.currentNetwork()
+                guard gen == generation else { return nil }
+                return await awaitManualJoin(gen, message: failure.message, baseline: baseline)
             }
             endSession(.error, detail: failure.message, issue: .wifiJoinFailed(message: failure.message))
             return nil
         } catch {
             guard gen == generation, !(error is CancellationError) else { return nil }
             Log.e("WIFI", "[wifi] join error: \(error)")
-            let message = s.trigger == .auto ? SessionText.autoConnectFailed(l) : SessionText.connectFailed(l)
-            endSession(.error, detail: message, issue: s.trigger == .auto ? nil : .other(message))
+            if s.trigger == .auto {
+                endAutoConnectQuietly("join error")
+                return nil
+            }
+            let message = SessionText.connectFailed(l)
+            endSession(.error, detail: message, issue: .other(message))
             return nil
         }
     }
 
+    /// An auto-connect that failed with "not found" / "cannot join": back to idle without a dialog or
+    /// a stale error, retried once on the next foreground (app-features §13.12, Android "retry on
+    /// next resume").
+    private func endAutoConnectQuietly(_ reason: String) {
+        Log.i("APP", "→ Auto-connect: \(reason) \u{2014} staying idle; will retry when the app returns")
+        retryAutoConnectAfterBackground = true
+        endSession(.idle, detail: "", issue: nil)
+    }
+
     /// Shows the manual-join prompt and waits for the bike network (or the rider's confirmation).
-    private func awaitManualJoin(_ gen: UInt64, message: String) async -> WifiNetworkInfo? {
-        guard let s = session else { return nil }
+    /// `baseline` is the network read BEFORE the prompt is published: read after it, a switch the
+    /// rider makes as soon as the sheet appears could become the baseline and never count as a change.
+    private func awaitManualJoin(_ gen: UInt64, message: String, baseline: WifiNetworkInfo) async -> WifiNetworkInfo? {
+        guard let s = session, gen == generation else { return nil }
         let l = core.language
         manualJoin = ManualWifiJoinPrompt(ssid: s.qr.ssid, password: s.qr.password.isEmpty ? nil : s.qr.password,
                                           message: message)
         setPhase(.joiningWifi, detail: SessionText.joinInSettings(ssid: s.qr.ssid, l))
         Log.i("WIFI", "[wifi] waiting for the rider to join \(s.qr.ssid) in Settings \u{25B8} Wi-Fi")
-        let baseline = await core.services.wifi.currentNetwork()
-        guard gen == generation else { return nil }
         let info = await waitForManualJoin(ssid: s.qr.ssid, baseline: baseline)
         guard gen == generation, let info else { return nil }
         manualJoin = nil
@@ -532,44 +679,100 @@ public final class ConnectionModel {
     private func wifiChanged(_ info: WifiNetworkInfo, gen: UInt64) {
         guard let s = session else { return }
         let l = core.language
-        if Self.isOnBikeNetwork(info, ssid: s.qr.ssid) {
+        if let d = dashlessNetwork, d != info { dashlessNetwork = nil }
+        if Self.isOnBikeNetwork(info, ssid: s.qr.ssid, joined: sessionNetwork) {
             guard wifiLostAt != nil else { return }
-            wifiLostAt = nil
-            parkTask?.cancel()
-            parkTask = nil
-            let resumed = isParked
-            isParked = false
             if linkState == .streaming, link != nil {
                 // A path blip: the link never stopped streaming.
+                clearWifiLoss()
                 Log.i("WIFI", "Wi-Fi back: \(s.qr.ssid) \u{2014} the link kept streaming")
                 ride.setLinkBanner(nil)
                 setPhase(s.mode == .mirror ? .mirroring : .streaming, detail: s.bike.name)
                 return
             }
-            Log.i("WIFI", "Wi-Fi re-acquired: \(s.qr.ssid) \u{2014} restarting bike link on fresh network\(resumed ? " (resume)" : "")")
+            let resumed = isParked
+            if info.ssid == s.qr.ssid {
+                sessionNetwork = info
+                clearWifiLoss()
+                Log.i("WIFI", "Wi-Fi re-acquired: \(s.qr.ssid) \u{2014} restarting bike link on fresh network\(resumed ? " (resume)" : "")")
+            } else {
+                // SSID unknown: this network only LOOKS like the bike's (same gateway and /24 as the one
+                // the session joined, CON:CL-3 / SEC-3). Try the dash, but keep the loss in force until
+                // it streams: a fresh grace bounds the attempt, then the session parks (again) instead
+                // of hosting the PXC listeners on, say, a home LAN with the same address plan.
+                guard unconfirmedNetwork == nil, dashlessNetwork == nil else { return } // already tried
+                unconfirmedNetwork = info
+                armParkTimer(gen)
+                Log.i("WIFI", "Wi-Fi looks like the bike's again (\(Self.describe(info)), SSID unknown) \u{2014} restarting bike link; waiting for the dash to confirm\(resumed ? " (resume)" : "")")
+            }
             ride.setLinkBanner(SessionText.reconnectingBanner(l))
-            Task { [weak self] in await self?.startLink(info: info, gen: gen, afterWifiLoss: true) }
-        } else {
-            guard wifiLostAt == nil else { return }
+            resumeToken &+= 1
+            let token = resumeToken
+            Task { [weak self] in await self?.startLink(info: info, gen: gen, afterWifiLoss: true, resume: token) }
+        } else if wifiLostAt == nil {
+            resumeToken &+= 1
             wifiLostAt = core.services.clock.now()
             Log.w("WIFI", "Wi-Fi lost: bike network gone (\(Self.describe(info)))")
             if !isParked {
                 setPhase(.reconnecting, detail: SessionText.waitingForBikeWifi(l))
                 ride.setLinkBanner(SessionText.waitingForWifiBanner(l))
             }
-            let grace = tuning.wifiParkGrace
-            parkTask?.cancel()
-            parkTask = Task { [weak self] in
-                await sleepSeconds(grace)
-                guard !Task.isCancelled, let self, gen == self.generation, self.wifiLostAt != nil else { return }
-                self.wifiGraceExpired()
+            armParkTimer(gen)
+        } else if unconfirmedNetwork != nil {
+            // The look-alike network went away again before the dash answered: drop that attempt.
+            unconfirmedNetwork = nil
+            resumeToken &+= 1
+            Log.w("WIFI", "Wi-Fi lost again before the dash answered (\(Self.describe(info)))")
+            stopLink()
+            if isParked {
+                setPhase(.waitingForBike, detail: SessionText.willResume(l))
+                ride.setLinkBanner(nil)
+            } else {
+                setPhase(.reconnecting, detail: SessionText.waitingForBikeWifi(l))
+                ride.setLinkBanner(SessionText.waitingForWifiBanner(l))
             }
         }
     }
 
-    /// The bike Wi-Fi stayed away for the whole grace period (iOS battery policy, §11.6).
+    /// (Re)starts the grace timer: the bike Wi-Fi must be confirmed (re-acquired by SSID, or the dash
+    /// streaming again) before it fires, or the session parks.
+    private func armParkTimer(_ gen: UInt64) {
+        let grace = tuning.wifiParkGrace
+        parkTask?.cancel()
+        parkTask = Task { [weak self] in
+            await sleepSeconds(grace)
+            guard !Task.isCancelled, let self, gen == self.generation, self.wifiLostAt != nil else { return }
+            self.wifiGraceExpired()
+        }
+    }
+
+    /// The bike network is confirmed back: no loss, no park, no pending confirmation.
+    private func clearWifiLoss() {
+        wifiLostAt = nil
+        parkTask?.cancel()
+        parkTask = nil
+        isParked = false
+        unconfirmedNetwork = nil
+        dashlessNetwork = nil
+    }
+
+    /// The bike Wi-Fi stayed away for the whole grace period (iOS battery policy, §11.6), or a link on a
+    /// look-alike network (SSID unknown) never reached the dash within its grace.
     private func wifiGraceExpired() {
-        guard let s = session, !isParked else { return }
+        guard let s = session else { return }
+        if isParked {
+            // Already parked: only an unconfirmed resume attempt can be running. It found no dash.
+            guard unconfirmedNetwork != nil || link != nil else { return }
+            dashlessNetwork = unconfirmedNetwork
+            unconfirmedNetwork = nil
+            resumeToken &+= 1
+            Log.i("WIFI", "no dash answered on this Wi-Fi within \(Int(tuning.wifiParkGrace))s \u{2014} pausing the dash link again; watching for the bike")
+            stopLink()
+            if s.mode == .dashUI { core.services.projection.stop() }
+            ride.setLinkBanner(nil)
+            setPhase(.waitingForBike, detail: SessionText.willResume(core.language))
+            return
+        }
         let seconds = Int(tuning.wifiParkGrace)
         guard core.currentSettings.autoRecovery else {
             Log.i("WIFI", "bike Wi-Fi gone > \(seconds)s and auto-recovery is off \u{2014} stopping")
@@ -577,17 +780,25 @@ public final class ConnectionModel {
             return
         }
         isParked = true
+        if let u = unconfirmedNetwork { dashlessNetwork = u }
+        unconfirmedNetwork = nil
         Log.i("WIFI", "bike Wi-Fi gone > \(seconds)s \u{2014} pausing the dash link to save battery; watching for the bike")
         stopLink()
-        if s.mode == .dashUI { core.services.projection.stop() }
+        if s.mode == .dashUI {
+            core.services.projection.stop()
+            // The own UI is off the dash while parked: the trip auto-log stops and saves, the "Live"
+            // label and Ride Mode follow. The resumed link's .streaming starts a new projection (CON:CL-2).
+            ride.projectionChanged(active: false)
+        }
         ride.setLinkBanner(nil)
         setPhase(.waitingForBike, detail: SessionText.willResume(core.language))
     }
 
     // MARK: - Link
 
-    private func startLink(info: WifiNetworkInfo, gen: UInt64, afterWifiLoss: Bool) async {
-        guard let s = session, gen == generation else { return }
+    /// `resume`: the `resumeToken` of a Wi-Fi-back restart (nil for the session's first link).
+    private func startLink(info: WifiNetworkInfo, gen: UInt64, afterWifiLoss: Bool, resume: UInt64? = nil) async {
+        guard let s = session, gen == generation, resume == nil || resume == resumeToken else { return }
         let l = core.language
         setPhase(.linking, detail: afterWifiLoss ? SessionText.reconnecting(l) : s.bike.name)
         let signer: HuidSigner
@@ -599,7 +810,7 @@ public final class ConnectionModel {
             endSession(.error, detail: SessionText.connectFailed(l), issue: .other(SessionText.connectFailed(l)))
             return
         }
-        guard gen == generation, let s = session else { return }
+        guard gen == generation, let s = session, resume == nil || resume == resumeToken else { return }
         stopLink()
         let st = core.currentSettings
         let ownUI = s.mode == .dashUI
@@ -625,12 +836,14 @@ public final class ConnectionModel {
         link = newLink
         linkState = .idle
         diagnostics = LinkDiagnostics(profileName: newLink.currentProfile.name, projection: projectionSummary())
-        let id = ObjectIdentifier(newLink)
+        linkSerial &+= 1
+        let serial = linkSerial
         let events = newLink.events
         linkEventsTask = Task { [weak self] in
             for await event in events {
-                guard let self else { return }
-                self.handleLinkEvent(event, gen: gen, linkID: id)
+                // Cancelling does not stop an element already handed to this consumer.
+                guard !Task.isCancelled, let self else { return }
+                self.handleLinkEvent(event, gen: gen, serial: serial)
             }
         }
         Log.i("LINK", "→ starting PXC link (\(ownUI ? "own dash UI" : "mirror")) on \(Self.describe(info))")
@@ -640,6 +853,7 @@ public final class ConnectionModel {
     private func stopLink() {
         linkEventsTask?.cancel()
         linkEventsTask = nil
+        linkSerial &+= 1
         if let l = link {
             link = nil
             l.stop()
@@ -647,8 +861,9 @@ public final class ConnectionModel {
         linkState = .idle
     }
 
-    private func handleLinkEvent(_ event: LinkEvent, gen: UInt64, linkID: ObjectIdentifier) {
-        guard gen == generation, let link, ObjectIdentifier(link) == linkID, let s = session else { return }
+    /// Internal for tests (stale-event filtering).
+    func handleLinkEvent(_ event: LinkEvent, gen: UInt64, serial: UInt64) {
+        guard gen == generation, serial == linkSerial, let link, let s = session else { return }
         switch event {
         case let .state(st):
             linkStateChanged(st, session: s)
@@ -660,7 +875,8 @@ public final class ConnectionModel {
             garage.reload()
             let st = core.currentSettings
             core.dashMemory.setLastDashTouch(!st.forceNonTouch && (st.forceTouch || profile.supportsScreenTouch))
-            Log.i("APP", "dash identified: \(info.huName.isEmpty ? info.huid : info.huName) \u{2192} \(profile.name)")
+            // No key prefix for the redactor to match: mask the serial itself (review SEC-5).
+            Log.i("APP", "dash identified: \(info.huName.isEmpty ? LogRedactor.maskTail(info.huid) : info.huName) \u{2192} \(profile.name)")
             if s.mode == .dashUI { ride.profileIdentified(profile) } else { applyMirrorFit(profile: profile) }
         case let .canvas(c):
             diagnostics.canvas = c
@@ -681,14 +897,19 @@ public final class ConnectionModel {
         linkState = st
         diagnostics.state = st
         let l = core.language
-        if st == .streaming, wifiLostAt != nil {
-            // The dash is back on its own: the Wi-Fi loss was a blip.
-            wifiLostAt = nil
-            parkTask?.cancel()
-            parkTask = nil
+        if st == .streaming, wifiLostAt != nil || isParked {
+            // The dash streams again: the Wi-Fi loss was a blip, or a look-alike network (SSID unknown)
+            // is confirmed to be the bike's.
+            if unconfirmedNetwork != nil { Log.i("WIFI", "the dash answered \u{2014} this Wi-Fi is the bike's") }
+            clearWifiLoss()
         }
         if wifiLostAt != nil || isParked {
-            return // the Wi-Fi supervisor owns the status line meanwhile
+            // The Wi-Fi supervisor owns the status line meanwhile. A terminal failure of an unconfirmed
+            // attempt (auto-recovery off: nothing re-arms) still ends the session like any other.
+            if unconfirmedNetwork != nil, case let .failed(f) = st, !core.currentSettings.autoRecovery {
+                linkFailed(f, session: s)
+            }
+            return
         }
         switch st {
         case .idle, .stopped:
@@ -705,6 +926,8 @@ public final class ConnectionModel {
             controls.linkStreamingChanged(true, mirror: s.mode == .mirror)
             ride.setLinkBanner(nil)
             if s.mode == .dashUI { ride.projectionChanged(active: true) }
+            localNetworkIssueRaised = false
+            sessionEverStreamed = true
             switch issue {
             case .dashNotFound?, .lostLink?, .localNetworkDenied?, .wifiUnavailable?: issue = nil
             default: break
@@ -728,7 +951,11 @@ public final class ConnectionModel {
         case .localNetworkDenied:
             let d = SessionText.localNetworkDenied(l)
             if recovery {
-                issue = .localNetworkDenied
+                // Once per episode: the watchdog re-arm fails the same way every 20 s.
+                if !localNetworkIssueRaised {
+                    localNetworkIssueRaised = true
+                    issue = .localNetworkDenied
+                }
                 setPhase(.error, detail: d)
             } else {
                 endSession(.error, detail: d, issue: .localNetworkDenied)
@@ -737,7 +964,15 @@ public final class ConnectionModel {
             endSession(.error, detail: SessionText.noWifiAddress(l), issue: .wifiUnavailable)
         case .dashNotFound:
             let d = SessionText.easyConnOffline(l)
-            if recovery { setPhase(.error, detail: d) } else { endSession(.error, detail: d, issue: .dashNotFound) }
+            if s.trigger == .auto, !sessionEverStreamed, sessionNetwork?.ssid == nil {
+                // An auto-connect on a network recognised only by its address plan (SSID unknown) may
+                // be a home LAN on the dash's plan: never re-arm there unattended (§13.12, SEC-3).
+                endAutoConnectQuietly("no dash answered on this Wi-Fi (SSID unknown)")
+            } else if recovery {
+                setPhase(.error, detail: d)
+            } else {
+                endSession(.error, detail: d, issue: .dashNotFound)
+            }
         case .lostLink:
             let d = SessionText.lostLink(l)
             if recovery { setPhase(.error, detail: d) } else { endSession(.error, detail: d, issue: .lostLink) }
@@ -750,10 +985,25 @@ public final class ConnectionModel {
 
     // MARK: - Mirror
 
+    /// The profile before the dash identified itself (QR model id, override, learned canvas).
+    private func earlyProfile(_ qr: BikeQR) -> BikeProfile {
+        BikeProfiles.selectByQR(qr, override: core.currentSettings.profileOverride,
+                                learnedCanvas: core.dashMemory.learnedCanvas(forSSID: qr.ssid))
+    }
+
     private func applyMirrorFit(profile: BikeProfile) {
         let st = core.currentSettings
+        let fit = SettingsModel.mirrorScreenFit(core.settings, bikeId: core.garage.selected?.id)
         let margins = CanvasFit.effectiveMargins(st.screenMargins, profileDefault: profile.defaultMargins)
-        core.services.mirror.setFit(st.screenFit, margins: margins)
+        if let applied = appliedMirrorFit, applied.fit == fit, applied.margins == margins { return }
+        appliedMirrorFit = (fit, margins)
+        core.services.mirror.setFit(fit, margins: margins)
+    }
+
+    /// A settings change while mirroring: push the new fit / margins to the running relay.
+    private func mirrorSettingsChanged() {
+        guard let s = session, s.mode == .mirror else { return }
+        applyMirrorFit(profile: link?.currentProfile ?? earlyProfile(s.qr))
     }
 
     private func mirrorExtensionChanged(_ connected: Bool) {
@@ -780,16 +1030,45 @@ public final class ConnectionModel {
         return addresses.contains { a in dashSubnetPrefixes.contains { a.hasPrefix($0) } }
     }
 
-    /// On the bike Wi-Fi with an address (SSID unknown → any Wi-Fi with an IPv4 counts).
-    nonisolated static func isOnBikeNetwork(_ info: WifiNetworkInfo, ssid: String) -> Bool {
+    /// On the bike Wi-Fi with an address. SSID known → it must match. SSID unknown (free flavor, or no
+    /// precise location for a network the app did not configure) → only the network the session
+    /// actually `joined` counts (same gateway and phone /24); without one, a known dash subnet. Any
+    /// other Wi-Fi (home, café) is "bike gone": the grace / park apply and the link never restarts
+    /// there (review CON:CL-3, SPEC:CL-5, SEC-3).
+    nonisolated static func isOnBikeNetwork(_ info: WifiNetworkInfo, ssid: String, joined: WifiNetworkInfo? = nil) -> Bool {
         guard info.isWifiAvailable, info.phoneIPv4 != nil else { return false }
-        guard let current = info.ssid else { return true }
-        return current == ssid
+        if let current = info.ssid { return current == ssid }
+        guard let joined else { return isOnDashSubnet(info) }
+        return isSameNetwork(info, as: joined)
+    }
+
+    /// Same IPv4 /24 for the phone and the same gateway (both unknown counts as the same).
+    nonisolated static func isSameNetwork(_ info: WifiNetworkInfo, as other: WifiNetworkInfo) -> Bool {
+        guard let ip = info.phoneIPv4, let otherIP = other.phoneIPv4,
+              let subnet = subnet24(ip), subnet == subnet24(otherIP) else { return false }
+        return info.gateway == other.gateway
+    }
+
+    /// "192.168.0.23" → "192.168.0" (nil if not a dotted IPv4 address).
+    nonisolated static func subnet24(_ ipv4: String) -> String? {
+        let parts = ipv4.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 4, parts.allSatisfy({ !$0.isEmpty && $0.allSatisfy(\.isNumber) }) else { return nil }
+        return parts[0 ... 2].joined(separator: ".")
     }
 
     /// Positively on the bike Wi-Fi (the SSID is known and matches).
     nonisolated static func isConfirmedBikeNetwork(_ info: WifiNetworkInfo, ssid: String) -> Bool {
         info.isWifiAvailable && info.phoneIPv4 != nil && info.ssid == ssid
+    }
+
+    /// iOS already joined the bike Wi-Fi: the SSID is known and matches, or (SSID unknown: free flavor,
+    /// no precise location) the phone has an address on a known dash subnet. Auto-connect starts only
+    /// then (§11.8), and a Connect skips the manual-join sheet (review CON:CL-4, SPEC:CL-4). Known
+    /// limitation: an SSID-less home LAN on the dash's address plan looks the same — discovery then
+    /// finds no dash, and an auto-connect ends quietly instead of re-arming there.
+    nonisolated static func isAlreadyOnBikeNetwork(_ info: WifiNetworkInfo, ssid: String) -> Bool {
+        if isConfirmedBikeNetwork(info, ssid: ssid) { return true }
+        return info.ssid == nil && info.isWifiAvailable && info.phoneIPv4 != nil && isOnDashSubnet(info)
     }
 
     /// The rider joined the bike network in Settings: the SSID matches, or (SSID unknown) a NEW

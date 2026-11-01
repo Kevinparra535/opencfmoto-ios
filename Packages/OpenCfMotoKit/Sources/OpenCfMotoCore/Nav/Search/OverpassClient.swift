@@ -19,8 +19,11 @@ public struct OverpassClient: Sendable {
 
     /// Nearby-by-tag query, e.g. for `amenity=fuel` at (44.4268, 26.1025) within 6 000 m:
     /// `[out:json][timeout:25];\n(\n  node["amenity"="fuel"](around:6000,44.4268,26.1025);\n  way[…];\n);\nout center 60;`
+    /// The centre is rounded to 3 decimals (~110 m, against a ≥ 6 km radius) so a POI chip does not send
+    /// the exact fix (iOS deviation, review SEC-7); the results are still sorted from the exact one.
     public static func nearbyQuery(key: String, value: String, radiusM: Int, lat: Double, lon: Double, maxResults: Int) -> String {
-        let la = NavNumberFormat.javaString(lat), lo = NavNumberFormat.javaString(lon)
+        let la = NavNumberFormat.javaString(PlaceSearch.roundedCoordinate(lat, decimals: 3))
+        let lo = NavNumberFormat.javaString(PlaceSearch.roundedCoordinate(lon, decimals: 3))
         return """
         [out:json][timeout:25];
         (
@@ -112,6 +115,7 @@ public struct OverpassClient: Sendable {
             } else {
                 continue
             }
+            guard GeoMath.isValidCoordinate(lat: plat, lon: plon) else { continue } // review SEC-1
             let tags = o["tags"]
             func tag(_ k: String) -> String? {
                 let v = tags[k].string("")
@@ -162,7 +166,8 @@ public struct OverpassClient: Sendable {
         let root = try await post(q)
         var out: [Place] = []
         for o in root["elements"].elements {
-            guard o.has("lat"), o.has("lon"), let lat = o["lat"].doubleOrNil, let lon = o["lon"].doubleOrNil else { continue }
+            guard o.has("lat"), o.has("lon"), let lat = o["lat"].doubleOrNil, let lon = o["lon"].doubleOrNil,
+                  GeoMath.isValidCoordinate(lat: lat, lon: lon) else { continue }
             let tags = o["tags"]
             guard tags.object != nil else { continue }
             let amenity = tags["amenity"].string("")

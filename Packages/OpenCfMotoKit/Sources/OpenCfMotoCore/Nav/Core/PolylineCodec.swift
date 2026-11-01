@@ -36,8 +36,13 @@ public enum PolylineCodec {
         while index < bytes.count {
             guard let dlat = next() else { break }
             guard let dlon = next() else { break }
-            lat += dlat
-            lon += dlon
+            // A crafted shape can carry deltas up to 2^60: stop instead of trapping on overflow
+            // (review SEC-1). Range checks belong to the callers (ValhallaRouter rejects the route).
+            let (newLat, latOverflow) = lat.addingReportingOverflow(dlat)
+            let (newLon, lonOverflow) = lon.addingReportingOverflow(dlon)
+            guard !latOverflow, !lonOverflow else { break }
+            lat = newLat
+            lon = newLon
             out.append(GeoPoint(lat: Double(lat) / factor, lon: Double(lon) / factor))
         }
         return out

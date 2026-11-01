@@ -85,6 +85,42 @@ final class LinkControlHandlerTests: XCTestCase {
         XCTAssertEqual(h.handle(PxcFrame(cmd: 0x201C1)), ControlChannelResponse())
     }
 
+    /// Review SEC-5: the CHECK_SN reply echoes the serial under "id" (no redaction rule matches it)
+    /// and an HUID that is not purely alphanumeric escapes the bare-serial rule: both are logged
+    /// masked, while the wire payload still carries the full serial.
+    func testSerialsNeverReachTheRedactedLog() {
+        LogRedactor.install(on: .shared, includeSecrets: false)
+        let before = Log.shared.lines().last?.id ?? 0
+        let h = ControlChannelHandler(context: context())
+        let sn = h.handle(PxcFrame(cmd: 0x103E0, text: LinkDashSamples.checkSn))
+        XCTAssertTrue(sn.replies.contains { String(decoding: $0.payload, as: UTF8.self).contains("\"id\":\"DSXXZMHNFV3DEXEBB3PZ2\"") })
+        let info = LinkDashSamples.cfdl16ClientInfo.replacingOccurrences(of: "6GUVA2C00100055", with: "6GUV-A2C00100055")
+        _ = ControlChannelHandler(context: context()).handle(PxcFrame(cmd: PxcCmd.clientInfo, text: info))
+        let logged = Log.shared.lines().filter { $0.id > before && $0.tag == "LINK" }
+            .map { $0.formatted(redactor: Log.shared.redactor) }.joined(separator: "\n")
+        XCTAssertTrue(logged.contains("CHECK_SN_RESULT"), logged)
+        XCTAssertTrue(logged.contains("\"id\":\"DSXX\u{2026}********\""), logged)
+        XCTAssertFalse(logged.contains("DSXXZMHNFV3DEXEBB3PZ2"), logged)
+        XCTAssertFalse(logged.contains("A2C00100055"), logged)
+    }
+
+    /// Review SEC-4: CLIENT_INFO / CHECK_SN payloads far larger than any real one are not parsed (and
+    /// not logged in full).
+    func testOversizedJSONPayloadsAreNotParsed() {
+        let pad = String(repeating: " ", count: ControlChannelHandler.maxJSONPayloadBytes)
+        let info = ControlChannelHandler(context: context()).handle(PxcFrame(cmd: PxcCmd.clientInfo, text: LinkDashSamples.cfdl16ClientInfo + pad))
+        XCTAssertTrue(info.replies.isEmpty) // like an unparsable CLIENT_INFO (Android parity: no reply)
+        guard case let .clientInfoUnparsable(logged)? = info.events.first else { return XCTFail("\(info.events)") }
+        XCTAssertLessThan(logged.count, 3_000)
+        let sn = ControlChannelHandler(context: context()).handle(PxcFrame(cmd: 0x103E0, text: LinkDashSamples.checkSn + pad))
+        XCTAssertEqual(sn.events, [.checkSnCompleted(serial: "")])
+        XCTAssertEqual(sn.replies.count, 2)
+        let before = Log.shared.lines().last?.id ?? 0
+        _ = ControlChannelHandler(context: context()).handle(PxcFrame(cmd: 0x1_2345, text: String(repeating: "A", count: 100_000)))
+        let longest = Log.shared.lines().filter { $0.id > before }.map(\.message.count).max() ?? 0
+        XCTAssertLessThan(longest, 3_000)
+    }
+
     func testClockFrames() {
         let h = ControlChannelHandler(context: context())
         let req = PxcFrame(cmd: 0x10600, payload: LinkDashSamples.timeSyncRequest())

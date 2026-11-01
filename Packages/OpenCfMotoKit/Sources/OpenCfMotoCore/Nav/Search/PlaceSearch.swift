@@ -91,24 +91,40 @@ public final class PlaceSearch: @unchecked Sendable {
         return Self.rank(general + settlements, query: q, near: near)
     }
 
+    /// The position sent to Photon / Nominatim: rounded to 2 decimals (~1 km), plenty for a location
+    /// bias, so live suggestions do not hand the exact fix to a third party on every keystroke (iOS
+    /// deviation, review SEC-7; Android sends the full-precision fix). Ranking keeps the exact position.
+    static func biasPosition(_ p: GeoPoint) -> GeoPoint {
+        GeoPoint(lat: roundedCoordinate(p.lat, decimals: 2), lon: roundedCoordinate(p.lon, decimals: 2))
+    }
+
+    static func roundedCoordinate(_ v: Double, decimals: Int) -> Double {
+        let factor = pow(10.0, Double(decimals))
+        return (v * factor).rounded() / factor
+    }
+
     /// `https://photon.komoot.io/api/?q={enc}&lat={lat}&lon={lon}&limit={n}&location_bias_scale=
-    /// {0.2|0.12}&lang=default[&osm_tag=place:city&osm_tag=place:town&osm_tag=place:municipality]`.
+    /// {0.2|0.12}&lang=default[&osm_tag=place:city&osm_tag=place:town&osm_tag=place:municipality]`
+    /// (position rounded: `biasPosition`).
     public static func photonURL(query: String, near: GeoPoint, limit: Int, settlementsOnly: Bool) -> URL {
         let bias = settlementsOnly ? 0.12 : 0.2
-        var s = "https://photon.komoot.io/api/?q=\(FormURLEncoding.encode(query))&lat=\(NavNumberFormat.javaString(near.lat))"
-            + "&lon=\(NavNumberFormat.javaString(near.lon))&limit=\(limit)&location_bias_scale=\(NavNumberFormat.javaString(bias))&lang=default"
+        let at = biasPosition(near)
+        var s = "https://photon.komoot.io/api/?q=\(FormURLEncoding.encode(query))&lat=\(NavNumberFormat.javaString(at.lat))"
+            + "&lon=\(NavNumberFormat.javaString(at.lon))&limit=\(limit)&location_bias_scale=\(NavNumberFormat.javaString(bias))&lang=default"
         if settlementsOnly { s += "&osm_tag=place:city&osm_tag=place:town&osm_tag=place:municipality" }
         return URL(string: s)!
     }
 
     /// `https://nominatim.openstreetmap.org/search?q={enc}&format=jsonv2&addressdetails=1&limit=20`
-    /// `[&viewbox={lon-1.6},{lat+1.6},{lon+1.6},{lat-1.6}&bounded=0]`.
+    /// `[&viewbox={lon-1.6},{lat+1.6},{lon+1.6},{lat-1.6}&bounded=0]` around `biasPosition(near)`,
+    /// each edge rounded to 2 decimals.
     public static func nominatimURL(query: String, near: GeoPoint?) -> URL {
         var s = "https://nominatim.openstreetmap.org/search?q=\(FormURLEncoding.encode(query))&format=jsonv2&addressdetails=1&limit=20"
         if let near {
             let d = 1.6
-            s += "&viewbox=\(NavNumberFormat.javaString(near.lon - d)),\(NavNumberFormat.javaString(near.lat + d)),"
-                + "\(NavNumberFormat.javaString(near.lon + d)),\(NavNumberFormat.javaString(near.lat - d))&bounded=0"
+            let at = biasPosition(near)
+            func edge(_ v: Double) -> String { NavNumberFormat.javaString(roundedCoordinate(v, decimals: 2)) }
+            s += "&viewbox=\(edge(at.lon - d)),\(edge(at.lat + d)),\(edge(at.lon + d)),\(edge(at.lat - d))&bounded=0"
         }
         return URL(string: s)!
     }
@@ -137,6 +153,7 @@ public final class PlaceSearch: @unchecked Sendable {
                   let lat = f["geometry"]["coordinates"][1].doubleOrNil else {
                 throw NavServiceError.invalidJSON("Photon feature without coordinates")
             }
+            guard GeoMath.isValidCoordinate(lat: lat, lon: lon) else { continue } // review SEC-1
             let p = f["properties"]
             guard p.object != nil else { throw NavServiceError.invalidJSON("Photon feature without properties") }
             var name = p["name"].string("")
@@ -159,6 +176,7 @@ public final class PlaceSearch: @unchecked Sendable {
             guard o.object != nil, let lat = o["lat"].doubleOrNil, let lon = o["lon"].doubleOrNil else {
                 throw NavServiceError.invalidJSON("Nominatim result without lat/lon")
             }
+            guard GeoMath.isValidCoordinate(lat: lat, lon: lon) else { continue } // review SEC-1
             let display = o["display_name"].string("")
             var name = o["name"].string("")
             if name.isNavBlank {

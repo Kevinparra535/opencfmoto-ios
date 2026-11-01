@@ -17,6 +17,14 @@ public enum GeoMath {
     /// Metres per degree of latitude in the local equirectangular projection (Android `111_320`).
     public static let metresPerDegree = 111_320.0
 
+    /// A coordinate every consumer (tile math, map projection, routing) can take: finite, latitude in
+    /// [-90, 90], longitude in [-180, 180]. Used at every untrusted boundary (GPX, imported places and
+    /// map data, search / POI / router responses): NaN, ±inf or 1e300 from a crafted file or server
+    /// used to reach `Int(...)` conversions and trap (review SEC-1).
+    public static func isValidCoordinate(lat: Double, lon: Double) -> Bool {
+        lat.isFinite && lon.isFinite && (-90.0 ... 90.0).contains(lat) && (-180.0 ... 180.0).contains(lon)
+    }
+
     /// `Math.toRadians` (JDK 9+: `deg * DEGREES_TO_RADIANS`).
     @inline(__always) public static func toRadians(_ deg: Double) -> Double { deg * 0.017453292519943295 }
     /// `Math.toDegrees` (JDK 9+: `rad * RADIANS_TO_DEGREES`).

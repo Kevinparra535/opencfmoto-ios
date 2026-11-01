@@ -120,6 +120,8 @@ public struct ValhallaRouter: Sendable {
         for leg in legs.elements {
             let pts = PolylineCodec.decodeTrackPoints(leg["shape"].string(""), precision: 6)
             if pts.count < 2 { continue }
+            // A shape with impossible coordinates rejects the route, like OSRM / ORS (review SEC-1).
+            guard pts.allSatisfy({ GeoMath.isValidCoordinate(lat: $0.lat, lon: $0.lon) }) else { return nil }
             if allPts.isEmpty { allPts.append(contentsOf: pts) } else { allPts.append(contentsOf: pts.dropFirst()) }
             let summary = leg["summary"]
             distKm += summary.object != nil ? summary["length"].double(0) : 0

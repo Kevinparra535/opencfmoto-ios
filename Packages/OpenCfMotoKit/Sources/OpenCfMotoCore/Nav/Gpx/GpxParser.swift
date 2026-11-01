@@ -127,7 +127,12 @@ private final class GpxXMLDelegate: NSObject, XMLParserDelegate {
                 pointDepth = depth
                 pointLat = Self.number(Self.attr(attributeDict, "lat"))
                 pointLon = Self.number(Self.attr(attributeDict, "lon"))
-                pointValid = pointLat != nil && pointLon != nil
+                // Points with NaN / infinite / out-of-range coordinates are dropped (review SEC-1).
+                if let lat = pointLat, let lon = pointLon {
+                    pointValid = GeoMath.isValidCoordinate(lat: lat, lon: lon)
+                } else {
+                    pointValid = false
+                }
                 pointEle = nil
                 pointName = nil
             }
@@ -166,7 +171,7 @@ private final class GpxXMLDelegate: NSObject, XMLParserDelegate {
         if let c = capture, depth == captureDepth {
             let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
             switch c {
-            case .pointEle: pointEle = Self.number(value)
+            case .pointEle: pointEle = Self.number(value).flatMap { $0.isFinite ? $0 : nil }
             case .pointName: if !value.isEmpty { pointName = value }
             case .trkName: if !value.isEmpty { trackName = value }
             case .rteName: if !value.isEmpty { routeName = value }

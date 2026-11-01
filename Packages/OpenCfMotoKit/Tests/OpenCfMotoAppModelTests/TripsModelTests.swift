@@ -241,6 +241,22 @@ final class TripsModelTests: XCTestCase {
         XCTAssertTrue(env.core.tripStore.list().isEmpty)
     }
 
+    /// Review SEC-6: a GPX exported for sharing holds every fix; it goes with the deleted trip.
+    @MainActor
+    func testDeletingATripRemovesItsExportedGPX() async throws {
+        let env = LDTestEnv()
+        env.cleanUp(after: self)
+        try env.core.tripStore.save(Self.vectorTrip)
+        let trips = await makeModel(env)
+        let other = try LogicData.writeExport("x", fileName: "opencfmoto-log-1.txt", typeIdentifier: "public.plain-text",
+                                              in: env.services.files.exportsDirectory)
+        let file = try trips.exportGPX(Self.vectorTrip)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file.url.path))
+        trips.delete(Self.vectorTrip)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.url.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: other.url.path)) // only that trip's export
+    }
+
     // MARK: GPX export
 
     @MainActor

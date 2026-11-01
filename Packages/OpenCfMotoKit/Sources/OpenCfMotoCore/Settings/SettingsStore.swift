@@ -387,6 +387,15 @@ public final class SettingsStore: @unchecked Sendable {
         write { store.set(v.rawValue, forKey: key(SettingsKeys.screenFit, b)) }
     }
 
+    /// True when a valid Screen fit is stored for the bike (scoped or global key) — chosen by the rider
+    /// or set by a settings pack. iOS mirror mode uses FIT when nothing is stored (media-video.md §15.7:
+    /// iOS cannot rotate other apps, FILL shows only a slice); the read / exported default stays FILL
+    /// for Android settings-pack compatibility.
+    public func hasStoredScreenFit(forBike b: String?) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        return scopedString(SettingsKeys.screenFit, b).flatMap(ScreenFit.init(rawValue:)) != nil
+    }
+
     public func setMirrorOrientation(_ v: MirrorOrientation, forBike b: String?) {
         write { store.set(v.rawValue, forKey: key(SettingsKeys.mirrorOrientation, b)) }
     }

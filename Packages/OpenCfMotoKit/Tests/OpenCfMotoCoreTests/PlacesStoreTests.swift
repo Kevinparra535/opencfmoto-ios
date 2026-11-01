@@ -26,14 +26,15 @@ final class PlacesStoreTests: XCTestCase {
 
     func testSamePlaceRuleAndNewestFirstWithCaps() {
         let (s, _) = store()
-        for i in 0 ..< 120 { s.addFavorite(Place(name: "F\(i)", lat: Double(i), lon: 0)) }
+        // Latitudes −60…59 (valid coordinates: invalid ones are dropped when the list is read back).
+        for i in 0 ..< 120 { s.addFavorite(Place(name: "F\(i)", lat: Double(i - 60), lon: 0)) }
         XCTAssertEqual(s.favorites().count, 100)
         XCTAssertEqual(s.favorites().first?.name, "F119")
         // Same location (|Δ| < 1e-5) replaces and moves to the front; names are ignored.
         s.addFavorite(Place(name: "Renamed", lat: 50.000009, lon: 0.000009))
         XCTAssertEqual(s.favorites().count, 100)
         XCTAssertEqual(s.favorites().first?.name, "Renamed")
-        XCTAssertFalse(s.favorites().contains { $0.name == "F50" })
+        XCTAssertFalse(s.favorites().contains { $0.name == "F110" })
         for i in 0 ..< 60 { s.addMarker(Place(name: "M\(i)", lat: Double(i), lon: 1)) }
         XCTAssertEqual(s.markers().count, 50)
         for i in 0 ..< 40 { s.pushHistory(Place(name: "H\(i)", lat: Double(i), lon: 2)) }

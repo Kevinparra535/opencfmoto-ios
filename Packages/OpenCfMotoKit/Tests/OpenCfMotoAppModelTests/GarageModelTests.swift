@@ -105,10 +105,25 @@ final class GarageModelTests: XCTestCase {
             XCTAssertNotEqual(es, hint, "missing Spanish for: \(hint)")
             XCTAssertNotNil(LogicData.Strings.qrHintsES[hint])
         }
-        XCTAssertEqual(seen.count, 7)
-        XCTAssertEqual(LogicData.Strings.qrHintsES.count, 7)
+        XCTAssertEqual(seen.count, 6) // 4 and 5 share the "not supported on iPhone" text (IOS-3)
+        XCTAssertEqual(LogicData.Strings.qrHintsES.count, 6)
         // Unknown hints pass through.
         XCTAssertEqual(LogicData.Strings(.es).qrHint("something new"), "something new")
+    }
+
+    /// Review IOS-3: a dash that joins the PHONE's hotspot cannot be connected from an iPhone — the
+    /// QR is refused with a clear localized hint instead of saving a bike with a synthetic SSID.
+    @MainActor
+    func testPhoneHotspotQRsAreRefusedWithAClearHint() async throws {
+        let env = LDTestEnv()
+        env.cleanUp(after: self)
+        let garage = GarageModel(core: env.core)
+        let expected = PairingOutcome.invalid(hint: env.strings.qrHint(BikeQR.iosPhoneHotspotUnsupportedHint))
+        XCTAssertEqual(garage.pair(rawQR: "http://www.carbit.com.cn/down6/645/644/_ylqxos?modelid=21322&sn=t6J4&action=128&bm=DD%3A0D%3A30%3A24%3A87%3A6D"), expected)
+        XCTAssertEqual(garage.pair(rawQR: "CARBITDC0D3024876D"), expected)
+        XCTAssertTrue(garage.bikes.isEmpty)
+        XCTAssertNil(garage.selected)
+        XCTAssertNotEqual(LogicData.Strings(.es).qrHint(BikeQR.iosPhoneHotspotUnsupportedHint), BikeQR.iosPhoneHotspotUnsupportedHint)
     }
 
     @MainActor

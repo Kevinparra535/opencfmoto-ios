@@ -204,8 +204,13 @@ enum AndroidOrgJSON {
     // MARK: - Tokener (port of AOSP org.json.JSONTokener)
 
     private struct Tokener {
+        /// Max nesting of objects / arrays (settings packs, bikes_json and trip files nest ≤ 4 levels).
+        /// Deeper input fails instead of recursing until a stack overflow (review SEC-4).
+        static let maxDepth = 64
+
         let input: [UInt16]
         var pos = 0
+        var depth = 0
 
         init(_ text: String) {
             var units = Array(text.utf16)
@@ -223,8 +228,12 @@ enum AndroidOrgJSON {
             let c = try nextClean()
             switch c {
             case -1: throw syntaxError("End of input")
-            case 0x7B: return try readObject()             // {
-            case 0x5B: return try readArray()              // [
+            case 0x7B, 0x5B:                               // { [
+                depth += 1
+                defer { depth -= 1 }
+                // Not `syntaxError`: that message embeds the whole input.
+                guard depth <= Tokener.maxDepth else { throw ParseError(message: "Nesting too deep at character \(pos)") }
+                return c == 0x7B ? try readObject() : try readArray()
             case 0x27, 0x22: return .string(try nextString(quote: UInt16(c))) // ' "
             default:
                 pos -= 1
