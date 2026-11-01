@@ -322,6 +322,28 @@ final class VideoEngineTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(engine.stats.pullsUnanswered, 1)
     }
 
+    /// CL-5: Control Center (active → inactive → active) pre-encodes the hold picture; back in the
+    /// foreground it is dropped, so a later lock seeds the hold with the live picture instead of a
+    /// stale "Phone locked" frame from the blip.
+    func testInactiveBlipLeavesNoStaleHoldPicture() async throws {
+        try requireEncoder(width: 320, height: 160)
+        let engine = makeEngine()
+        defer { engine.stop() }
+        engine.allowsSoftwareEncodingInBackground = false
+        engine.prepare(canvas: canvas, parameters: .default)
+        engine.resynchronize()
+        _ = await engine.nextFrame(timeout: 3)
+        let built = Locked<Bool?>(nil)
+        engine.prepareHoldPicture { ok in built.set(ok) } // the blip
+        XCTAssertTrue(pollUntil { built.current != nil })
+        engine.enterForeground() // active again, never backgrounded
+        engine.enterBackground() // a real lock later, without a fresh hold picture
+        XCTAssertTrue(pollUntil { engine.mode == .hold })
+        let held = await engine.nextFrame(timeout: 2)
+        XCTAssertNotNil(held)
+        XCTAssertEqual(held?.accessUnit, engine.frameQueue.lastKeyframe?.accessUnit, "the last live IDR, not the blip's hold IDR")
+    }
+
     func testStopWakesPullsWithNil() async throws {
         try requireEncoder(width: 320, height: 160)
         let engine = makeEngine()

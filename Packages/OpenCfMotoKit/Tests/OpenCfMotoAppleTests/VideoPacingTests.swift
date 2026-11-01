@@ -121,6 +121,20 @@ final class VideoPacingTests: XCTestCase {
         XCTAssertNil(r.frame)
     }
 
+    /// CL-5: after an inactive blip the "Phone locked" hold IDRs may still exist while the engine
+    /// streams in the foreground; a late pull must fall back to the live IDR, never to them (and
+    /// must not consume the hold round-robin).
+    func testForegroundFallbackIsTheLiveKeyframeNeverTheHoldPicture() {
+        let hold = frame(7, key: true), live = frame(9, key: true)
+        let holdAsked = Locked(0)
+        let holdPick: () -> EncodedFrame? = { holdAsked.withLock { $0 += 1 }; return hold }
+        XCTAssertEqual(ProjectionFallback.keyframe(foreground: true, hold: holdPick, live: { live })?.sequence, 9)
+        XCTAssertEqual(holdAsked.current, 0)
+        XCTAssertNil(ProjectionFallback.keyframe(foreground: true, hold: holdPick, live: { nil }), "no live IDR: nothing")
+        XCTAssertEqual(ProjectionFallback.keyframe(foreground: false, hold: holdPick, live: { live })?.sequence, 7)
+        XCTAssertEqual(ProjectionFallback.keyframe(foreground: false, hold: { nil }, live: { live })?.sequence, 9)
+    }
+
     // MARK: RateMeter
 
     func testRateMeterWindow() {

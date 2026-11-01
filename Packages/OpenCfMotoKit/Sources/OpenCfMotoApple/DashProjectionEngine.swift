@@ -86,6 +86,16 @@ enum FramePull {
     }
 }
 
+/// Which cached IDR a 114 falls back to when the encoder produced nothing in time (CL-5): in the
+/// foreground only the last live keyframe — never the pre-encoded "Phone locked" hold picture,
+/// which may linger after an inactive blip (Control Center, a banner) — and in the background
+/// modes the hold picture first, then the last live keyframe.
+enum ProjectionFallback {
+    static func keyframe(foreground: Bool, hold: () -> EncodedFrame?, live: () -> EncodedFrame?) -> EncodedFrame? {
+        foreground ? live() : (hold() ?? live())
+    }
+}
+
 /// Records the exact access units sent to the dash as a raw Annex-B `.h264` file (Android
 /// DUMP_H264, 600-AU cap; media-video.md §7.7, §15.8) — open it with ffprobe / ffplay.
 public final class H264WireDump: @unchecked Sendable {
@@ -883,6 +893,11 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
 
     private func applyForeground() {
         backgrounded = false
+        // Active again: a hold picture pre-encoded on the way out (Control Center, a banner, the
+        // app switcher, or a real lock) is stale now — drop it even when the engine never left
+        // the foreground mode, so no pull fallback can show "Phone locked" (CL-5). The next
+        // `.inactive` pre-encodes a fresh one.
+        shared.withLock { $0.holdFrames = []; $0.holdCanvas = nil; $0.holdIndex = 0 }
         let m = shared.current.mode
         guard m == .hold || m == .backgroundSoftware, canvas != nil else { return }
         encoder?.invalidate()
@@ -899,8 +914,11 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
         Log.i("VIDEO", "foreground → hardware encoder, IDR forced")
     }
 
+    /// The 114 fallback: in the foreground the last live IDR (never the "Phone locked" hold
+    /// picture, CL-5); in the background modes the hold picture first, then the last live IDR.
     private func holdOrLastKeyframe() -> EncodedFrame? {
-        nextHoldFrame() ?? liveKeyframeForCurrentCanvas()
+        ProjectionFallback.keyframe(foreground: shared.current.mode == .foreground,
+                                    hold: { nextHoldFrame() }, live: { liveKeyframeForCurrentCanvas() })
     }
 
     /// Round-robin over the hold IDRs (consecutive identical IDRs share an idr_pic_id); only when
