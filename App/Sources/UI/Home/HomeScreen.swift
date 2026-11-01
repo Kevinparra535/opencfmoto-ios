@@ -156,31 +156,60 @@ private struct HomeConnectButton: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        let phase = model.connection.phase
-        Button {
-            model.connection.toggle()
-        } label: {
-            Group {
-                if phase.showsStop {
-                    Label("Stop", systemImage: "stop.fill")
-                } else if let name = model.garage.selected?.name {
-                    Label {
-                        Text("Connect to \(name)")
-                    } icon: {
-                        Image(systemName: "power")
+        let connection = model.connection
+        let phase = connection.phase
+        // Stop follows the session, not only the phase: after a dash-not-found / lost-link / Local
+        // Network failure the phase is .error while the session keeps re-arming the link every 20 s
+        // (GPS, keep-awake, bike Wi-Fi and handlebar capture stay on) — Connect would start a second
+        // session instead of ending it (review finding CL-1). `toggle()` stops in that case too.
+        let showsStop = connection.isSessionActive || phase.showsStop
+        VStack(spacing: 10) {
+            Button {
+                connection.toggle()
+            } label: {
+                Group {
+                    if showsStop {
+                        Label("Stop", systemImage: "stop.fill")
+                    } else if let name = model.garage.selected?.name {
+                        Label {
+                            Text("Connect to \(name)")
+                        } icon: {
+                            Image(systemName: "power")
+                        }
+                    } else {
+                        Label("Connect", systemImage: "power")
                     }
-                } else {
-                    Label("Connect", systemImage: "power")
                 }
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .padding(.horizontal, 12)
             }
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
-            .padding(.horizontal, 12)
+            .buttonStyle(PrimaryButtonStyle())
+            .accessibilityHint(showsStop
+                               ? Text("Stops the dash link and everything it projects")
+                               : Text("Joins the bike Wi-Fi and shows the OpenCfMoto map on the dash"))
+
+            if phase == .error && connection.isSessionActive {
+                Button {
+                    retryNow()
+                } label: {
+                    Label("Retry now", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(TonalButtonStyle())
+                .accessibilityHint(Text("Tries the bike again right away instead of waiting for the automatic retry"))
+            }
         }
-        .buttonStyle(PrimaryButtonStyle())
-        .accessibilityHint(phase.showsStop
-                           ? Text("Stops the dash link and everything it projects")
-                           : Text("Joins the bike Wi-Fi and shows the OpenCfMoto map on the dash"))
+    }
+
+    /// The issue alert's Retry: a fresh attempt in the session's mode (own dash UI or mirror).
+    private func retryNow() {
+        let connection = model.connection
+        connection.dismissIssue()
+        if connection.mode == .mirror {
+            connection.startMirror()
+        } else {
+            connection.connect()
+        }
     }
 }
 
