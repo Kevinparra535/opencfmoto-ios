@@ -118,8 +118,12 @@ final class RouteOrchestratorTests: XCTestCase {
     func testCancellationStopsFurtherRequests() async {
         let client = NavFakeHTTPClient(Self.handler(valhalla: nil, osrmDirect: nil, osrmVia: nil, ors: nil))
         let orch = RouteOrchestrator(http: client)
-        let task = Task { await orch.alternatives(from: GeoPoint(lat: 44.43, lon: 26.10), to: GeoPoint(lat: 44.44, lon: 26.115), options: RouteOptions()) }
-        task.cancel()
+        let task = Task {
+            // Cancelled before its first request whatever the scheduling (a `task.cancel()` from here
+            // raced the task's start and failed under load in the full suite).
+            withUnsafeCurrentTask { $0?.cancel() }
+            return await orch.alternatives(from: GeoPoint(lat: 44.43, lon: 26.10), to: GeoPoint(lat: 44.44, lon: 26.115), options: RouteOptions())
+        }
         let r = await task.value
         XCTAssertEqual(r.routes.first?.label, "Direct")
         XCTAssertLessThanOrEqual(client.requests.count, 1)

@@ -25,15 +25,18 @@
 //   `.touch` → `ride.handleDashTouch`; `.stats` → `diagnostics`.
 // - Wi-Fi supervision: bike Wi-Fi lost → `.reconnecting` "waiting for bike Wi-Fi"; after 180 s
 //   → `.waitingForBike` "will resume when the bike is back"; Wi-Fi back → `link.start()` (clean
-//   restart). Auto-recovery off → stop instead.
+//   restart). Auto-recovery off → stop instead. With the SSID unknown, only the network the session
+//   joined counts as the bike's (same gateway + /24), and the loss stays in force until the dash
+//   streams on it (review CON:CL-3 / SEC-3).
 // - `startMirror()`: `services.mirror.start()` (+ setFit from settings) → mode `.mirror`, phase
 //   `.mirroring` (detail bike name) → same join/link flow with `frameSource: services.mirror.frameSource`;
 //   the UI presents the ReplayKit broadcast picker. Duplicate tap guard: ignore if already
 //   mirroring and a frame was sent < 15 s ago (toast text in `detail`).
 // - `stop()`: "Stop everything": link.stop(), projection/mirror stop, ride.projectionChanged(false),
 //   forget the Wi-Fi unless kept, `setPreferCellular(false)`, phase `.stopped`, detail "".
-// - Auto-connect at launch / foreground (§7.5.3): settings.autoConnect && a saved bike && not busy
-//   → after 1.2 s `connect()` once per process (latched); iOS cannot scan Wi-Fi: "range unknown".
+// - Auto-connect at launch / foreground (§7.5.3, iOS §11.8): settings.autoConnect && a saved bike &&
+//   not busy → after 1.2 s, only if iOS already joined the bike Wi-Fi (no hotspot prompt at every
+//   launch), once per process (latched); a quiet failure retries after the next background (§13.12).
 // - Every phase change: `ride.linkPhaseChanged`, `controls.linkStreamingChanged`, log with the
 //   Android labels (`ConnectionPhase` EN log label).
 //
@@ -50,7 +53,10 @@
 // - Errors that the link re-arms by itself (dash not found, lost link, Local Network denied) keep
 //   the session alive while auto-recovery is on; terminal errors end it (Wi-Fi stays associated
 //   until Stop, like Android).
-// - Auto-connect never prompts: a free-flavor manual join or a failed join ends quietly.
+// - Auto-connect never prompts: a free-flavor manual join or a failed join ends quietly (idle, retried
+//   on the next foreground after a background).
+// - Stop must stay reachable: `isSessionActive` is true for every session, including an .error phase
+//   whose link keeps re-arming (the Local Network issue is raised once per such episode).
 
 import Foundation
 import Observation
@@ -558,8 +564,7 @@ public final class ConnectionModel {
                     return current
                 }
                 if s.trigger == .auto {
-                    Log.i("APP", "→ Auto-connect: join '\(s.qr.ssid)' in Settings \u{25B8} Wi-Fi, then tap Connect")
-                    endSession(.idle, detail: "", issue: nil)
+                    endAutoConnectQuietly("join '\(s.qr.ssid)' in Settings \u{25B8} Wi-Fi, then tap Connect")
                     return nil
                 }
                 return await awaitManualJoin(gen, message: SessionText.manualJoinMessage(ssid: s.qr.ssid, l), baseline: current)
