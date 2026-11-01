@@ -93,6 +93,14 @@ public final class RideModel {
     public private(set) var speedText: String = ""
     /// Status of the location permission / GPS for the UI ("Waiting for GPS…").
     public private(set) var gpsStatus: String = ""
+    /// Logs ▸ diagnostics (MP-7): the access units sent to the dash are being recorded to
+    /// `dashVideoRecordingURL` (raw Annex-B H.264, the first `dashVideoRecordingFrameLimit`) — the
+    /// day-one wire dump of media-video.md §15.8.
+    public private(set) var isRecordingDashVideo = false
+    /// The current / last recording (share it once recording is off).
+    public private(set) var dashVideoRecordingURL: URL?
+    /// Access units kept per recording (Android DUMP_H264's cap).
+    public static let dashVideoRecordingFrameLimit = 600
 
     // MARK: Internal state
 
@@ -113,6 +121,9 @@ public final class RideModel {
     @ObservationIgnored private var compassDeg: Double?
     @ObservationIgnored private var lastCompassModelAt: TimeInterval = -.greatestFiniteMagnitude
     @ObservationIgnored private var negotiatedCanvas: VideoCanvas?
+    /// The canvas the link assumes for this own-UI session before REQ 16 (learned / 800×384): the
+    /// dash UI is laid out (and the hold picture pre-encoded) for it until the dash negotiates.
+    @ObservationIgnored private var sessionExpectedCanvas: VideoCanvas?
     @ObservationIgnored private var identifiedProfile: BikeProfile?
     @ObservationIgnored private var earlyProfile: BikeProfile = .legacy
     @ObservationIgnored private var linkBanner: String?
@@ -139,6 +150,8 @@ public final class RideModel {
     @ObservationIgnored private var placesListener: UUID?
     @ObservationIgnored private let tileRefreshPending = Locked(false)
     @ObservationIgnored private var scenePhase: AppScenePhase = .active
+    /// Which source the running recording is attached to (true = mirror relay).
+    @ObservationIgnored private var dashVideoSourceIsMirror: Bool?
 
     public init(core: AppCore, settings: SettingsModel, navigation: NavigationModel, trips: TripsModel) {
         self.core = core
@@ -200,6 +213,56 @@ public final class RideModel {
         updateLoops()
     }
 
+    // MARK: Dash video recording (diagnostics)
+
+    /// Starts / stops recording what is sent to the dash (MP-7): the own-UI projection, or the
+    /// mirror relay during a mirror session. Each recording is a new file in the exports folder.
+    public func setDashVideoRecording(_ on: Bool) {
+        guard on != isRecordingDashVideo else { return }
+        if on {
+            startDashVideoRecording(mirror: sessionIsMirror)
+        } else {
+            stopDashVideoRecording()
+            Log.i("RIDE", "dash video recording stopped (\(dashVideoRecordingURL?.lastPathComponent ?? "-"))")
+        }
+    }
+
+    private func startDashVideoRecording(mirror: Bool) {
+        let services = core.services
+        let url = services.files.exportsDirectory.appendingPathComponent("opencfmoto-wire-\(Self.fileStamp(services.now())).h264")
+        do {
+            try FileManager.default.createDirectory(at: services.files.exportsDirectory, withIntermediateDirectories: true)
+            if mirror {
+                try services.mirror.startWireDump(to: url, maxFrames: Self.dashVideoRecordingFrameLimit)
+            } else {
+                try services.projection.startWireDump(to: url, maxFrames: Self.dashVideoRecordingFrameLimit)
+            }
+        } catch {
+            Log.w("RIDE", "dash video recording unavailable: \(error)")
+            return
+        }
+        dashVideoSourceIsMirror = mirror
+        dashVideoRecordingURL = url
+        isRecordingDashVideo = true
+        Log.i("RIDE", "recording the dash video stream (\(mirror ? "mirror" : "own UI"), first \(Self.dashVideoRecordingFrameLimit) frames) → \(url.lastPathComponent)")
+    }
+
+    private func stopDashVideoRecording() {
+        if let mirror = dashVideoSourceIsMirror {
+            if mirror { core.services.mirror.stopWireDump() } else { core.services.projection.stopWireDump() }
+        }
+        dashVideoSourceIsMirror = nil
+        isRecordingDashVideo = false
+    }
+
+    /// "20261101-142530" (POSIX, local time) for file names.
+    private static func fileStamp(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyyMMdd-HHmmss"
+        return f.string(from: date)
+    }
+
     /// Starts GPS + navigation session use without a dash (preview / testing on the phone).
     public func startLocationPreview() {
         previewRequests += 1
@@ -235,9 +298,26 @@ public final class RideModel {
         sessionIsMirror = active && mirror
         guard changed else { return }
         autoLogSuppressed = false
+        if isRecordingDashVideo, active, let wasMirror = dashVideoSourceIsMirror, wasMirror != sessionIsMirror {
+            // The recording follows what is sent to the dash: a new file on the other source.
+            stopDashVideoRecording()
+            startDashVideoRecording(mirror: sessionIsMirror)
+        }
         if active {
             encoderPlan.adaptive.reset()
             lastPushedParameters = nil
+            sessionExpectedCanvas = sessionIsMirror ? nil : expectedCanvasForSelectedBike()
+            flushModel()
+            // Pre-encode the hold picture right away (the hardware encoder is available now): a
+            // rider who taps Connect and pockets the phone before the dash's REQ 16 still gets a
+            // picture (MP-2). Refreshed when the app leaves the foreground.
+            if !sessionIsMirror, scenePhase == .active { requestHoldPicture() }
+        } else if negotiatedCanvas != nil || identifiedProfile != nil || sessionExpectedCanvas != nil {
+            // Ended before the first frame (no projectionChanged(false)): back to the preview layout.
+            negotiatedCanvas = nil
+            identifiedProfile = nil
+            sessionExpectedCanvas = nil
+            flushModel()
         }
         applyLocationPolicy()
         applyIdleTimer()
@@ -255,6 +335,7 @@ public final class RideModel {
         } else {
             negotiatedCanvas = nil
             identifiedProfile = nil
+            if !sessionActive { sessionExpectedCanvas = nil }
             linkBanner = nil
             flushModel()
         }
@@ -265,12 +346,26 @@ public final class RideModel {
     /// REQ 16 negotiated a canvas.
     func canvasNegotiated(_ canvas: VideoCanvas) {
         negotiatedCanvas = canvas
+        linkBanner = nil // the dash is talking again: no "Reconnecting…" in its next picture
         flushModel() // the next frame must be laid out for exactly this canvas
     }
 
-    /// Dash identified: profile default margins / touch support.
+    /// The own-UI encoder was prepared at `canvas` (projection port, MP-6). Usually the same canvas
+    /// as `canvasNegotiated`; it also covers the link's guard paths that never emit a canvas event:
+    /// a REQ 16 without a usable size (the previous canvas is kept and replied) and 112 without 16.
+    func canvasPrepared(_ canvas: VideoCanvas) {
+        guard sessionActive, !sessionIsMirror, canvas.width >= 16, canvas.height >= 16 else { return }
+        guard negotiatedCanvas.map({ $0.width != canvas.width || $0.height != canvas.height }) ?? true else { return }
+        Log.i("RIDE", "laying the dash UI out for the prepared canvas \(canvas.width)x\(canvas.height)")
+        canvasNegotiated(canvas)
+    }
+
+    /// Dash identified: profile default margins / touch support. CLIENT_INFO also means the dash
+    /// is back after a reconnect — well before it re-opens media and asks for the resync IDR — so
+    /// the "Reconnecting…" banner goes now and is not in the first picture after the reconnect.
     func profileIdentified(_ profile: BikeProfile) {
         identifiedProfile = profile
+        linkBanner = nil
         flushModel()
         pushEncoderPlan(force: false)
     }
@@ -296,11 +391,12 @@ public final class RideModel {
         setNeedsModelUpdate()
     }
 
-    /// Link state for TripAutoLogPolicy.
+    /// Link state for TripAutoLogPolicy and the idle timer (no screen kept awake while parked).
     func linkPhaseChanged(_ phase: ConnectionPhase) {
         guard phase != linkPhase else { return }
         linkPhase = phase
         evaluateTripAutoLog()
+        applyIdleTimer()
     }
 
     func scenePhaseChanged(_ phase: AppScenePhase) {
@@ -310,8 +406,9 @@ public final class RideModel {
         switch phase {
         case .inactive:
             // Leaving the foreground (not coming back from the background): pre-encode the hold
-            // picture while the hardware encoder is still available.
-            if previous == .active, isProjecting { projection.prepareHoldPicture() }
+            // picture while the hardware encoder is still available — for the whole own-UI
+            // session, also before the dash negotiated (MP-2: REQ 16 may come while locked).
+            if previous == .active, sessionActive, !sessionIsMirror { requestHoldPicture() }
         case .background:
             projection.enterBackground()
         case .active:
@@ -320,13 +417,28 @@ public final class RideModel {
         }
     }
 
+    /// Asks the projection to pre-encode the hold picture at the negotiated canvas, or the
+    /// session's expected one (the dash UI is laid out for it, so the picture is not stretched).
+    private func requestHoldPicture() {
+        if updateScheduled { flushModel() } // the hold provider renders the current model
+        let canvas = negotiatedCanvas ?? sessionExpectedCanvas ?? .defaultLandscape
+        core.services.projection.prepareHoldPicture(expectedCanvas: canvas)
+    }
+
+    /// The canvas the link will assume for the selected bike before REQ 16.
+    private func expectedCanvasForSelectedBike() -> VideoCanvas {
+        let learned = core.garage.selected.flatMap { core.garage.qr(for: $0.id) }
+            .flatMap { core.dashMemory.learnedCanvas(forSSID: $0.ssid) }
+        return VideoCanvas.expectedSessionCanvas(learned: learned)
+    }
+
     /// Location permission changed (PermissionsModel → AppModel).
     func locationPermissionChanged(_ permission: LocationPermission) {
         applyLocationPolicy()
     }
 
     private func previewCanvasChanged() {
-        guard negotiatedCanvas == nil else { return }
+        guard negotiatedCanvas == nil, sessionExpectedCanvas == nil else { return }
         flushModel()
     }
 
@@ -354,6 +466,9 @@ public final class RideModel {
         }
         projection.setTileURLTemplate(cachedSettings.tileURLTemplate)
         projection.setThermalCapsEnabled(cachedSettings.powerMode != .auto)
+        projection.onCanvasPrepared = { @Sendable [weak self] canvas in
+            Task { @MainActor [weak self] in self?.canvasPrepared(canvas) }
+        }
     }
 
     private func wireLocation() {
@@ -429,11 +544,22 @@ public final class RideModel {
         let key = Self.routeKey(snap.route)
         if key != lastRouteKey {
             lastRouteKey = key
-            if let route = snap.route, route.points.count >= 2 {
-                core.services.projection.prefetchCorridor(Self.sampled(route.points.map(\.point), max: 400))
+            if let route = snap.route {
+                // Route points come from untrusted GPX files / imports: never hand NaN, ±∞ or
+                // out-of-range coordinates to the tile maths (SEC-1).
+                let corridor = Self.corridorPoints(route)
+                if corridor.count >= 2 {
+                    core.services.projection.prefetchCorridor(Self.sampled(corridor, max: 400))
+                }
             }
         }
         setNeedsModelUpdate()
+    }
+
+    /// The usable vertices of a route for the tile-corridor prefetch: finite, latitude −90…90,
+    /// longitude −180…180 (`MapProjection.isUsable`).
+    nonisolated static func corridorPoints(_ route: Route) -> [GeoPoint] {
+        Array(route.points.lazy.map(\.point).filter(MapProjection.isUsable))
     }
 
     private func handleNavEffect(_ effect: NavEffect) {
@@ -482,6 +608,8 @@ public final class RideModel {
                               lowPowerMode: core.services.system.isLowPowerModeEnabled) {
             pushEncoderPlan(force: false)
         }
+        // The system port also reports appearance changes here: theme AUTO follows dark mode.
+        setNeedsModelUpdate()
     }
 
     // MARK: - Dash model
@@ -505,11 +633,13 @@ public final class RideModel {
 
     private func buildModel() -> DashModel {
         let s = cachedSettings
-        let canvas = negotiatedCanvas.map(DashModel.canvasSize) ?? previewCanvas.size
+        let canvas = (negotiatedCanvas ?? sessionExpectedCanvas).map(DashModel.canvasSize) ?? previewCanvas.size
         let profileDefault = (identifiedProfile ?? earlyProfile).defaultMargins
         let margins = CanvasFit.effectiveMargins(s.screenMargins, profileDefault: profileDefault)
         let wall = core.services.now()
-        let night = nightMonitor.evaluate(theme: s.map.theme, phoneDarkMode: false, date: wall, now: clock.now())
+        // AUTO = phone in dark mode OR 19:00–06:59 (navigation-dash §10.3, app-features §2.2).
+        let night = nightMonitor.evaluate(theme: s.map.theme, phoneDarkMode: core.services.system.isSystemDarkMode,
+                                          date: wall, now: clock.now())
         let lap = core.navigation.lapCard().map { DashLapTimer(title: $0.current, meta: $0.meta) }
         // The clock chip shows HH:mm: a minute-aligned date keeps the model stable within a minute.
         let minute = Date(timeIntervalSince1970: (wall.timeIntervalSince1970 / 60).rounded(.down) * 60)
@@ -654,8 +784,12 @@ public final class RideModel {
         if status != gpsStatus { gpsStatus = status }
     }
 
+    /// "Keep screen on while projecting" (session-network §11.4) holds only while the dash can be
+    /// linked: not while the session is parked waiting for the bike (§11.6, the iOS battery park)
+    /// or sits in an error. Ride Mode always keeps the screen awake.
     private func applyIdleTimer() {
-        let keepAwake = isRideModeActive || (sessionActive && cachedSettings.keepScreenOn)
+        let linked = sessionActive && linkPhase != .waitingForBike && linkPhase != .error
+        let keepAwake = isRideModeActive || (linked && cachedSettings.keepScreenOn)
         let system = core.services.system
         if system.isIdleTimerDisabled != keepAwake { system.isIdleTimerDisabled = keepAwake }
     }
@@ -946,9 +1080,12 @@ public final class RideModel {
                                        learnedCanvas: core.dashMemory.learnedCanvas(forSSID: qr.ssid))
     }
 
-    private static func routeKey(_ route: Route?) -> String? {
+    /// Identity of a route for "apply once" work (corridor prefetch). Never traps on a corrupt
+    /// route: the distance is converted with Kotlin `toInt()` semantics (NaN → 0, saturating).
+    nonisolated static func routeKey(_ route: Route?) -> String? {
         guard let r = route, let first = r.points.first, let last = r.points.last else { return nil }
-        return "\(r.points.count)|\(first.lat),\(first.lon)|\(last.lat),\(last.lon)|\(Int(r.distanceM))|\(r.label)"
+        let metres = NavNumberFormat.truncateToInt(r.distanceM)
+        return "\(r.points.count)|\(first.lat),\(first.lon)|\(last.lat),\(last.lon)|\(metres)|\(r.label)"
     }
 
     /// At most `max` points, evenly spaced, always keeping the last one.

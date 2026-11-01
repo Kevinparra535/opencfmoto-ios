@@ -58,6 +58,18 @@ public protocol SystemControlling: AnyObject {
     func checkLocalNetworkAccess() async -> LocalNetworkAccessState
     /// Triggers the Local Network prompt if needed and waits for the answer (bounded).
     func requestLocalNetworkAccess() async -> LocalNetworkAccessState
+    /// ADDITION (fix-media, SPEC:CL-10): the phone's SYSTEM appearance is dark (Settings ▸
+    /// Display & Brightness, including "Automatic" after sunset) — read from the screen traits,
+    /// unaffected by the app's own forced dark scheme. Map theme AUTO = this OR 19:00–06:59
+    /// (navigation-dash §10.3). Implementations should call `onPowerStateChange` when it changes
+    /// (the ride re-evaluates night mode then; it also re-reads it at least once a minute).
+    /// Default (protocol extension): false.
+    var isSystemDarkMode: Bool { get }
+}
+
+public extension SystemControlling {
+    /// Conformers that cannot tell report a light system appearance (AUTO = clock only).
+    var isSystemDarkMode: Bool { false }
 }
 
 /// Where the app keeps its files.
@@ -268,6 +280,34 @@ public protocol DashProjecting: AnyObject, Sendable {
     func prefetchCorridor(_ points: [GeoPoint])
     func setTileURLTemplate(_ template: String)
     func clearTileCache()
+    /// ADDITION (fix-media, MED:MP-6): called (any thread) with the canvas the encoder was just
+    /// prepared at by the link (`VideoFrameSource.prepare`: REQ 16, a REQ 16 without a usable size
+    /// that keeps the previous canvas, or 112 without any 16). The dash UI must be laid out for
+    /// exactly this canvas (RLY 17, encoder and layout agree). Default: never called.
+    var onCanvasPrepared: (@Sendable (VideoCanvas) -> Void)? { get set }
+    /// ADDITION (fix-media, MED:MP-2): pre-encode the hold picture NOW (the app is about to leave
+    /// the foreground: the hardware encoder is still available) at the canvas the dash negotiated —
+    /// or, before any REQ 16, at `expectedCanvas` (the session's learned / default canvas), so a
+    /// dash that negotiates while the phone is locked still gets a picture. Default: forwards to
+    /// `prepareHoldPicture()`.
+    func prepareHoldPicture(expectedCanvas: VideoCanvas)
+    /// ADDITION (fix-media, MED:MP-7): records every access unit served to the dash as a raw
+    /// Annex-B `.h264` file (the first `maxFrames`) — the day-one diagnostic of media-video.md
+    /// §15.8, "shareable from the app". Default: throws (unsupported).
+    func startWireDump(to url: URL, maxFrames: Int) throws
+    /// Closes the recording (the file keeps what was written).
+    func stopWireDump()
+}
+
+public extension DashProjecting {
+    var onCanvasPrepared: (@Sendable (VideoCanvas) -> Void)? {
+        get { nil }
+        set {}
+    }
+
+    func prepareHoldPicture(expectedCanvas: VideoCanvas) { prepareHoldPicture() }
+    func startWireDump(to url: URL, maxFrames: Int) throws { throw CocoaError(.featureUnsupported) }
+    func stopWireDump() {}
 }
 
 // MARK: - Mirror (ReplayKit broadcast extension → App Group socket → host)
@@ -282,6 +322,15 @@ public protocol MirrorHosting: AnyObject, Sendable {
     func start() throws
     func stop()
     func setFit(_ fit: ScreenFit, margins: ScreenMargins)
+    /// ADDITION (fix-media, MED:MP-7): records every access unit the relay serves to the dash (raw
+    /// Annex-B `.h264`, the first `maxFrames`). Default: throws (unsupported).
+    func startWireDump(to url: URL, maxFrames: Int) throws
+    func stopWireDump()
+}
+
+public extension MirrorHosting {
+    func startWireDump(to url: URL, maxFrames: Int) throws { throw CocoaError(.featureUnsupported) }
+    func stopWireDump() {}
 }
 
 // MARK: - The bundle

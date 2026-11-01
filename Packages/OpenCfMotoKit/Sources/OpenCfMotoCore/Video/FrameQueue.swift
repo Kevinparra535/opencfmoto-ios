@@ -8,7 +8,10 @@
 // - Keyframe gate: after `resynchronize()` (REQ 112) or an overflow, non-keyframes are dropped
 //   until the next keyframe arrives, so the first frame the dash decodes is always an IDR.
 // - The most recent keyframe is cached (`lastKeyframe`) so a background "hold" can re-send a
-//   complete picture when the encoder is unavailable (never re-send P-frames).
+//   complete picture when the encoder is unavailable (never re-send P-frames). The cache belongs
+//   to one media session and one canvas: `reopen()` clears it and producers call
+//   `invalidateKeyframe()` when the canvas changes, so a stale or wrong-size IDR is never re-sent
+//   (MP-3; RLY 17 and the encoded size must agree, media-video.md §9.2).
 
 import Foundation
 
@@ -139,12 +142,18 @@ public final class FrameQueue: @unchecked Sendable {
         for w in ws { w.cont.resume(returning: nil) }
     }
 
-    /// Re-opens a closed queue (new media session) with the gate closed.
+    /// Re-opens a closed queue (new media session) with the gate closed and no cached keyframe.
     public func reopen() {
         lock.lock()
         closed = false
         gateClosed = true
         items.removeAll()
+        _lastKeyframe = nil
         lock.unlock()
+    }
+
+    /// Forgets the cached keyframe (canvas change, session end): it must never be re-sent.
+    public func invalidateKeyframe() {
+        lock.lock(); _lastKeyframe = nil; lock.unlock()
     }
 }

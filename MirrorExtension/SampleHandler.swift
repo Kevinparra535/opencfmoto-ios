@@ -45,7 +45,9 @@ final class SampleHandler: RPBroadcastSampleHandler {
             finish(with: MirrorMessage.appGroupMissing)
             return
         }
-        let source = MirrorFrameSource(configuration: MirrorRelayConfig(canvas: .defaultLandscape))
+        // No canvas until the host's CONFIG: an IDR encoded at a guessed 800×384 could reach a dash
+        // that negotiated another size (MP-3). The newest screen frame waits for it.
+        let source = MirrorFrameSource(configuration: nil)
         let client = MirrorRelayClient(socketPath: path)
         source.onFrame = { [weak client] frame in client?.send(frame: frame) }
         client.onConfig = { [weak source] config in source?.update(configuration: config) }

@@ -294,10 +294,14 @@ public enum DashStrings {
 
 /// Small formatting helpers for what the dash formats itself (speed gauge, clock, night mode).
 public enum DashFormat {
-    /// Java `Math.round`-style HALF_UP rounding (`floor(x + 0.5)`).
+    /// Java `Math.round`-style HALF_UP rounding (`floor(x + 0.5)`), saturating like Java (0 for
+    /// NaN / ±∞) — values derived from untrusted routes must never trap.
     public static func roundHalfUp(_ x: Double) -> Int {
         guard x.isFinite else { return 0 }
-        return Int((x + 0.5).rounded(.down))
+        let r = (x + 0.5).rounded(.down)
+        if r >= 9.2e18 { return Int.max }
+        if r <= -9.2e18 { return Int.min }
+        return Int(r)
     }
 
     /// `formatSpeed` (GpxNav.kt): `"%.0f"` of km/h (metric) or km/h·0.621371 (imperial), computed in

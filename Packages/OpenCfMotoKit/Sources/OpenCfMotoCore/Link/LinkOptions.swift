@@ -110,3 +110,16 @@ public struct LinkOptions: Sendable {
 
     public init() {}
 }
+
+public extension VideoCanvas {
+    /// The canvas a link session assumes before the dash's first REQ 16 (and prepares for a 112
+    /// without 16): the learned canvas of this SSID (rounded `& 0xFFF0`) when plausible, else
+    /// Android's 800×384 default. The app pre-encodes the background hold picture and lays the
+    /// dash UI out at this canvas while a session waits for the dash (MP-2).
+    static func expectedSessionCanvas(learned: VideoCanvas?) -> VideoCanvas {
+        guard let l = learned, (16 ... 8192).contains(l.requestedWidth), (16 ... 8192).contains(l.requestedHeight) else {
+            return .defaultLandscape
+        }
+        return .rounded(requestedWidth: l.requestedWidth, requestedHeight: l.requestedHeight, requestedFps: l.requestedFps)
+    }
+}

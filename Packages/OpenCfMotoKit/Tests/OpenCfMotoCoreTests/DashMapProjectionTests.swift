@@ -188,6 +188,60 @@ final class DashMapProjectionTests: XCTestCase {
         XCTAssertNil(MapProjection.fitting([a], in: .zero, viewport: vp))
     }
 
+    /// SEC-1 / INT:SEC-1-tiles: a corrupt GPX or import (NaN, ±∞, 1e300, lat 200) can reach the
+    /// camera (overview fitting, previewing a place). Nothing may trap: bad points are ignored by
+    /// `fitting` and an unusable camera has no visible tiles.
+    func testCorruptCoordinatesNeverTrap() throws {
+        let good = [GeoPoint(lat: 45.10, lon: 24.40), GeoPoint(lat: 45.20, lon: 24.60)]
+        let poison: [GeoPoint] = [GeoPoint(lat: .nan, lon: 24.5), GeoPoint(lat: 45.1, lon: .infinity),
+                                  GeoPoint(lat: 45.1, lon: 1e300), GeoPoint(lat: 200, lon: 24.5),
+                                  GeoPoint(lat: 45.1, lon: -1e20), GeoPoint(lat: -.infinity, lon: .nan)]
+        let rect = DashRect(x: 8, y: 64, width: 732, height: 146)
+        let clean = try XCTUnwrap(MapProjection.fitting(good, in: rect, viewport: vp))
+        let mixed = try XCTUnwrap(MapProjection.fitting(poison + good + poison, in: rect, viewport: vp))
+        XCTAssertEqual(mixed, clean, "bad points are ignored")
+        XCTAssertNil(MapProjection.fitting(poison, in: rect, viewport: vp))
+        XCTAssertNil(MapProjection.fitting(good, in: DashRect(x: 0, y: 0, width: .nan, height: 100), viewport: vp))
+        XCTAssertNil(MapProjection.fitting(good, in: DashRect(x: 0, y: 0, width: .infinity, height: 100), viewport: vp))
+
+        let c = GeoPoint(lat: 45.1, lon: 24.5)
+        let cameras: [(GeoPoint, Double, Double)] = [
+            (GeoPoint(lat: .nan, lon: 24.5), 16, 0), (GeoPoint(lat: 45.1, lon: .infinity), 16, 0),
+            (GeoPoint(lat: 45.1, lon: 1e300), 16, 0), (GeoPoint(lat: 45.1, lon: -1e20), 16, 0),
+            (c, .nan, 0), (c, .infinity, 0), (c, -.infinity, 0), (c, 16, .nan), (c, 16, .infinity),
+        ]
+        for (center, zoom, bearing) in cameras {
+            let p = MapProjection(center: center, zoom: zoom, bearingDeg: bearing, viewport: vp)
+            XCTAssertEqual(p.visibleTiles(), [], "\(center) z\(zoom) b\(bearing)")
+            XCTAssertEqual(p.visibleTiles(overscan: 64), [])
+        }
+        XCTAssertFalse(MapProjection(center: c, zoom: 16, viewport: vp).visibleTiles(overscan: .nan).isEmpty)
+        XCTAssertEqual(MapProjection(center: c, zoom: 16, viewport: DashSize(width: .nan, height: 384)).visibleTiles(), [])
+        // An absurd zoom never reaches an unchecked conversion (its tile size overflows: no tiles);
+        // a deep over-zoom still draws.
+        XCTAssertEqual(MapProjection(center: c, zoom: 1e300, viewport: vp).visibleTiles(), [])
+        XCTAssertFalse(MapProjection(center: c, zoom: 24, viewport: vp).visibleTiles().isEmpty)
+        // A centre just past the antimeridian (look-ahead offset) still draws, wrapped.
+        let past = MapProjection(center: GeoPoint(lat: 0, lon: 180.0005), zoom: 10, viewport: vp).visibleTiles()
+        XCTAssertFalse(past.isEmpty)
+        XCTAssertTrue(past.allSatisfy { (0 ..< 1024).contains($0.x) })
+        // A huge overscan is refused instead of allocating millions of tiles.
+        XCTAssertEqual(MapProjection(center: c, zoom: 16, viewport: vp).visibleTiles(overscan: 1e9), [])
+
+        XCTAssertEqual(MapProjection.tileZoom(for: .nan), 0)
+        XCTAssertEqual(MapProjection.tileZoom(for: .infinity), 0)
+        XCTAssertEqual(MapProjection.tileZoom(for: 1e300), 19)
+        XCTAssertEqual(MapProjection.tileZoom(for: -1e300), 0)
+        XCTAssertEqual(MapProjection.tileZoom(for: 17.3), 17)
+        XCTAssertTrue(MapProjection.isUsable(GeoPoint(lat: 90, lon: -180)))
+        XCTAssertFalse(MapProjection.isUsable(GeoPoint(lat: 90.0001, lon: 0)))
+        XCTAssertFalse(MapProjection.isUsable(GeoPoint(lat: 0, lon: .nan)))
+        XCTAssertEqual(DashFormat.roundHalfUp(1e300), Int.max)
+        XCTAssertEqual(DashFormat.roundHalfUp(-1e300), Int.min)
+        XCTAssertEqual(DashFormat.roundHalfUp(.nan), 0)
+        XCTAssertEqual(DashFormat.roundHalfUp(2.5), 3)
+    }
+
     func testGeoHelpers() {
         // GpxNavTest vectors: 0.01° of latitude ≈ 1111.95 m
         XCTAssertEqual(DashGeo.distanceM(GeoPoint(lat: 0, lon: 0), GeoPoint(lat: 0.01, lon: 0)), 1111.9493, accuracy: 0.001)

@@ -90,10 +90,24 @@ public struct MapProjection: Hashable, Sendable {
     /// Ground resolution at the camera centre.
     public var metersPerPixel: Double { Self.metersPerPixel(latitude: center.lat, zoom: zoom, tileSize: tileSize) }
 
-    /// Integer tile zoom used for drawing: floor(zoom) clamped to 0…maxTileZoom.
+    /// Integer tile zoom used for drawing: floor(zoom) clamped to 0…maxTileZoom (0 for a
+    /// non-finite zoom — never traps).
     public static func tileZoom(for zoom: Double, maxTileZoom: Int = defaultMaxTileZoom) -> Int {
-        min(maxTileZoom, max(0, Int((zoom + 1e-9).rounded(.down))))
+        let top = max(0, maxTileZoom)
+        guard zoom.isFinite else { return 0 }
+        let z = min(Double(top), max(0, (zoom + 1e-9).rounded(.down)))
+        return Int(z)
     }
+
+    /// A geo point the projection maths can use: finite, latitude in −90…90, longitude in −180…180.
+    /// Route and place coordinates come from untrusted files (GPX, map-data imports): anything else
+    /// is skipped by `fitting` and makes `visibleTiles` empty instead of trapping (SEC-1).
+    public static func isUsable(_ p: GeoPoint) -> Bool {
+        p.lat.isFinite && p.lon.isFinite && (-90 ... 90).contains(p.lat) && (-180 ... 180).contains(p.lon)
+    }
+
+    /// Largest tile count `visibleTiles` returns (a dash canvas needs a few dozen).
+    static let maxVisibleTiles = 4_096
 
     // MARK: Transforms
 
@@ -154,23 +168,35 @@ public struct MapProjection: Hashable, Sendable {
 
     /// Tiles (at `tileZoom`) covering the whole rotated viewport (plus `overscan` px), sorted by
     /// row then column. Rows outside the world are skipped; columns wrap around the antimeridian.
+    /// Empty (never a trap) for a non-finite or absurd camera (centre, zoom, bearing, size). The
+    /// centre may sit slightly past ±180° (a look-ahead offset near the antimeridian): columns wrap.
     public func visibleTiles(maxTileZoom: Int = defaultMaxTileZoom, overscan: Double = 0) -> [DashMapTile] {
+        guard center.lat.isFinite, center.lon.isFinite, zoom.isFinite, bearingDeg.isFinite, tileSize.isFinite,
+              viewport.width.isFinite, viewport.height.isFinite, anchor.x.isFinite, anchor.y.isFinite else { return [] }
         let tz = Self.tileZoom(for: zoom, maxTileZoom: maxTileZoom)
         let tilePx = tileSize * pow(2, zoom - Double(tz))
-        guard tilePx > 0, viewport.width > 0, viewport.height > 0 else { return [] }
+        guard tilePx.isFinite, tilePx > 0, viewport.width > 0, viewport.height > 0 else { return [] }
         let inv = screenToMap
-        let o = overscan
+        let o = overscan.isFinite ? overscan : 0
         let corners = [DashPoint(-o, -o), DashPoint(viewport.width + o, -o),
                        DashPoint(viewport.width + o, viewport.height + o), DashPoint(-o, viewport.height + o)].map(inv.apply)
         let minX = corners.map(\.x).min()!, maxX = corners.map(\.x).max()!
         let minY = corners.map(\.y).min()!, maxY = corners.map(\.y).max()!
         let c = centerWorld
         let n = 1 << tz
-        let tx0 = Int(((c.x + minX) / tilePx).rounded(.down))
-        let tx1 = Int(((c.x + maxX) / tilePx - 1e-9).rounded(.down))
-        let ty0 = max(0, Int(((c.y + minY) / tilePx).rounded(.down)))
-        let ty1 = min(n - 1, Int(((c.y + maxY) / tilePx - 1e-9).rounded(.down)))
+        // Tile indices as doubles first: only convert values that fit an Int comfortably.
+        let fx0 = ((c.x + minX) / tilePx).rounded(.down)
+        let fx1 = ((c.x + maxX) / tilePx - 1e-9).rounded(.down)
+        let fy0 = ((c.y + minY) / tilePx).rounded(.down)
+        let fy1 = ((c.y + maxY) / tilePx - 1e-9).rounded(.down)
+        let limit = Double(1 << 40)
+        guard [fx0, fx1, fy0, fy1].allSatisfy({ $0.isFinite && abs($0) < limit }) else { return [] }
+        let tx0 = Int(fx0), tx1 = Int(fx1)
+        let ty0 = max(0, Int(fy0))
+        let ty1 = min(n - 1, Int(fy1))
         guard ty0 <= ty1, tx0 <= tx1 else { return [] }
+        let columns = tx1 - tx0 + 1, rows = ty1 - ty0 + 1 // each < 2^41: the checks below cannot overflow
+        guard columns <= Self.maxVisibleTiles, rows <= Self.maxVisibleTiles, columns * rows <= Self.maxVisibleTiles else { return [] }
         var out: [DashMapTile] = []
         out.reserveCapacity((ty1 - ty0 + 1) * (tx1 - tx0 + 1))
         for ty in ty0 ... ty1 {
@@ -188,11 +214,14 @@ public struct MapProjection: Hashable, Sendable {
     /// Zoom (and centre) that fits `points` inside `rect` (screen px, north-up), like osmdroid
     /// `zoomToBoundingBox`: zoom = min(lon zoom, lat zoom) clamped to minZoom…maxZoom, the box
     /// centre (Mercator midpoint) placed at the rect centre. A single point (or zero span) is
-    /// centred at `singlePointZoom`. Returns nil for no points or an empty rect.
-    public static func fitting(_ points: [GeoPoint], in rect: DashRect, viewport: DashSize, anchor: DashPoint? = nil,
+    /// centred at `singlePointZoom`. Returns nil for no points or an empty rect. Unusable points
+    /// (`isUsable`: NaN, ±∞, out of range — from a corrupt GPX or import) are ignored.
+    public static func fitting(_ allPoints: [GeoPoint], in rect: DashRect, viewport: DashSize, anchor: DashPoint? = nil,
                                tileSize: Double = 256, minZoom: Double = 5, maxZoom: Double = 20,
                                singlePointZoom: Double = 16) -> MapProjection? {
-        guard !points.isEmpty, rect.width > 0, rect.height > 0 else { return nil }
+        let points = allPoints.filter(isUsable)
+        guard !points.isEmpty, rect.width > 0, rect.height > 0, rect.width.isFinite, rect.height.isFinite,
+              rect.midX.isFinite, rect.midY.isFinite, tileSize.isFinite, tileSize > 0 else { return nil }
         let w0 = points.map { worldPoint($0, zoom: 0, tileSize: 1) } // 0…1 coordinates
         let minX = w0.map(\.x).min()!, maxX = w0.map(\.x).max()!
         let minY = w0.map(\.y).min()!, maxY = w0.map(\.y).max()!
@@ -206,6 +235,7 @@ public struct MapProjection: Hashable, Sendable {
             zoom = min(zx, zy)
         }
         zoom = min(maxZoom, max(minZoom, zoom))
+        guard zoom.isFinite else { return nil }
         let anchorPt = anchor ?? DashPoint(viewport.width / 2, viewport.height / 2)
         let size = worldSize(zoom: zoom, tileSize: tileSize)
         let boxCentre = DashPoint((minX + maxX) / 2 * size, (minY + maxY) / 2 * size)

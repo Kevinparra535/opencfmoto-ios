@@ -46,6 +46,11 @@ final class ProjectionAdapter: DashProjecting, @unchecked Sendable {
         set { lock.withLock { tileLoaded = newValue } }
     }
 
+    var onCanvasPrepared: (@Sendable (VideoCanvas) -> Void)? {
+        get { engine.onPrepared }
+        set { engine.onPrepared = newValue }
+    }
+
     func setDisplayListProvider(_ provider: (@Sendable (TimeInterval) -> DashDisplayList)?) {
         engine.displayListProvider = provider
     }
@@ -64,6 +69,9 @@ final class ProjectionAdapter: DashProjecting, @unchecked Sendable {
 
     func invalidate() { engine.invalidate() }
     func prepareHoldPicture() { engine.prepareHoldPicture() }
+    func prepareHoldPicture(expectedCanvas: VideoCanvas) { engine.prepareHoldPicture(expectedCanvas: expectedCanvas) }
+    func startWireDump(to url: URL, maxFrames: Int) throws { try engine.startWireDump(to: url, maxFrames: maxFrames) }
+    func stopWireDump() { engine.stopWireDump() }
     func enterBackground() { engine.enterBackground() }
     func enterForeground() { engine.enterForeground() }
     func stop() { engine.stop() }

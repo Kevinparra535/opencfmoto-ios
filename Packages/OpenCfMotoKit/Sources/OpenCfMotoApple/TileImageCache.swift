@@ -83,22 +83,60 @@ enum TileDiskLayout {
     static func relativePath(_ key: TileCacheKey) -> String { "\(key.z)/\(key.x)/\(key.y).png" }
 }
 
+/// What the tile cache may write to the log. A tile URL template can carry an API key (in the
+/// query or in the path, e.g. `…/{z}/{x}/{y}.png?apikey=…`), and logs are shared in problem
+/// reports: log the source folder name (sanitized host + hash) instead of the template, and keep
+/// only scheme + host of any URL inside an error description.
+enum TileLogText {
+    /// `TileDiskLayout.sourceKey`, e.g. "tile.openstreetmap.org-1a2b3c4d" — never the template.
+    static func source(_ template: String) -> String { TileDiskLayout.sourceKey(for: template) }
+
+    private static let urlPattern = try? NSRegularExpression(pattern: "(https?)://([^/\\s?#\"'<>,;]+)[^\\s\"'<>,;]*",
+                                                             options: [.caseInsensitive])
+
+    /// `text` with every http(s) URL reduced to `scheme://host/…` (path and query dropped).
+    static func redactingURLs(_ text: String) -> String {
+        guard let re = urlPattern else { return text }
+        let range = NSRange(text.startIndex ..< text.endIndex, in: text)
+        return re.stringByReplacingMatches(in: text, options: [], range: range, withTemplate: "$1://$2/…")
+    }
+
+    /// An error description safe for the log.
+    static func describe(_ error: Error) -> String { redactingURLs(String(describing: error)) }
+}
+
 /// Web-Mercator tile math and route-corridor coverage.
+///
+/// Every input is untrusted (GPX files, imported places, search results reach the corridor
+/// prefetch): nothing here may trap on NaN, ±∞ or out-of-range coordinates (SEC-1). Invalid
+/// corridor points are dropped, longitudes and latitudes are clamped before any `Int` conversion
+/// and the per-segment sample count is bounded.
 enum TileCoverage {
     static let maxLatitude = 85.051_128_779_806_59
     static let metersPerDegree = 111_320.0
+    /// Larger radii are clamped (the app prefetches 250 m; nothing useful is wider).
+    static let maxRadiusMeters = 50_000.0
+
+    /// A coordinate the tile maths can use: finite, latitude in −90…90, longitude in −180…180.
+    static func isUsable(_ p: GeoPoint) -> Bool {
+        p.lat.isFinite && p.lon.isFinite && (-90 ... 90).contains(p.lat) && (-180 ... 180).contains(p.lon)
+    }
 
     static func tileX(lon: Double, zoom: Int) -> Int {
-        let n = Double(1 << zoom)
-        let x = Int(((lon + 180) / 360 * n).rounded(.down))
-        return min(max(0, x), (1 << zoom) - 1)
+        let z = min(max(0, zoom), 24)
+        let n = Double(1 << z)
+        let l = lon.isNaN ? 0 : min(max(lon, -180), 180) // ±∞ clamp to the world edge
+        let x = Int(((l + 180) / 360 * n).rounded(.down))
+        return min(max(0, x), (1 << z) - 1)
     }
 
     static func tileY(lat: Double, zoom: Int) -> Int {
-        let n = Double(1 << zoom)
-        let l = min(max(lat, -maxLatitude), maxLatitude) * .pi / 180
-        let y = Int(((1 - log(tan(l) + 1 / cos(l)) / .pi) / 2 * n).rounded(.down))
-        return min(max(0, y), (1 << zoom) - 1)
+        let z = min(max(0, zoom), 24)
+        let n = Double(1 << z)
+        let l = (lat.isNaN ? 0 : min(max(lat, -maxLatitude), maxLatitude)) * .pi / 180
+        let v = ((1 - log(tan(l) + 1 / cos(l)) / .pi) / 2 * n).rounded(.down)
+        let y = v.isFinite ? Int(min(max(v, 0), n)) : 0
+        return min(max(0, y), (1 << z) - 1)
     }
 
     static func key(for p: GeoPoint, zoom: Int) -> TileCacheKey {
@@ -111,10 +149,14 @@ enum TileCoverage {
     }
 
     /// Tiles within `radiusMeters` of the polyline, in corridor order (nearest the start first),
-    /// at most `limit`.
-    static func tiles(corridor: [GeoPoint], zoom: Int, radiusMeters: Double, limit: Int) -> [TileCacheKey] {
+    /// at most `limit`. Unusable points (`isUsable`) are skipped.
+    static func tiles(corridor rawCorridor: [GeoPoint], zoom: Int, radiusMeters: Double, limit: Int) -> [TileCacheKey] {
+        let corridor = rawCorridor.filter(isUsable)
         guard let first = corridor.first, limit > 0, zoom >= 0, zoom <= 24 else { return [] }
-        let r = max(0, radiusMeters.isFinite ? radiusMeters : 0)
+        let r = min(max(0, radiusMeters.isFinite ? radiusMeters : 0), maxRadiusMeters)
+        // Samples per segment: enough for `limit` tiles even on an antipodal segment; a longer
+        // segment is sampled more coarsely (the capped prefetch could not use more tiles anyway).
+        let maxSamples = Double(max(1, limit)) * 64
         var seen = Set<TileCacheKey>()
         var out: [TileCacheKey] = []
         func cover(_ p: GeoPoint) -> Bool {
@@ -140,7 +182,9 @@ enum TileCoverage {
             let dy = (b.lat - a.lat) * metersPerDegree
             let dist = (dx * dx + dy * dy).squareRoot()
             let step = max(1, min(max(r, 1), tileMeters(lat: meanLat, zoom: zoom) / 2))
-            let n = max(1, Int((dist / step).rounded(.up)))
+            let samples = (dist / step).rounded(.up)
+            guard samples.isFinite else { continue }
+            let n = max(1, Int(min(samples, maxSamples)))
             for i in 1 ... n {
                 let t = Double(i) / Double(n)
                 let p = GeoPoint(lat: a.lat + (b.lat - a.lat) * t, lon: a.lon + (b.lon - a.lon) * t)
@@ -469,7 +513,7 @@ public final class TileImageCache: @unchecked Sendable {
         ) { [weak self] _ in self?.purgeMemory() }
         ioQueue.asyncAfter(deadline: .now() + 3) { [weak self] in self?.purgeDiskIfNeeded(force: true) }
         if !TileURLTemplate.isValid(configuration.urlTemplate) {
-            Log.w("OSM", "tile URL template looks invalid: \(configuration.urlTemplate)")
+            Log.w("OSM", "tile URL template looks invalid (source \(TileLogText.source(configuration.urlTemplate)))")
         }
     }
 
@@ -497,7 +541,7 @@ public final class TileImageCache: @unchecked Sendable {
             netPending.removeAll(); netStack.removeAll(); prefetchQueue.removeAll()
             retryNotBefore.removeAll()
             lock.unlock()
-            Log.i("OSM", "tile source → \(newValue)")
+            Log.i("OSM", "tile source → \(TileLogText.source(newValue))\(TileURLTemplate.isValid(newValue) ? "" : " (template looks invalid)")")
         }
     }
 
@@ -602,9 +646,10 @@ public final class TileImageCache: @unchecked Sendable {
     /// Queues the tiles around a route corridor (disk-fresh tiles are skipped). Returns the number
     /// of tiles considered (≤ `maxPrefetchTiles`).
     @discardableResult
-    public func prefetch(corridor: [GeoPoint], zooms: ClosedRange<Int>, radiusMeters: Double) -> Int {
+    public func prefetch(corridor rawCorridor: [GeoPoint], zooms: ClosedRange<Int>, radiusMeters: Double) -> Int {
         let lo = max(0, zooms.lowerBound)
         let hi = min(configuration.maxFetchZoom, zooms.upperBound)
+        let corridor = rawCorridor.filter(TileCoverage.isUsable) // untrusted route points (SEC-1)
         guard lo <= hi, !corridor.isEmpty else { return 0 }
         var keys: [TileCacheKey] = []
         var budget = configuration.maxPrefetchTiles
@@ -613,7 +658,8 @@ public final class TileImageCache: @unchecked Sendable {
             keys += t
             budget -= t.count
         }
-        Log.i("OSM", "prefetch \(keys.count) tile(s) z\(lo)…\(hi) r=\(Int(radiusMeters)) m (cap \(configuration.maxPrefetchTiles))")
+        let r = radiusMeters.isFinite ? Int(min(max(radiusMeters, 0), TileCoverage.maxRadiusMeters)) : 0
+        Log.i("OSM", "prefetch \(keys.count) tile(s) z\(lo)…\(hi) r=\(r) m (cap \(configuration.maxPrefetchTiles))")
         let corridorKeys = keys
         ioQueue.async { [weak self] in
             guard let self else { return }
@@ -846,7 +892,7 @@ public final class TileImageCache: @unchecked Sendable {
             } catch {
                 transportError = true
                 retryDelay = 5
-                Log.shared.throttled("tile-net", interval: 30, .warn, "OSM", "tile download failed: \(error)")
+                Log.shared.throttled("tile-net", interval: 30, .warn, "OSM", "tile download failed: \(TileLogText.describe(error))")
             }
         } else {
             retryDelay = 3_600

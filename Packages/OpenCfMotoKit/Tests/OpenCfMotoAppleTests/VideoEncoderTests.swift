@@ -151,6 +151,16 @@ final class VideoEncoderTests: XCTestCase {
         }
     }
 
+    /// MP-1: the mirror host's "start the screen broadcast" card, pre-encoded at the canvas.
+    func testMirrorPlaceholderIsEncodedAtTheCanvas() throws {
+        try requireEncoder(width: 800, height: 384)
+        let frames = MirrorRelayPlaceholder.frames(canvas: VideoCanvas(width: 800, height: 384), parameters: .default)
+        XCTAssertEqual(frames.count, 2)
+        XCTAssertTrue(frames.allSatisfy { $0.isKeyframe })
+        XCTAssertEqual(H264SPS.parse(accessUnit: frames[0].accessUnit).map { [$0.width, $0.height] }, [800, 384])
+        XCTAssertEqual(MirrorRelayPlaceholder.frames(canvas: VideoCanvas(width: 0, height: 384), parameters: .default), [])
+    }
+
     func testSoftwareRequestIsReported() throws {
         try requireEncoder()
         let enc = H264Encoder(label: "sw")
@@ -267,6 +277,100 @@ final class VideoEngineTests: XCTestCase {
         XCTAssertTrue(resumed?.isKeyframe ?? false, "first live frame after the hold is an IDR")
     }
 
+    /// MP-2: Connect, lock the phone, THEN the dash negotiates: the hold picture pre-encoded at the
+    /// expected canvas (no canvas existed yet) answers the pulls in the background.
+    func testHoldPictureAtTheExpectedCanvasServesADashThatNegotiatesWhileBackgrounded() async throws {
+        try requireEncoder(width: 320, height: 160)
+        let engine = makeEngine()
+        defer { engine.stop() }
+        engine.holdDisplayListProvider = { _ in
+            DashDisplayList(size: DashSize(width: 320, height: 160), background: DashColor(rgb: 0x000000), commands: [
+                .text("Phone locked", DashRect(x: 0, y: 0, width: 320, height: 160),
+                      DashTextStyle(font: DashFont(size: 28, weight: .bold), color: .white, alignment: .center)),
+            ])
+        }
+        engine.allowsSoftwareEncodingInBackground = false
+        let built = Locked<Bool?>(nil)
+        engine.prepareHoldPicture(expectedCanvas: canvas) { ok in built.set(ok) }
+        XCTAssertTrue(pollUntil { built.current != nil })
+        XCTAssertEqual(built.current, true, "made without any negotiated canvas")
+        engine.enterBackground()
+        engine.prepare(canvas: canvas, parameters: .default) // REQ 16 while locked
+        XCTAssertEqual(engine.mode, .hold)
+        engine.resynchronize()
+        let a = await engine.nextFrame(timeout: 2)
+        let f = try XCTUnwrap(a)
+        XCTAssertTrue(f.isKeyframe)
+        XCTAssertEqual(H264SPS.parse(accessUnit: f.accessUnit).map { [$0.width, $0.height] }, [320, 160])
+        XCTAssertGreaterThanOrEqual(engine.stats.holdFramesServed, 1)
+    }
+
+    /// A hold picture made for another size is never served (the dash decodes exactly RLY 17).
+    func testHoldPictureOfAnotherCanvasIsNotServed() async throws {
+        try requireEncoder(width: 320, height: 160)
+        let engine = makeEngine()
+        defer { engine.stop() }
+        engine.allowsSoftwareEncodingInBackground = false
+        let built = Locked<Bool?>(nil)
+        engine.prepareHoldPicture(expectedCanvas: VideoCanvas(width: 320, height: 240)) { ok in built.set(ok) }
+        XCTAssertTrue(pollUntil { built.current != nil })
+        engine.enterBackground()
+        engine.prepare(canvas: canvas, parameters: .default) // the dash wanted 320×160
+        XCTAssertEqual(engine.mode, .hold)
+        let none = await engine.nextFrame(timeout: 1)
+        XCTAssertNil(none)
+        XCTAssertGreaterThanOrEqual(engine.stats.pullsUnanswered, 1)
+    }
+
+    /// CL-5: Control Center (active → inactive → active) pre-encodes the hold picture; back in the
+    /// foreground it is dropped, so a later lock seeds the hold with the live picture instead of a
+    /// stale "Phone locked" frame from the blip.
+    func testInactiveBlipLeavesNoStaleHoldPicture() async throws {
+        try requireEncoder(width: 320, height: 160)
+        let engine = makeEngine()
+        defer { engine.stop() }
+        engine.allowsSoftwareEncodingInBackground = false
+        engine.prepare(canvas: canvas, parameters: .default)
+        engine.resynchronize()
+        _ = await engine.nextFrame(timeout: 3)
+        let built = Locked<Bool?>(nil)
+        engine.prepareHoldPicture { ok in built.set(ok) } // the blip
+        XCTAssertTrue(pollUntil { built.current != nil })
+        engine.enterForeground() // active again, never backgrounded
+        engine.enterBackground() // a real lock later, without a fresh hold picture
+        XCTAssertTrue(pollUntil { engine.mode == .hold })
+        let held = await engine.nextFrame(timeout: 2)
+        XCTAssertNotNil(held)
+        XCTAssertEqual(held?.accessUnit, engine.frameQueue.lastKeyframe?.accessUnit, "the last live IDR, not the blip's hold IDR")
+    }
+
+    /// E2E: REQ 16 then 112 used to put 3–4 IDRs on the wire in the first 200 ms (prepare IDR,
+    /// resync asking twice, a second IDR at +200 ms). Now one IDR per 112 (periodic IDR at 1 s).
+    func testSessionStartPutsOneIDROnTheWire() async throws {
+        try requireEncoder(width: 320, height: 160)
+        let engine = DashProjectionEngine() // default secondKeyframeDelay (off)
+        XCTAssertNil(engine.secondKeyframeDelay)
+        engine.displayListProvider = { now in
+            DashDisplayList(size: DashSize(width: 320, height: 160), background: DashColor(rgb: 0x101418), commands: [
+                .fill(.rect(DashRect(x: (now * 200).truncatingRemainder(dividingBy: 200), y: 40, width: 60, height: 60)),
+                      DashColor(rgb: 0x1A73E8), .nonZero),
+            ])
+        }
+        defer { engine.stop() }
+        engine.prepare(canvas: canvas, parameters: EncoderParameters(bitrate: 1_000_000, frameRate: 30))
+        engine.resynchronize()
+        // A 30 fps dash pulling for ~0.5 s: fewer frames than one GOP (VideoToolbox also counts
+        // MaxKeyFrameInterval in frames — 30 here — so an unpaced loop would see periodic IDRs).
+        var frames: [EncodedFrame] = []
+        for _ in 0 ..< 15 {
+            if let f = await engine.nextFrame(timeout: 1) { frames.append(f) }
+            try? await Task.sleep(nanoseconds: 33_000_000)
+        }
+        XCTAssertTrue(frames.first?.isKeyframe ?? false, "the first frame after 112 is an IDR")
+        XCTAssertGreaterThan(frames.count, 10)
+        XCTAssertEqual(frames.filter(\.isKeyframe).count, 1, "one IDR, then P-frames: \(frames.map(\.isKeyframe))")
+    }
+
     func testStopWakesPullsWithNil() async throws {
         try requireEncoder(width: 320, height: 160)
         let engine = makeEngine()
@@ -275,6 +379,17 @@ final class VideoEngineTests: XCTestCase {
         XCTAssertEqual(engine.mode, .stopped)
         let f = await engine.nextFrame(timeout: 0.5)
         XCTAssertNil(f)
+    }
+
+    /// MP-6: the app learns the canvas the encoder really uses (also for the link's guard paths).
+    func testPrepareReportsThePreparedCanvas() {
+        let engine = makeEngine()
+        defer { engine.stop() }
+        let seen = Locked<[VideoCanvas]>([])
+        engine.onPrepared = { c in seen.withLock { $0.append(c) } }
+        engine.prepare(canvas: VideoCanvas(width: 0, height: 384), parameters: .default) // ignored
+        engine.prepare(canvas: canvas, parameters: .default)
+        XCTAssertEqual(seen.current, [canvas])
     }
 
     func testInvalidCanvasIsIgnored() {
