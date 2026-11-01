@@ -590,7 +590,12 @@ public final class ConnectionModel {
         isParked = true
         Log.i("WIFI", "bike Wi-Fi gone > \(seconds)s \u{2014} pausing the dash link to save battery; watching for the bike")
         stopLink()
-        if s.mode == .dashUI { core.services.projection.stop() }
+        if s.mode == .dashUI {
+            core.services.projection.stop()
+            // The own UI is off the dash while parked: the trip auto-log stops and saves, the "Live"
+            // label and Ride Mode follow. The resumed link's .streaming starts a new projection (CON:CL-2).
+            ride.projectionChanged(active: false)
+        }
         ride.setLinkBanner(nil)
         setPhase(.waitingForBike, detail: SessionText.willResume(core.language))
     }

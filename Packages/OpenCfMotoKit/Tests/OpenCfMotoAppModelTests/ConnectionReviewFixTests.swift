@@ -123,6 +123,68 @@ final class ConnectionReviewFixTests: XCTestCase {
         XCTAssertTrue(again)
         h.connection.stop()
     }
+
+    // MARK: CON:CL-2 — parking ends the own-UI projection (trip auto-log, Live label)
+
+    /// CFDL16 handshake + media channels, then three frame pulls (the link reaches STREAMING).
+    private func streamFromFakeDash(_ dash: LinkFakeDash) async throws -> [() -> Void] {
+        let ctrl = try dash.openControl()
+        try await ctrl.send(PxcFrame(cmd: 0x10000))
+        _ = try await ctrl.nextRaw()
+        try await ctrl.send(cmd: 0x10010, json: LinkDashSamples.cfdl16ClientInfo)
+        _ = try await ctrl.next()
+        let mctl = try dash.openMedia(port: 10921)
+        try await mctl.send(cmd: 16, body: LinkDashSamples.configCaptureBody(width: 800, height: 386))
+        _ = try await mctl.reply()
+        try await mctl.send(cmd: 112)
+        _ = try await mctl.reply()
+        let mdata = try dash.openMedia(port: 10920)
+        for _ in 1 ... 3 {
+            try await mdata.send(cmd: 114)
+            _ = try await mdata.frame()
+        }
+        return [ctrl.close, mctl.close, mdata.close]
+    }
+
+    @MainActor
+    func testParkingAfterTheWifiGraceEndsTheProjectionAndTheAutoLoggedTrip() async throws {
+        let net = LinkMemoryNetwork(phoneHost: "192.168.0.2")
+        let dash = LinkFakeDash(network: net, host: "192.168.0.1")
+        dash.installProbeServer()
+        let h = AppTestHarness(network: net, frameSource: TestFrameSource())
+        let (_, qr) = h.addBike()
+        h.connection.connect()
+        _ = await eventually { dash.acceptedCount.current == 1 }
+        let first = try await streamFromFakeDash(dash)
+        let streaming = await eventually { h.connection.phase == .streaming }
+        XCTAssertTrue(streaming)
+        XCTAssertTrue(h.ride.isProjecting)
+        XCTAssertTrue(h.core.tripRecorder.isRecording) // "Log trips automatically" (default)
+
+        // The bike is switched off: the Wi-Fi goes, the grace runs out, the session parks.
+        h.wifi.setNetwork(.unavailable)
+        first.forEach { $0() }
+        let parked = await eventually { h.connection.phase == .waitingForBike }
+        XCTAssertTrue(parked)
+        XCTAssertEqual(h.projection.stats.mode, "stopped")
+        XCTAssertFalse(h.ride.isProjecting)
+        XCTAssertFalse(h.core.tripRecorder.isRecording) // the leg was saved at park
+        h.ride.runHousekeeping()
+        XCTAssertFalse(h.core.tripRecorder.isRecording)
+        XCTAssertTrue(h.connection.isSessionActive)
+
+        // The bike is back: a fresh link streams again, the projection and a new leg start.
+        let accepted = dash.acceptedCount.current
+        h.wifi.setNetwork(AppTestHarness.bikeNetwork(ssid: qr.ssid))
+        _ = await eventually { dash.acceptedCount.current > accepted }
+        let second = try await streamFromFakeDash(dash)
+        let back = await eventually { h.connection.phase == .streaming }
+        XCTAssertTrue(back)
+        XCTAssertTrue(h.ride.isProjecting)
+        XCTAssertTrue(h.core.tripRecorder.isRecording)
+        h.connection.stop()
+        second.forEach { $0() }
+    }
 }
 
 /// Free-flavor Wi-Fi whose network switches to the bike (SSID unknown, dash subnet) at the second
