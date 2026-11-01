@@ -10,6 +10,11 @@
 // iOS addition (fixes the Android GAP): pairing QRs in a line are also PARSED and their Wi-Fi password
 // masked in every format (Moto Morini `Wifi=SSID#PWD#…` and Kove/Thinkerride `?SSID&PWD&ap=1` leak
 // through the regexes on Android). SSIDs and model ids are kept on purpose.
+// iOS addition (review SEC-2): API keys in URL query parameters — custom tile servers put a billable
+// key there (MapTiler `?key=`, Thunderforest `?apikey=`, Stadia `?api_key=`, Mapbox `?access_token=`,
+// any `?token=`):  [?&](key|apikey|api_key|access_token|token)=([^&\s"]*)  → `<sep>$1=«redacted»`.
+// Anchored on `?` / `&` so plain `token=<n>` fields of the PXC logs stay readable. `redact` stays
+// byte-identical to Android; `redactAll` (what the app installs) applies the iOS additions.
 
 import Foundation
 
@@ -27,6 +32,7 @@ public enum LogRedactor {
     private static let jsonSerial = make(#"("(?:HUID|sn|uuid|carHuid)"\s*:\s*)"([^"]*)""#)
     private static let bareSerial = make(#"\b(carHuid|HUID|sn)=([A-Za-z0-9]{6,})"#)
     private static let qrStart = make(#"(https?://|CQKY_|Wifi=)"#)
+    private static let urlApiKey = make(#"([?&])(key|apikey|api_key|access_token|token)=([^&\s"]*)"#)
 
     /// Android `LogRedactor.redact`: the four regex rules only (byte-identical results).
     public static func redact(_ line: String) -> String {
@@ -38,9 +44,14 @@ public enum LogRedactor {
         return s
     }
 
-    /// iOS redaction: the Android rules, then parse-based masking of pairing-QR passwords.
+    /// iOS redaction: the Android rules, URL API keys, then parse-based masking of pairing-QR passwords.
     public static func redactAll(_ line: String) -> String {
-        redactQRPasswords(redact(line))
+        redactQRPasswords(redactURLAPIKeys(redact(line)))
+    }
+
+    /// Masks `key` / `apikey` / `api_key` / `access_token` / `token` URL query parameters (review SEC-2).
+    public static func redactURLAPIKeys(_ line: String) -> String {
+        replace(urlApiKey, in: line) { m, str in group(m, 1, str) + group(m, 2, str) + "=" + mask }
     }
 
     /// Masks the Wi-Fi password of every pairing QR found in `line` (any `BikeQR` format): each

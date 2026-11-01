@@ -101,4 +101,34 @@ final class RedactorTests: XCTestCase {
         XCTAssertNil(log.redactor)
         XCTAssertTrue(log.export(redacted: true).contains("81316044"))
     }
+
+    /// Review SEC-2: custom tile-server templates carry billable API keys in the query string.
+    func testURLAPIKeysAreMaskedOnIOSOnly() {
+        let m = LogRedactor.mask
+        let vectors: [(String, String)] = [
+            ("tile source → https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=AbCdEf1234567890",
+             "tile source → https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=\(m)"),
+            ("https://tile.thunderforest.com/cycle/{z}/{x}/{y}.png?apikey=0123456789abcdef",
+             "https://tile.thunderforest.com/cycle/{z}/{x}/{y}.png?apikey=\(m)"),
+            ("https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}.png?lang=es&api_key=f00-ba4&scale=2",
+             "https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}.png?lang=es&api_key=\(m)&scale=2"),
+            ("https://api.mapbox.com/styles/v1/me/abc/tiles/256/{z}/{x}/{y}?access_token=pk.eyJ1IjoibWUifQ.sig",
+             "https://api.mapbox.com/styles/v1/me/abc/tiles/256/{z}/{x}/{y}?access_token=\(m)"),
+            ("\"https://x.example/t?TOKEN=Secret99\" failed", "\"https://x.example/t?TOKEN=\(m)\" failed"),
+        ]
+        for (input, expected) in vectors {
+            XCTAssertEqual(LogRedactor.redactAll(input), expected)
+            XCTAssertEqual(LogRedactor.redact(input), input, "Android rules unchanged") // byte-identical to Android
+        }
+        // Not URL parameters: protocol fields and words containing "key" stay readable.
+        let plain = "[:10921] media cmdType=114 len=0 token=305419896 monkey=1 hotkey=2"
+        XCTAssertEqual(LogRedactor.redactAll(plain), plain)
+        XCTAssertEqual(LogRedactor.redactAll("https://x/?monkey=3&donkey=4"), "https://x/?monkey=3&donkey=4")
+        // Installed on the bus: exports are masked.
+        let log = Log()
+        LogRedactor.install(on: log, includeSecrets: false)
+        log.log(.info, "OSM", "tile source → https://api.maptiler.com/maps/x/{z}/{x}/{y}.png?key=AbCdEf1234567890")
+        XCTAssertFalse(log.export(redacted: true).contains("AbCdEf1234567890"))
+        XCTAssertTrue(log.export(redacted: false).contains("AbCdEf1234567890"))
+    }
 }
