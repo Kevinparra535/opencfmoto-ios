@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     container: swift:6.0
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: swift test (OpenCfMotoKit)
         shell: bash
         run: |
@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: TestFlight helper tests
         run: |
           python3 --version && openssl version
@@ -48,7 +48,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: TestFlight helper tests (LibreSSL)
         run: |
           export PATH="/usr/bin:$PATH"
@@ -59,7 +59,7 @@ jobs:
     name: Package tests (macOS) + iOS app build
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Show Xcode
         run: xcodebuild -version && swift --version
       - name: swift test (macOS — also compiles the Apple adapters)
@@ -113,7 +113,7 @@ jobs:
           done
       - name: Upload logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ci-logs
           path: |
@@ -129,7 +129,7 @@ jobs:
     name: iPhone build (newest Xcode on the runner)
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Every workflow file: syntax, expressions, contexts, job outputs (shellcheck off there: the
       # older jobs predate it). The TestFlight workflow and its script also go through shellcheck
       # (warnings and errors). Findings become annotations.
@@ -186,9 +186,10 @@ jobs:
           done
           grep -h -E "xcodebuild: error|is not installed|Unable to find a destination" build-device-*.log 2>/dev/null | head -5 | while read -r line; do echo "::error title=xcodebuild::$line"; done
       # TestFlight dry run (no secrets, nothing leaves the runner) for .github/workflows/testflight.yml:
-      # the signing variables resolve as that workflow expects, an unsigned Release archive passes
-      # tools/testflight/lint_bundle.py (privacy manifests, versions, extension layout...), and the
-      # keychain plumbing of tools/testflight/build_and_sign.sh works with a throw-away identity.
+      # the signing variables resolve as that workflow expects (iPhone only), an unsigned Release
+      # archive passes tools/testflight/lint_bundle.py (privacy manifests, versions, devices,
+      # extension layout...), the keychain plumbing of tools/testflight/build_and_sign.sh works with a
+      # throw-away identity, and its teardown handles what a cancelled step left running.
       - name: TestFlight dry run — signing settings (developer defaults, then the CI Local.xcconfig)
         run: |
           set -euo pipefail
@@ -318,6 +319,59 @@ jobs:
           if [ -n "$left" ]; then fail "teardown left installed profiles behind: $left"; fi
           shells="/bin/bash $(/bin/bash -c 'echo $BASH_VERSION'), PATH bash $(bash -c 'echo $BASH_VERSION')"
           echo "::notice title=TestFlight dry run (keychain)::identity $sha imported; codesign signed without a prompt; profiles installed in both Xcode folders; teardown removed keychain, search-list entry, key and profiles ($shells)"
+      # After a cancel GitHub stops only a step's own shell. build_and_sign.sh teardown must let a
+      # running create-signing finish, stop this job's other leftovers with SIGTERM, and leave alone
+      # the teardown itself and anything outside this checkout. The leftovers here are perl
+      # processes whose arguments look like the real command lines (macOS pgrep/pkill, /bin/bash 3.2).
+      - name: TestFlight dry run — teardown after a cancel (leftover steps)
+        run: |
+          set -uo pipefail
+          d="$RUNNER_TEMP/tf-teardown-dry-run"
+          rm -rf "$d" && mkdir -p "$d/work" "$d/elsewhere/tools/testflight"
+          tf="$GITHUB_WORKSPACE/tools/testflight"
+          export TF_WORK="$d/work" TF_LEFTOVER_WAIT_SEC=30 TF_KILL_WAIT_SEC=5
+          pids=""
+          fail() {
+            echo "::error title=TestFlight dry run (teardown)::$1"
+            for p in $pids; do kill "$p" 2> /dev/null || true; done
+            exit 1
+          }
+          (perl -e 'sleep 4' "$tf/asc.py" create-signing --out x; echo "$?" > "$d/signing.rc") & signing=$!
+          perl -e 'sleep 90' "$tf/build_and_sign.sh" upload & step=$!
+          perl -e 'sleep 90' "$tf/asc.py" upload --ipa x & asc=$!
+          perl -e 'sleep 90' altool --upload-app -f "$TF_WORK/export/OpenCfMoto.ipa" -t ios & altool=$!
+          perl -e 'sleep 90' xcodebuild -exportArchive -archivePath "$TF_WORK/OpenCfMoto.xcarchive" -exportPath x & xcb=$!
+          perl -e 'sleep 90' "$tf/build_and_sign.sh" teardown & self=$!
+          perl -e 'sleep 90' "$d/elsewhere/tools/testflight/asc.py" upload --ipa x & other=$!
+          pids="$step $asc $altool $xcb $self $other"
+          for _ in 1 2 3 4 5 6 7 8 9 10; do
+            if pgrep -f "elsewhere/tools/testflight/asc.py upload" > /dev/null && pgrep -f "$tf/asc.py create-signing" > /dev/null; then break; fi
+            sleep 0.5
+          done
+          start=$(date +%s)
+          GITHUB_OUTPUT="$d/outputs" /bin/bash "$tf/build_and_sign.sh" teardown > "$d/teardown.log" 2>&1 || fail "teardown failed: $(tr '\n' ' ' < "$d/teardown.log")"
+          took=$(( $(date +%s) - start ))
+          cat "$d/teardown.log"
+          wait "$signing" || true
+          [ "$(cat "$d/signing.rc" 2> /dev/null)" = 0 ] || fail "teardown did not let the running create-signing finish (exit $(cat "$d/signing.rc" 2> /dev/null), teardown took ${took} s)"
+          for v in self other; do
+            kill -0 "${!v}" 2> /dev/null || fail "teardown stopped a process it must leave alone ($v)"
+          done
+          for v in step asc altool xcb; do
+            pid=${!v}
+            state=$(ps -o stat= -p "$pid" 2> /dev/null | tr -d ' ' || true)
+            case "$state" in Z* | '') ;; *) fail "teardown did not stop the leftover $v (state $state)" ;; esac
+            rc=0
+            wait "$pid" || rc=$?
+            [ "$rc" = 143 ] || fail "the leftover $v did not end by SIGTERM (exit $rc)"
+          done
+          kill "$self" "$other" 2> /dev/null || true
+          grep -q '^uploaded=false$' "$d/outputs" && grep -q '^teardown=done$' "$d/outputs" || fail "teardown outputs: $(tr '\n' ' ' < "$d/outputs")"
+          # Once Apple has the whole file (asc.py's committed marker) the certificate is kept for finish.
+          touch "$TF_WORK/committed"
+          GITHUB_OUTPUT="$d/outputs2" /bin/bash "$tf/build_and_sign.sh" teardown > "$d/teardown2.log" 2>&1
+          grep -q '^uploaded=true$' "$d/outputs2" || fail "with the committed marker teardown wrote: $(tr '\n' ' ' < "$d/outputs2")"
+          echo "::notice title=TestFlight dry run (teardown)::waited for the running create-signing (teardown took ${took} s), stopped the leftover step, asc.py, altool and xcodebuild with SIGTERM, left the teardown and another checkout alone; the committed marker gives uploaded=true (/bin/bash $(/bin/bash -c 'echo $BASH_VERSION'))"
 
   # The REAL app in the iOS Simulator: screenshots of every screen (demo services + demo content)
   # and end-to-end runs against tools/fakedash/fakedash.py on 127.0.0.1 (real sockets, link,
@@ -339,7 +393,7 @@ jobs:
       HOMEBREW_NO_INSTALL_CLEANUP: "1"
       HOMEBREW_NO_ENV_HINTS: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Prepare (XcodeGen; ffmpeg + pngquant in the background; pick + boot an iPhone simulator)
         id: sim
         run: |

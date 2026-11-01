@@ -13,9 +13,12 @@
 #   archive           xcodebuild archive (Release, iPhone) + lint_bundle.py --archive
 #   export            xcodebuild -exportArchive (app-store-connect) + lint_bundle.py --ipa
 #   upload            asc.py upload (Build Upload API); `xcrun altool` when that API refuses (exit 3)
-#   teardown          delete keychain, keys, profiles and Local.xcconfig; revoke the certificate and
-#                     profiles at once unless the upload succeeded (then the workflow's finish job
-#                     revokes them once Apple has processed the build). Safe to run more than once.
+#   teardown          stop what a cancelled step left running; delete keychain, keys, profiles and
+#                     Local.xcconfig; revoke the certificate and profiles at once unless the build
+#                     reached Apple (uploaded, or committed and still processing: then the workflow's
+#                     finish job revokes them once Apple has processed it). Writes the step outputs
+#                     uploaded=true|false and teardown=done. Safe to run more than once, also
+#                     without the API key.
 #   all               everything above in order, teardown on exit
 #
 # Environment:
@@ -24,9 +27,15 @@
 #                    profiles/<uuid>.mobileprovision, state.json
 #   ASC_KEY_ID ASC_ISSUER_ID ASC_PRIVATE_KEY   the API key: create-signing, upload and teardown only
 #   APP_BUNDLE_ID MIRROR_BUNDLE_ID APP_BUNDLE_RESOURCE_ID MIRROR_BUNDLE_RESOURCE_ID APP_GROUP
-#   BUNDLE_ID_PREFIX APP_ID BUILD_NUMBER MARKETING_VERSION   outputs of `asc.py prepare`
+#   BUNDLE_ID_PREFIX APP_ID MARKETING_VERSION   outputs of `asc.py prepare`
+#   BUILD_NUMBER     output of `asc.py next-build` (the workflow puts it in GITHUB_ENV)
 #   TF_ALLOW_UNTRUSTED_IDENTITY=1   setup-keychain accepts an identity macOS does not trust
 #                                   (the CI dry run's self-signed certificate; never for real builds)
+#   TF_LEFTOVER_WAIT_SEC, TF_KILL_WAIT_SEC   teardown: how long to let a running create-signing
+#                    finish (default 60 s) and to wait for stopped leftovers (default 15 s)
+#
+# The workflow runs each subcommand by its absolute path: that is how teardown recognizes (and
+# stops) a subcommand a cancelled step left running.
 #
 # Secrets never reach the log: passwords are random, masked (::add-mask::) and passed in the
 # environment or in mode-600 files; teardown deletes every key file, also after a failure.
@@ -37,6 +46,7 @@ set -Eeuo pipefail
 umask 077 # keys, p12, passwords and everything else this script writes stay private
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SELF="$ROOT/tools/testflight/build_and_sign.sh"
 ASC="$ROOT/tools/testflight/asc.py"
 LINT="$ROOT/tools/testflight/lint_bundle.py"
 ANNOTATE="$ROOT/tools/ci/annotate.py"
@@ -49,7 +59,13 @@ EXPORT_DIR="$WORK/export"
 LOCAL_XCCONFIG="$ROOT/Config/Local.xcconfig"
 OPENSSL="${OPENSSL:-/usr/bin/openssl}"
 MIN_SDK_MAJOR="${TF_MIN_SDK_MAJOR:-26}" # App Store Connect only accepts builds made with the iOS 26 SDK
+DEVICE_FAMILY=1                        # iPhone only (TARGETED_DEVICE_FAMILY in project.yml)
+LEFTOVER_WAIT_SEC="${TF_LEFTOVER_WAIT_SEC:-60}"
+KILL_WAIT_SEC="${TF_KILL_WAIT_SEC:-15}"
 DOCS_URL="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-Kevinparra535/opencfmoto-ios}/blob/main/docs/TESTFLIGHT.md"
+URL_CERTS="https://developer.apple.com/account/resources/certificates/list"
+NEW_RUN_ES="lanza una ejecución nueva: Actions ▸ TestFlight ▸ Run workflow (Re-run repite el mismo commit, sin tus arreglos)"
+NEW_RUN_EN="start a new run: Actions ▸ TestFlight ▸ Run workflow (Re-run repeats the same commit, without your fixes)"
 STEP=""
 
 # ------------------------------------------------------------------ output helpers
@@ -110,6 +126,9 @@ output_value() { sed -n "s/^$2=//p" "$1" | tail -n 1; }
 cmd_create_signing() {
   need_env ASC_KEY_ID ASC_ISSUER_ID ASC_PRIVATE_KEY APP_BUNDLE_RESOURCE_ID MIRROR_BUNDLE_RESOURCE_ID \
     APP_BUNDLE_ID MIRROR_BUNDLE_ID APP_GROUP
+  # Markers of an earlier run in the same work directory (a manual run on a Mac) do not apply to
+  # the certificate created now.
+  rm -f "$WORK/uploaded" "$WORK/committed" "$WORK/apple-cleanup-done" "$WORK/teardown-started"
   mkdir -p "$SIGNING_DIR"
   # Unique per run, so profiles left behind by a crashed run never clash by name.
   local suffix outputs="$WORK/create-signing.outputs" status=0
@@ -339,7 +358,7 @@ run_xcodebuild() {
 signing_hints() {
   local log=$1
   if grep -q -E "Provisioning profile .*(doesn't include|doesn't match).*application-groups" "$log"; then
-    annotate error "TestFlight: App Group" "El perfil no incluye el App Group ${APP_GROUP:-}: créalo y asígnalo a los DOS App IDs en developer.apple.com ▸ Identifiers, y vuelve a ejecutar. Guía: $DOCS_URL"$'\n'"The profile lacks App Group ${APP_GROUP:-}: create it and assign it to BOTH App IDs on developer.apple.com ▸ Identifiers, then run again. Guide: $DOCS_URL"
+    annotate error "TestFlight: App Group" "El perfil no incluye el App Group ${APP_GROUP:-}: créalo y asígnalo a los DOS App IDs en developer.apple.com ▸ Identifiers; después $NEW_RUN_ES. Guía: $DOCS_URL"$'\n'"The profile lacks App Group ${APP_GROUP:-}: create it and assign it to BOTH App IDs on developer.apple.com ▸ Identifiers, then $NEW_RUN_EN. Guide: $DOCS_URL"
   fi
   if grep -q -E "Provisioning profile .*(doesn't include|doesn't match).*(HotspotConfiguration|wifi-info)" "$log"; then
     annotate error "TestFlight: capabilities" "Al App ID le falta Hotspot o Access Wi-Fi Information (la preparación las activa; ¿se desactivaron a mano?)."$'\n'"The App ID lacks Hotspot or Access Wi-Fi Information (the prepare job enables them; were they turned off by hand?)."
@@ -354,7 +373,8 @@ signing_hints() {
 }
 
 lint_args() { # common lint_bundle.py options
-  printf '%s\n' --app-group "$APP_GROUP" --expect-build "$BUILD_NUMBER" --min-sdk-major "$MIN_SDK_MAJOR"
+  printf '%s\n' --app-group "$APP_GROUP" --expect-build "$BUILD_NUMBER" --min-sdk-major "$MIN_SDK_MAJOR" \
+    --expect-device-family "$DEVICE_FAMILY"
   if [ -n "${MARKETING_VERSION:-}" ]; then printf '%s\n' --expect-version "$MARKETING_VERSION"; fi
 }
 
@@ -364,8 +384,8 @@ cmd_archive() {
   need_env BUILD_NUMBER APP_GROUP
   unlock_keychain
   rm -rf "$ARCHIVE"
-  # CURRENT_PROJECT_VERSION = the build number asc.py chose (one more than any build Apple has);
-  # --keychain keeps codesign on our keychain.
+  # CURRENT_PROJECT_VERSION = the build number `asc.py next-build` chose (one more than any build
+  # Apple has); --keychain keeps codesign on our keychain.
   if ! run_xcodebuild "$WORK/archive.log" "ARCHIVE SUCCEEDED" "TestFlight archive" \
     -project "$ROOT/OpenCfMoto.xcodeproj" -scheme OpenCfMoto -configuration Release \
     -destination "generic/platform=iOS" -archivePath "$ARCHIVE" \
@@ -401,7 +421,7 @@ options = {
     },
     "destination": "export",                  # only write the IPA; asc.py uploads it
     "uploadSymbols": True,
-    "manageAppVersionAndBuildNumber": False,  # keep the build number asc.py chose
+    "manageAppVersionAndBuildNumber": False,  # keep the build number `asc.py next-build` chose
 }
 with open(sys.argv[1], "wb") as fh:
     plistlib.dump(options, fh)
@@ -434,20 +454,34 @@ distribution_log_errors() {
 }
 
 # ------------------------------------------------------------------ upload
+# A step that a cancel left running must not upload anything once teardown has started.
+not_after_teardown() {
+  if [ -e "$WORK/teardown-started" ]; then
+    die "La limpieza («Clean up») ya empezó: no se sube nada más." "Clean up has already started: nothing more is uploaded."
+  fi
+}
+
 cmd_upload() {
   state_load
   need_env ASC_KEY_ID ASC_ISSUER_ID ASC_PRIVATE_KEY APP_ID MARKETING_VERSION BUILD_NUMBER
+  not_after_teardown
   local ipa="${S_IPA:-}" status=0
   if [ -z "$ipa" ] || [ ! -f "$ipa" ]; then die "No hay IPA (¿falló la exportación?)." "No IPA (did the export fail?)."; fi
   note "uploading $(basename "$ipa") $MARKETING_VERSION ($BUILD_NUMBER) with the Build Upload API"
+  # asc.py creates $WORK/committed as soon as Apple has the whole file, and deletes it again if
+  # Apple then rejects the upload: while it exists, the certificate must outlive this job.
   python3 "$ASC" upload --ipa "$ipa" --app-id "$APP_ID" --version "$MARKETING_VERSION" \
-    --build "$BUILD_NUMBER" --timeout-min 30 || status=$?
+    --build "$BUILD_NUMBER" --timeout-min 30 --committed-marker "$WORK/committed" || status=$?
   case "$status" in
     0)
       touch "$WORK/uploaded"
       gh_output upload_method rest
       ;;
     3) # the API refused before the file was committed: Apple's own uploader may still work
+      if [ -e "$WORK/committed" ]; then # Apple has the file already: never send it twice
+        die "asc.py pidió usar altool, pero Apple ya tiene el archivo: no se sube otra vez. El trabajo «Processing, TestFlight group, revoke the certificate» espera a la build." \
+          "asc.py asked for altool, but Apple already has the file: it is not uploaded again. The «Processing, TestFlight group, revoke the certificate» job waits for the build."
+      fi
       annotate warning "TestFlight upload" "La API de subida de builds rechazó la subida; se intenta con xcrun altool."$'\n'"The Build Upload API refused the upload; trying xcrun altool instead."
       altool_upload "$ipa"
       ;;
@@ -461,6 +495,7 @@ cmd_upload() {
 altool_upload() {
   require_macos
   local ipa=$1 dir="$HOME/.appstoreconnect/private_keys" key log="$WORK/altool.log" status=0 errors
+  not_after_teardown
   mkdir -p "$dir"
   key="$dir/AuthKey_${ASC_KEY_ID}.p8" # where altool looks for --apiKey
   printf '%s\n' "$key" >> "$WORK/secret-files"
@@ -468,8 +503,9 @@ altool_upload() {
   xcrun altool --upload-app -f "$ipa" -t ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" > "$log" 2>&1 || status=$?
   rm -f "$key"
   cat "$log"
-  # altool from Xcode 26 can exit 0 although the upload failed: trust its output, not only its status.
-  if [ "$status" -eq 0 ] && ! grep -q "ERROR" "$log" && grep -q -E "UPLOAD SUCCEEDED|No errors uploading" "$log"; then
+  # altool can exit 0 although the upload failed, and print harmless "ERROR" lines when it
+  # worked: go by its verdict lines (and its exit status).
+  if [ "$status" -eq 0 ] && grep -q -E "UPLOAD SUCCEEDED|No errors uploading" "$log" && ! grep -q "UPLOAD FAILED" "$log"; then
     touch "$WORK/uploaded"
     gh_output uploaded true
     gh_output upload_method altool
@@ -477,7 +513,12 @@ altool_upload() {
     return 0
   fi
   errors=$(grep -E "ERROR|[Ee]rror" "$log" | head -n 20 || true)
-  die "xcrun altool no pudo subir la build (código $status): $errors" "xcrun altool could not upload the build (exit $status): $errors"
+  if grep -q -E "ENTITY_ERROR\.ATTRIBUTE\.INVALID\.DUPLICATE|must be higher than the previously uploaded|ITMS-90189|ITMS-4238|Redundant Binary Upload" "$log"; then
+    die "La build $BUILD_NUMBER ya existe en App Store Connect: $NEW_RUN_ES; la ejecución nueva elige el número siguiente." \
+      "Build $BUILD_NUMBER already exists in App Store Connect: $NEW_RUN_EN; the new run picks the next number."
+  fi
+  die "xcrun altool no pudo subir la build (código $status): $errors. Corrige lo que diga y $NEW_RUN_ES." \
+    "xcrun altool could not upload the build (exit $status): $errors. Fix what it says and $NEW_RUN_EN."
 }
 
 # The .p8 text from the secret, normalized: CRLF, surrounding blanks, literal "\n" and a key pasted
@@ -499,10 +540,63 @@ PY
 }
 
 # ------------------------------------------------------------------ teardown
+re_quote() { printf '%s' "$1" | sed -e 's/[][\.*^$+?(){}|]/\\&/g'; } # literal text as an ERE
+
+# On cancel or timeout GitHub stops only the step's own shell: the subcommand it ran, and that
+# subcommand's asc.py, xcodebuild or altool, can keep running next to this teardown. The patterns
+# name this job's paths and subcommands only, so they never match the teardown itself.
+stop_leftovers() {
+  if ! command -v pgrep > /dev/null 2>&1 || ! command -v pkill > /dev/null 2>&1; then return 0; fi
+  local asc p n waited found
+  asc=$(re_quote "$ASC")
+  local -a labels patterns
+  labels=("build_and_sign.sh step" "asc.py" "altool upload" "xcodebuild")
+  patterns=("$(re_quote "$SELF") (create-signing|setup-keychain|install-profiles|configure|archive|export|upload)( |\$)"
+    "$asc (create-signing|upload)( |\$)"
+    "altool --upload-app -f $(re_quote "$EXPORT_DIR")/"
+    "xcodebuild .*-archivePath $(re_quote "$ARCHIVE")( |\$)")
+  # 1. A create-signing still talking to Apple writes each certificate and profile it creates to
+  #    state.json at once: let it finish, so the revocation below knows about them.
+  waited=0
+  while [ "$waited" -lt "$LEFTOVER_WAIT_SEC" ] && pgrep -f "$asc create-signing( |\$)" > /dev/null 2>&1; do
+    if [ "$waited" -eq 0 ]; then note "waiting (up to ${LEFTOVER_WAIT_SEC} s) for a create-signing that is still running"; fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  # 2. Stop the rest (step scripts first, so none starts another tool) and wait until it is gone.
+  n=0
+  while [ "$n" -lt ${#patterns[@]} ]; do
+    p=${patterns[$n]}
+    if pgrep -f "$p" > /dev/null 2>&1; then
+      note "stopping a leftover ${labels[$n]}: pid $(pgrep -f "$p" | tr '\n' ' ')"
+      pkill -TERM -f "$p" > /dev/null 2>&1
+    fi
+    n=$((n + 1))
+  done
+  waited=0
+  while :; do
+    found=""
+    for p in "${patterns[@]}"; do
+      if pgrep -f "$p" > /dev/null 2>&1; then found=1; fi
+    done
+    if [ -z "$found" ]; then return 0; fi
+    if [ "$waited" -eq "$KILL_WAIT_SEC" ]; then
+      for p in "${patterns[@]}"; do pkill -KILL -f "$p" > /dev/null 2>&1; done
+    elif [ "$waited" -gt $((KILL_WAIT_SEC + 5)) ]; then
+      annotate warning "TestFlight (teardown)" "Un paso anterior sigue en marcha y no se pudo parar."$'\n'"An earlier step is still running and could not be stopped."
+      return 0
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+}
+
 cmd_teardown() {
   trap - ERR
   set +e # best effort: never stop half-way through the cleanup
-  local f line
+  touch "$WORK/teardown-started"
+  stop_leftovers
+  local f line uploaded=false
   if [ "$(uname -s)" = Darwin ]; then
     if [ -e "$KEYCHAIN" ]; then
       security delete-keychain "$KEYCHAIN" && note "deleted the temporary keychain"
@@ -533,16 +627,24 @@ cmd_teardown() {
   note "deleted the signing key, keychain password, installed profiles and Config/Local.xcconfig"
 
   # Apple side: a certificate counts against the team's small limit, so never leave one behind.
+  # Once Apple has the file (uploaded, or committed and still processing) the certificate must
+  # outlive this job: the finish job revokes it after Apple's processing.
   if [ -f "$WORK/uploaded" ]; then
+    uploaded=true
     note "the build was uploaded: the finish job revokes the CI certificate and profiles after Apple's processing"
+  elif [ -f "$WORK/committed" ]; then
+    uploaded=true
+    note "Apple has the whole file although the upload step did not finish: the finish job waits for the build, then revokes the CI certificate and profiles"
   elif [ -f "$SIGNING_DIR/state.json" ] && [ ! -f "$WORK/apple-cleanup-done" ]; then
     if [ -n "${ASC_KEY_ID:-}" ] && [ -n "${ASC_ISSUER_ID:-}" ] && [ -n "${ASC_PRIVATE_KEY:-}" ]; then
       note "the build was not uploaded: revoking the CI certificate and profiles now"
       if python3 "$ASC" cleanup --state "$SIGNING_DIR/state.json"; then touch "$WORK/apple-cleanup-done"; fi
     else
-      annotate warning "TestFlight (teardown)" "Sin clave de API no se pudo revocar el certificado de CI: revócalo en developer.apple.com ▸ Certificates."$'\n'"Without the API key the CI certificate could not be revoked: revoke it at developer.apple.com ▸ Certificates."
+      annotate warning "TestFlight (teardown)" "Sin clave de API no se pudo revocar el certificado de CI: revócalo en $URL_CERTS (los «Apple Distribution» creados hoy por la clave de la API)."$'\n'"Without the API key the CI certificate could not be revoked: revoke it at $URL_CERTS (the «Apple Distribution» ones the API key created today)."
     fi
   fi
+  gh_output uploaded "$uploaded"
+  gh_output teardown "done"
   return 0
 }
 
