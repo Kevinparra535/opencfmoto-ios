@@ -157,13 +157,37 @@ final class AppModelTests: XCTestCase {
         p.advance()
         XCTAssertEqual(p.step, .pairBike)
         p.advance()
+        // The last page shows; onboarding completes only with its "Start riding" (review UI-3).
         XCTAssertEqual(p.step, .done)
+        XCTAssertFalse(p.hasCompletedOnboarding)
+        XCTAssertNil(h.core.services.keyValueStore.bool(forKey: PermissionsModel.onboardingDoneKey))
+        p.completeOnboarding()
         XCTAssertTrue(p.hasCompletedOnboarding)
+        XCTAssertEqual(p.step, .done)
         XCTAssertEqual(h.core.services.keyValueStore.bool(forKey: PermissionsModel.onboardingDoneKey), true)
         p.resetOnboarding()
         XCTAssertFalse(p.hasCompletedOnboarding)
         XCTAssertEqual(p.step, .welcome)
         XCTAssertEqual(h.core.services.keyValueStore.bool(forKey: PermissionsModel.onboardingDoneKey), false)
+    }
+
+    @MainActor
+    func testReachingTheLastOnboardingPageDoesNotStartAutoConnect() async {
+        let h = AppTestHarness()
+        let (_, qr) = h.addBike()
+        h.wifi.setNetwork(AppTestHarness.bikeNetwork(ssid: qr.ssid))
+        h.model.start()
+        let p = h.model.permissions
+        for _ in 0 ..< 4 { p.advance() }
+        XCTAssertEqual(p.step, .done)
+        await settle(0.2)
+        XCTAssertNil(h.connection.session) // the rider has not confirmed yet
+        XCTAssertFalse(h.connection.autoConnectLatched)
+        p.advance() // at .done: same as "Start riding"
+        XCTAssertTrue(p.hasCompletedOnboarding)
+        let started = await eventually { h.connection.session != nil }
+        XCTAssertTrue(started)
+        h.connection.stop()
     }
 
     @MainActor

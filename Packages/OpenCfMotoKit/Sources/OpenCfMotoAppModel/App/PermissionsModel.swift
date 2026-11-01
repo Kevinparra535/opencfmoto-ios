@@ -71,7 +71,10 @@ public final class PermissionsModel {
         }
     }
 
-    /// Next onboarding step (welcome → location → local network → pair bike → done).
+    /// Next onboarding step (welcome → location → local network → pair bike → done). Reaching `.done`
+    /// only shows the last page (ride-safety note, Ride Mode advice): its "Start riding" button calls
+    /// `completeOnboarding()`, which swaps onboarding for Home and starts auto-connect (review UI-3:
+    /// completing here hid that page in the same update). `advance()` at `.done` completes too.
     public func advance() {
         let all = OnboardingStep.allCases
         guard let i = all.firstIndex(of: step), i + 1 < all.count else {
@@ -79,7 +82,6 @@ public final class PermissionsModel {
             return
         }
         step = all[i + 1]
-        if step == .done { completeOnboarding() }
     }
 
     public func completeOnboarding() {
