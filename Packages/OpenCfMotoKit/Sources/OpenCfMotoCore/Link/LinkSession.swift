@@ -16,16 +16,28 @@ final class LinkSession: @unchecked Sendable {
         let stream: any ByteStream
         let port: UInt16
         let isControl: Bool
+        /// The peer's address (`LinkPeerHost.normalize`), checked against the dash candidates.
+        let peer: String
         /// Serializes the reply path and the heartbeat task on this socket.
         let writeLock = LinkWriteLock()
         /// Guarded by the session lock.
         var heartbeat: Task<Void, Never>?
-        init(id: Int, stream: any ByteStream, port: UInt16, isControl: Bool) {
+        init(id: Int, stream: any ByteStream, port: UInt16, isControl: Bool, peer: String) {
             self.id = id
             self.stream = stream
             self.port = port
             self.isControl = isControl
+            self.peer = peer
         }
+    }
+
+    /// Outcome of registering an accepted socket.
+    private enum Registration {
+        case accepted(Connection)
+        /// The peer is not the dash (SEC-3): closed, the accept loop goes on.
+        case rejected(host: String?)
+        /// The session is shutting down: the accept loop ends.
+        case dead
     }
 
     private enum DiscoveryResult { case accepted, notFound, denied, aborted }
@@ -72,6 +84,14 @@ final class LinkSession: @unchecked Sendable {
     private var mediaConnectionCount = 0
     private var mediaActive = false
     private var gatewayCandidates: [String] = []
+    /// Hosts allowed to connect back (SEC-3): the dash candidates of this session plus every host
+    /// that accepted a probe (gateway, Bonjour result, scanned port). Normalized.
+    private var allowedPeers: Set<String> = []
+    /// Hosts that spoke the PXC control handshake on :10922 (a channel select or CLIENT_INFO) in
+    /// this session: only they are served video frames on the media plane.
+    private var controlPeers: Set<String> = []
+    /// Foreign connections closed so far (the log line is throttled).
+    private var rejectedPeers = 0
     /// Log lines produced while holding `lock` (flushed by `withLock`).
     private var pendingLogs: [String] = []
 
@@ -254,7 +274,10 @@ final class LinkSession: @unchecked Sendable {
             withLock { setStateLocked(.failed(.noWifiAddress)) }
             return
         }
-        withLock { gatewayCandidates = candidates }
+        withLock {
+            gatewayCandidates = candidates
+            allowedPeers.formUnion(candidates.compactMap(LinkPeerHost.normalize))
+        }
         let fallbacks = candidates.count > 1 ? " (fallbacks \(candidates.dropFirst().joined(separator: ", ")))" : ""
         Log.i("LINK", "our IP=\(local?.ipv4 ?? "?")  bike IP=\(primary)\(fallbacks)")
 
@@ -326,21 +349,39 @@ final class LinkSession: @unchecked Sendable {
                 Log.i("LINK", "[:\(port)] listening again")
                 continue
             }
-            guard let conn = register(stream) else {
+            switch register(stream) {
+            case let .accepted(conn):
+                if !spawn({ [self] in await self.serve(conn) }) { stream.close() }
+            case let .rejected(host):
+                // Not the dash (SEC-3): close it and keep accepting — one foreign client must not
+                // be able to stop the listener either.
+                stream.close()
+                let n: Int = withLock {
+                    rejectedPeers += 1
+                    return rejectedPeers
+                }
+                if n <= 5 || n % 50 == 0 {
+                    Log.w("LINK", "[:\(port)] !! refused a connection from \(host ?? "an unknown address") — not the dash this session probed (#\(n))")
+                }
+            case .dead:
                 stream.close()
                 return
             }
-            if !spawn({ [self] in await self.serve(conn) }) { stream.close() }
         }
     }
 
     /// Accounting for an accepted bike socket (Android `spawnAccept`): everConnected, budget reset,
-    /// live count, state.
-    private func register(_ stream: any ByteStream) -> Connection? {
-        let conn: Connection? = withLock {
-            guard alive else { return nil }
+    /// live count, state. Android accepts any peer; the iOS link only accepts the dash (SEC-3): the
+    /// session's dash candidates (explicit / NWPath gateway, subnet .1, known dash gateways) and
+    /// every host that accepted a probe. A loopback e2e run (fake dash on 127.0.0.1 as the gateway)
+    /// passes the same check.
+    private func register(_ stream: any ByteStream) -> Registration {
+        let peer = LinkPeerHost.normalize(stream.remoteHost)
+        let result: Registration = withLock {
+            guard alive else { return .dead }
+            guard let peer, allowedPeers.contains(peer) else { return .rejected(host: peer) }
             let isControl = stream.localPort == LinkSession.controlPort
-            let c = Connection(id: nextConnectionId, stream: stream, port: stream.localPort, isControl: isControl)
+            let c = Connection(id: nextConnectionId, stream: stream, port: stream.localPort, isControl: isControl, peer: peer)
             nextConnectionId += 1
             connections[c.id] = c
             everConnected = true
@@ -358,10 +399,21 @@ final class LinkSession: @unchecked Sendable {
             default:
                 break
             }
-            return c
+            return .accepted(c)
         }
-        if conn != nil { Log.i("LINK", "[:\(stream.localPort)] <<< bike connected from \(stream.remoteEndpoint)") }
-        return conn
+        if case .accepted = result { Log.i("LINK", "[:\(stream.localPort)] <<< bike connected from \(stream.remoteEndpoint)") }
+        return result
+    }
+
+    /// The peer completed the PXC control handshake on :10922 (channel select / CLIENT_INFO).
+    private func markControlPeer(_ peer: String) {
+        withLock { _ = controlPeers.insert(peer) }
+    }
+
+    /// Whether video frames may be served to `peer` (it spoke the control handshake first, as every
+    /// dash family does — control-plane.md §5.5 S4–S9 precede S10).
+    private func mayServeFrames(to peer: String) -> Bool {
+        withLock { controlPeers.contains(peer) }
     }
 
     private func connectionEnded(_ conn: Connection) {
@@ -428,8 +480,10 @@ final class LinkSession: @unchecked Sendable {
             for event in response.events {
                 switch event {
                 case let .channelSelected(channel, startHeartbeat):
+                    markControlPeer(conn.peer)
                     if startHeartbeat { startHeartbeatTask(conn, label: channel.rawValue) }
                 case let .dashIdentified(info, profile):
+                    markControlPeer(conn.peer)
                     owner?.sessionIdentified(info, profile: profile, generation: generation)
                 case .checkSnCompleted:
                     withLock { if state == .handshaking { setStateLocked(.awaitingMedia) } }
@@ -452,10 +506,12 @@ final class LinkSession: @unchecked Sendable {
     private func serveMedia(_ conn: Connection) async {
         let tag = ":\(conn.port)"
         Log.i("LINK", "[\(tag)] framing=ReqBase (media plane) profile=\(context.activeProfile.name)")
+        let peer = conn.peer
         let handler = MediaChannelHandler(context: context, frameSource: frameSource, stats: stats,
                                           framePullTimeout: config.framePullTimeout, tag: tag,
                                           resynchronizeOnStartH264: options.resynchronizeOnStartH264,
-                                          encoderParameters: options.encoderParameters) { [weak self] touch in
+                                          encoderParameters: options.encoderParameters,
+                                          mayServeFrames: { [weak self] in self?.mayServeFrames(to: peer) ?? false }) { [weak self] touch in
             self?.touchFilter.handle(touch)
         }
         let stream = conn.stream
@@ -667,7 +723,11 @@ final class LinkSession: @unchecked Sendable {
             await gate.release(accepted: outcome == .accepted)
             switch outcome {
             case .accepted:
-                withLock { probeAccepted = true }
+                withLock {
+                    probeAccepted = true
+                    // The dash calls back from the address it was probed at (SEC-3 allowlist).
+                    if let h = LinkPeerHost.normalize(host) { allowedPeers.insert(h) }
+                }
                 return true
             case .localNetworkDenied:
                 denied.set(true)
@@ -866,5 +926,22 @@ final class LinkSession: @unchecked Sendable {
         } else {
             spawn { [self] in await self.runDiscovery() }
         }
+    }
+}
+
+/// Canonical form of a peer address for the SEC-3 allowlist: brackets and an IPv6 zone
+/// ("%en0") removed, an IPv4-mapped IPv6 address ("::ffff:192.168.0.1") reduced to its IPv4,
+/// lower-cased. nil for a missing / empty address (such a peer is never allowed).
+enum LinkPeerHost {
+    static func normalize(_ raw: String?) -> String? {
+        guard var h = raw?.trimmingCharacters(in: .whitespaces), !h.isEmpty else { return nil }
+        if h.hasPrefix("["), h.hasSuffix("]") { h = String(h.dropFirst().dropLast()) }
+        if let zone = h.firstIndex(of: "%") { h = String(h[..<zone]) }
+        h = h.lowercased()
+        if h.hasPrefix("::ffff:") {
+            let v4 = String(h.dropFirst("::ffff:".count))
+            if InterfaceAddresses.isValidIPv4(v4) { return v4 }
+        }
+        return h.isEmpty ? nil : h
     }
 }

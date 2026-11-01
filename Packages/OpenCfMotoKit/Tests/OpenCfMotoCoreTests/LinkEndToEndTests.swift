@@ -595,4 +595,122 @@ final class LinkEndToEndTests: XCTestCase {
         XCTAssertEqual(h.recorder.touches.first.map { [$0.x, $0.y] }, [799, 383])
         h.link.stop()
     }
+
+    // MARK: - SEC-3: only the probed dash may connect back
+
+    /// A connection that is closed by the phone: the next read fails with something other than a
+    /// timeout.
+    private func assertClosedByPhone(_ stream: LinkMemoryStream, file: StaticString = #filePath, line: UInt = #line) async {
+        do {
+            _ = try await linkWithin(1, "closed") { try await stream.readSome(maxCount: 64) }
+            XCTFail("expected the phone to close the connection", file: file, line: line)
+        } catch {
+            XCTAssertFalse(error is TimeoutError, "still open", file: file, line: line)
+        }
+    }
+
+    func testForeignPeerIsRefusedAndTheListenersKeepAccepting() async throws {
+        let h = makeHarness()
+        h.link.start()
+        let probed = await linkEventually { h.dash.acceptedCount.current == 1 }
+        XCTAssertTrue(probed)
+        // Another device on the bike Wi-Fi tries every port: closed at once, no state change.
+        for port: UInt16 in [10922, 10921, 10920] {
+            let foreign = try h.net.dial(port: port, fromHost: "192.168.0.77")
+            await assertClosedByPhone(foreign)
+        }
+        XCTAssertEqual(h.link.state, .awaitingCallback)
+        XCTAssertEqual(h.source.calls, [])
+        // The probed dash still gets through on the same listeners and streams.
+        let ctrl = try h.dash.openControl()
+        try await ctrl.send(PxcFrame(cmd: 0x10000))
+        _ = try await ctrl.nextRaw()
+        try await ctrl.send(cmd: 0x10010, json: LinkDashSamples.cfdl16ClientInfo)
+        _ = try await ctrl.next()
+        let mctl = try h.dash.openMedia(port: 10921)
+        try await mctl.send(cmd: 16, body: LinkDashSamples.configCaptureBody(width: 800, height: 386))
+        _ = try await mctl.reply()
+        try await mctl.send(cmd: 112)
+        _ = try await mctl.reply()
+        let mdata = try h.dash.openMedia(port: 10920)
+        try await mdata.send(cmd: 114)
+        let first = try await mdata.frame()
+        XCTAssertTrue(AnnexB.containsIDR(annexB: first.accessUnit))
+        await waitState(h) { $0 == .streaming }
+        // A foreign media socket during the session is refused too and the stream goes on.
+        let late = try h.net.dial(port: 10920, fromHost: "10.0.0.9")
+        await assertClosedByPhone(late)
+        try await mdata.send(cmd: 114)
+        _ = try await mdata.frame()
+        h.link.stop()
+    }
+
+    func testMediaPeerWithoutAControlHandshakeIsServedNoFrames() async throws {
+        let h = makeHarness()
+        h.link.start()
+        let probed = await linkEventually { h.dash.acceptedCount.current == 1 }
+        XCTAssertTrue(probed)
+        // Media straight away from the dash address, no :10922 handshake: negotiation is answered
+        // (order-agnostic) but no picture is served.
+        let mctl = try h.dash.openMedia(port: 10921)
+        try await mctl.send(cmd: 16, body: LinkDashSamples.configCaptureBody(width: 800, height: 386))
+        _ = try await mctl.reply()
+        try await mctl.send(cmd: 112)
+        _ = try await mctl.reply()
+        let mdata = try h.dash.openMedia(port: 10920)
+        try await mdata.send(cmd: 114)
+        await mdata.expectSilence(for: 0.6)
+        XCTAssertEqual(h.link.stats.framesSent, 0)
+        XCTAssertFalse(h.source.calls.contains(.nextFrame), "the frame source is not even asked")
+        // Once that host spoke the control handshake, its pulls are served.
+        let ctrl = try h.dash.openControl()
+        try await ctrl.send(PxcFrame(cmd: 0x10000))
+        _ = try await ctrl.nextRaw()
+        try await mdata.send(cmd: 114)
+        let f = try await mdata.frame()
+        XCTAssertTrue(AnnexB.containsIDR(annexB: f.accessUnit))
+        h.link.stop()
+    }
+
+    /// The CI e2e harness: phone and fake dash both on loopback (the phone presented as 127.0.0.2,
+    /// the fake dash at 127.0.0.1 as the gateway, calling back from 127.0.0.1).
+    func testLoopbackFakeDashIsAccepted() async throws {
+        let net = LinkMemoryNetwork(phoneHost: "127.0.0.1")
+        let dash = LinkFakeDash(network: net, host: "127.0.0.1")
+        dash.installProbeServer()
+        let source = LinkFakeFrameSource()
+        let config = LinkConfiguration(phone: LinkTestKeys.examplePhone, localHost: "127.0.0.2", connectBackTimeout: 2,
+                                       framePullTimeout: 0.3)
+        var options = LinkOptions()
+        options.timings = Self.fastTimings
+        options.interfaceProvider = { [InterfaceAddress(name: "lo0", ipv4: "127.0.0.2", netmask: "255.0.0.0")] }
+        let link = EasyConnLink(configuration: config, network: net, frameSource: source, signer: LinkTestKeys.fixtureSigner,
+                                gateway: "127.0.0.1", options: options)
+        link.start()
+        let probed = await linkEventually { dash.acceptedCount.current == 1 }
+        XCTAssertTrue(probed)
+        XCTAssertEqual(net.connectLog.first, "127.0.0.1:10930")
+        let ctrl = try dash.openControl()
+        try await ctrl.send(PxcFrame(cmd: 0x10000))
+        _ = try await ctrl.nextRaw()
+        let mdata = try dash.openMedia(port: 10920)
+        try await mdata.send(cmd: 112)
+        _ = try await mdata.reply()
+        try await mdata.send(cmd: 114)
+        let f = try await mdata.frame()
+        XCTAssertTrue(AnnexB.containsIDR(annexB: f.accessUnit))
+        link.stop()
+    }
+
+    func testPeerHostNormalization() {
+        XCTAssertEqual(LinkPeerHost.normalize("192.168.0.1"), "192.168.0.1")
+        XCTAssertEqual(LinkPeerHost.normalize("::ffff:192.168.0.1"), "192.168.0.1")
+        XCTAssertEqual(LinkPeerHost.normalize("::FFFF:192.168.49.1"), "192.168.49.1")
+        XCTAssertEqual(LinkPeerHost.normalize("[fe80::1%en0]"), "fe80::1")
+        XCTAssertEqual(LinkPeerHost.normalize("FE80::1%25en0"), "fe80::1")
+        XCTAssertEqual(LinkPeerHost.normalize(" 127.0.0.1 "), "127.0.0.1")
+        XCTAssertNil(LinkPeerHost.normalize(nil))
+        XCTAssertNil(LinkPeerHost.normalize(""))
+        XCTAssertNil(LinkPeerHost.normalize("%en0"))
+    }
 }

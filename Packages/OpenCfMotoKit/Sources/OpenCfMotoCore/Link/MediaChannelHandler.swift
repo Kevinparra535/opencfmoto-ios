@@ -18,6 +18,8 @@ public enum MediaChannelEvent: Sendable, Equatable {
     case frameSent(number: Int, bytes: Int, keyframe: Bool)
     /// A 114 got no frame within the pull timeout (nothing sent).
     case pullMissed
+    /// A 114 from a peer that never spoke the PXC control handshake: no frame is served (SEC-3).
+    case pullRefused
     /// A touch frame (cmd 32) was decoded and handed to the touch sink (never answered).
     case touch(PxcTouchFrame)
     /// A cmd 32 body shorter than 8 bytes (dropped).
@@ -34,15 +36,19 @@ public final class MediaChannelHandler: @unchecked Sendable {
     private let framePullTimeout: TimeInterval
     private let resynchronizeOnStartH264: Bool
     private let encoderParameters: @Sendable (BikeProfile, VideoCanvas) -> EncoderParameters
+    private let mayServeFrames: @Sendable () -> Bool
     private let touchSink: @Sendable (PxcTouchFrame) -> Void
 
     /// - Parameters:
     ///   - framePullTimeout: how long a 114 may wait in `VideoFrameSource.nextFrame`.
     ///   - encoderParameters: parameters for `prepare` (default: the profile's encoder defaults).
+    ///   - mayServeFrames: whether this connection's peer may receive video (the session only
+    ///     serves a peer that completed the control handshake on :10922; default: always).
     ///   - touchSink: receives decoded touch frames (the ghost filter).
     public init(context: LinkSessionContext, frameSource: VideoFrameSource, stats: LinkStatsTracker,
                 framePullTimeout: TimeInterval, tag: String, resynchronizeOnStartH264: Bool = true,
                 encoderParameters: (@Sendable (BikeProfile, VideoCanvas) -> EncoderParameters)? = nil,
+                mayServeFrames: @escaping @Sendable () -> Bool = { true },
                 touchSink: @escaping @Sendable (PxcTouchFrame) -> Void) {
         self.context = context
         self.frameSource = frameSource
@@ -51,6 +57,7 @@ public final class MediaChannelHandler: @unchecked Sendable {
         self.tag = tag
         self.resynchronizeOnStartH264 = resynchronizeOnStartH264
         self.encoderParameters = encoderParameters ?? { profile, _ in profile.encoderDefaults }
+        self.mayServeFrames = mayServeFrames
         self.touchSink = touchSink
     }
 
@@ -143,6 +150,13 @@ public final class MediaChannelHandler: @unchecked Sendable {
     }
 
     private func onDataNext(write: @Sendable (Data) async throws -> Void) async throws -> [MediaChannelEvent] {
+        guard mayServeFrames() else {
+            // The dash always speaks the control handshake on :10922 before it pulls video; a
+            // peer that never did gets no picture of the rider's map (SEC-3).
+            Log.shared.throttled("refused-\(tag)", interval: 5, .warn, "LINK",
+                                 "[\(tag)] !! REQ_RV_DATA_NEXT(114) from a peer without a control handshake — no frame served")
+            return [.pullRefused]
+        }
         stats.recordPull()
         guard let frame = await frameSource.nextFrame(timeout: framePullTimeout) else {
             stats.recordMissedPull()
