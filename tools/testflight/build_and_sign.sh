@@ -34,6 +34,8 @@
 #                                   (the CI dry run's self-signed certificate; never for real builds)
 #   TF_LEFTOVER_WAIT_SEC, TF_KILL_WAIT_SEC   teardown: how long to let a running create-signing
 #                    finish (default 60 s) and to wait for stopped leftovers (default 15 s)
+#   TF_DUPLICATES_WAIT_SEC   teardown of an uploaded build: how long the look for a duplicate
+#                    certificate may take (default 120 s; GitHub stops Clean up soon after a cancel)
 #   GITHUB_REPOSITORY_ID GITHUB_RUN_ID GITHUB_RUN_ATTEMPT   name the CI profiles
 #                    ("OpenCfMoto CI r<repository>-<run>-<attempt> app"; "local<date>-1" on a Mac);
 #                    TF_SUFFIX replaces that suffix (asc.py janitor never removes such profiles)
@@ -66,6 +68,7 @@ MIN_SDK_MAJOR="${TF_MIN_SDK_MAJOR:-26}" # App Store Connect only accepts builds 
 DEVICE_FAMILY=1                        # iPhone only (TARGETED_DEVICE_FAMILY in project.yml)
 LEFTOVER_WAIT_SEC="${TF_LEFTOVER_WAIT_SEC:-60}"
 KILL_WAIT_SEC="${TF_KILL_WAIT_SEC:-15}"
+DUPLICATES_WAIT_SEC="${TF_DUPLICATES_WAIT_SEC:-120}"
 DOCS_URL="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-Kevinparra535/opencfmoto-ios}/blob/main/docs/TESTFLIGHT.md"
 URL_CERTS="https://developer.apple.com/account/resources/certificates/list"
 URL_PROFILES="https://developer.apple.com/account/resources/profiles/list"
@@ -127,6 +130,45 @@ random_secret() { "$OPENSSL" rand -hex 24; }
 # key=value lines a tool appended to its GITHUB_OUTPUT file (multi-line values are not used).
 output_value() { sed -n "s/^$2=//p" "$1" | tail -n 1; }
 
+# A value of create-signing's state.json: a list joined with commas; only App Store Connect id
+# characters; nothing when there is no such file or value.
+state_json() {
+  if [ ! -f "$SIGNING_DIR/state.json" ]; then return 0; fi
+  python3 -I -c 'import json, re, sys
+try:
+    value = json.load(open(sys.argv[1])).get(sys.argv[2])
+    values = value if isinstance(value, list) else [value]
+    print(",".join(str(v) for v in values if re.fullmatch(r"[A-Za-z0-9._-]+", str(v or ""))))
+except Exception:
+    pass' "$SIGNING_DIR/state.json" "$1"
+}
+
+# The CI profiles' name suffix, as asc.py default_suffix() makes it: r<repository id>-<run>-<attempt>
+# on GitHub (asc.py janitor knows this repository's profiles by it), local<date and time>-1 on a
+# Mac, or TF_SUFFIX; cleaned as asc.py cleans it (clean_suffix), so it is the one in the names.
+profile_suffix() {
+  local suffix
+  suffix="${GITHUB_RUN_ID:-local$(date +%Y%m%d%H%M%S)}-${GITHUB_RUN_ATTEMPT:-1}"
+  case "${GITHUB_REPOSITORY_ID:-x}" in
+    *[!0-9]*) ;;
+    *) suffix="r$GITHUB_REPOSITORY_ID-$suffix" ;;
+  esac
+  python3 -I -c 'import re, sys
+print(re.sub(r"[^A-Za-z0-9-]+", "-", sys.argv[1]).strip("-") or "run")' "${TF_SUFFIX:-$suffix}"
+}
+
+# Run a command with a time limit (macOS has no `timeout`): after $1 seconds it gets SIGALRM and
+# ends with exit status 142.
+bounded() {
+  local seconds=$1
+  shift
+  if command -v perl > /dev/null 2>&1; then
+    perl -e 'alarm shift; exec @ARGV; exit 127' "$seconds" "$@"
+  else
+    "$@"
+  fi
+}
+
 # ------------------------------------------------------------------ create-signing
 cmd_create_signing() {
   need_env ASC_KEY_ID ASC_ISSUER_ID ASC_PRIVATE_KEY APP_BUNDLE_RESOURCE_ID MIRROR_BUNDLE_RESOURCE_ID \
@@ -136,15 +178,11 @@ cmd_create_signing() {
   rm -f "$WORK/uploaded" "$WORK/committed" "$WORK/apple-cleanup-done" "$WORK/teardown-started"
   rm -f "$SIGNING_DIR"/profiles/*.mobileprovision
   mkdir -p "$SIGNING_DIR"
-  # Unique per run, so profiles left behind by a crashed run never clash by name. The repository id
-  # tells asc.py janitor which CI profiles are this repository's (asc.py default_suffix: same rule).
+  # Unique per run, so profiles left behind by a crashed run never clash by name. Recorded before
+  # asc.py runs: the teardown names this run's profiles by it in its manual steps.
   local suffix outputs="$WORK/create-signing.outputs" status=0
-  suffix="${GITHUB_RUN_ID:-local$(date +%Y%m%d%H%M%S)}-${GITHUB_RUN_ATTEMPT:-1}"
-  case "${GITHUB_REPOSITORY_ID:-x}" in
-    *[!0-9]*) ;;
-    *) suffix="r$GITHUB_REPOSITORY_ID-$suffix" ;;
-  esac
-  suffix="${TF_SUFFIX:-$suffix}"
+  suffix=$(profile_suffix)
+  state_set S_SUFFIX "$suffix"
   : > "$outputs"
   note "creating a distribution certificate and two App Store profiles (suffix $suffix)"
   GITHUB_OUTPUT="$outputs" python3 "$ASC" create-signing \
@@ -153,15 +191,7 @@ cmd_create_signing() {
     --out "$SIGNING_DIR" --suffix "$suffix" || status=$?
   # Pass every id on even after a failure: the job outputs and teardown need them.
   if [ -n "${GITHUB_OUTPUT:-}" ]; then cat "$outputs" >> "$GITHUB_OUTPUT"; fi
-  local profile_ids=""
-  if [ -f "$SIGNING_DIR/state.json" ]; then
-    profile_ids=$(python3 -I -c 'import json, sys
-try:
-    print(",".join(str(p) for p in json.load(open(sys.argv[1])).get("profile_ids") or []))
-except Exception:
-    pass' "$SIGNING_DIR/state.json")
-  fi
-  gh_output profile_ids "$profile_ids"
+  gh_output profile_ids "$(state_json profile_ids)"
   if [ "$status" -ne 0 ]; then
     reported # asc.py has already explained the problem in an annotation
     exit "$status"
@@ -642,10 +672,16 @@ cmd_teardown() {
   # Apple side: a certificate counts against the team's small limit, so never leave one behind.
   # Once Apple has (or may have) the file - uploaded, or committed or being committed - the
   # certificate must outlive this job: the finish job revokes it after Apple's processing.
-  local have_key=""
+  local have_key="" suffix="" status
   if [ -n "${ASC_KEY_ID:-}" ] && [ -n "${ASC_ISSUER_ID:-}" ] && [ -n "${ASC_PRIVATE_KEY:-}" ]; then have_key=1; fi
+  state_load
+  suffix="${S_SUFFIX:-}" # this run's profile names: «OpenCfMoto CI <suffix> app|mirror»
   if [ -f "$WORK/uploaded" ] || [ -f "$WORK/committed" ]; then
     uploaded=true
+    # Written before anything below talks to Apple: should GitHub stop this step half-way (its
+    # time limit after a cancel), the finish job must still wait for the build before it revokes
+    # the certificate, not take this job for one that lost its runner.
+    gh_output uploaded true
     if [ -f "$WORK/uploaded" ]; then
       note "the build was uploaded: the «Processing, TestFlight group, revoke the certificate» job revokes the CI certificate and profiles after Apple's processing"
     else
@@ -655,14 +691,24 @@ cmd_teardown() {
     # profile, so only this run's key (csr.pem) finds it: revoke it now (asc.py keeps the
     # recorded one and does nothing unless state.json says a request went unanswered).
     if [ -f "$SIGNING_DIR/state.json" ] && [ -n "$have_key" ]; then
-      python3 "$ASC" cleanup --state "$SIGNING_DIR/state.json" --duplicates-only
+      status=0
+      bounded "$DUPLICATES_WAIT_SEC" python3 "$ASC" cleanup --state "$SIGNING_DIR/state.json" --duplicates-only || status=$?
+      if [ "$status" -eq 142 ]; then
+        annotate warning "Certificado sin confirmar / Certificate not confirmed" "Una petición de certificado de esta ejecución quedó sin respuesta clara, y App Store Connect no respondió a tiempo (${DUPLICATES_WAIT_SEC} s) para comprobar si creó un segundo certificado. Cuando termine el trabajo «Processing, TestFlight group, revoke the certificate» (revoca el certificado de esta build), mira en $URL_CERTS: si aún queda un certificado «Apple Distribution» creado hoy, púlsalo ▸ Revoke."$'\n'"A certificate request of this run got no clear answer, and App Store Connect did not answer in time (${DUPLICATES_WAIT_SEC} s) to check whether it made a second certificate. Once the «Processing, TestFlight group, revoke the certificate» job has finished (it revokes this build's certificate), look at $URL_CERTS: if an «Apple Distribution» certificate created today is still there, click it ▸ Revoke."
+      fi
     fi
   elif [ -f "$SIGNING_DIR/state.json" ] && [ ! -f "$WORK/apple-cleanup-done" ]; then
     if [ -n "$have_key" ]; then
       note "the build was not uploaded: revoking the CI certificate and profiles now"
-      if python3 "$ASC" cleanup --state "$SIGNING_DIR/state.json"; then touch "$WORK/apple-cleanup-done"; fi
+      if python3 "$ASC" cleanup --state "$SIGNING_DIR/state.json" --suffix "$suffix"; then touch "$WORK/apple-cleanup-done"; fi
     else
-      annotate warning "Revoca a mano / Revoke by hand" "Sin la clave de la API no se pudo revocar lo que creó esta ejecución. En $URL_CERTS revoca el certificado «Apple Distribution» creado hoy (púlsalo ▸ Revoke) y en $URL_PROFILES borra los perfiles «OpenCfMoto CI …» (cada uno ▸ Remove)."$'\n'"Without the API key, what this run created could not be revoked. At $URL_CERTS revoke the «Apple Distribution» certificate created today (click it ▸ Revoke) and at $URL_PROFILES delete the «OpenCfMoto CI …» profiles (each ▸ Remove)."
+      # Only this run's profiles by name: another repository's or a Mac's run may be using its own.
+      local cert_id profile_ids app mirror
+      cert_id=$(state_json cert_id)
+      profile_ids=$(state_json profile_ids)
+      app="OpenCfMoto CI ${suffix:-…} app"
+      mirror="OpenCfMoto CI ${suffix:-…} mirror"
+      annotate warning "Revoca a mano / Revoke by hand" "Sin la clave de la API no se pudo revocar lo que creó esta ejecución. En $URL_CERTS revoca el certificado «Apple Distribution» creado hoy${cert_id:+ (id $cert_id)} (púlsalo ▸ Revoke) y en $URL_PROFILES borra los perfiles «$app» y «$mirror»${profile_ids:+ (ids $profile_ids)} (cada uno ▸ Remove; ningún otro «OpenCfMoto CI …»)."$'\n'"Without the API key, what this run created could not be revoked. At $URL_CERTS revoke the «Apple Distribution» certificate created today${cert_id:+ (id $cert_id)} (click it ▸ Revoke) and at $URL_PROFILES delete the «$app» and «$mirror» profiles${profile_ids:+ (ids $profile_ids)} (each ▸ Remove; no other «OpenCfMoto CI …» one)."
     fi
   fi
   gh_output uploaded "$uploaded"

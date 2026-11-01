@@ -17,7 +17,7 @@ LibreSSL as macOS /usr/bin/openssl), using only flags both understand.
   asc.py upload --ipa PATH --app-id ID --version 1.2.3 --build N [--timeout-min 30] \\
                 [--committed-marker PATH]
   asc.py wait-build --app-id ID --build N [--timeout-min 90] [--poll-sec 60]
-  asc.py cleanup [--state DIR/state.json] [--cert-id C] [--profile-ids P1,P2]
+  asc.py cleanup [--state DIR/state.json] [--cert-id C] [--profile-ids P1,P2] [--suffix S]
   asc.py cleanup --state DIR/state.json --duplicates-only     (teardown of an uploaded build)
 
 Environment: ASC_KEY_ID, ASC_ISSUER_ID and ASC_PRIVATE_KEY (the text of the .p8 file; CRLF, stray
@@ -70,6 +70,8 @@ UPLOAD_POLL_SEC = 15
 COMMIT_CHECK_MIN = 2        # after a commit with no clear answer, look for it this long
 RECHECK_SEC = 5             # pause before looking for what an unanswered POST may have created
 PENDING_RECHECK_SEC = (10, 20, 30)   # cleanup: a cut-off certificate request may still complete
+PENDING_RECHECK_BUDGET_SEC = 150     # ...but no new look after this long (real seconds, not scaled):
+                                     # GitHub stops Clean up a few minutes after a cancel
 FALSE_404_PAUSES = (3, 6, 12)   # Apple's transient 404 on Build Upload API reads
 # Apple refuses tokens whose `exp` is more than 20 minutes ahead (clock skew included): use 19.
 JWT_LIFETIME = 19 * 60
@@ -733,23 +735,64 @@ def _ids(ids) -> str:
     return f" ({'id' if len(ids) == 1 else 'ids'} {', '.join(ids)})" if ids else ""
 
 
-def manual_revoke(cert_ids=(), profile_ids=()):
+def run_profile_names(suffix: str = ""):
+    """(app, mirror): this run's two profiles as the developer portal's Profiles list names them.
+    `suffix`: the exact one create-signing used (the teardown knows it). Without it, the name is
+    made from this run's ids as default_suffix() makes it, with «…» for the attempt (the finish
+    job's attempt can differ from the build job's); «…» alone outside GitHub Actions."""
+    if not suffix:
+        run = os.environ.get("GITHUB_RUN_ID") or ""
+        repo = os.environ.get("GITHUB_REPOSITORY_ID") or ""
+        suffix = "…"
+        if re.fullmatch(r"[0-9]+", run):
+            suffix = f"{run}-…"
+            if re.fullmatch(r"[0-9]+", repo):
+                suffix = f"r{repo}-{suffix}"
+    return f"{CI_PROFILE_PREFIX}{suffix} app", f"{CI_PROFILE_PREFIX}{suffix} mirror"
+
+
+def manual_revoke(cert_ids=(), profile_ids=(), suffix: str = "", certs: bool = True,
+                  profiles: bool = True):
     """(es, en): how to revoke by hand what this run created today, the way the developer portal
-    lists it: the certificate by its type and date, the profiles by their name."""
+    lists it: the certificate by its type and date, the profiles by this run's names, never every
+    «OpenCfMoto CI …» one (another repository's or a Mac's run may still be using its own).
+    `certs=False` / `profiles=False`: nothing of that kind can be left (it went, none was made,
+    or another message names it)."""
     cert_ids, profile_ids = list(cert_ids), list(profile_ids)
-    many = len(cert_ids) > 1
-    cert_es = (f"los certificados «Apple Distribution» creados hoy{_ids(cert_ids)}, púlsalos uno a "
-               "uno ▸ Revoke" if many else
-               f"el certificado «Apple Distribution» creado hoy{_ids(cert_ids)}, púlsalo ▸ Revoke")
-    cert_en = (f"the «Apple Distribution» certificates created today{_ids(cert_ids)}, click each "
-               "▸ Revoke" if many else
-               f"the «Apple Distribution» certificate created today{_ids(cert_ids)}, click it ▸ Revoke")
-    return (f"Revoca a mano lo que quede. En {URL_CERTIFICATES}: {cert_es}. En {URL_PROFILES}: los "
-            f"perfiles «OpenCfMoto CI …»{_ids(profile_ids)}, cada uno ▸ Remove. Un certificado "
-            "olvidado ocupa uno de los pocos certificados de distribución que permite Apple.",
-            f"Revoke what is left by hand. At {URL_CERTIFICATES}: {cert_en}. At {URL_PROFILES}: the "
-            f"«OpenCfMoto CI …» profiles{_ids(profile_ids)}, each ▸ Remove. A forgotten certificate "
-            "uses one of the few distribution certificates Apple allows.")
+    certs = certs or not profiles
+    es, en = [], []
+    if certs:
+        many = len(cert_ids) > 1
+        es.append(f"En {URL_CERTIFICATES}: " + (
+            f"los certificados «Apple Distribution» creados hoy{_ids(cert_ids)}, púlsalos uno a uno "
+            "▸ Revoke." if many else
+            f"el certificado «Apple Distribution» creado hoy{_ids(cert_ids)}, púlsalo ▸ Revoke."))
+        en.append(f"At {URL_CERTIFICATES}: " + (
+            f"the «Apple Distribution» certificates created today{_ids(cert_ids)}, click each ▸ "
+            "Revoke." if many else
+            f"the «Apple Distribution» certificate created today{_ids(cert_ids)}, click it ▸ Revoke."))
+    if profiles:
+        app, mirror = run_profile_names(suffix)
+        es.append(f"En {URL_PROFILES}: los perfiles «{app}» y «{mirror}» que queden"
+                  f"{_ids(profile_ids)}, cada uno ▸ Remove (ningún otro «OpenCfMoto CI …»).")
+        en.append(f"At {URL_PROFILES}: the «{app}» and «{mirror}» profiles that are left"
+                  f"{_ids(profile_ids)}, each ▸ Remove (no other «OpenCfMoto CI …» one).")
+    if certs:
+        es.append("Un certificado olvidado ocupa uno de los pocos certificados de distribución que "
+                  "permite Apple.")
+        en.append("A forgotten certificate uses one of the few distribution certificates Apple allows.")
+    return (" ".join(["Revoca a mano lo que quede." if certs else "Borra a mano lo que quede."] + es),
+            " ".join(["Revoke what is left by hand." if certs else "Delete what is left by hand."] + en))
+
+
+# After a build reached Apple its certificate must outlive the build job: only once the finish job
+# has revoked it is an «Apple Distribution» certificate of today still there a leftover of the run.
+AFTER_FINISH_ES = ("Cuando termine el trabajo «Processing, TestFlight group, revoke the certificate» "
+                   f"(revoca el certificado de esta build), mira en {URL_CERTIFICATES}: si aún queda "
+                   "un certificado «Apple Distribution» creado hoy, púlsalo ▸ Revoke.")
+AFTER_FINISH_EN = ("Once the «Processing, TestFlight group, revoke the certificate» job has finished "
+                   f"(it revokes this build's certificate), look at {URL_CERTIFICATES}: if an «Apple "
+                   "Distribution» certificate created today is still there, click it ▸ Revoke.")
 
 
 # ---------------------------------------------------------------- check-auth
@@ -1032,9 +1075,17 @@ def _expiry(cert: dict) -> str:
     return str(attrs(cert).get("expirationDate") or "")[:10]     # YYYY-MM-DD
 
 
+def _joined(items, word: str) -> str:
+    """«a», «b» y «c» / «a», «b» and «c»."""
+    items = list(items)
+    return items[0] if len(items) == 1 else f"{', '.join(items[:-1])} {word} {items[-1]}"
+
+
 def sweep_leftovers(client: Client, run_id: str = ""):
-    """Delete the CI profiles is_leftover() picks and revoke the certificates they use that no
-    other profile uses. Returns (removed, problems): (Spanish, English) texts; each problem names
+    """Revoke the certificates of the CI profiles is_leftover() picks (those no other profile
+    uses), then delete those profiles. Certificates go first, and a profile whose certificate could
+    not be revoked stays: the sweep finds certificates only through these profiles, so the next run
+    can then try again. Returns (removed, problems): (Spanish, English) texts; each problem names
     the profile or certificate that is left."""
     repo_id = os.environ.get("GITHUB_REPOSITORY_ID") or ""
     repo_id = repo_id if re.fullmatch(r"[0-9]+", repo_id) else ""
@@ -1051,20 +1102,12 @@ def sweep_leftovers(client: Client, run_id: str = ""):
     for profile in profiles:
         if profile["id"] not in ci_ids:
             in_use.update(profile_certificate_ids(client, profile))
-    certs = _unique(c for p in ci for c in profile_certificate_ids(client, p)
-                    if RESOURCE_ID_RE.fullmatch(c))
+    links = {p["id"]: [c for c in profile_certificate_ids(client, p) if RESOURCE_ID_RE.fullmatch(c)]
+             for p in ci}
+    names = {p["id"]: attrs(p).get("name") or p["id"] for p in ci}
     expiry = {str(c.get("id")): _expiry(c) for c in included if c.get("type") == "certificates"}
-    removed, problems = [], []
-    for profile in ci:
-        name = attrs(profile).get("name") or profile["id"]
-        try:
-            client.request("DELETE", f"/v1/profiles/{profile['id']}")
-            removed.append((f"perfil «{name}»", f"profile «{name}»"))
-        except ApiError as err:
-            if err.status != 404:      # 404: already gone
-                problems.append((f"perfil «{name}»{_ids([profile['id']])}: {err.describe()}",
-                                 f"profile «{name}»{_ids([profile['id']])}: {err.describe()}"))
-    for cert_id in certs:
+    removed, problems, unrevoked = [], [], set()
+    for cert_id in _unique(c for p in ci for c in links[p["id"]]):
         if cert_id in in_use:
             log(f"Certificate {cert_id} is also in another profile: not revoked")
             continue
@@ -1075,8 +1118,28 @@ def sweep_leftovers(client: Client, run_id: str = ""):
             client.request("DELETE", f"/v1/certificates/{cert_id}")
             removed.append((es, en))
         except ApiError as err:
+            if err.status != 404:      # 404: already gone
+                unrevoked.add(cert_id)
+                kept = [f"«{names[p['id']]}»" for p in ci if cert_id in links[p["id"]]]
+                one = len(kept) == 1
+                problems.append((
+                    f"{es}: {err.describe()}; se {'conserva su perfil' if one else 'conservan sus perfiles'} "
+                    f"{_joined(kept, 'y')} para que la próxima ejecución lo encuentre",
+                    f"{en}: {err.describe()}; its {'profile' if one else 'profiles'} "
+                    f"{_joined(kept, 'and')} {'is' if one else 'are'} kept so that the next run "
+                    "finds it"))
+    for profile in ci:
+        name = names[profile["id"]]
+        if unrevoked.intersection(links[profile["id"]]):
+            log(f"Profile «{name}» kept: the next run finds its certificate through it")
+            continue
+        try:
+            client.request("DELETE", f"/v1/profiles/{profile['id']}")
+            removed.append((f"perfil «{name}»", f"profile «{name}»"))
+        except ApiError as err:
             if err.status != 404:
-                problems.append((f"{es}: {err.describe()}", f"{en}: {err.describe()}"))
+                problems.append((f"perfil «{name}»{_ids([profile['id']])}: {err.describe()}",
+                                 f"profile «{name}»{_ids([profile['id']])}: {err.describe()}"))
     return removed, problems
 
 
@@ -1102,7 +1165,8 @@ def janitor(client: Client = None, run_id: str = "") -> None:
         log("No leftovers from earlier runs / no quedan restos de ejecuciones anteriores")
     if problems or unnamed:
         # Not the create-signing manual steps: nothing was created today, and when only the
-        # listing failed there may be no leftovers at all.
+        # listing failed there may be no leftovers at all. The next run does find whatever is left:
+        # a profile stays until its certificate is revoked (sweep_leftovers).
         es = ("No se pudieron comprobar o borrar todos los restos de ejecuciones de TestFlight "
               f"({'; '.join([p[0] for p in problems] + ([unnamed] if unnamed else []))}). No hace "
               "falta hacer nada: la próxima ejecución lo intenta otra vez.")
@@ -1262,8 +1326,10 @@ def my_certificates(client: Client, key_file: str) -> list:
 
 def adopt_certificate(client: Client, mine: list, chosen: dict = None) -> dict:
     """Keep one certificate made from this run's key and revoke any other (a lost answer plus a
-    second request can make two). A revocation that fails here is no warning yet: state.json
-    says a request was unclear (cert_unclear), so the «Clean up» step looks for duplicates again."""
+    second request can make two). state.json says a request was unclear (cert_unclear), so the
+    «Clean up» step looks for duplicates again; a revocation that fails here warns all the same:
+    if that step never runs (a lost runner), nothing else finds a certificate that is in no
+    profile. The warning never points at the kept certificate, which the build still needs."""
     chosen = chosen or mine[0]
     for extra in mine:
         if extra.get("id") == chosen.get("id"):
@@ -1273,8 +1339,13 @@ def adopt_certificate(client: Client, mine: list, chosen: dict = None) -> dict:
             log(f"Revoked the duplicate certificate {extra['id']}")
         except ApiError as err:
             if err.status != 404:
-                log(f"(could not revoke the duplicate certificate {extra['id']}: {err.describe()}; "
-                    "the «Clean up» step tries again)")
+                report("warning", "Limpieza incompleta / Cleanup incomplete",
+                       f"No se pudo revocar un certificado duplicado de esta ejecución "
+                       f"({err.describe()}). El paso «Clean up» lo intenta otra vez. Solo si ese "
+                       f"paso no llega a ejecutarse, o avisa: {AFTER_FINISH_ES}",
+                       f"Could not revoke a duplicate certificate of this run ({err.describe()}). "
+                       "The «Clean up» step tries again. Only if that step does not run, or warns: "
+                       f"{AFTER_FINISH_EN}")
     return chosen
 
 
@@ -1330,8 +1401,12 @@ def request_certificate(client: Client, csr: str, key_path: str, state: dict,
             raise certificate_refused(err) from None
         if not unclear:
             return settled(cert)
-        # Created on the second try: the unanswered first request may have made one too. A
-        # listing counts only once it shows the certificate just created (the list can lag).
+        # Created on the second try: the unanswered first request may have made one too. This
+        # one is recorded at once (cert_pending stays set), so a stop during the listings below
+        # (they can take minutes while Apple's API fails) loses nothing. A listing counts only
+        # once it shows the certificate just created (the list can lag).
+        state["cert_id"] = cert["id"]
+        save_state(state_path, state)
         for attempt in range(4):
             try:
                 mine = my_certificates(client, key_path)
@@ -1344,11 +1419,10 @@ def request_certificate(client: Client, csr: str, key_path: str, state: dict,
                 pause(RECHECK_SEC)
         log("  (no listing showed the new certificate yet: the «Clean up» step looks for a second "
             "one)")
-        state["cert_id"] = cert["id"]       # cert_pending stays set: the teardown looks again
-        save_state(state_path, state)
-        return cert
-    if any(200 <= err.status < 300 for err in unclear):    # Apple said it made one
-        raise lost_certificate_failure(unclear[-1])
+        return cert                         # cert_pending stays set: the teardown looks again
+    lost = next((err for err in unclear if 200 <= err.status < 300), None)
+    if lost is not None:            # Apple said it made one (its answer could not be read)
+        raise lost_certificate_failure(lost)
     # Two requests without an answer, and two listings that worked showed no certificate made from
     # this run's key: an outage, not a lost certificate. cert_pending stays set, so the «Clean up»
     # step looks once more (and waits a while) and revokes one that shows up late.
@@ -1423,6 +1497,11 @@ def default_suffix() -> str:
     return f"r{repo}-{suffix}" if re.fullmatch(r"[0-9]+", repo) else suffix
 
 
+def clean_suffix(text: str) -> str:
+    """A profile name suffix as it ends up in the names: letters, digits and hyphens only."""
+    return re.sub(r"[^A-Za-z0-9-]+", "-", text).strip("-") or "run"
+
+
 def cmd_create_signing(args) -> int:
     out = os.path.abspath(args.out)
     profiles_dir = os.path.join(out, "profiles")
@@ -1431,7 +1510,7 @@ def cmd_create_signing(args) -> int:
     state_path = os.path.join(out, "state.json")
     state = {"cert_id": None, "profile_ids": []}
     save_state(state_path, state)
-    suffix = re.sub(r"[^A-Za-z0-9-]+", "-", args.suffix or default_suffix()).strip("-") or "run"
+    suffix = clean_suffix(args.suffix or default_suffix())
     client = Client(load_credentials())
 
     # 1. Private key + CSR. The key stays here; Apple only sees the CSR. The key file is created
@@ -1649,13 +1728,15 @@ def send_upload_operation(path: str, op: dict, index: int, total: int,
             response = conn.getresponse()
             response.read()
             status = response.status
-        except (http.client.InvalidURL, ValueError):
-            # InvalidURL quotes the URL, ValueError a header value: neither is ever printed.
+        except http.client.InvalidURL:  # an HTTPException that quotes the whole URL: never printed
             return unusable
         except (OSError, http.client.HTTPException) as exc:
+            # Also ssl.SSLCertVerificationError (an OSError and a ValueError): it names the host only.
             last = f"{type(exc).__name__}: {exc}"
             log(f"  upload part {index}/{total} ({length} bytes at {offset}): {last}")
             continue
+        except ValueError:              # a header name or value http.client refuses (it quotes it)
+            return unusable
         finally:
             conn.close()
         # The URL is a temporary write credential: log the host only, never the URL.
@@ -2148,11 +2229,12 @@ def cmd_cleanup(args) -> int:
     if args.duplicates_only:
         return cleanup_duplicates(args)
     known = {"certs": [], "profiles": []}     # what _cleanup knew of when it stopped
+    suffix = clean_suffix(args.suffix) if args.suffix else ""
     try:
-        return _cleanup(args, known)
+        return _cleanup(args, known, suffix)
     except Exception as exc:  # cleanup never fails the job: say what to revoke by hand
         reason = exc.en if isinstance(exc, Failure) else f"{type(exc).__name__}: {exc}"
-        es, en = manual_revoke(known["certs"], known["profiles"])
+        es, en = manual_revoke(known["certs"], known["profiles"], suffix)
         report("warning", "Limpieza incompleta / Cleanup incomplete",
                f"La limpieza falló ({reason}). {es}", f"Cleanup failed ({reason}). {en}")
         return EXIT_OK
@@ -2182,14 +2264,15 @@ def run_key_file(state_path: str) -> str:
                  if os.path.isfile(p)), "")
 
 
-def _cleanup(args, known: dict) -> int:
+def _cleanup(args, known: dict, suffix: str = "") -> int:
+    started = time.monotonic()
     cert_ids, profile_ids, key_file, pending = [], [], "", False
     if args.state:
         try:
             state = read_state(args.state)
         except (OSError, ValueError) as exc:
             state = {}
-            es, en = manual_revoke()
+            es, en = manual_revoke(suffix=suffix)
             report("warning", "state.json ilegible / unreadable",
                    f"No se pudo leer {args.state} ({exc}). {es}",
                    f"Could not read {args.state} ({exc}). {en}")
@@ -2212,58 +2295,89 @@ def _cleanup(args, known: dict) -> int:
         return EXIT_OK
     client = Client(load_credentials())
     done, failed = [], [("invalid", i, f"invalid id «{i}»") for i in bad]   # (kind, id, text)
-    checked = False         # every listing of this run's certificates worked
+    tried = set()
+
+    def revoke_known():
+        """DELETE every recorded or listed id not tried yet, profiles first (they reference the
+        certificate). Each one goes as soon as it is known: after a cancel GitHub stops Clean up
+        within minutes, and what was revoked by then stays revoked."""
+        for kind, template, ids in (("profile", "/v1/profiles/{}", profile_ids),
+                                    ("certificate", "/v1/certificates/{}", cert_ids)):
+            for resource_id in ids:
+                if (kind, resource_id) in tried:
+                    continue
+                tried.add((kind, resource_id))
+                try:
+                    client.request("DELETE", template.format(resource_id))
+                    done.append(f"{kind} `{resource_id}`")
+                except ApiError as err:
+                    if err.status == 404:
+                        done.append(f"{kind} `{resource_id}` (ya no existía / already gone)")
+                    else:
+                        failed.append((kind, resource_id, f"{kind} {resource_id}: {err.describe()}"))
+
+    checked = False                     # every listing of this run's certificates worked
+    why_es, why_en = "no está csr.pem, la clave de esta ejecución", "csr.pem, this run's key, is missing"
     if key_file:
-        try:
-            # cert_pending: a certificate request of this run was cut off (a cancelled step) or
-            # got no clear answer, so Apple may still be making that certificate: look again for
-            # a while, also after finding one (two requests may have been sent). Each certificate
-            # is kept as soon as it is listed, so a later listing that fails loses none.
-            for delay in (0,) + (PENDING_RECHECK_SEC if pending else ()):
-                if delay:
-                    log(f"  a certificate request of this run got no clear answer: looking again "
-                        f"in {delay:g} s")
-                    pause(delay)
-                for cert in my_certificates(client, key_file):
-                    if cert["id"] not in cert_ids:
-                        log(f"Certificate {cert['id']} was made from this run's key: revoking it too")
-                        cert_ids.append(cert["id"])
-            checked = True
-        except (ApiError, Failure) as exc:
-            log(f"(could not look for this run's certificates: {exc})")
+        checked = True
+        # cert_pending: a certificate request of this run was cut off (a cancelled step) or got no
+        # clear answer, so Apple may still be making that certificate: look again for a while,
+        # also after finding one (two requests may have been sent). Whatever a listing shows is
+        # revoked before the next pause. A DELETE problem is not a listing problem: revoke_known
+        # stays outside this try (its failures are reported below, or by cmd_cleanup).
+        for delay in (0,) + (PENDING_RECHECK_SEC if pending else ()):
+            if delay:
+                if time.monotonic() - started + delay * time_scale() > PENDING_RECHECK_BUDGET_SEC:
+                    checked = False
+                    why_es = ("App Store Connect respondía muy despacio y se dejó de buscar para que "
+                              "este paso termine a tiempo")
+                    why_en = ("App Store Connect answered very slowly, so the search stopped for "
+                              "this step to end in time")
+                    log(f"  ({why_en}: GitHub stops Clean up a few minutes after a cancel)")
+                    break
+                log(f"  a certificate request of this run got no clear answer: looking again "
+                    f"in {delay:g} s")
+                pause(delay)
+            try:
+                listed = my_certificates(client, key_file)
+            except (ApiError, Failure) as exc:
+                checked, why_es, why_en = False, str(exc), str(exc)
+                log(f"(could not look for this run's certificates: {exc})")
+                break
+            for cert in listed:
+                if cert["id"] not in cert_ids:
+                    log(f"Certificate {cert['id']} was made from this run's key: revoking it too")
+                    cert_ids.append(cert["id"])
+            revoke_known()
+    revoke_known()      # no CSR, or a listing that failed: the recorded ids go all the same
     if pending and not checked:
-        es, en = manual_revoke()
+        es, en = manual_revoke(suffix=suffix, profiles=False)   # profiles: reported below
         report("warning", "Certificado sin confirmar / Certificate not confirmed",
                "Una petición de certificado de esta ejecución quedó sin respuesta clara y no se "
-               f"pudo comprobar si Apple llegó a crear el certificado. {es}",
+               f"pudo comprobar si Apple llegó a crear el certificado ({why_es}). {es}",
                "A certificate request of this run got no clear answer and it could not be checked "
-               f"whether Apple created the certificate. {en}")
+               f"whether Apple created the certificate ({why_en}). {en}")
     elif pending:
         log("A certificate request of this run got no clear answer: its certificate was looked "
-            f"for during {sum(PENDING_RECHECK_SEC):g} s (any that showed up is revoked below)")
-    # Profiles first: they reference the certificate.
-    for kind, template, ids in (("profile", "/v1/profiles/{}", profile_ids),
-                                ("certificate", "/v1/certificates/{}", cert_ids)):
-        for resource_id in ids:
-            try:
-                client.request("DELETE", template.format(resource_id))
-                done.append(f"{kind} `{resource_id}`")
-            except ApiError as err:
-                if err.status == 404:
-                    done.append(f"{kind} `{resource_id}` (ya no existía / already gone)")
-                else:
-                    failed.append((kind, resource_id, f"{kind} {resource_id}: {err.describe()}"))
+            f"for during {sum(PENDING_RECHECK_SEC):g} s (any that showed up was revoked)")
     if failed:
         listing = "; ".join(f[2] for f in failed)
-        es, en = manual_revoke([f[1] for f in failed if f[0] == "certificate"],
-                               [f[1] for f in failed if f[0] == "profile"])
+        certs_left = [f[1] for f in failed if f[0] == "certificate"]
+        profiles_left = [f[1] for f in failed if f[0] == "profile"]
+        unknown = any(f[0] == "invalid" for f in failed)    # a tampered id: say both
+        es, en = manual_revoke(certs_left, profiles_left, suffix, certs=bool(certs_left) or unknown,
+                               profiles=bool(profiles_left) or unknown)
         report("warning", "Limpieza incompleta / Cleanup incomplete",
                f"No se pudo revocar o borrar: {listing}. {es}",
                f"Could not revoke or delete: {listing}. {en}")
     if done:
         append_summary("**Limpieza / cleanup:** revocado o borrado / revoked or deleted: "
                        + ", ".join(done) + ".")
-    elif not failed:
+    if pending and not checked:
+        append_summary("**Limpieza / cleanup:** certificado sin confirmar: sigue el aviso "
+                       "«Certificado sin confirmar» / certificate not confirmed: follow the "
+                       "«Certificado sin confirmar» warning.")
+    elif not done and not failed:
         log("Nothing to clean up / nada que limpiar")
         looked = (" (se buscó un rato el certificado de una petición sin respuesta clara: no "
                   "apareció ninguno / the certificate of a request without a clear answer was "
@@ -2290,12 +2404,7 @@ def cleanup_duplicates(args) -> int:
     if not keep or not key_file:
         log("(no recorded certificate or no CSR: duplicates are not looked for)")
         return EXIT_OK
-    after_es = ("Cuando termine el trabajo «Processing, TestFlight group, revoke the certificate» "
-                f"(revoca el certificado de esta build), mira en {URL_CERTIFICATES}: si aún queda un "
-                "certificado «Apple Distribution» creado hoy, púlsalo ▸ Revoke.")
-    after_en = ("Once the «Processing, TestFlight group, revoke the certificate» job has finished "
-                f"(it revokes this build's certificate), look at {URL_CERTIFICATES}: if an «Apple "
-                "Distribution» certificate created today is still there, click it ▸ Revoke.")
+    after_es, after_en = AFTER_FINISH_ES, AFTER_FINISH_EN
     try:
         client = Client(load_credentials())
         extra = [c["id"] for c in my_certificates(client, key_file) if c.get("id") != keep]
@@ -2414,6 +2523,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--state")
     p.add_argument("--cert-id")
     p.add_argument("--profile-ids")
+    p.add_argument("--suffix", default="", help="the profile name suffix create-signing used "
+                                                "(names this run's profiles in the manual steps)")
     p.add_argument("--duplicates-only", action="store_true", help=argparse.SUPPRESS)
     p.set_defaults(func=cmd_cleanup)
     return parser

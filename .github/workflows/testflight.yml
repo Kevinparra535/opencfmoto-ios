@@ -164,6 +164,8 @@ jobs:
       # teardown: the Clean up step ran to its end; if not, finish sweeps up after this job.
       uploaded: ${{ steps.teardown.outputs.uploaded }}
       teardown: ${{ steps.teardown.outputs.teardown }}
+      # signing: the certificate step's outcome; skipped = the job stopped before it, so it made none.
+      signing: ${{ steps.signing.outcome }}
       cert_id: ${{ steps.signing.outputs.cert_id }}
       profile_ids: ${{ steps.signing.outputs.profile_ids }}
       build_number: ${{ steps.buildnum.outputs.build_number }}
@@ -272,13 +274,15 @@ jobs:
           METHOD: ${{ steps.upload.outputs.upload_method }}
           # skipped: the job stopped before the certificate step, so nothing was created to revoke.
           SIGNING_OUTCOME: ${{ steps.signing.outcome }}
+          # cancelled: the run was cancelled (or the job hit its time limit): nothing to fix.
+          JOB_STATUS: ${{ job.status }}
         run: |
           guide="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/main/docs/TESTFLIGHT.md"
           version="$MARKETING_VERSION (${BUILD_NUMBER:-?})"
           revoke_es="" revoke_en=""
           if [ "$SIGNING_OUTCOME" != skipped ]; then
-            revoke_es=" El paso «Clean up» revoca el certificado y los perfiles temporales."
-            revoke_en=" The «Clean up» step revokes the temporary certificate and profiles."
+            revoke_es=" El paso «Clean up» revoca el certificado y los perfiles temporales (si no puede, deja un aviso con los pasos)."
+            revoke_en=" The «Clean up» step revokes the temporary certificate and profiles (if it cannot, it leaves a warning with the steps)."
           fi
           {
             echo "## TestFlight — compilación / build"
@@ -291,6 +295,10 @@ jobs:
               echo "Apple tiene (o puede tener) el archivo de la versión **$version**, pero el paso «Upload to App Store Connect» no terminó (se canceló o falló: mira las anotaciones). El trabajo «Processing, TestFlight group, revoke the certificate» espera a que Apple lo procese (si no cancelaste la ejecución) y después revoca el certificado temporal."
               echo
               echo "Apple has (or may have) the file of version **$version**, but the «Upload to App Store Connect» step did not finish (it was cancelled or failed: see the annotations). The «Processing, TestFlight group, revoke the certificate» job waits for Apple's processing (unless you cancelled the run), then revokes the temporary certificate."
+            elif [ "$JOB_STATUS" = cancelled ]; then
+              echo "Se canceló la ejecución (o el trabajo superó su tiempo máximo) y no se subió ninguna build.$revoke_es Cuando quieras, lanza una ejecución nueva: **Actions ▸ TestFlight ▸ Run workflow**."
+              echo
+              echo "The run was cancelled (or the job hit its time limit) and nothing was uploaded.$revoke_en Whenever you like, start a new run: **Actions ▸ TestFlight ▸ Run workflow**."
             else
               echo "No se subió ninguna build: lee las anotaciones de error de este trabajo (arriba).$revoke_es Cuando lo hayas corregido, lanza una ejecución nueva: **Actions ▸ TestFlight ▸ Run workflow** (*Re-run* repite el mismo commit, sin tus arreglos). Guía: $guide"
               echo
@@ -339,11 +347,14 @@ jobs:
           ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
           CERT_ID: ${{ needs.build.outputs.cert_id }}
           PROFILE_IDS: ${{ needs.build.outputs.profile_ids }}
+          SIGNING: ${{ needs.build.outputs.signing }}
         run: |
           if [ ! -f tools/testflight/asc.py ]; then
             certs=https://developer.apple.com/account/resources/certificates/list
             profiles=https://developer.apple.com/account/resources/profiles/list
-            echo "::warning title=Revoca a mano / Revoke by hand::No se pudo revocar porque falló la descarga del código (checkout). En $certs revoca el certificado «Apple Distribution» creado hoy${CERT_ID:+ (id $CERT_ID)} (púlsalo ▸ Revoke) y en $profiles borra los perfiles «OpenCfMoto CI …»${PROFILE_IDS:+ (ids $PROFILE_IDS)} (cada uno ▸ Remove). O lanza una ejecución nueva con «Solo preparar» marcado (Actions ▸ TestFlight ▸ Run workflow): su preparación borra estos restos.%0ACould not revoke because the code checkout failed. At $certs revoke the «Apple Distribution» certificate created today${CERT_ID:+ (id $CERT_ID)} (click it ▸ Revoke) and at $profiles delete the «OpenCfMoto CI …» profiles${PROFILE_IDS:+ (ids $PROFILE_IDS)} (each ▸ Remove). Or start a new run with «Solo preparar» ticked (Actions ▸ TestFlight ▸ Run workflow): its prepare job removes these leftovers."
+            # This run's profiles only («…»: the build job's attempt), never every «OpenCfMoto CI …».
+            run="OpenCfMoto CI ${GITHUB_REPOSITORY_ID:+r$GITHUB_REPOSITORY_ID-}$GITHUB_RUN_ID-…"
+            echo "::warning title=Revoca a mano / Revoke by hand::No se pudo revocar porque falló la descarga del código (checkout). En $certs revoca el certificado «Apple Distribution» creado hoy${CERT_ID:+ (id $CERT_ID)} (púlsalo ▸ Revoke) y en $profiles borra los perfiles «$run app» y «$run mirror»${PROFILE_IDS:+ (ids $PROFILE_IDS)} (cada uno ▸ Remove; ningún otro «OpenCfMoto CI …»). O lanza una ejecución nueva con «Solo preparar» marcado (Actions ▸ TestFlight ▸ Run workflow): su preparación borra estos restos.%0ACould not revoke because the code checkout failed. At $certs revoke the «Apple Distribution» certificate created today${CERT_ID:+ (id $CERT_ID)} (click it ▸ Revoke) and at $profiles delete the «$run app» and «$run mirror» profiles${PROFILE_IDS:+ (ids $PROFILE_IDS)} (each ▸ Remove; no other «OpenCfMoto CI …» one). Or start a new run with «Solo preparar» ticked (Actions ▸ TestFlight ▸ Run workflow): its prepare job removes these leftovers."
             exit 0
           fi
           if [ "$UPLOADED" = true ]; then
@@ -362,9 +373,15 @@ jobs:
           elif [ -n "$CERT_ID" ]; then
             echo "Nothing to revoke here: the build job's Clean up step already revoked the temporary certificate and profiles."
             echo "**Certificado / certificate:** ya lo revocó el paso «Clean up» del trabajo «Build, sign and upload (macOS)» (si no pudo, allí hay un aviso con los pasos). / The «Clean up» step of the «Build, sign and upload (macOS)» job already revoked it (if it could not, a warning there gives the steps)." >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$SIGNING" = skipped ]; then
+            echo "Nothing to revoke here: the build job stopped before its certificate step."
+            echo "**Certificado / certificate:** no hay nada que revocar: el trabajo «Build, sign and upload (macOS)» se detuvo antes de crear el certificado. / Nothing to revoke: the «Build, sign and upload (macOS)» job stopped before creating the certificate." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "Nothing to revoke here: the build job recorded no certificate (or its Clean up step already revoked it)."
-            echo "**Certificado / certificate:** no hay nada que revocar: el trabajo «Build, sign and upload (macOS)» no llegó a crear ninguno (o su paso «Clean up» ya lo revocó). / Nothing to revoke: the «Build, sign and upload (macOS)» job created none (or its «Clean up» step already revoked it)." >> "$GITHUB_STEP_SUMMARY"
+            # No certificate id although the certificate step ran: it made none, or Clean up revoked
+            # it, or its id was lost (an unclear answer, a cancel during that step) and Clean up
+            # looked for it by this run's key; when that failed, Clean up left a warning.
+            echo "Nothing to revoke here: the build job recorded no certificate id (it made none, or its Clean up step revoked it; if Clean up left a warning, follow it)."
+            echo "**Certificado / certificate:** el trabajo «Build, sign and upload (macOS)» no registró ningún certificado: o no llegó a crearlo, o su paso «Clean up» ya lo revocó. Si ese paso dejó un aviso («Certificado sin confirmar» o «Limpieza incompleta»), haz lo que dice. / The «Build, sign and upload (macOS)» job recorded no certificate: it made none, or its «Clean up» step already revoked it. If that step left a warning («Certificado sin confirmar» or «Limpieza incompleta»), do what it says." >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Summary
@@ -387,6 +404,10 @@ jobs:
               echo "El trabajo «Build, sign and upload (macOS)» terminó sin su paso «Clean up» (se perdió el runner o se forzó la cancelación), así que no se sabe si llegó a subir la build. El paso «Revoke the temporary certificate and profiles» de este trabajo borra los restos (si no puede, deja un aviso con los pasos). Lanza una ejecución nueva: **Actions ▸ TestFlight ▸ Run workflow**."
               echo
               echo "The «Build, sign and upload (macOS)» job ended without its «Clean up» step (lost runner or force cancel), so it is unknown whether the build was uploaded. This job's «Revoke the temporary certificate and profiles» step removes the leftovers (if it cannot, a warning gives the steps). Start a new run: **Actions ▸ TestFlight ▸ Run workflow**."
+            elif [ "$UPLOADED" != true ] && [ "$BUILD_RESULT" = cancelled ]; then
+              echo "La ejecución se canceló (o el trabajo «Build, sign and upload (macOS)» superó su tiempo máximo) y no se subió ninguna build. El paso «Clean up» de ese trabajo revocó lo que se llegó a crear (si no pudo, allí hay un aviso con los pasos). Cuando quieras, lanza una ejecución nueva: **Actions ▸ TestFlight ▸ Run workflow**."
+              echo
+              echo "The run was cancelled (or the «Build, sign and upload (macOS)» job hit its time limit) and no build was uploaded. That job's «Clean up» step revoked whatever had been created (if it could not, a warning there gives the steps). Whenever you like, start a new run: **Actions ▸ TestFlight ▸ Run workflow**."
             elif [ "$UPLOADED" != true ]; then
               echo "No hay build que esperar: el trabajo «Build, sign and upload (macOS)» no subió ninguna (mira sus anotaciones). Cuando lo hayas corregido, lanza una ejecución nueva: **Actions ▸ TestFlight ▸ Run workflow**."
               echo

@@ -26,12 +26,16 @@ import os
 import plistlib
 import re
 import shutil
+import signal
+import socket
+import ssl
 import stat
 import subprocess
 import sys
 import tempfile
 import threading
 import time
+import types
 import unittest
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -406,12 +410,14 @@ class FakeASC:
 
     @staticmethod
     def send(h, status, doc=None, headers=None):
-        payload = b"" if doc is None else json.dumps(doc).encode("utf-8")
+        """`doc`: a JSON document, or bytes sent as they are (a page from a proxy, say)."""
+        raw = isinstance(doc, bytes)
+        payload = b"" if doc is None else doc if raw else json.dumps(doc).encode("utf-8")
         h.send_response(status)
         for key, value in (headers or {}).items():
             h.send_header(key, value)
         if payload:
-            h.send_header("Content-Type", "application/json")
+            h.send_header("Content-Type", "text/html" if raw else "application/json")
         h.send_header("Content-Length", str(len(payload)))
         h.end_headers()
         if payload:
@@ -823,6 +829,45 @@ class OtherHost:
         self.thread.join(5)
 
 
+class UntrustedTls:
+    """A TLS server on 127.0.0.1 whose certificate no client trusts (self-signed), like Apple's
+    upload storage seen through a proxy that intercepts TLS: each connection gets its handshake
+    and nothing more."""
+
+    def __init__(self):
+        self.context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        self.context.load_cert_chain(KEYS.path("apple.pem"), KEYS.path("apple.key"))
+        self.connections, self.stop = 0, threading.Event()
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.bind(("127.0.0.1", 0))
+        self.sock.listen(8)
+        self.sock.settimeout(0.1)
+        self.port = self.sock.getsockname()[1]
+        self.thread = threading.Thread(target=self.serve, daemon=True)
+        self.thread.start()
+
+    def serve(self):
+        while not self.stop.is_set():
+            try:
+                conn, _ = self.sock.accept()
+            except OSError:                     # the accept timeout: look at self.stop again
+                continue
+            self.connections += 1
+            conn.settimeout(10)
+            try:
+                with self.context.wrap_socket(conn, server_side=True):
+                    pass
+            except OSError:                     # the client refused the certificate
+                pass
+            finally:
+                conn.close()
+
+    def close(self):
+        self.stop.set()
+        self.thread.join(5)
+        self.sock.close()
+
+
 # ---------------------------------------------------------------- test base
 
 class AscTest(unittest.TestCase):
@@ -1045,19 +1090,44 @@ class JwtTest(unittest.TestCase):
         self.assertIn("ejecución nueva", failure.es)
 
     def test_manual_steps_name_what_the_portal_shows_ids_only_in_parentheses(self):
-        es, en = asc.manual_revoke(["C1"], ["P1", "P2"])
+        with mock.patch.dict(os.environ, {"GITHUB_REPOSITORY_ID": "123", "GITHUB_RUN_ID": "4242"}):
+            es, en = asc.manual_revoke(["C1"], ["P1", "P2"])
         for needle in ("el certificado «Apple Distribution» creado hoy (id C1), púlsalo ▸ Revoke",
-                       "los perfiles «OpenCfMoto CI …» (ids P1, P2), cada uno ▸ Remove",
+                       "los perfiles «OpenCfMoto CI r123-4242-… app» y «OpenCfMoto CI r123-4242-… mirror» que "
+                       "queden (ids P1, P2), cada uno ▸ Remove (ningún otro «OpenCfMoto CI …»)",
                        asc.URL_CERTIFICATES, asc.URL_PROFILES):
             self.assertIn(needle, es)
         for needle in ("the «Apple Distribution» certificate created today (id C1), click it ▸ Revoke",
-                       "the «OpenCfMoto CI …» profiles (ids P1, P2), each ▸ Remove"):
+                       "the «OpenCfMoto CI r123-4242-… app» and «OpenCfMoto CI r123-4242-… mirror» profiles "
+                       "that are left (ids P1, P2), each ▸ Remove (no other «OpenCfMoto CI …» one)"):
             self.assertIn(needle, en)
         es, en = asc.manual_revoke()
         self.assertIn("el certificado «Apple Distribution» creado hoy, púlsalo", es)
         self.assertNotIn("(id", es + en)
         self.assertIn("los certificados «Apple Distribution» creados hoy (ids C1, C2)",
                       asc.manual_revoke(["C1", "C2"])[0])
+
+    def test_manual_steps_name_only_this_runs_profiles(self):
+        # The leftover sweep keeps another repository's or a Mac's «OpenCfMoto CI …» profiles for
+        # 12 hours (that run may still be building): the manual steps never send the owner after
+        # every profile named like that, only after this run's.
+        es, en = asc.manual_revoke(["C1"], ["P1"], suffix="r123-4242-1")
+        self.assertIn("«OpenCfMoto CI r123-4242-1 app» y «OpenCfMoto CI r123-4242-1 mirror» que queden (id P1)", es)
+        self.assertIn("«OpenCfMoto CI r123-4242-1 app» and «OpenCfMoto CI r123-4242-1 mirror» profiles", en)
+        for env, label in (({"GITHUB_RUN_ID": "4242"}, "4242-…"), ({}, "…")):      # no repository id; a Mac
+            with mock.patch.dict(os.environ, env, clear=True):
+                self.assertIn(f"«OpenCfMoto CI {label} app» y «OpenCfMoto CI {label} mirror»", asc.manual_revoke()[0])
+        # Only what can be left: the certificate went (profiles only), or no profile was made.
+        es, en = asc.manual_revoke([], ["P1"], suffix="r123-4242-1", certs=False)
+        self.assertTrue(es.startswith("Borra a mano lo que quede. En "), es)
+        self.assertTrue(en.startswith("Delete what is left by hand. At "), en)
+        self.assertNotIn(asc.URL_CERTIFICATES, es + en)
+        es, en = asc.manual_revoke(["C1"], profiles=False)
+        self.assertNotIn(asc.URL_PROFILES, es + en)
+        self.assertIn("(id C1), púlsalo ▸ Revoke", es)
+        for es, en in (asc.manual_revoke(["C1"], ["P1"]), asc.manual_revoke(suffix="r1-2-3")):
+            self.assertNotIn("los perfiles «OpenCfMoto CI …»", es)
+            self.assertNotIn("the «OpenCfMoto CI …» profiles", en)
 
     def test_profile_names_carry_the_repository_and_match_what_the_janitor_knows(self):
         github = {"GITHUB_REPOSITORY_ID": "123", "GITHUB_RUN_ID": "18700000001", "GITHUB_RUN_ATTEMPT": "2"}
@@ -1508,8 +1578,9 @@ class JanitorTest(AscTest):
         own = f.add_profile("My App Store profile", [other, extra, shared])
         lookalike = f.add_profile("OpenCfMoto CI-like, not ours", [other])
         proc = self.run_asc("janitor")
+        # The certificate first: the profiles are the only way back to it if its revocation fails.
         self.assertEqual([c.path for c in self.calls("DELETE")],
-                         [f"/v1/profiles/{app}", f"/v1/profiles/{mirror}", f"/v1/certificates/{ci_cert}"])
+                         [f"/v1/certificates/{ci_cert}", f"/v1/profiles/{app}", f"/v1/profiles/{mirror}"])
         self.assertEqual(set(f.profiles), {own, lookalike})
         self.assertEqual(set(f.certificates), {shared, other, extra})
         listings = self.calls("GET", "/v1/profiles")
@@ -1543,19 +1614,50 @@ class JanitorTest(AscTest):
     def test_problems_only_warn_with_their_own_manual_steps(self):
         # Not «revoke the certificate created today»: these are leftovers of earlier runs.
         cert = self.fake.add_cert(KEYS.cert_der)
-        self.fake.add_profile(f"{self.OURS}-9-1 app", [cert])
+        profile = self.fake.add_profile(f"{self.OURS}-9-1 app", [cert])
         self.fake.fail("DELETE", r"/v1/certificates/.*", 500, SERVER_ERROR, times=99)
         proc = self.run_asc("janitor")
         title, message = self.annotation(proc, "warning")
         self.assertEqual(title, "Limpieza incompleta / Cleanup incomplete")
         for needle in (f"certificado «Apple Distribution» que caduca el 2027-11-01 (id {cert})",
                        f"«Apple Distribution» certificate expiring 2027-11-01 (id {cert})",
+                       f"se conserva su perfil «{self.OURS}-9-1 app» para que la próxima ejecución lo encuentre",
+                       f"its profile «{self.OURS}-9-1 app» is kept so that the next run finds it",
                        "No hace falta hacer nada", "Nothing to do", "revoca solo los certificados que nombra",
                        "revoke only the certificates it names", asc.URL_CERTIFICATES, asc.URL_PROFILES):
             self.assertIn(needle, message)
         for wrong in ("{URL_", "creado hoy", "created today"):
             self.assertNotIn(wrong, message)
-        self.assertEqual(self.fake.profiles, {})            # the profiles went anyway
+        self.assertEqual(list(self.fake.profiles), [profile])    # the way back to the certificate stays
+
+    def test_a_certificate_it_could_not_revoke_is_revoked_by_the_next_run(self):
+        # The sweep finds certificates only through these profiles, so they stay until their
+        # certificate is revoked: «la próxima ejecución lo intenta otra vez» holds for certificates
+        # too. Here the finish job's sweep (a lost runner), then the next run's prepare.
+        f = self.fake
+        cert = f.add_cert(KEYS.cert_der)
+        app, mirror = (f.add_profile(f"{self.OURS}-112-1 {role}", [cert]) for role in ("app", "mirror"))
+        f.fail("DELETE", rf"/v1/certificates/{cert}", 409, error_doc(409, "ENTITY_ERROR", "Not allowed now"))
+        proc = self.run_asc("janitor", "--run-id", "112")
+        self.assertEqual([c.path for c in self.calls("DELETE")], [f"/v1/certificates/{cert}"])
+        self.assertEqual(set(f.profiles), {app, mirror})
+        title, message = self.annotation(proc, "warning")
+        self.assertEqual(title, "Limpieza incompleta / Cleanup incomplete")
+        for needle in (f"(id {cert}): DELETE /v1/certificates/{cert} → HTTP 409",
+                       f"se conservan sus perfiles «{self.OURS}-112-1 app» y «{self.OURS}-112-1 mirror» para que "
+                       "la próxima ejecución lo encuentre",
+                       f"its profiles «{self.OURS}-112-1 app» and «{self.OURS}-112-1 mirror» are kept so that "
+                       "the next run finds it",
+                       "No hace falta hacer nada: la próxima ejecución lo intenta otra vez",
+                       "Nothing to do: the next run tries again"):
+            self.assertIn(needle, message)
+        self.assertEqual(self.annotations(proc, "notice"), [])           # nothing went
+        proc = self.run_asc("janitor")                                   # the next run's prepare
+        self.assertEqual((f.profiles, f.certificates), ({}, {}))
+        title, message = self.annotation(proc, "notice")
+        self.assertIn("Restos borrados", title)
+        self.assertIn(f"(id {cert})", message)
+        self.assertEqual(self.annotations(proc, "warning"), [])
 
     def test_missing_secrets_warn_and_exit_0(self):
         proc = self.run_asc("janitor", env={"ASC_KEY_ID": None})
@@ -1770,6 +1872,68 @@ class CreateSigningTest(AscTest):
         self.assertEqual(self.outputs()["cert_id"], second)
         self.assertIn(f"/v1/certificates/{first}", [c.path for c in self.calls("DELETE")])
         self.assert_one_certificate_recorded(proc, posts=2, unclear=True)
+
+    def test_the_second_certificate_is_recorded_before_the_listings_that_follow(self):
+        # Those listings can take minutes while Apple's API fails, long enough for a cancel's Clean
+        # up to stop this step: by then state.json must already name the certificate it got.
+        f = self.fake
+        f.cert_list_lag = 1                       # the look after the unanswered request misses it
+        f.fail("POST", "/v1/certificates", 502, BAD_GATEWAY, effect=True)
+        real, recorded = f.list_certs, []
+
+        def listing(rec):
+            if "cursor" not in rec.query and len(self.calls("POST", "/v1/certificates")) == 2:
+                with open(os.path.join(self.out, "state.json"), encoding="utf-8") as fh:
+                    recorded.append(json.load(fh))
+            return real(rec)
+        f.list_certs = listing
+        proc = self.create()
+        first, second = f.created_certs
+        self.assertTrue(recorded)
+        self.assertEqual((recorded[0]["cert_id"], recorded[0].get("cert_pending")), (second, True))
+        self.assertIn(f"/v1/certificates/{first}", [c.path for c in self.calls("DELETE")])
+        self.assert_one_certificate_recorded(proc, posts=2, unclear=True)
+
+    def test_an_unreadable_success_is_quoted_not_the_error_after_it(self):
+        # Apple said it made the certificate (201 with a page the client cannot read), the list
+        # never shows it, and the second request gets a 503: the message quotes the 201.
+        f = self.fake
+        f.cert_list_lag = 2
+        f.fail("POST", "/v1/certificates", 201, b"<html><body>proxy</body></html>", effect=True)
+        f.fail("POST", "/v1/certificates", 503, error_doc(503, "SERVICE_UNAVAILABLE", "Unavailable"))
+        proc = self.create(expect=1)
+        title, message = self.annotation(proc, "error")
+        self.assertEqual(title, "Certificado sin confirmar / Certificate not confirmed")
+        for needle in ("Apple dijo que creó el certificado de distribución, pero su respuesta no se pudo leer "
+                       "(POST /v1/certificates → HTTP 201: response is not JSON)",
+                       "Apple said it created the distribution certificate, but its answer could not be read "
+                       "(POST /v1/certificates → HTTP 201: response is not JSON)"):
+            self.assertIn(needle, message)
+        self.assertNotIn("HTTP 503", message)
+        self.assertEqual(len(self.calls("POST", "/v1/certificates")), 2)
+        self.assertEqual(self.state(), {"cert_id": None, "profile_ids": [], "cert_pending": True, "cert_unclear": True})
+
+    def test_a_duplicate_it_cannot_revoke_warns_at_once_and_spares_the_builds(self):
+        # A lost runner means no Clean up, and nothing else finds a certificate that is in no
+        # profile: the owner is told now. Never in a way that points at the kept certificate.
+        f = self.fake
+        f.cert_list_lag = 1
+        f.fail("POST", "/v1/certificates", 502, BAD_GATEWAY, effect=True)
+        f.fail("DELETE", r"/v1/certificates/.*", 500, SERVER_ERROR, times=99)
+        proc = self.create()
+        first, second = f.created_certs
+        self.assertEqual(self.outputs()["cert_id"], second)
+        self.assertEqual(self.alive(), [first, second])
+        title, message = self.annotation(proc, "warning")
+        self.assertEqual(title, "Limpieza incompleta / Cleanup incomplete")
+        for needle in (f"No se pudo revocar un certificado duplicado de esta ejecución (DELETE /v1/certificates/{first} → "
+                       "HTTP 500", "El paso «Clean up» lo intenta otra vez", asc.AFTER_FINISH_ES,
+                       f"Could not revoke a duplicate certificate of this run (DELETE /v1/certificates/{first}",
+                       asc.AFTER_FINISH_EN):
+            self.assertIn(needle, message)
+        for wrong in ("Revoca a mano lo que quede", f"/{second}", f"id {second}"):
+            self.assertNotIn(wrong, message)
+        self.assertEqual(self.annotations(proc, "error"), [])
 
     def test_a_failing_list_after_the_second_request_leaves_the_duplicate_to_the_teardown(self):
         f = self.fake
@@ -2182,6 +2346,26 @@ class UploadTest(AscTest):
                 self.assertEqual(self.calls("PUT"), [])        # nothing was sent
                 self.assertFalse(os.path.exists(self.marker))
 
+    def test_an_upload_host_with_an_untrusted_certificate_is_retried_and_named(self):
+        # ssl.SSLCertVerificationError is an OSError and a ValueError: a network problem to retry
+        # and name (it quotes the host only), not «unusable upload operation from Apple».
+        server = UntrustedTls()
+        self.addCleanup(server.close)
+        secret = "SIGSECRET42"
+        op = {"method": "PUT", "url": f"https://127.0.0.1:{server.port}/upload/F1/part1?X-Signature={secret}",
+              "offset": 0, "length": 100,
+              "requestHeaders": [{"name": "Content-Type", "value": "application/octet-stream"}]}
+        out = io.StringIO()
+        with mock.patch.dict(os.environ, self.asc_env(), clear=True), \
+                mock.patch.object(asc.urllib.request, "getproxies", return_value={}), \
+                contextlib.redirect_stdout(out):
+            problem = asc.send_upload_operation(self.ipa, op, 1, 2, asc.ssl_context())
+        self.assertIn("SSLCertVerificationError", problem)
+        self.assertIn(f"part 1/2 (100 bytes at offset 0) still failing after {asc.UPLOAD_OP_RETRIES} retries", problem)
+        self.assertEqual(server.connections, 1 + asc.UPLOAD_OP_RETRIES)
+        for leak in (secret, "X-Signature", "/upload/"):
+            self.assertNotIn(leak, problem + out.getvalue())
+
     def test_commit_without_answer_and_never_received(self):
         self.fake.fail("PATCH", r"/v1/buildUploadFiles/.*", 0)          # nothing reached Apple
         proc = self.upload(expect=3)
@@ -2524,10 +2708,24 @@ class CleanupTest(AscTest):
         self.fake.fail("GET", "/v1/certificates", 500, SERVER_ERROR, times=99)
         proc = self.run_asc("cleanup", "--state", self.write_state(
             {"cert_id": None, "profile_ids": [], "cert_pending": True}))
+        # The step's summary agrees with its warning (not «nothing to revoke»).
+        self.assertIn("certificado sin confirmar: sigue el aviso «Certificado sin confirmar»", self.summary())
+        self.assertNotIn("nada que revocar", self.summary())
         title, message = self.annotation(proc, "warning")
         self.assertIn("Certificado sin confirmar", title)
-        for needle in ("no se pudo comprobar", "certificates/list", "«Apple Distribution» creado hoy"):
+        for needle in ("no se pudo comprobar", "certificates/list", "«Apple Distribution» creado hoy", "HTTP 500"):
             self.assertIn(needle, message)
+        self.assertNotIn(asc.URL_PROFILES, message)          # this run made no profile
+
+    def test_an_unconfirmed_request_without_its_key_says_why(self):
+        proc = self.run_asc("cleanup", "--state", self.write_state(
+            {"cert_id": None, "profile_ids": [], "cert_pending": True}))     # no csr.pem next to it
+        title, message = self.annotation(proc, "warning")
+        self.assertEqual(title, "Certificado sin confirmar / Certificate not confirmed")
+        self.assertIn("(no está csr.pem, la clave de esta ejecución)", message)
+        self.assertIn("(csr.pem, this run's key, is missing)", message)
+        self.assertNotIn("()", message)
+        self.assertEqual(self.fake.requests, [])
 
     # A certificate request of this run that was cut off (a cancel) or got no clear answer
     # (state.json: cert_pending) may still be completed by Apple after the teardown's first look.
@@ -2610,11 +2808,57 @@ class CleanupTest(AscTest):
         self.fake.certificates = {"C1": {}}
         self.fake.profiles = {"P1": {}}
         self.fake.fail("DELETE", "/v1/.*", 500, error_doc(500, "UNEXPECTED_ERROR", "boom"), times=99)
-        proc = self.run_asc("cleanup", "--cert-id", "C1", "--profile-ids", "P1")
+        # The finish job: this run's profile names from its ids (its attempt may differ).
+        proc = self.run_asc("cleanup", "--cert-id", "C1", "--profile-ids", "P1", env={"GITHUB_RUN_ID": "112"})
         message = self.annotation(proc, "warning")[1]
-        for needle in ("el certificado «Apple Distribution» creado hoy (id C1)", "«OpenCfMoto CI …» (id P1)",
+        for needle in ("el certificado «Apple Distribution» creado hoy (id C1)",
+                       "los perfiles «OpenCfMoto CI r123-112-… app» y «OpenCfMoto CI r123-112-… mirror» que queden "
+                       "(id P1), cada uno ▸ Remove (ningún otro «OpenCfMoto CI …»)",
                        "the «Apple Distribution» certificate created today (id C1)"):
             self.assertIn(needle, message)
+        self.assertNotIn("«OpenCfMoto CI …» (id P1)", message)
+        # The teardown knows the exact suffix create-signing used.
+        proc = self.run_asc("cleanup", "--profile-ids", "P1", "--suffix", "r123-112-1")
+        message = self.annotation(proc, "warning")[1]
+        self.assertIn("«OpenCfMoto CI r123-112-1 app» y «OpenCfMoto CI r123-112-1 mirror» que queden (id P1)", message)
+        self.assertNotIn(asc.URL_CERTIFICATES, message)      # only a profile failed: no certificate to hunt for
+
+    def test_what_a_listing_shows_is_revoked_before_the_next_look(self):
+        # The DELETEs do not wait for the re-checks (a minute or more): GitHub stops Clean up a few
+        # minutes after a cancel, and what was revoked by then stays revoked.
+        csr = make_csr(self.tmp)
+        os.unlink(os.path.join(self.tmp, "key.pem"))
+        ours = self.fake.issue(csr)
+        self.fake.profiles = {"P1": {}}
+        seen = []
+        self.listings(after=lambda n: seen.append([c.path for c in self.calls("DELETE")]))
+        proc = self.run_asc("cleanup", "--state", self.write_state(
+            {"cert_id": None, "profile_ids": ["P1"], "cert_pending": True}))
+        self.assertEqual(len(seen), 1 + len(asc.PENDING_RECHECK_SEC))
+        self.assertEqual(seen[0], [])
+        self.assertEqual(seen[1], ["/v1/profiles/P1", f"/v1/certificates/{ours}"])
+        self.assertEqual([c.path for c in self.calls("DELETE")], seen[1])      # each one once
+        self.assertEqual(self.annotations(proc, "warning"), [])
+
+    def test_slow_answers_end_the_search_in_time_and_warn(self):
+        # Re-checks stop once Clean up has used its budget (real time: GitHub's limit); what was
+        # found is revoked, and the warning says the check could not be finished.
+        csr = make_csr(self.tmp)
+        os.unlink(os.path.join(self.tmp, "key.pem"))
+        ours = self.fake.issue(csr)
+        count = self.listings()
+        state = self.write_state({"cert_id": None, "profile_ids": [], "cert_pending": True})
+        with mock.patch.object(asc, "PENDING_RECHECK_BUDGET_SEC", 0):
+            code, output = self.run_in_process("cleanup", "--state", state)
+        self.assertEqual(code, 0, output)
+        self.assertEqual(count[0], 1)
+        self.assertEqual([c.path for c in self.calls("DELETE")], [f"/v1/certificates/{ours}"])
+        title, message = self.annotation(types.SimpleNamespace(stdout=output, stderr=""), "warning")
+        self.assertEqual(title, "Certificado sin confirmar / Certificate not confirmed")
+        for needle in ("se dejó de buscar para que este paso termine a tiempo", "the search stopped for this step "
+                       "to end in time", "creado hoy, púlsalo ▸ Revoke"):
+            self.assertIn(needle, message)
+        self.assertIn("certificado sin confirmar: sigue el aviso", self.summary())
 
     # cleanup --duplicates-only: the teardown of a build that reached Apple.
 
@@ -2698,16 +2942,110 @@ class BuildScriptTest(ScriptTest):
         self.work = os.path.join(self.tmp, "work")
         self.signing = os.path.join(self.work, "signing")
 
-    def step(self, name, env=None, expect=0):
+    def step_env(self, env=None):
         base = {"TF_WORK": self.work, "APP_BUNDLE_RESOURCE_ID": self.app["id"],
                 "MIRROR_BUNDLE_RESOURCE_ID": self.mirror["id"], "APP_BUNDLE_ID": APP_BID,
                 "MIRROR_BUNDLE_ID": MIRROR_BID, "APP_GROUP": GROUP, "GITHUB_RUN_ID": "4242",
                 "GITHUB_RUN_ATTEMPT": "1", "TF_LEFTOVER_WAIT_SEC": "0", "TF_KILL_WAIT_SEC": "1"}
         base.update(env or {})
-        return self.bash([SCRIPT_PATH, name], base, expect=expect)
+        return base
+
+    def step(self, name, env=None, expect=0):
+        return self.bash([SCRIPT_PATH, name], self.step_env(env), expect=expect)
+
+    def start_step(self, name, env=None):
+        """The step in its own process group, not waited for (the test cuts it off)."""
+        full = self.asc_env(self.step_env(env))
+        full["PATH"] = self.bindir + os.pathsep + full["PATH"]
+        return subprocess.Popen([BASH, SCRIPT_PATH, name], env=full, cwd=REPO, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, encoding="utf-8", errors="replace",
+                                start_new_session=True)
 
     def alive(self):
         return [c for c in self.fake.created_certs if c in self.fake.certificates]
+
+    def unclear_certificate_then_uploaded(self):
+        """create-signing after a certificate request without a clear answer (state.json keeps
+        cert_unclear, so the teardown looks for a duplicate), then an upload that got through."""
+        self.fake.fail("POST", "/v1/certificates", 502, BAD_GATEWAY, effect=True)
+        self.step("create-signing")
+        open(os.path.join(self.work, "uploaded"), "w").close()
+
+    def hang_listings(self):
+        """GET /v1/certificates hangs (Apple's API not answering) until the test ends."""
+        release, real = threading.Event(), self.fake.list_certs
+        self.addCleanup(release.set)
+        self.server.handle_error = lambda *args: None      # the answer then goes to a closed socket
+
+        def hanging(rec):
+            release.wait(20)
+            return real(rec)
+        self.fake.list_certs = hanging
+
+    def test_a_teardown_cut_off_while_it_asks_apple_has_already_said_uploaded(self):
+        # GitHub stops Clean up a few minutes after a cancel or at the job's time limit. Cut off
+        # while asking Apple about a duplicate, it must already have said uploaded=true: otherwise
+        # the finish job takes the job for one that lost its runner and revokes the build's
+        # certificate at once, before Apple has processed the build.
+        self.unclear_certificate_then_uploaded()
+        before = len(self.calls("GET", "/v1/certificates"))
+        self.hang_listings()
+        proc = self.start_step("teardown")
+        try:
+            deadline = time.monotonic() + 60
+            while (len(self.calls("GET", "/v1/certificates")) == before and proc.poll() is None
+                   and time.monotonic() < deadline):
+                time.sleep(0.05)
+            self.assertGreater(len(self.calls("GET", "/v1/certificates")), before, "the teardown never asked Apple")
+            self.assertEqual(self.outputs().get("uploaded"), "true")
+        finally:
+            os.killpg(proc.pid, signal.SIGKILL)
+            proc.communicate(timeout=30)
+        self.assertNotIn("teardown", self.outputs())            # it was cut off before its end
+        self.assertEqual(len(self.alive()), 1)                  # the build's certificate stays
+
+    def test_the_look_for_a_duplicate_is_bounded_and_then_warns(self):
+        self.unclear_certificate_then_uploaded()
+        self.hang_listings()
+        proc = self.step("teardown", env={"TF_DUPLICATES_WAIT_SEC": "2"})
+        out = self.outputs()
+        self.assertEqual((out["uploaded"], out["teardown"]), ("true", "done"))
+        title, message = self.annotation(proc, "warning")
+        self.assertEqual(title, "Certificado sin confirmar / Certificate not confirmed")
+        for needle in ("App Store Connect no respondió a tiempo (2 s)", "did not answer in time (2 s)",
+                       "Cuando termine el trabajo «Processing, TestFlight group, revoke the certificate» (revoca "
+                       "el certificado de esta build)", asc.URL_CERTIFICATES):
+            self.assertIn(needle, message)
+        self.assertNotIn("Revoca a mano lo que quede", message)    # never the build's certificate
+        self.assertEqual(len(self.alive()), 1)
+
+    def test_the_teardown_without_the_key_names_only_this_runs_profiles(self):
+        self.step("create-signing")
+        proc = self.step("teardown", env={"ASC_KEY_ID": None, "ASC_ISSUER_ID": None, "ASC_PRIVATE_KEY": None})
+        out = self.outputs()
+        title, message = self.annotation(proc, "warning")
+        self.assertEqual(title, "Revoca a mano / Revoke by hand")
+        name = f"OpenCfMoto CI r{REPO_ID}-4242-1"
+        for needle in (f"borra los perfiles «{name} app» y «{name} mirror» (ids {out['profile_ids']}) (cada uno ▸ "
+                       "Remove; ningún otro «OpenCfMoto CI …»)",
+                       f"delete the «{name} app» and «{name} mirror» profiles (ids {out['profile_ids']})",
+                       f"revoca el certificado «Apple Distribution» creado hoy (id {out['cert_id']})"):
+            self.assertIn(needle, message)
+        self.assertNotIn("los perfiles «OpenCfMoto CI …»", message)
+        self.assertEqual((len(self.alive()), len(self.fake.profiles)), (1, 2))   # nothing revoked without it
+
+    def test_the_teardown_names_this_runs_profiles_when_it_cannot_delete_them(self):
+        self.step("create-signing")
+        self.fake.fail("DELETE", r"/v1/profiles/.*", 500, SERVER_ERROR, times=99)
+        proc = self.step("teardown")
+        self.assertEqual(self.alive(), [])                       # the certificate went
+        title, message = self.annotation(proc, "warning")
+        self.assertEqual(title, "Limpieza incompleta / Cleanup incomplete")
+        name = f"OpenCfMoto CI r{REPO_ID}-4242-1"
+        self.assertIn(f"Borra a mano lo que quede. En {asc.URL_PROFILES}: los perfiles «{name} app» y "
+                      f"«{name} mirror» que queden (ids ", message)
+        for wrong in ("los perfiles «OpenCfMoto CI …»", asc.URL_CERTIFICATES):
+            self.assertNotIn(wrong, message)
 
     def test_the_teardown_of_an_uploaded_build_revokes_only_a_duplicate_certificate(self):
         f = self.fake
@@ -2864,21 +3202,46 @@ class WorkflowTextTest(ScriptTest):
     def revoke_step(self, cwd=None, **env):
         open(self.step_summary, "w").close()
         return self.run_step("finish", "Revoke the temporary certificate and profiles",
-                             dict({"CERT_ID": "", "PROFILE_IDS": "", "UPLOADED": "false", "TEARDOWN": "done"}, **env),
-                             cwd=cwd)
+                             dict({"CERT_ID": "", "PROFILE_IDS": "", "UPLOADED": "false", "TEARDOWN": "done",
+                                   "SIGNING": ""}, **env), cwd=cwd)
+
+    @staticmethod
+    def workflow_text():
+        with open(WORKFLOW_PATH, encoding="utf-8") as fh:
+            return fh.read()
 
     def test_the_finish_job_names_no_revocation_when_no_certificate_was_made(self):
-        self.revoke_step()
-        self.assertIn("no hay nada que revocar: el trabajo «Build, sign and upload (macOS)» no llegó a crear ninguno",
-                      self.summary())
+        self.revoke_step(SIGNING="skipped")
+        self.assertIn("no hay nada que revocar: el trabajo «Build, sign and upload (macOS)» se detuvo antes de crear "
+                      "el certificado", self.summary())
         self.assertNotIn("ya lo revocó el paso «Clean up»", self.summary())
-        self.revoke_step(CERT_ID="C1", PROFILE_IDS="P1,P2")
+        self.revoke_step(CERT_ID="C1", PROFILE_IDS="P1,P2", SIGNING="success")
         self.assertIn("ya lo revocó el paso «Clean up»", self.summary())
+        self.assertEqual(self.fake.requests, [])
+        # SIGNING: the build job's certificate step outcome (skipped: the job stopped before it).
+        self.assertIn("signing: ${{ steps.signing.outcome }}", self.workflow_text())
+        self.assertIn("SIGNING: ${{ needs.build.outputs.signing }}", self.workflow_text())
+
+    def test_the_finish_job_without_a_certificate_id_points_at_the_clean_up_warning(self):
+        # The certificate step ran but no id came out (an unclear answer, a cancel during it):
+        # Clean up looked for the certificate by this run's key and warned if it could not revoke
+        # it. The finish summary must not tell the owner «nothing to revoke» over that warning.
+        for signing in ("failure", "cancelled", "success", ""):
+            with self.subTest(signing=signing):
+                self.revoke_step(SIGNING=signing)
+                text = self.summary()
+                for needle in ("no registró ningún certificado: o no llegó a crearlo, o su paso «Clean up» ya lo "
+                               "revocó", "(«Certificado sin confirmar» o «Limpieza incompleta»), haz lo que dice",
+                               "If that step left a warning", "do what it says"):
+                    self.assertIn(needle, text)
+                for wrong in ("no hay nada que revocar", "Nothing to revoke"):
+                    self.assertNotIn(wrong, text)
         self.assertEqual(self.fake.requests, [])
 
     def test_the_finish_job_without_a_checkout_names_what_the_portal_shows(self):
         empty = os.path.join(self.tmp, "no-checkout")
         os.makedirs(empty)
+        run = f"OpenCfMoto CI r{REPO_ID}-112-…"            # this run's (the build job's attempt: «…»)
         for ids, cert, profiles in ((dict(CERT_ID="C1", PROFILE_IDS="P1,P2"), " (id C1)", " (ids P1,P2)"),
                                     ({}, "", "")):
             with self.subTest(ids=ids):
@@ -2886,10 +3249,13 @@ class WorkflowTextTest(ScriptTest):
                 title, message = self.annotation(proc, "warning")
                 self.assertEqual(title, "Revoca a mano / Revoke by hand")
                 for needle in (f"revoca el certificado «Apple Distribution» creado hoy{cert} (púlsalo ▸ Revoke)",
-                               f"borra los perfiles «OpenCfMoto CI …»{profiles} (cada uno ▸ Remove)",
+                               f"borra los perfiles «{run} app» y «{run} mirror»{profiles} (cada uno ▸ Remove; "
+                               "ningún otro «OpenCfMoto CI …»)",
                                f"revoke the «Apple Distribution» certificate created today{cert}",
-                               f"delete the «OpenCfMoto CI …» profiles{profiles}"):
+                               f"delete the «{run} app» and «{run} mirror» profiles{profiles} (each ▸ Remove; no "
+                               "other «OpenCfMoto CI …» one)"):
                     self.assertIn(needle, message)
+                self.assertNotIn("los perfiles «OpenCfMoto CI …»", message)
 
     def test_the_finish_job_sweeps_up_only_its_own_run(self):
         f = self.fake
@@ -2917,6 +3283,33 @@ class WorkflowTextTest(ScriptTest):
         self.assertNotIn("se perdió el runner", text)
         text = self.finish_summary(UPLOADED="", TEARDOWN="", BUILD_RESULT="failure", OUTCOME="skipped")
         self.assertIn("se perdió el runner", text)
+
+    def test_after_a_cancel_that_clean_up_handled_no_summary_asks_for_a_fix(self):
+        # Cancelled during archive, export or upload, and Clean up ran: the only annotation is
+        # GitHub's «The operation was canceled», so no summary sends the owner to fix errors.
+        text = self.build_summary(UPLOADED="false", UPLOAD_OUTCOME="cancelled", SIGNING_OUTCOME="success",
+                                  JOB_STATUS="cancelled")
+        for needle in ("Se canceló la ejecución (o el trabajo superó su tiempo máximo) y no se subió ninguna build.",
+                       "El paso «Clean up» revoca el certificado", "Cuando quieras, lanza una ejecución nueva",
+                       "The run was cancelled (or the job hit its time limit)"):
+            self.assertIn(needle, text)
+        text = self.finish_summary(UPLOADED="false", TEARDOWN="done", BUILD_RESULT="cancelled", OUTCOME="skipped")
+        for needle in ("La ejecución se canceló (o el trabajo «Build, sign and upload (macOS)» superó su tiempo máximo)",
+                       "revocó lo que se llegó a crear", "Cuando quieras, lanza una ejecución nueva", "The run was cancelled"):
+            self.assertIn(needle, text)
+        self.assertNotIn("se perdió el runner", text)
+        for summary in (text, self.build_summary(UPLOADED="false", UPLOAD_OUTCOME="cancelled",
+                                                 SIGNING_OUTCOME="success", JOB_STATUS="cancelled")):
+            for wrong in ("anotaciones de error", "mira sus anotaciones", "Cuando lo hayas corregido", "Once that is fixed"):
+                self.assertNotIn(wrong, summary)
+        # A failure still asks for the fix.
+        text = self.build_summary(UPLOADED="false", UPLOAD_OUTCOME="skipped", SIGNING_OUTCOME="success",
+                                  JOB_STATUS="failure")
+        self.assertIn("lee las anotaciones de error", text)
+        text = self.finish_summary(UPLOADED="false", TEARDOWN="done", BUILD_RESULT="failure", OUTCOME="skipped")
+        self.assertIn("Cuando lo hayas corregido", text)
+        for wiring in ("JOB_STATUS: ${{ job.status }}", "BUILD_RESULT: ${{ needs.build.result }}"):
+            self.assertIn(wiring, self.workflow_text())
 
     def test_the_finish_summary_never_promises_an_email(self):
         for env in (dict(STATE="PROCESSING", OUTCOME="success"), dict(OUTCOME="skipped"), dict(OUTCOME="failure")):
