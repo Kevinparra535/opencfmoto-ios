@@ -91,7 +91,7 @@ jobs:
             # com.<owner>, lower case, only [a-z0-9.-]: Kevinparra535 -> com.kevinparra535
             prefix="com.$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9.-')"
           fi
-          if ! printf '%s' "$prefix" | grep -Eq '^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$'; then
+          if ! [[ "$prefix" =~ ^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$ ]]; then
             echo "::error title=BUNDLE_ID_PREFIX::El prefijo «$prefix» no es válido (ejemplo: com.tunombre). Corrige la variable BUNDLE_ID_PREFIX en Settings ▸ Secrets and variables ▸ Actions ▸ Variables.%0AThe prefix \"$prefix\" is not valid (example: com.yourname). Fix the BUNDLE_ID_PREFIX repository variable."
             exit 1
           fi
@@ -180,11 +180,14 @@ jobs:
       # App Store Connect only accepts builds made with Xcode 26 / the iOS 26 SDK (since 2026-04-28).
       - name: Select the newest stable Xcode (26 or newer)
         run: |
-          newest=$(find /Applications -maxdepth 1 -name 'Xcode_*.app' | grep -v -i -E 'beta|_rc|release_candidate' | sort -V | tail -n 1)
+          newest=$(find /Applications -maxdepth 1 -name 'Xcode_*.app' | grep -v -i -E 'beta|_rc|release_candidate' | sort -V | tail -n 1 || true)
           if [ -n "$newest" ]; then sudo xcode-select -s "$newest/Contents/Developer"; fi
-          version=$(xcodebuild -version | head -n 1 | awk '{print $2}')
-          echo "::notice title=Xcode::$(xcodebuild -version | tr '\n' ' ')"
-          if [ "${version%%.*}" -lt 26 ] 2> /dev/null || [ -z "$version" ]; then
+          about=$(xcodebuild -version 2>&1 || true)
+          version=$(printf '%s\n' "$about" | awk 'NR == 1 { print $2 }')
+          echo "::notice title=Xcode::$(printf '%s' "$about" | tr '\n' ' ')"
+          major=${version%%.*}
+          case "$major" in '' | *[!0-9]*) major=0 ;; esac
+          if [ "$major" -lt 26 ]; then
             echo "::error title=Xcode 26 necesario / Xcode 26 required::El runner solo tiene Xcode ${version:-?}; App Store Connect exige Xcode 26 o posterior. Vuelve a intentarlo cuando GitHub actualice la imagen macos-15.%0AThe runner only has Xcode ${version:-?}; App Store Connect requires Xcode 26 or newer. Try again once GitHub updates the macos-15 image."
             exit 1
           fi

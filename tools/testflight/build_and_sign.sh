@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2317,SC2329 # the cmd_* functions are called indirectly: "cmd_${STEP//-/_}"
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Build, sign and upload OpenCfMoto to TestFlight on a macOS GitHub Actions runner, with nothing but
@@ -32,7 +33,6 @@
 # Every failure ends with a ::error annotation (raw CI logs are not always readable). Written for
 # bash 3.2 (/bin/bash on macOS) as well as newer versions.
 
-# shellcheck disable=SC2317,SC2329 # the cmd_* functions are called indirectly: "cmd_${STEP//-/_}"
 set -Eeuo pipefail
 umask 077 # keys, p12, passwords and everything else this script writes stay private
 
@@ -181,8 +181,9 @@ cmd_setup_keychain() {
   # 1. A PKCS#12 bundle of key + certificate. `security import` only reads the legacy PKCS#12
   #    algorithms (3DES/RC2 + SHA-1 MAC): the defaults of /usr/bin/openssl (LibreSSL). OpenSSL 3
   #    defaults to AES/PBKDF2, which macOS rejects ("MAC verification failed"), hence -legacy there.
-  local legacy=""
-  if "$OPENSSL" version 2>/dev/null | grep -q '^OpenSSL 3'; then legacy="-legacy"; fi
+  local legacy="" version
+  version=$("$OPENSSL" version 2> /dev/null || true)
+  if [[ "$version" == "OpenSSL 3"* ]]; then legacy="-legacy"; fi
   P12_PASSWORD="$p12_pass" "$OPENSSL" pkcs12 -export ${legacy:+"$legacy"} -name "OpenCfMoto TestFlight CI" \
     -inkey "$SIGNING_DIR/key.pem" -in "$SIGNING_DIR/cert.pem" -passout env:P12_PASSWORD -out "$p12" \
     || die "openssl no pudo crear el archivo .p12." "openssl could not create the .p12 file."
@@ -225,7 +226,7 @@ cmd_setup_keychain() {
     ids=$(security find-identity -v -p codesigning "$KEYCHAIN")
   fi
   printf '%s\n' "$ids"
-  if ! printf '%s\n' "$ids" | grep -q '"Apple Distribution'; then
+  if ! grep -q '"Apple Distribution' <<< "$ids"; then
     local all
     all=$(security find-identity -p codesigning "$KEYCHAIN" 2>&1 | tr '\n' ' ')
     die "El llavero no tiene una identidad «Apple Distribution» válida: $all" \

@@ -119,6 +119,10 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         OCMAppGroupIdentifier: $(APP_GROUP_ID)
+        # The extension links OpenCfMotoApple, so its binary references CLLocationManager (the app's
+        # location service) although it never asks for the location. App Store Connect checks purpose
+        # strings bundle by bundle (ITMS-90683), so the extension carries the key too.
+        NSLocationWhenInUseUsageDescription: "OpenCfMoto uses your location to show the map and turn-by-turn guidance on your bike's dash. The screen mirroring extension never asks for it itself."
         NSExtension:
           NSExtensionPointIdentifier: com.apple.broadcast-services-upload
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SampleHandler

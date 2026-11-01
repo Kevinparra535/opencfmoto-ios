@@ -189,6 +189,15 @@ jobs:
             "OpenCfMotoMirror:PRODUCT_BUNDLE_IDENTIFIER=com.cidryrun.opencfmoto.mirror"
           TF_WORK="$d" bash tools/testflight/build_and_sign.sh teardown
           if [ -e Config/Local.xcconfig ]; then echo "::error title=TestFlight dry run::teardown left Config/Local.xcconfig behind"; exit 1; fi
+      - name: TestFlight dry run — lint_bundle.py self-test (synthetic signed archive and IPA)
+        run: |
+          if ! python3 tools/testflight/test_lint_bundle.py > lint-selftest.log 2>&1; then
+            cat lint-selftest.log
+            msg=$(grep -E '^(FAIL|ERROR):|Error|^FAILED' lint-selftest.log | head -n 30 | sed 's/%/%25/g' | awk '{ printf "%s%%0A", $0 }')
+            echo "::error title=lint_bundle.py self-test::$msg"
+            exit 1
+          fi
+          tail -n 3 lint-selftest.log
       - name: TestFlight dry run — unsigned Release archive + bundle lint
         run: |
           set -uo pipefail
