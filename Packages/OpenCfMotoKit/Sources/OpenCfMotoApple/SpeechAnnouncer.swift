@@ -11,7 +11,9 @@
 //   so the rider's music is only ducked while a prompt plays. The `audio` background mode covers these
 //   audible prompts (never a silent keep-alive).
 // - While `HandlebarRemote` holds its non-mixable Now Playing session, prompts are spoken inside that
-//   session (no category change, no deactivation) so handlebar capture is not broken.
+//   session (no category change, no deactivation) so handlebar capture is not broken. "Holds" means
+//   enabled AND claimed: once another app took the session (or a reclaim was declined because other
+//   audio plays) prompts go back to the transient mixable session above.
 
 #if canImport(Foundation)
 import Foundation
@@ -67,7 +69,10 @@ import AVFoundation
 @MainActor
 final class OCMAudioSessionCoordinator {
     static let shared = OCMAudioSessionCoordinator()
-    /// True while `HandlebarRemote` holds its non-mixable `.playback` session (Now Playing).
+    /// True only while `HandlebarRemote` actually holds its ACTIVE non-mixable `.playback` session
+    /// (capture enabled AND claimed — published by HandlebarRemote whenever either changes). False
+    /// after another app interrupted it or while a reclaim is declined: prompts then use their own
+    /// transient mixable session.
     var captureOwnsSession = false
     private init() {}
 }
@@ -173,7 +178,13 @@ public final class SpeechAnnouncer: NSObject, AVSpeechSynthesizerDelegate {
 
     private func deactivateIfIdle(generation: Int) {
         guard generation == deactivationGeneration, active.isEmpty, !synthesizer.isSpeaking,
-              sessionActivatedByUs, !OCMAudioSessionCoordinator.shared.captureOwnsSession else { return }
+              sessionActivatedByUs else { return }
+        if OCMAudioSessionCoordinator.shared.captureOwnsSession {
+            // Handlebar capture re-claimed the session meanwhile: it is capture's now — never
+            // deactivate it, and stop tracking it as ours.
+            sessionActivatedByUs = false
+            return
+        }
         do {
             try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
             sessionActivatedByUs = false
