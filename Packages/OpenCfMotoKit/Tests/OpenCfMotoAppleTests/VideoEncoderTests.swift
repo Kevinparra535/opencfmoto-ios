@@ -277,6 +277,51 @@ final class VideoEngineTests: XCTestCase {
         XCTAssertTrue(resumed?.isKeyframe ?? false, "first live frame after the hold is an IDR")
     }
 
+    /// MP-2: Connect, lock the phone, THEN the dash negotiates: the hold picture pre-encoded at the
+    /// expected canvas (no canvas existed yet) answers the pulls in the background.
+    func testHoldPictureAtTheExpectedCanvasServesADashThatNegotiatesWhileBackgrounded() async throws {
+        try requireEncoder(width: 320, height: 160)
+        let engine = makeEngine()
+        defer { engine.stop() }
+        engine.holdDisplayListProvider = { _ in
+            DashDisplayList(size: DashSize(width: 320, height: 160), background: DashColor(rgb: 0x000000), commands: [
+                .text("Phone locked", DashRect(x: 0, y: 0, width: 320, height: 160),
+                      DashTextStyle(font: DashFont(size: 28, weight: .bold), color: .white, alignment: .center)),
+            ])
+        }
+        engine.allowsSoftwareEncodingInBackground = false
+        let built = Locked<Bool?>(nil)
+        engine.prepareHoldPicture(expectedCanvas: canvas) { ok in built.set(ok) }
+        XCTAssertTrue(pollUntil { built.current != nil })
+        XCTAssertEqual(built.current, true, "made without any negotiated canvas")
+        engine.enterBackground()
+        engine.prepare(canvas: canvas, parameters: .default) // REQ 16 while locked
+        XCTAssertEqual(engine.mode, .hold)
+        engine.resynchronize()
+        let a = await engine.nextFrame(timeout: 2)
+        let f = try XCTUnwrap(a)
+        XCTAssertTrue(f.isKeyframe)
+        XCTAssertEqual(H264SPS.parse(accessUnit: f.accessUnit).map { [$0.width, $0.height] }, [320, 160])
+        XCTAssertGreaterThanOrEqual(engine.stats.holdFramesServed, 1)
+    }
+
+    /// A hold picture made for another size is never served (the dash decodes exactly RLY 17).
+    func testHoldPictureOfAnotherCanvasIsNotServed() async throws {
+        try requireEncoder(width: 320, height: 160)
+        let engine = makeEngine()
+        defer { engine.stop() }
+        engine.allowsSoftwareEncodingInBackground = false
+        let built = Locked<Bool?>(nil)
+        engine.prepareHoldPicture(expectedCanvas: VideoCanvas(width: 320, height: 240)) { ok in built.set(ok) }
+        XCTAssertTrue(pollUntil { built.current != nil })
+        engine.enterBackground()
+        engine.prepare(canvas: canvas, parameters: .default) // the dash wanted 320×160
+        XCTAssertEqual(engine.mode, .hold)
+        let none = await engine.nextFrame(timeout: 1)
+        XCTAssertNil(none)
+        XCTAssertGreaterThanOrEqual(engine.stats.pullsUnanswered, 1)
+    }
+
     func testStopWakesPullsWithNil() async throws {
         try requireEncoder(width: 320, height: 160)
         let engine = makeEngine()

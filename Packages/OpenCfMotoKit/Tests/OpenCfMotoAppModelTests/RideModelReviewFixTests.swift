@@ -161,6 +161,56 @@ final class RideModelReviewFixTests: XCTestCase {
         XCTAssertTrue(applied)
     }
 
+    // MARK: MED:MP-2 — a hold picture exists before the dash negotiates
+
+    /// Tap Connect, pocket the phone: the dash's REQ 16 comes while the app is in the background,
+    /// where the hardware encoder is gone. The hold picture must already exist at the canvas the
+    /// dash will most likely negotiate (the learned one), laid out for it.
+    @MainActor
+    func testHoldPictureIsPreEncodedAtTheExpectedCanvasBeforeREQ16() async throws {
+        let h = AppTestHarness()
+        let (_, qr) = h.addBike()
+        h.core.dashMemory.observe(ssid: qr.ssid, width: 800, height: 951)
+        let tall = VideoCanvas.rounded(requestedWidth: 800, requestedHeight: 951)
+        h.ride.sessionChanged(active: true, mirror: false)
+        XCTAssertEqual(h.projection.holdPictureRequests, [tall], "pre-encoded at once, in the foreground")
+        XCTAssertEqual(h.ride.canvasSize, DashSize(width: 800, height: 944), "laid out for the expected canvas")
+        let hold = try XCTUnwrap(h.projection.currentHoldDisplayList(now: h.core.services.clock.now()))
+        XCTAssertEqual(hold.size, DashSize(width: 800, height: 944), "the hold picture is not stretched")
+        // Leaving the foreground refreshes it (current map) while the encoder is still available…
+        h.ride.scenePhaseChanged(.inactive)
+        XCTAssertEqual(h.projection.holdPictureRequests, [tall, tall])
+        h.ride.scenePhaseChanged(.background)
+        // …and coming back from the background does not (the hardware encoder is back).
+        h.ride.scenePhaseChanged(.inactive)
+        XCTAssertEqual(h.projection.holdPictureRequests.count, 2)
+        h.ride.scenePhaseChanged(.active)
+        // The dash negotiates another size: the hold picture follows the negotiated canvas.
+        h.ride.canvasNegotiated(VideoCanvas(width: 1280, height: 576))
+        h.ride.scenePhaseChanged(.inactive)
+        XCTAssertEqual(h.projection.holdPictureRequests.last, VideoCanvas(width: 1280, height: 576))
+        h.ride.scenePhaseChanged(.active)
+        // Session over: back to the preview canvas, no more hold pictures.
+        h.ride.sessionChanged(active: false, mirror: false)
+        XCTAssertEqual(h.ride.canvasSize, DashSize(width: 800, height: 384))
+        let count = h.projection.holdPictureRequests.count
+        h.ride.scenePhaseChanged(.inactive)
+        XCTAssertEqual(h.projection.holdPictureRequests.count, count)
+    }
+
+    @MainActor
+    func testHoldPictureDefaultsTo800x384AndIsNotMadeForMirroring() async {
+        let h = AppTestHarness()
+        h.addBike() // no learned canvas
+        h.ride.sessionChanged(active: true, mirror: true)
+        h.ride.scenePhaseChanged(.inactive)
+        XCTAssertEqual(h.projection.holdPictureRequests, [], "mirror: the own UI is not projected")
+        h.ride.scenePhaseChanged(.active)
+        h.ride.sessionChanged(active: true, mirror: false)
+        XCTAssertEqual(h.projection.holdPictureRequests, [.defaultLandscape])
+        XCTAssertEqual(h.ride.canvasSize, DashSize(width: 800, height: 384))
+    }
+
     // MARK: SPEC:CL-10 — theme AUTO follows the phone's dark mode
 
     private func fix(lat: Double = 4.6584, lon: Double = -74.0930) -> LocationFix {

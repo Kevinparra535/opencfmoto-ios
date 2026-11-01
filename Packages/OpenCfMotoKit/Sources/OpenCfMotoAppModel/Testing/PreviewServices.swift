@@ -241,6 +241,11 @@ public final class PreviewProjection: DashProjecting, @unchecked Sendable {
     public func setThermalCapsEnabled(_ enabled: Bool) {}
     public func invalidate() { lock.lock(); invalidations += 1; lock.unlock() }
     public func prepareHoldPicture() {}
+    /// ADDITION (fix-media, MED:MP-2): every `prepareHoldPicture(expectedCanvas:)` request.
+    public private(set) var holdPictureRequests: [VideoCanvas] = []
+    public func prepareHoldPicture(expectedCanvas: VideoCanvas) {
+        lock.lock(); holdPictureRequests.append(expectedCanvas); lock.unlock()
+    }
     public func enterBackground() { lock.lock(); mode = "hold"; lock.unlock() }
     public func enterForeground() { lock.lock(); mode = "foreground"; lock.unlock() }
     public func stop() { lock.lock(); mode = "stopped"; lock.unlock() }

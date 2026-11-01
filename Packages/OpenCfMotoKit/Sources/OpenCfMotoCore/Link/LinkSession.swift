@@ -130,10 +130,7 @@ final class LinkSession: @unchecked Sendable {
     /// The canvas assumed before the first REQ 16: the learned one (rounded) if plausible, else
     /// Android's 800×384 default. REQ 16 always overrides it.
     static func initialCanvas(_ learned: VideoCanvas?) -> VideoCanvas {
-        guard let l = learned, (16 ... 8192).contains(l.requestedWidth), (16 ... 8192).contains(l.requestedHeight) else {
-            return .defaultLandscape
-        }
-        return .rounded(requestedWidth: l.requestedWidth, requestedHeight: l.requestedHeight, requestedFps: l.requestedFps)
+        VideoCanvas.expectedSessionCanvas(learned: learned)
     }
 
     private var touchFilter: GhostTouchFilter { touchFilterStorage! }

@@ -285,6 +285,12 @@ public protocol DashProjecting: AnyObject, Sendable {
     /// that keeps the previous canvas, or 112 without any 16). The dash UI must be laid out for
     /// exactly this canvas (RLY 17, encoder and layout agree). Default: never called.
     var onCanvasPrepared: (@Sendable (VideoCanvas) -> Void)? { get set }
+    /// ADDITION (fix-media, MED:MP-2): pre-encode the hold picture NOW (the app is about to leave
+    /// the foreground: the hardware encoder is still available) at the canvas the dash negotiated —
+    /// or, before any REQ 16, at `expectedCanvas` (the session's learned / default canvas), so a
+    /// dash that negotiates while the phone is locked still gets a picture. Default: forwards to
+    /// `prepareHoldPicture()`.
+    func prepareHoldPicture(expectedCanvas: VideoCanvas)
 }
 
 public extension DashProjecting {
@@ -292,6 +298,8 @@ public extension DashProjecting {
         get { nil }
         set {}
     }
+
+    func prepareHoldPicture(expectedCanvas: VideoCanvas) { prepareHoldPicture() }
 }
 
 // MARK: - Mirror (ReplayKit broadcast extension → App Group socket → host)

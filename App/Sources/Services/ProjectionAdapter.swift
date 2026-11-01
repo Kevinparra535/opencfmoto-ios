@@ -69,6 +69,7 @@ final class ProjectionAdapter: DashProjecting, @unchecked Sendable {
 
     func invalidate() { engine.invalidate() }
     func prepareHoldPicture() { engine.prepareHoldPicture() }
+    func prepareHoldPicture(expectedCanvas: VideoCanvas) { engine.prepareHoldPicture(expectedCanvas: expectedCanvas) }
     func enterBackground() { engine.enterBackground() }
     func enterForeground() { engine.enterForeground() }
     func stop() { engine.stop() }

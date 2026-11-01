@@ -113,6 +113,9 @@ public final class RideModel {
     @ObservationIgnored private var compassDeg: Double?
     @ObservationIgnored private var lastCompassModelAt: TimeInterval = -.greatestFiniteMagnitude
     @ObservationIgnored private var negotiatedCanvas: VideoCanvas?
+    /// The canvas the link assumes for this own-UI session before REQ 16 (learned / 800×384): the
+    /// dash UI is laid out (and the hold picture pre-encoded) for it until the dash negotiates.
+    @ObservationIgnored private var sessionExpectedCanvas: VideoCanvas?
     @ObservationIgnored private var identifiedProfile: BikeProfile?
     @ObservationIgnored private var earlyProfile: BikeProfile = .legacy
     @ObservationIgnored private var linkBanner: String?
@@ -238,10 +241,17 @@ public final class RideModel {
         if active {
             encoderPlan.adaptive.reset()
             lastPushedParameters = nil
-        } else if negotiatedCanvas != nil || identifiedProfile != nil {
+            sessionExpectedCanvas = sessionIsMirror ? nil : expectedCanvasForSelectedBike()
+            flushModel()
+            // Pre-encode the hold picture right away (the hardware encoder is available now): a
+            // rider who taps Connect and pockets the phone before the dash's REQ 16 still gets a
+            // picture (MP-2). Refreshed when the app leaves the foreground.
+            if !sessionIsMirror, scenePhase == .active { requestHoldPicture() }
+        } else if negotiatedCanvas != nil || identifiedProfile != nil || sessionExpectedCanvas != nil {
             // Ended before the first frame (no projectionChanged(false)): back to the preview layout.
             negotiatedCanvas = nil
             identifiedProfile = nil
+            sessionExpectedCanvas = nil
             flushModel()
         }
         applyLocationPolicy()
@@ -260,6 +270,7 @@ public final class RideModel {
         } else {
             negotiatedCanvas = nil
             identifiedProfile = nil
+            if !sessionActive { sessionExpectedCanvas = nil }
             linkBanner = nil
             flushModel()
         }
@@ -326,8 +337,9 @@ public final class RideModel {
         switch phase {
         case .inactive:
             // Leaving the foreground (not coming back from the background): pre-encode the hold
-            // picture while the hardware encoder is still available.
-            if previous == .active, isProjecting { projection.prepareHoldPicture() }
+            // picture while the hardware encoder is still available — for the whole own-UI
+            // session, also before the dash negotiated (MP-2: REQ 16 may come while locked).
+            if previous == .active, sessionActive, !sessionIsMirror { requestHoldPicture() }
         case .background:
             projection.enterBackground()
         case .active:
@@ -336,13 +348,28 @@ public final class RideModel {
         }
     }
 
+    /// Asks the projection to pre-encode the hold picture at the negotiated canvas, or the
+    /// session's expected one (the dash UI is laid out for it, so the picture is not stretched).
+    private func requestHoldPicture() {
+        if updateScheduled { flushModel() } // the hold provider renders the current model
+        let canvas = negotiatedCanvas ?? sessionExpectedCanvas ?? .defaultLandscape
+        core.services.projection.prepareHoldPicture(expectedCanvas: canvas)
+    }
+
+    /// The canvas the link will assume for the selected bike before REQ 16.
+    private func expectedCanvasForSelectedBike() -> VideoCanvas {
+        let learned = core.garage.selected.flatMap { core.garage.qr(for: $0.id) }
+            .flatMap { core.dashMemory.learnedCanvas(forSSID: $0.ssid) }
+        return VideoCanvas.expectedSessionCanvas(learned: learned)
+    }
+
     /// Location permission changed (PermissionsModel → AppModel).
     func locationPermissionChanged(_ permission: LocationPermission) {
         applyLocationPolicy()
     }
 
     private func previewCanvasChanged() {
-        guard negotiatedCanvas == nil else { return }
+        guard negotiatedCanvas == nil, sessionExpectedCanvas == nil else { return }
         flushModel()
     }
 
@@ -537,7 +564,7 @@ public final class RideModel {
 
     private func buildModel() -> DashModel {
         let s = cachedSettings
-        let canvas = negotiatedCanvas.map(DashModel.canvasSize) ?? previewCanvas.size
+        let canvas = (negotiatedCanvas ?? sessionExpectedCanvas).map(DashModel.canvasSize) ?? previewCanvas.size
         let profileDefault = (identifiedProfile ?? earlyProfile).defaultMargins
         let margins = CanvasFit.effectiveMargins(s.screenMargins, profileDefault: profileDefault)
         let wall = core.services.now()

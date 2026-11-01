@@ -257,6 +257,8 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
         var mode: Mode = .idle
         var holdFrames: [EncodedFrame] = []
         var holdIndex = 0
+        /// The canvas the hold IDRs were encoded at (only served for that canvas).
+        var holdCanvas: PictureSize?
         /// The canvas of the current session (mirrors the render-queue `canvas`; nil when idle /
         /// stopped) and the last live IDR with the canvas it was encoded at (MP-3: a cached IDR is
         /// only ever re-sent for the canvas it was made for, and never across sessions).
@@ -504,11 +506,14 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
 
     /// Renders the hold picture (`holdDisplayListProvider`, else the current UI) and pre-encodes
     /// it as IDRs with a temporary session. Call from `willResignActive` — while the hardware
-    /// encoder is still available. `completion` (render queue) reports success.
-    public func prepareHoldPicture(completion: (@Sendable (Bool) -> Void)? = nil) {
+    /// encoder is still available. The negotiated canvas is used; before any REQ 16 the picture is
+    /// made at `expectedCanvas` (the session's learned / default canvas) and kept for a dash that
+    /// negotiates that size while the app is in the background (MP-2). `completion` (render
+    /// queue) reports success.
+    public func prepareHoldPicture(expectedCanvas: VideoCanvas? = nil, completion: (@Sendable (Bool) -> Void)? = nil) {
         renderQueue.async { [weak self] in
             guard let self else { completion?(false); return }
-            let ok = self.buildHoldFrames()
+            let ok = self.buildHoldFrames(expected: expectedCanvas)
             completion?(ok)
         }
     }
@@ -538,10 +543,12 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
             self.lastList = nil
             self.shared.withLock {
                 $0.mode = .stopped
-                $0.holdFrames = []
                 $0.stats.mode = .stopped
                 $0.canvasSize = nil
                 $0.lastLiveKeyframe = nil // never seed a later session's hold with this ride's map
+                // The pre-encoded hold IDRs (lock notice, tagged with their canvas) are kept: a
+                // session that resumes while the phone is still locked (e.g. after the Wi-Fi park)
+                // needs them; foreground use never serves them.
             }
         }
         frameQueue.close()
@@ -593,7 +600,15 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
             lastList = nil
             pictureNotEncoded = false
             lastEncodeAt = nil
-            shared.withLock { $0.holdFrames = []; $0.lastLiveKeyframe = nil }
+            let size = PictureSize(newCanvas)
+            shared.withLock {
+                // Hold IDRs pre-encoded at this very size (expected canvas, MP-2) stay usable.
+                if $0.holdCanvas != size {
+                    $0.holdFrames = []
+                    $0.holdCanvas = nil
+                }
+                $0.lastLiveKeyframe = nil
+            }
             frameQueue.invalidateKeyframe() // an IDR of the old size must never answer a pull (MP-3)
             encoder?.invalidate()
             encoder = nil
@@ -789,26 +804,36 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
     // MARK: hold / background
 
     @discardableResult
-    private func buildHoldFrames() -> Bool {
-        guard let canvas, let factory else { return false }
+    private func buildHoldFrames(expected: VideoCanvas? = nil) -> Bool {
+        // The negotiated canvas wins; before any REQ 16 the session's expected canvas is used.
+        let target: VideoCanvas
+        if let canvas {
+            target = canvas
+        } else if let e = expected, e.width >= 16, e.height >= 16 {
+            target = e
+        } else {
+            return false
+        }
         let now = clock.now()
         let provider = shared.withLock { $0.holdDisplayListProvider ?? $0.displayListProvider }
         var picture: CVPixelBuffer?
-        if let provider, let buffer = factory.makeBuffer() ?? PixelBufferFactory.makeStandaloneBuffer(width: canvas.width, height: canvas.height) {
+        let pooled = canvas != nil ? factory?.makeBuffer() : nil
+        if let provider, let buffer = pooled ?? PixelBufferFactory.makeStandaloneBuffer(width: target.width, height: target.height) {
             renderer.render(provider(now), into: buffer)
             picture = buffer
-        } else {
+        } else if canvas != nil {
             picture = lastPixelBuffer
         }
         guard let pic = picture else { return false }
-        let frames = H264Encoder.encodeStill(pixelBuffer: pic, width: canvas.width, height: canvas.height,
+        let frames = H264Encoder.encodeStill(pixelBuffer: pic, width: target.width, height: target.height,
                                              parameters: currentEffective(), count: 2, timeout: 0.6)
         guard !frames.isEmpty else {
             Log.w("VIDEO", "hold picture: no IDR produced (encoder unavailable?)")
             return false
         }
-        shared.withLock { $0.holdFrames = frames; $0.holdIndex = 0 }
-        Log.i("VIDEO", "hold picture ready: \(frames.count) IDR(s), \(frames.map { $0.accessUnit.count })b")
+        shared.withLock { $0.holdFrames = frames; $0.holdIndex = 0; $0.holdCanvas = PictureSize(target) }
+        Log.i("VIDEO", "hold picture ready at \(target.width)x\(target.height)\(canvas == nil ? " (expected canvas)" : ""): "
+            + "\(frames.count) IDR(s), \(frames.map { $0.accessUnit.count })b")
         return true
     }
 
@@ -826,10 +851,17 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
         var nextMode = Mode.hold
         if flags.current.software, H264Encoder.isSoftwareEncodingSupported {
             shared.withLock { $0.mode = .backgroundSoftware }
-            if let enc = makeEncoder(software: true), enc.isSessionValid {
+            let candidate = makeEncoder(software: true)
+            if let enc = candidate, enc.isSessionValid, enc.stats.usingHardware == false {
                 encoder = enc
                 nextMode = .backgroundSoftware
             } else {
+                // No session, or VideoToolbox quietly handed back a HARDWARE session for the
+                // software request (it would fail once the app is suspended): hold picture.
+                if let enc = candidate, enc.isSessionValid {
+                    Log.w("VIDEO", "background: no software H.264 session (hardware=\(enc.stats.usingHardware.map { String($0) } ?? "?")) — serving the hold picture")
+                }
+                candidate?.invalidate()
                 encoder?.invalidate()
                 encoder = nil
             }
@@ -837,7 +869,10 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
         let live = liveKeyframeForCurrentCanvas()
         shared.withLock { s in
             s.mode = nextMode
-            if nextMode == .hold, s.holdFrames.isEmpty, let k = live { s.holdFrames = [k] }
+            if nextMode == .hold, s.holdFrames.isEmpty || s.holdCanvas != s.canvasSize, let k = live {
+                s.holdFrames = [k]
+                s.holdCanvas = s.canvasSize
+            }
         }
         factory?.flush()
         keyframePending = true
@@ -858,7 +893,7 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
         keyframePending = true
         lastEncodeAt = nil
         pendingDirty = true
-        shared.withLock { $0.holdFrames = [] }
+        shared.withLock { $0.holdFrames = []; $0.holdCanvas = nil }
         applyEffectiveParameters()
         tick()
         Log.i("VIDEO", "foreground → hardware encoder, IDR forced")
@@ -868,10 +903,11 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
         nextHoldFrame() ?? liveKeyframeForCurrentCanvas()
     }
 
-    /// Round-robin over the hold IDRs (consecutive identical IDRs share an idr_pic_id).
+    /// Round-robin over the hold IDRs (consecutive identical IDRs share an idr_pic_id); only when
+    /// they were encoded at the current canvas.
     private func nextHoldFrame() -> EncodedFrame? {
         shared.withLock { s -> EncodedFrame? in
-            guard !s.holdFrames.isEmpty else { return nil }
+            guard !s.holdFrames.isEmpty, let size = s.canvasSize, s.holdCanvas == size else { return nil }
             let f = s.holdFrames[s.holdIndex % s.holdFrames.count]
             s.holdIndex &+= 1
             return f
