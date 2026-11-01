@@ -27,7 +27,9 @@ on:
 permissions:
   contents: read
 
-# One TestFlight run at a time (the leftover sweep in prepare relies on it).
+# One TestFlight run at a time in this repository (a concurrency group never spans repositories).
+# The leftover sweep (asc.py janitor) relies on it for this repository's «OpenCfMoto CI r<repository
+# id>-…» profiles only; those of other repositories or of a Mac run go only once older than 12 hours.
 concurrency:
   group: testflight
   cancel-in-progress: false
@@ -94,7 +96,7 @@ jobs:
             prefix="com.$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9.-')"
           fi
           if ! [[ "$prefix" =~ ^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$ ]]; then
-            echo "::error title=BUNDLE_ID_PREFIX::El prefijo «$prefix» no es válido (ejemplo: com.tunombre). Corrige la variable BUNDLE_ID_PREFIX en Settings ▸ Secrets and variables ▸ Actions ▸ Variables y lanza una ejecución nueva: Actions ▸ TestFlight ▸ Run workflow.%0AThe prefix \"$prefix\" is not valid (example: com.yourname). Fix the BUNDLE_ID_PREFIX repository variable, then start a new run: Actions ▸ TestFlight ▸ Run workflow."
+            echo "::error title=Prefijo no válido / Invalid prefix::El prefijo «$prefix» no es válido (ejemplo: com.tunombre). Corrige la variable BUNDLE_ID_PREFIX en Settings ▸ Secrets and variables ▸ Actions ▸ Variables y lanza una ejecución nueva: Actions ▸ TestFlight ▸ Run workflow.%0AThe prefix \"$prefix\" is not valid (example: com.yourname). Fix the BUNDLE_ID_PREFIX repository variable, then start a new run: Actions ▸ TestFlight ▸ Run workflow."
             exit 1
           fi
           echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
@@ -268,9 +270,16 @@ jobs:
           UPLOADED: ${{ steps.teardown.outputs.uploaded }}
           UPLOAD_OUTCOME: ${{ steps.upload.outcome }}
           METHOD: ${{ steps.upload.outputs.upload_method }}
+          # skipped: the job stopped before the certificate step, so nothing was created to revoke.
+          SIGNING_OUTCOME: ${{ steps.signing.outcome }}
         run: |
           guide="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/main/docs/TESTFLIGHT.md"
           version="$MARKETING_VERSION (${BUILD_NUMBER:-?})"
+          revoke_es="" revoke_en=""
+          if [ "$SIGNING_OUTCOME" != skipped ]; then
+            revoke_es=" El paso «Clean up» revoca el certificado y los perfiles temporales."
+            revoke_en=" The «Clean up» step revokes the temporary certificate and profiles."
+          fi
           {
             echo "## TestFlight — compilación / build"
             echo
@@ -279,13 +288,13 @@ jobs:
               echo
               echo "Uploaded version **$version** to App Store Connect (${METHOD:-rest}). Apple is processing it; the «Processing, TestFlight group, revoke the certificate» job waits, adds it to your internal TestFlight group and revokes the temporary certificate."
             elif [ "$UPLOADED" = true ]; then
-              echo "El archivo de la versión **$version** ya llegó a Apple, pero el paso «Upload to App Store Connect» no terminó (se canceló o falló mientras Apple lo procesaba: mira las anotaciones). El trabajo «Processing, TestFlight group, revoke the certificate» espera a que Apple lo procese y después revoca el certificado temporal."
+              echo "Apple tiene (o puede tener) el archivo de la versión **$version**, pero el paso «Upload to App Store Connect» no terminó (se canceló o falló: mira las anotaciones). El trabajo «Processing, TestFlight group, revoke the certificate» espera a que Apple lo procese (si no cancelaste la ejecución) y después revoca el certificado temporal."
               echo
-              echo "The file of version **$version** already reached Apple, but the «Upload to App Store Connect» step did not finish (it was cancelled or failed while Apple was processing it: see the annotations). The «Processing, TestFlight group, revoke the certificate» job waits for Apple's processing, then revokes the temporary certificate."
+              echo "Apple has (or may have) the file of version **$version**, but the «Upload to App Store Connect» step did not finish (it was cancelled or failed: see the annotations). The «Processing, TestFlight group, revoke the certificate» job waits for Apple's processing (unless you cancelled the run), then revokes the temporary certificate."
             else
-              echo "No se subió ninguna build: lee las anotaciones de error de este trabajo (arriba). El paso «Clean up» revoca el certificado y los perfiles temporales. Cuando lo hayas corregido, lanza una ejecución nueva: **Actions ▸ TestFlight ▸ Run workflow** (*Re-run* repite el mismo commit, sin tus arreglos). Guía: $guide"
+              echo "No se subió ninguna build: lee las anotaciones de error de este trabajo (arriba).$revoke_es Cuando lo hayas corregido, lanza una ejecución nueva: **Actions ▸ TestFlight ▸ Run workflow** (*Re-run* repite el mismo commit, sin tus arreglos). Guía: $guide"
               echo
-              echo "Nothing was uploaded: read this job's error annotations (above). The «Clean up» step revokes the temporary certificate and profiles. Once that is fixed, start a new run: **Actions ▸ TestFlight ▸ Run workflow** (*Re-run* repeats the same commit, without your fixes). Guide: $guide"
+              echo "Nothing was uploaded: read this job's error annotations (above).$revoke_en Once that is fixed, start a new run: **Actions ▸ TestFlight ▸ Run workflow** (*Re-run* repeats the same commit, without your fixes). Guide: $guide"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -320,7 +329,8 @@ jobs:
       # After a build reached Apple: only now, after processing, so Apple's processing never sees a
       # revoked certificate (builds already in TestFlight keep working after the revocation).
       # Without one, the build job's Clean up step revoked already, unless that job ended without
-      # it (lost runner, force cancel): then this sweeps up what any CI run left behind.
+      # it (lost runner, force cancel): then this sweeps up the profiles this run left behind and
+      # their certificate (janitor --run-id: this repository's run only).
       - name: Revoke the temporary certificate and profiles
         if: always()
         env:
@@ -333,7 +343,7 @@ jobs:
           if [ ! -f tools/testflight/asc.py ]; then
             certs=https://developer.apple.com/account/resources/certificates/list
             profiles=https://developer.apple.com/account/resources/profiles/list
-            echo "::warning title=Revoca a mano / Revoke by hand::No se pudo revocar porque falló la descarga del código (checkout). Revoca el certificado ${CERT_ID:-«Apple Distribution» creado hoy} en $certs y borra los perfiles ${PROFILE_IDS:-«OpenCfMoto CI …»} en $profiles. O lanza una ejecución nueva con «Solo preparar» marcado (Actions ▸ TestFlight ▸ Run workflow): su preparación borra estos restos.%0ACould not revoke because the code checkout failed. Revoke certificate ${CERT_ID:-«Apple Distribution» created today} at $certs and delete profiles ${PROFILE_IDS:-«OpenCfMoto CI …»} at $profiles. Or start a new run with «Solo preparar» ticked (Actions ▸ TestFlight ▸ Run workflow): its prepare job removes these leftovers."
+            echo "::warning title=Revoca a mano / Revoke by hand::No se pudo revocar porque falló la descarga del código (checkout). En $certs revoca el certificado «Apple Distribution» creado hoy${CERT_ID:+ (id $CERT_ID)} (púlsalo ▸ Revoke) y en $profiles borra los perfiles «OpenCfMoto CI …»${PROFILE_IDS:+ (ids $PROFILE_IDS)} (cada uno ▸ Remove). O lanza una ejecución nueva con «Solo preparar» marcado (Actions ▸ TestFlight ▸ Run workflow): su preparación borra estos restos.%0ACould not revoke because the code checkout failed. At $certs revoke the «Apple Distribution» certificate created today${CERT_ID:+ (id $CERT_ID)} (click it ▸ Revoke) and at $profiles delete the «OpenCfMoto CI …» profiles${PROFILE_IDS:+ (ids $PROFILE_IDS)} (each ▸ Remove). Or start a new run with «Solo preparar» ticked (Actions ▸ TestFlight ▸ Run workflow): its prepare job removes these leftovers."
             exit 0
           fi
           if [ "$UPLOADED" = true ]; then
@@ -343,15 +353,18 @@ jobs:
             if [ ${#args[@]} -gt 0 ]; then
               python3 tools/testflight/asc.py cleanup "${args[@]}"
             else
-              echo "The build job passed on no certificate or profile ids: sweeping up what CI runs left behind."
-              python3 tools/testflight/asc.py janitor
+              echo "The build job passed on no certificate or profile ids: sweeping up what this run left behind."
+              python3 tools/testflight/asc.py janitor --run-id "$GITHUB_RUN_ID"
             fi
           elif [ "$TEARDOWN" != "done" ]; then
-            echo "The build job ended without its Clean up step (lost runner or force cancel): sweeping up what CI runs left behind."
-            python3 tools/testflight/asc.py janitor
-          else
+            echo "The build job ended without its Clean up step (lost runner or a cancel): sweeping up what this run left behind."
+            python3 tools/testflight/asc.py janitor --run-id "$GITHUB_RUN_ID"
+          elif [ -n "$CERT_ID" ]; then
             echo "Nothing to revoke here: the build job's Clean up step already revoked the temporary certificate and profiles."
             echo "**Certificado / certificate:** ya lo revocó el paso «Clean up» del trabajo «Build, sign and upload (macOS)» (si no pudo, allí hay un aviso con los pasos). / The «Clean up» step of the «Build, sign and upload (macOS)» job already revoked it (if it could not, a warning there gives the steps)." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Nothing to revoke here: the build job recorded no certificate (or its Clean up step already revoked it)."
+            echo "**Certificado / certificate:** no hay nada que revocar: el trabajo «Build, sign and upload (macOS)» no llegó a crear ninguno (o su paso «Clean up» ya lo revocó). / Nothing to revoke: the «Build, sign and upload (macOS)» job created none (or its «Clean up» step already revoked it)." >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Summary
@@ -360,12 +373,17 @@ jobs:
           STATE: ${{ steps.wait.outputs.processing_state }}
           GROUP: ${{ steps.wait.outputs.beta_group }}
           OUTCOME: ${{ steps.wait.outcome }}
+          BUILD_RESULT: ${{ needs.build.result }}
         run: |
           version="$MARKETING_VERSION (${BUILD_NUMBER:-?})"
           {
             echo "## TestFlight — resultado / result"
             echo
-            if [ "$UPLOADED" != true ] && [ "$TEARDOWN" != "done" ]; then
+            if [ "$UPLOADED" != true ] && [ "$TEARDOWN" != "done" ] && [ "$BUILD_RESULT" = cancelled ]; then
+              echo "La ejecución se canceló antes de que el trabajo «Build, sign and upload (macOS)» empezara o terminara su limpieza. El paso «Revoke the temporary certificate and profiles» de este trabajo borra lo que pudiera quedar (si no puede, deja un aviso con los pasos). Cuando quieras, lanza una ejecución nueva: **Actions ▸ TestFlight ▸ Run workflow**."
+              echo
+              echo "The run was cancelled before the «Build, sign and upload (macOS)» job started or finished its clean-up. This job's «Revoke the temporary certificate and profiles» step removes whatever may be left (if it cannot, a warning gives the steps). Whenever you like, start a new run: **Actions ▸ TestFlight ▸ Run workflow**."
+            elif [ "$UPLOADED" != true ] && [ "$TEARDOWN" != "done" ]; then
               echo "El trabajo «Build, sign and upload (macOS)» terminó sin su paso «Clean up» (se perdió el runner o se forzó la cancelación), así que no se sabe si llegó a subir la build. El paso «Revoke the temporary certificate and profiles» de este trabajo borra los restos (si no puede, deja un aviso con los pasos). Lanza una ejecución nueva: **Actions ▸ TestFlight ▸ Run workflow**."
               echo
               echo "The «Build, sign and upload (macOS)» job ended without its «Clean up» step (lost runner or force cancel), so it is unknown whether the build was uploaded. This job's «Revoke the temporary certificate and profiles» step removes the leftovers (if it cannot, a warning gives the steps). Start a new run: **Actions ▸ TestFlight ▸ Run workflow**."
@@ -382,22 +400,22 @@ jobs:
               echo
               echo "Apple rejected version **$version** (state: $STATE): it will not appear in TestFlight. Read the error above and App Store Connect's e-mail (ITMS codes), fix it and start a new run: **Actions ▸ TestFlight ▸ Run workflow** (*Re-run* repeats the same commit, without your fixes)."
             elif [ "$OUTCOME" = success ]; then
-              echo "Apple todavía procesa la build ${STATE:+(estado: $STATE)}; aparecerá en la app TestFlight en cuanto termine (te llegará un correo)."
+              echo "Apple todavía procesa la build ${STATE:+(estado: $STATE)}; aparecerá en la app TestFlight en cuanto termine (Apple suele avisar por correo)."
               echo
-              echo "Apple is still processing the build ${STATE:+(state: $STATE)}; it shows up in the TestFlight app as soon as that ends (Apple e-mails you)."
+              echo "Apple is still processing the build ${STATE:+(state: $STATE)}; it shows up in the TestFlight app as soon as that ends (Apple usually e-mails you)."
             else
               if [ "$OUTCOME" = failure ]; then
                 echo "No se pudo esperar a Apple: lee las anotaciones de error de este trabajo."
               else
                 echo "No se esperó a Apple (la ejecución se canceló o falló un paso anterior de este trabajo)."
               fi
-              echo "La versión **$version** ya está en App Store Connect: si Apple la acepta, aparecerá en la app TestFlight (te llega un correo). Si no aparece, lanza una ejecución nueva: **Actions ▸ TestFlight ▸ Run workflow**."
+              echo "La versión **$version** ya está en App Store Connect: si Apple la acepta, aparecerá en la app TestFlight (Apple suele avisar por correo). Si no aparece, lanza una ejecución nueva: **Actions ▸ TestFlight ▸ Run workflow**."
               echo
               if [ "$OUTCOME" = failure ]; then
                 echo "Could not wait for Apple: read this job's error annotations."
               else
                 echo "Apple's processing was not waited for (the run was cancelled, or an earlier step of this job failed)."
               fi
-              echo "Version **$version** is in App Store Connect already: if Apple accepts it, it shows up in the TestFlight app (Apple e-mails you). If it does not, start a new run: **Actions ▸ TestFlight ▸ Run workflow**."
+              echo "Version **$version** is in App Store Connect already: if Apple accepts it, it shows up in the TestFlight app (Apple usually e-mails you). If it does not, start a new run: **Actions ▸ TestFlight ▸ Run workflow**."
             fi
           } >> "$GITHUB_STEP_SUMMARY"

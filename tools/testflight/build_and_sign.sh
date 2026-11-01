@@ -15,8 +15,9 @@
 #   upload            asc.py upload (Build Upload API); `xcrun altool` when that API refuses (exit 3)
 #   teardown          stop what a cancelled step left running; delete keychain, keys, profiles and
 #                     Local.xcconfig; revoke the certificate and profiles at once unless the build
-#                     reached Apple (uploaded, or committed and still processing: then the workflow's
-#                     finish job revokes them once Apple has processed it). Writes the step outputs
+#                     reached Apple (uploaded, or committed or being committed: then the workflow's
+#                     finish job revokes them once Apple has processed it, and teardown revokes only
+#                     a duplicate certificate an unanswered request made). Writes the step outputs
 #                     uploaded=true|false and teardown=done. Safe to run more than once, also
 #                     without the API key.
 #   all               everything above in order, teardown on exit
@@ -33,6 +34,9 @@
 #                                   (the CI dry run's self-signed certificate; never for real builds)
 #   TF_LEFTOVER_WAIT_SEC, TF_KILL_WAIT_SEC   teardown: how long to let a running create-signing
 #                    finish (default 60 s) and to wait for stopped leftovers (default 15 s)
+#   GITHUB_REPOSITORY_ID GITHUB_RUN_ID GITHUB_RUN_ATTEMPT   name the CI profiles
+#                    ("OpenCfMoto CI r<repository>-<run>-<attempt> app"; "local<date>-1" on a Mac);
+#                    TF_SUFFIX replaces that suffix (asc.py janitor never removes such profiles)
 #
 # The workflow runs each subcommand by its absolute path: that is how teardown recognizes (and
 # stops) a subcommand a cancelled step left running.
@@ -64,6 +68,7 @@ LEFTOVER_WAIT_SEC="${TF_LEFTOVER_WAIT_SEC:-60}"
 KILL_WAIT_SEC="${TF_KILL_WAIT_SEC:-15}"
 DOCS_URL="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-Kevinparra535/opencfmoto-ios}/blob/main/docs/TESTFLIGHT.md"
 URL_CERTS="https://developer.apple.com/account/resources/certificates/list"
+URL_PROFILES="https://developer.apple.com/account/resources/profiles/list"
 NEW_RUN_ES="lanza una ejecución nueva: Actions ▸ TestFlight ▸ Run workflow (Re-run repite el mismo commit, sin tus arreglos)"
 NEW_RUN_EN="start a new run: Actions ▸ TestFlight ▸ Run workflow (Re-run repeats the same commit, without your fixes)"
 STEP=""
@@ -126,13 +131,20 @@ output_value() { sed -n "s/^$2=//p" "$1" | tail -n 1; }
 cmd_create_signing() {
   need_env ASC_KEY_ID ASC_ISSUER_ID ASC_PRIVATE_KEY APP_BUNDLE_RESOURCE_ID MIRROR_BUNDLE_RESOURCE_ID \
     APP_BUNDLE_ID MIRROR_BUNDLE_ID APP_GROUP
-  # Markers of an earlier run in the same work directory (a manual run on a Mac) do not apply to
-  # the certificate created now.
+  # Markers and profiles of an earlier run in the same work directory (a manual run on a Mac) do
+  # not apply to the certificate created now; install-profiles installs every profile it finds.
   rm -f "$WORK/uploaded" "$WORK/committed" "$WORK/apple-cleanup-done" "$WORK/teardown-started"
+  rm -f "$SIGNING_DIR"/profiles/*.mobileprovision
   mkdir -p "$SIGNING_DIR"
-  # Unique per run, so profiles left behind by a crashed run never clash by name.
+  # Unique per run, so profiles left behind by a crashed run never clash by name. The repository id
+  # tells asc.py janitor which CI profiles are this repository's (asc.py default_suffix: same rule).
   local suffix outputs="$WORK/create-signing.outputs" status=0
-  suffix="${TF_SUFFIX:-${GITHUB_RUN_ID:-local$(date +%Y%m%d%H%M%S)}-${GITHUB_RUN_ATTEMPT:-1}}"
+  suffix="${GITHUB_RUN_ID:-local$(date +%Y%m%d%H%M%S)}-${GITHUB_RUN_ATTEMPT:-1}"
+  case "${GITHUB_REPOSITORY_ID:-x}" in
+    *[!0-9]*) ;;
+    *) suffix="r$GITHUB_REPOSITORY_ID-$suffix" ;;
+  esac
+  suffix="${TF_SUFFIX:-$suffix}"
   : > "$outputs"
   note "creating a distribution certificate and two App Store profiles (suffix $suffix)"
   GITHUB_OUTPUT="$outputs" python3 "$ASC" create-signing \
@@ -468,8 +480,9 @@ cmd_upload() {
   local ipa="${S_IPA:-}" status=0
   if [ -z "$ipa" ] || [ ! -f "$ipa" ]; then die "No hay IPA (¿falló la exportación?)." "No IPA (did the export fail?)."; fi
   note "uploading $(basename "$ipa") $MARKETING_VERSION ($BUILD_NUMBER) with the Build Upload API"
-  # asc.py creates $WORK/committed as soon as Apple has the whole file, and deletes it again if
-  # Apple then rejects the upload: while it exists, the certificate must outlive this job.
+  # asc.py creates $WORK/committed just before it asks Apple to commit the upload (from then on
+  # Apple may have the whole file, even if this step is stopped) and deletes it again whenever
+  # Apple refuses the upload: while it exists, the certificate must outlive this job.
   python3 "$ASC" upload --ipa "$ipa" --app-id "$APP_ID" --version "$MARKETING_VERSION" \
     --build "$BUILD_NUMBER" --timeout-min 30 --committed-marker "$WORK/committed" || status=$?
   case "$status" in
@@ -627,20 +640,29 @@ cmd_teardown() {
   note "deleted the signing key, keychain password, installed profiles and Config/Local.xcconfig"
 
   # Apple side: a certificate counts against the team's small limit, so never leave one behind.
-  # Once Apple has the file (uploaded, or committed and still processing) the certificate must
-  # outlive this job: the finish job revokes it after Apple's processing.
-  if [ -f "$WORK/uploaded" ]; then
+  # Once Apple has (or may have) the file - uploaded, or committed or being committed - the
+  # certificate must outlive this job: the finish job revokes it after Apple's processing.
+  local have_key=""
+  if [ -n "${ASC_KEY_ID:-}" ] && [ -n "${ASC_ISSUER_ID:-}" ] && [ -n "${ASC_PRIVATE_KEY:-}" ]; then have_key=1; fi
+  if [ -f "$WORK/uploaded" ] || [ -f "$WORK/committed" ]; then
     uploaded=true
-    note "the build was uploaded: the «Processing, TestFlight group, revoke the certificate» job revokes the CI certificate and profiles after Apple's processing"
-  elif [ -f "$WORK/committed" ]; then
-    uploaded=true
-    note "Apple has the whole file although the upload step did not finish: the «Processing, TestFlight group, revoke the certificate» job waits for the build, then revokes the CI certificate and profiles"
+    if [ -f "$WORK/uploaded" ]; then
+      note "the build was uploaded: the «Processing, TestFlight group, revoke the certificate» job revokes the CI certificate and profiles after Apple's processing"
+    else
+      note "Apple has, or may have, the whole file although the upload step did not finish: the «Processing, TestFlight group, revoke the certificate» job waits for the build, then revokes the CI certificate and profiles"
+    fi
+    # A second certificate that an unanswered certificate request of this run made is in no
+    # profile, so only this run's key (csr.pem) finds it: revoke it now (asc.py keeps the
+    # recorded one and does nothing unless state.json says a request went unanswered).
+    if [ -f "$SIGNING_DIR/state.json" ] && [ -n "$have_key" ]; then
+      python3 "$ASC" cleanup --state "$SIGNING_DIR/state.json" --duplicates-only
+    fi
   elif [ -f "$SIGNING_DIR/state.json" ] && [ ! -f "$WORK/apple-cleanup-done" ]; then
-    if [ -n "${ASC_KEY_ID:-}" ] && [ -n "${ASC_ISSUER_ID:-}" ] && [ -n "${ASC_PRIVATE_KEY:-}" ]; then
+    if [ -n "$have_key" ]; then
       note "the build was not uploaded: revoking the CI certificate and profiles now"
       if python3 "$ASC" cleanup --state "$SIGNING_DIR/state.json"; then touch "$WORK/apple-cleanup-done"; fi
     else
-      annotate warning "TestFlight (teardown)" "Sin clave de API no se pudo revocar el certificado de CI: revócalo en $URL_CERTS (los «Apple Distribution» creados hoy por la clave de la API)."$'\n'"Without the API key the CI certificate could not be revoked: revoke it at $URL_CERTS (the «Apple Distribution» ones the API key created today)."
+      annotate warning "Revoca a mano / Revoke by hand" "Sin la clave de la API no se pudo revocar lo que creó esta ejecución. En $URL_CERTS revoca el certificado «Apple Distribution» creado hoy (púlsalo ▸ Revoke) y en $URL_PROFILES borra los perfiles «OpenCfMoto CI …» (cada uno ▸ Remove)."$'\n'"Without the API key, what this run created could not be revoked. At $URL_CERTS revoke the «Apple Distribution» certificate created today (click it ▸ Revoke) and at $URL_PROFILES delete the «OpenCfMoto CI …» profiles (each ▸ Remove)."
     fi
   fi
   gh_output uploaded "$uploaded"

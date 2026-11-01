@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Tests for tools/testflight/asc.py against an in-process fake App Store Connect.
+"""Tests for tools/testflight/asc.py against an in-process fake App Store Connect, plus the
+build_and_sign.sh steps that run on any OS and the shell blocks of the TestFlight workflow.
 
     python3 tools/testflight/test_asc.py [TestClass[.test_name] ...]
 
@@ -9,9 +10,9 @@ the CSR the way Apple does (by a throwaway CA), and http.server on 127.0.0.1 pla
 Connect and Apple's upload storage. The fake behaves like the live API where that differs from
 the OpenAPI spec (`limit` refused on bundleIdCapabilities, the transient false 404 of the Build
 Upload API reads, duplicate build numbers refused with 409). asc.py runs as a subprocess, exactly
-as the workflow runs it, with every wait scaled down (ASC_POLL_SCALE). Under GitHub Actions each
-failing test is also printed as an ::error annotation (raw job logs are not always readable;
-annotations are).
+as the workflow runs it, with every wait scaled down (ASC_POLL_SCALE); build_and_sign.sh and the
+workflow's `run:` blocks run with /bin/bash (3.2 on macOS). Under GitHub Actions each failing test
+is also printed as an ::error annotation (raw job logs are not always readable; annotations are).
 """
 import atexit
 import base64
@@ -38,7 +39,11 @@ from unittest import mock
 
 sys.dont_write_bytecode = True   # no __pycache__ next to the sources when asc.py is imported
 HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(os.path.dirname(HERE))
 ASC_PATH = os.path.join(HERE, "asc.py")
+SCRIPT_PATH = os.path.join(HERE, "build_and_sign.sh")
+WORKFLOW_PATH = os.path.join(REPO, ".github", "workflows", "testflight.yml")
+BASH = "/bin/bash" if os.path.isfile("/bin/bash") else (shutil.which("bash") or "bash")
 KEY_ID = "ABC123DEFG"
 ISSUER = "69a6de70-1234-47e3-e053-5b8c7c11a4d1"
 TEAM = "ABCDE12345"
@@ -47,6 +52,7 @@ APP_BID = "com.t.opencfmoto"
 MIRROR_BID = "com.t.opencfmoto.mirror"
 GROUP = "group.com.t.opencfmoto"
 APP_ID = "1234567890"
+REPO_ID = "123"           # GITHUB_REPOSITORY_ID of "this repository" in the tests
 # GitHub masks every line of a multi-line secret: these exact lines would print as ***.
 ARMOR_LINES = ("-----BEGIN PRIVATE KEY-----", "-----END PRIVATE KEY-----")
 
@@ -153,6 +159,11 @@ def decode_command(text):
 def error_doc(status, code, title, detail=None):
     return {"errors": [{"id": "e1", "status": str(status), "code": code, "title": title,
                         "detail": detail or title}]}
+
+
+def iso(seconds_ago=0.0):
+    """An App Store Connect date, `seconds_ago` before now."""
+    return time.strftime("%Y-%m-%dT%H:%M:%S.000+0000", time.gmtime(time.time() - seconds_ago))
 
 
 def user(uid, mail, roles):
@@ -320,11 +331,15 @@ class FakeASC:
         self.next_base = None          # host put in links.next (None: our own)
         self.page_size = 2             # small pages: every list exercises links.next
         self.include_limit = 2         # certificates shown per profile with include=certificates
+        self.include_total = "count"   # that linkage's meta.paging.total: "count", "missing", "zero"
         self.requests = []
         self.faults = []
         self.counter = itertools.count(1)
         self.seed_id = TEAM
         self.bundle_ids = []
+        self.bundle_list_lag = 0       # listings that do not show a newly registered App ID yet
+        self._bundle_lag = {}          # bundle resource id -> listings that still miss it
+        self._hidden_bundles = set()
         self.capabilities = {}         # bundle resource id -> [capabilityType]
         self.capability_conflicts = set()
         self.apps = []
@@ -341,7 +356,7 @@ class FakeASC:
         self.cert_limit = False        # True (409) or a status: the team is full
         self.cert_list_lag = 0         # listings that do not show new certificates yet
         self._lagging = False
-        self.profiles = {}             # id -> {"name", "certs", "type", "content", "uuid"}
+        self.profiles = {}             # id -> {"name", "certs", "type", "content", "uuid", "created"}
         self.assigned_groups = {}      # bundle identifier -> App Groups assigned on the portal
         self.beta_groups = []          # (app id, betaGroups resource)
         self.group_builds = {}
@@ -456,10 +471,11 @@ class FakeASC:
         self.created_certs.append(cert_id)
         return cert_id
 
-    def add_profile(self, name, certs, kind="IOS_APP_STORE"):
+    def add_profile(self, name, certs, kind="IOS_APP_STORE", created=None):
+        """`created`: its createdDate (default: just now)."""
         profile_id = self.new_id("P")
         self.profiles[profile_id] = {"name": name, "certs": list(certs), "type": kind,
-                                     "content": b"", "uuid": ""}
+                                     "content": b"", "uuid": "", "created": iso() if created is None else created}
         return profile_id
 
     def add_group(self, app, name, internal, all_builds):
@@ -474,8 +490,13 @@ class FakeASC:
     def list_bundle_ids(self, rec):
         ident = rec.query.get("filter[identifier]", "")
         platform = rec.query.get("filter[platform]")
+        if "cursor" not in rec.query:            # a new listing: may still miss a new App ID
+            self._hidden_bundles = {b for b, left in self._bundle_lag.items() if left > 0}
+            for bundle_id in self._hidden_bundles:
+                self._bundle_lag[bundle_id] -= 1
         # Like Apple, filter[identifier] matches substrings: X also returns X.mirror.
         items = [b for b in self.bundle_ids if ident in b["attributes"]["identifier"]
+                 and b["id"] not in self._hidden_bundles
                  and (platform is None or b["attributes"]["platform"] == platform)]
         return self.page(rec, items)
 
@@ -487,6 +508,7 @@ class FakeASC:
         bundle = {"type": "bundleIds", "id": self.new_id("B"),
                   "attributes": dict(attributes, seedId=self.seed_id)}
         self.bundle_ids.append(bundle)
+        self._bundle_lag[bundle["id"]] = self.bundle_list_lag
         return 201, {"data": bundle}
 
     def list_caps(self, rec, bundle_id):
@@ -617,7 +639,8 @@ class FakeASC:
                 "attributes": {"certificateType": info.get("type", "DISTRIBUTION"),
                                "certificateContent": base64.b64encode(info.get("content", b"")).decode("ascii"),
                                "name": "Apple Distribution: Test Owner", "displayName": "Test Owner",
-                               "platform": "IOS", "serialNumber": cert_id}}
+                               "platform": "IOS", "serialNumber": cert_id,
+                               "expirationDate": "2027-11-01T10:00:00.000+0000"}}
 
     def list_certs(self, rec):
         if "cursor" not in rec.query:            # a new listing, not a further page
@@ -655,12 +678,16 @@ class FakeASC:
         info = self.profiles[profile_id]
         certs = list(info.get("certs") or [])
         relation = {"links": {"self": f"{self.base}/v1/profiles/{profile_id}/relationships/certificates"}}
-        if with_certs:   # include=certificates shows only the first few, with the total
+        if with_certs:   # include=certificates shows only the first few; `total` is optional
             relation["data"] = [{"type": "certificates", "id": c} for c in certs[:self.include_limit]]
-            relation["meta"] = {"paging": {"total": len(certs), "limit": self.include_limit}}
+            paging = {"limit": self.include_limit}
+            if self.include_total != "missing":
+                paging["total"] = len(certs) if self.include_total == "count" else 0
+            relation["meta"] = {"paging": paging}
         return {"type": "profiles", "id": profile_id,
                 "attributes": {"name": info.get("name", ""), "profileType": info.get("type", "IOS_APP_STORE"),
                                "profileState": "ACTIVE", "platform": "IOS", "uuid": info.get("uuid", ""),
+                               "createdDate": info.get("created", ""),
                                "profileContent": base64.b64encode(info.get("content", b"")).decode("ascii")},
                 "relationships": {"certificates": relation}}
 
@@ -710,7 +737,7 @@ class FakeASC:
         self.profiles[profile_id] = {"name": name, "type": data["attributes"]["profileType"],
                                      "certs": [c["id"] for c in data["relationships"]["certificates"]["data"]],
                                      "content": CMS_HEAD + plist + CMS_TAIL, "uuid": uuid,
-                                     "bundle": bundle["id"]}
+                                     "bundle": bundle["id"], "created": iso()}
         return 201, {"data": self.profile_resource(profile_id, False)}
 
     def delete_profile(self, rec, profile_id):
@@ -831,7 +858,7 @@ class AscTest(unittest.TestCase):
                     "ASC_KEY_ID": KEY_ID, "ASC_ISSUER_ID": ISSUER, "ASC_PRIVATE_KEY": KEYS.pem,
                     "ASC_API_BASE": self.fake.base, "ASC_POLL_SCALE": "0.001",
                     "GITHUB_ACTIONS": "true", "GITHUB_OUTPUT": self.github_output,
-                    "GITHUB_STEP_SUMMARY": self.step_summary}
+                    "GITHUB_STEP_SUMMARY": self.step_summary, "GITHUB_REPOSITORY_ID": REPO_ID}
         for key, value in (env or {}).items():
             if value is None:
                 full_env.pop(key, None)
@@ -1011,6 +1038,41 @@ class JwtTest(unittest.TestCase):
         self.assertTrue(err(404, detail="There is no resource of type 'apps' with id '1'").false_404)
         self.assertFalse(err(404, detail="There is no resource of type 'buildUploads' with id '1'").false_404)
 
+    def test_408_is_explained_like_a_network_error(self):
+        failure = asc.explain(asc.ApiError("POST", "/v1/certificates", 408, [{"code": "REQUEST_TIMEOUT"}]))
+        self.assertEqual(failure.title, "Error de red / Network error")
+        self.assertIn("HTTP 408", failure.es)
+        self.assertIn("ejecución nueva", failure.es)
+
+    def test_manual_steps_name_what_the_portal_shows_ids_only_in_parentheses(self):
+        es, en = asc.manual_revoke(["C1"], ["P1", "P2"])
+        for needle in ("el certificado «Apple Distribution» creado hoy (id C1), púlsalo ▸ Revoke",
+                       "los perfiles «OpenCfMoto CI …» (ids P1, P2), cada uno ▸ Remove",
+                       asc.URL_CERTIFICATES, asc.URL_PROFILES):
+            self.assertIn(needle, es)
+        for needle in ("the «Apple Distribution» certificate created today (id C1), click it ▸ Revoke",
+                       "the «OpenCfMoto CI …» profiles (ids P1, P2), each ▸ Remove"):
+            self.assertIn(needle, en)
+        es, en = asc.manual_revoke()
+        self.assertIn("el certificado «Apple Distribution» creado hoy, púlsalo", es)
+        self.assertNotIn("(id", es + en)
+        self.assertIn("los certificados «Apple Distribution» creados hoy (ids C1, C2)",
+                      asc.manual_revoke(["C1", "C2"])[0])
+
+    def test_profile_names_carry_the_repository_and_match_what_the_janitor_knows(self):
+        github = {"GITHUB_REPOSITORY_ID": "123", "GITHUB_RUN_ID": "18700000001", "GITHUB_RUN_ATTEMPT": "2"}
+        with mock.patch.dict(os.environ, github):
+            self.assertEqual(asc.default_suffix(), "r123-18700000001-2")
+        with mock.patch.dict(os.environ, {}, clear=True):
+            local = asc.default_suffix()
+        self.assertRegex(local, r"^local[0-9]{14}-1$")                      # a manual run on a Mac
+        for suffix in ("r123-18700000001-2", local, "4242-1"):
+            for role in ("app", "mirror"):
+                self.assertTrue(asc.CI_PROFILE_RE.fullmatch(f"OpenCfMoto CI {suffix} {role}"), suffix)
+        for name in ("OpenCfMoto CI manual build", "OpenCfMoto CI manual app", "OpenCfMoto CI r1-2-3 app x",
+                     "OpenCfMoto CI-like, not ours", "OpenCfMoto CI r1-2-3 ipad"):
+            self.assertIsNone(asc.CI_PROFILE_RE.fullmatch(name), name)
+
     def test_iso_dates_with_any_offset(self):
         self.assertEqual(asc._timestamp("2026-11-01T10:00:00Z"), asc._timestamp("2026-11-01T03:00:00.123-07:00"))
         self.assertEqual(asc._timestamp("2026-11-01T10:00:00Z"), asc._timestamp("2026-11-01T15:30:00+0530"))
@@ -1078,6 +1140,9 @@ class CheckAuthTest(AscTest):
         title, message = self.annotation(self.run_asc("check-auth", expect=1), "error")
         self.assertIn("403", title)
         self.assertIn("Admin", message)
+        # Pending agreements show up on developer.apple.com first (as in the agreements text).
+        self.assertEqual(message.count("https://developer.apple.com/account"), 2)   # ES + EN
+        self.assertIn("Negocios", message)
 
     def test_missing_secrets(self):
         proc = self.run_asc("check-auth", expect=1, env={"ASC_ISSUER_ID": None, "ASC_PRIVATE_KEY": "  \n"})
@@ -1194,8 +1259,10 @@ class PrepareTest(AscTest):
             "app_id": "", "marketing_version": "2.3.4"})
         summary = self.summary()
         for needle in (GROUP, APP_BID, MIRROR_BID, "Nueva app", "New App", "Solo preparar",
-                       "identifiers/list/applicationGroup", "Asígnalo a los DOS App IDs", "Assign it to BOTH"):
+                       "identifiers/list/applicationGroup", "Asígnalo a los DOS App IDs", "Assign it to BOTH",
+                       "si ya está ocupado en la App Store"):
             self.assertIn(needle, summary)
+        self.assertNotIn("cogido", summary)
         self.assert_new_run_advice(summary)
         self.assertEqual(self.annotations(proc, "error"), [])
         self.assertEqual(self.calls("GET", "/v1/builds"), [])
@@ -1287,9 +1354,27 @@ class PrepareTest(AscTest):
                        error_doc(409, "ENTITY_ERROR.ATTRIBUTE.INVALID", "An attribute value is invalid.",
                                  "An App ID with Identifier 'com.t.opencfmoto' is not available."))
         proc = self.prepare(expect=1)
-        message = self.annotation(proc, "error")[1]
-        self.assertIn("BUNDLE_ID_PREFIX", message)
+        title, message = self.annotation(proc, "error")
+        self.assertEqual(title, "Bundle ID no disponible / Bundle ID not available")
+        for needle in ("BUNDLE_ID_PREFIX", "Si es la primera ejecución, lanza una ejecución nueva una vez",
+                       "If this is the first run, start one new run"):
+            self.assertIn(needle, message)
         self.assert_new_run_advice(message)
+        # After the 409 the App ID is looked up three times (any platform) before giving up.
+        lookups = [c for c in self.calls("GET", "/v1/bundleIds")
+                   if "filter[platform]" not in c.query and "cursor" not in c.query]
+        self.assertEqual(len(lookups), 3)
+
+    def test_a_lost_answer_and_a_lagging_list_are_not_taken_for_another_team(self):
+        # The App ID is registered but the answer is lost; the repeat gets 409, and the list still
+        # misses the new App ID twice: looking again (not «define BUNDLE_ID_PREFIX») is right.
+        self.fake.bundle_list_lag = 2
+        self.fake.fail("POST", "/v1/bundleIds", 502, BAD_GATEWAY, effect=True)
+        proc = self.prepare("--setup-only")
+        self.assertEqual(self.annotations(proc, "error"), [])
+        self.assertEqual([b["attributes"]["identifier"] for b in self.fake.bundle_ids], [APP_BID, MIRROR_BID])
+        self.assertEqual(self.outputs()["app_bundle_resource_id"], self.fake.bundle(APP_BID)["id"])
+        self.assertEqual(len(self.calls("POST", "/v1/bundleIds")), 3)      # app, its repeat, mirror
 
     def test_invalid_prefix(self):
         proc = self.run_asc("prepare", "--prefix", "com.bad prefix!", "--project-yml", self.project_yml, expect=2)
@@ -1299,15 +1384,16 @@ class PrepareTest(AscTest):
     def test_leftovers_of_an_interrupted_run_are_removed(self):
         self.seed_ready_account()
         cert = self.fake.add_cert(KEYS.cert_der)
-        self.fake.add_profile("OpenCfMoto CI 77-1 app", [cert])
-        self.fake.add_profile("OpenCfMoto CI 77-1 mirror", [cert])
+        self.fake.add_profile(f"OpenCfMoto CI r{REPO_ID}-77-1 app", [cert])
+        self.fake.add_profile(f"OpenCfMoto CI r{REPO_ID}-77-1 mirror", [cert])
         keep = self.fake.add_profile("My own profile", [])
         proc = self.prepare("--setup-only")
         self.assertEqual(list(self.fake.profiles), [keep])
         self.assertEqual(self.fake.certificates, {})
         title, message = self.annotation(proc, "notice")
         self.assertIn("Restos", title)
-        self.assertIn("OpenCfMoto CI 77-1 mirror", message)
+        self.assertIn(f"OpenCfMoto CI r{REPO_ID}-77-1 mirror", message)
+        self.assertIn(f"certificado «Apple Distribution» que caduca el 2027-11-01 (id {cert})", message)
         self.assertEqual(self.outputs()["ready"], "false")
         self.assertEqual(self.annotations(proc, "error"), [])
 
@@ -1319,8 +1405,24 @@ class PrepareTest(AscTest):
         self.assertEqual(self.outputs()["ready"], "true")
         title, message = self.annotation(proc, "warning")
         self.assertIn("Limpieza incompleta", title)
-        self.assertIn("certificates/list", message)
+        self.assertIn("HTTP 403", message)
         self.assertEqual(self.annotations(proc, "error"), [])
+
+    def test_a_failed_profile_listing_on_a_clean_account_asks_for_nothing_by_hand(self):
+        # Nothing was created today and there may be no leftovers at all: no manual steps that
+        # would send the owner hunting for an «Apple Distribution» certificate to revoke.
+        self.seed_ready_account()
+        self.fake.fail("GET", "/v1/profiles", 500, SERVER_ERROR, times=99)
+        proc = self.prepare()
+        self.assertEqual(self.outputs()["ready"], "true")
+        title, message = self.annotation(proc, "warning")
+        self.assertEqual(title, "Limpieza incompleta / Cleanup incomplete")
+        for needle in ("No hace falta hacer nada: la próxima ejecución lo intenta otra vez",
+                       "Nothing to do: the next run tries again", "HTTP 500"):
+            self.assertIn(needle, message)
+        for wrong in ("creado hoy", "created today", "Revoca a mano", "certificates/list", "{URL_"):
+            self.assertNotIn(wrong, message)
+        self.assertEqual(self.calls("DELETE"), [])
 
 
 # ---------------------------------------------------------------- next-build
@@ -1391,11 +1493,16 @@ class NextBuildTest(AscTest):
 # ---------------------------------------------------------------- janitor
 
 class JanitorTest(AscTest):
+    OURS = f"OpenCfMoto CI r{REPO_ID}"      # this repository's CI profiles start like this
+
+    def remaining(self):
+        return sorted(info["name"] for info in self.fake.profiles.values())
+
     def test_removes_ci_leftovers_but_keeps_certificates_other_profiles_use(self):
         f = self.fake
         ci_cert, shared, other, extra = (f.add_cert(KEYS.cert_der) for _ in range(4))
-        app = f.add_profile("OpenCfMoto CI 41-1 app", [ci_cert])
-        mirror = f.add_profile("OpenCfMoto CI 41-1 mirror", [ci_cert, shared])
+        app = f.add_profile(f"{self.OURS}-41-1 app", [ci_cert])
+        mirror = f.add_profile(f"{self.OURS}-41-1 mirror", [ci_cert, shared])
         # The owner's own profile: include=certificates shows only the first two of its three
         # certificates, and the one it shares with a CI profile is the third.
         own = f.add_profile("My App Store profile", [other, extra, shared])
@@ -1413,7 +1520,8 @@ class JanitorTest(AscTest):
         self.assertTrue(all("limit" not in c.query for c in links))
         title, message = self.annotation(proc, "notice")
         self.assertIn("Restos borrados", title)
-        for needle in ("OpenCfMoto CI 41-1 app", ci_cert, "No tienes que hacer nada", "Nothing to do"):
+        for needle in (f"{self.OURS}-41-1 app", f"«Apple Distribution» que caduca el 2027-11-01 (id {ci_cert})",
+                       "No tienes que hacer nada", "Nothing to do"):
             self.assertIn(needle, message)
         self.assertEqual(self.annotations(proc, "warning"), [])
 
@@ -1425,28 +1533,112 @@ class JanitorTest(AscTest):
 
     def test_already_gone_is_fine(self):
         cert = self.fake.add_cert(KEYS.cert_der)
-        self.fake.add_profile("OpenCfMoto CI 9-1 app", [cert])
+        self.fake.add_profile(f"{self.OURS}-9-1 app", [cert])
         self.fake.fail("DELETE", r"/v1/certificates/.*", 404,
                        error_doc(404, "NOT_FOUND", "The specified resource does not exist"))
         proc = self.run_asc("janitor")
         self.assertEqual(self.fake.profiles, {})
         self.assertEqual(self.annotations(proc, "warning"), [])
 
-    def test_problems_only_warn_with_the_manual_steps(self):
+    def test_problems_only_warn_with_their_own_manual_steps(self):
+        # Not «revoke the certificate created today»: these are leftovers of earlier runs.
         cert = self.fake.add_cert(KEYS.cert_der)
-        self.fake.add_profile("OpenCfMoto CI 9-1 app", [cert])
+        self.fake.add_profile(f"{self.OURS}-9-1 app", [cert])
         self.fake.fail("DELETE", r"/v1/certificates/.*", 500, SERVER_ERROR, times=99)
         proc = self.run_asc("janitor")
         title, message = self.annotation(proc, "warning")
-        self.assertIn("Limpieza incompleta", title)
-        for needle in (cert, "certificates/list", "Revoca", "Revoke"):
+        self.assertEqual(title, "Limpieza incompleta / Cleanup incomplete")
+        for needle in (f"certificado «Apple Distribution» que caduca el 2027-11-01 (id {cert})",
+                       f"«Apple Distribution» certificate expiring 2027-11-01 (id {cert})",
+                       "No hace falta hacer nada", "Nothing to do", "revoca solo los certificados que nombra",
+                       "revoke only the certificates it names", asc.URL_CERTIFICATES, asc.URL_PROFILES):
             self.assertIn(needle, message)
+        for wrong in ("{URL_", "creado hoy", "created today"):
+            self.assertNotIn(wrong, message)
         self.assertEqual(self.fake.profiles, {})            # the profiles went anyway
 
     def test_missing_secrets_warn_and_exit_0(self):
         proc = self.run_asc("janitor", env={"ASC_KEY_ID": None})
         self.assertIn("ASC_KEY_ID", self.annotation(proc, "warning")[1])
         self.assertEqual(self.fake.requests, [])
+
+    def test_a_profile_of_the_owner_named_like_ci_is_kept(self):
+        # Only the exact names create-signing gives: the owner's own profile and certificate stay.
+        f = self.fake
+        owner_cert, ci_cert = f.add_cert(KEYS.cert_der), f.add_cert(KEYS.cert_der)
+        owner = {f.add_profile("OpenCfMoto CI manual build", [owner_cert], created=iso(99 * 3600)),
+                 f.add_profile("OpenCfMoto CI manual app", [owner_cert], created=iso(99 * 3600)),
+                 f.add_profile(f"{self.OURS}-41-1 app (copy)", [owner_cert]),
+                 f.add_profile(f"{self.OURS}-41-1 app", [owner_cert], kind="IOS_APP_DEVELOPMENT")}
+        f.add_profile(f"{self.OURS}-41-1 app", [ci_cert])
+        self.run_asc("janitor")
+        self.assertEqual(set(f.profiles), owner)
+        self.assertEqual(set(f.certificates), {owner_cert})
+
+    def test_other_repositories_and_mac_runs_go_only_once_abandoned(self):
+        # The concurrency group is per repository: another repository's run (or a Mac's) may still
+        # be building with its profiles, so they go only once older than 12 hours.
+        f = self.fake
+        old = iso(48 * 3600)
+        live = {f"OpenCfMoto CI r999-111-1 {r}": f.add_cert(KEYS.cert_der) for r in ("app", "mirror")}
+        live["OpenCfMoto CI local20261101120000-1 app"] = f.add_cert(KEYS.cert_der)
+        live["OpenCfMoto CI 500-1 app"] = f.add_cert(KEYS.cert_der)
+        undated = f.add_cert(KEYS.cert_der)
+        for name, cert in live.items():
+            f.add_profile(name, [cert], created=iso(3600))
+        f.add_profile("OpenCfMoto CI r999-90-1 app", [undated], created="")      # unknown age: kept
+        gone = [f.add_cert(KEYS.cert_der) for _ in range(3)]
+        f.add_profile("OpenCfMoto CI r999-100-1 app", [gone[0]], created=old)
+        f.add_profile("OpenCfMoto CI local20261030120000-1 app", [gone[1]], created=old)
+        f.add_profile(f"{self.OURS}-110-1 app", [gone[2]])                       # ours, fresh
+        proc = self.run_asc("janitor")
+        self.assertEqual(self.remaining(), sorted(list(live) + ["OpenCfMoto CI r999-90-1 app"]))
+        self.assertEqual(set(f.certificates), set(live.values()) | {undated})
+        self.assertEqual(self.annotations(proc, "warning"), [])
+
+    def test_the_finish_job_sweeps_only_its_own_run(self):
+        f = self.fake
+        mine = f.add_cert(KEYS.cert_der)
+        for name in (f"{self.OURS}-112-1 app", f"{self.OURS}-112-1 mirror", f"{self.OURS}-112-2 app"):
+            f.add_profile(name, [mine])
+        kept = [f"{self.OURS}-111-1 app", "OpenCfMoto CI r999-112-1 app", "OpenCfMoto CI local20261030120000-1 app"]
+        for name in kept:
+            f.add_profile(name, [f.add_cert(KEYS.cert_der)], created=iso(48 * 3600))
+        self.run_asc("janitor", "--run-id", "112")
+        self.assertEqual(self.remaining(), sorted(kept))
+        self.assertNotIn(mine, f.certificates)
+        self.run_asc("janitor", "--run-id", "11x", expect=2)                    # digits only
+
+    def test_without_a_repository_id_only_abandoned_profiles_go(self):
+        f = self.fake
+        f.add_profile(f"{self.OURS}-41-1 app", [f.add_cert(KEYS.cert_der)])
+        f.add_profile(f"{self.OURS}-40-1 app", [f.add_cert(KEYS.cert_der)], created=iso(48 * 3600))
+        self.run_asc("janitor", env={"GITHUB_REPOSITORY_ID": None})
+        self.assertEqual(self.remaining(), [f"{self.OURS}-41-1 app"])
+
+    def _the_shared_certificate_survives(self, total):
+        f = self.fake
+        f.include_total = total
+        ci_cert, other, extra = (f.add_cert(KEYS.cert_der) for _ in range(3))
+        f.add_profile(f"{self.OURS}-41-1 app", [ci_cert])
+        own = f.add_profile("My App Store profile", [other, extra, ci_cert])   # the 3rd is not shown
+        self.run_asc("janitor")
+        self.assertIn(ci_cert, f.certificates)
+        self.assertTrue(self.calls("GET", rf"/v1/profiles/{own}/relationships/certificates"))
+
+    def test_a_cut_short_linkage_without_total_is_read_in_full(self):
+        self._the_shared_certificate_survives("missing")     # PagingInformation: total is optional
+
+    def test_a_cut_short_linkage_with_total_0_is_read_in_full(self):
+        self._the_shared_certificate_survives("zero")        # the shape of captured live answers
+
+    def test_a_complete_linkage_costs_no_extra_read(self):
+        f = self.fake
+        f.include_limit, f.include_total = 2147483647, "zero"
+        f.add_profile(f"{self.OURS}-41-1 app", [f.add_cert(KEYS.cert_der)])
+        f.add_profile("My App Store profile", [f.add_cert(KEYS.cert_der) for _ in range(3)])
+        self.run_asc("janitor")
+        self.assertEqual(self.calls("GET", r"/v1/profiles/[^/]+/relationships/certificates"), [])
 
 
 # ---------------------------------------------------------------- create-signing
@@ -1471,12 +1663,17 @@ class CreateSigningTest(AscTest):
         with open(os.path.join(self.out, "state.json"), encoding="utf-8") as fh:
             return json.load(fh)
 
-    def assert_one_certificate_recorded(self, proc, posts=1):
+    def alive(self):
+        return [c for c in self.fake.created_certs if c in self.fake.certificates]
+
+    def assert_one_certificate_recorded(self, proc, posts=1, unclear=False):
+        """`unclear`: a request got no clear answer, which state.json keeps for the teardown."""
         out = self.outputs()
         self.assertEqual(len(self.calls("POST", "/v1/certificates")), posts)
-        self.assertEqual([c for c in self.fake.created_certs if c in self.fake.certificates], [out["cert_id"]])
-        self.assertEqual(self.state(), {"cert_id": out["cert_id"],
-                                        "profile_ids": [out["profile_app_id"], out["profile_mirror_id"]]})
+        self.assertEqual(self.alive(), [out["cert_id"]])
+        self.assertEqual(self.state(), dict({"cert_id": out["cert_id"],
+                                             "profile_ids": [out["profile_app_id"], out["profile_mirror_id"]]},
+                                            **({"cert_unclear": True} if unclear else {})))
         with open(os.path.join(self.out, "cert.cer"), "rb") as fh:
             self.assertEqual(fh.read(), self.fake.certificates[out["cert_id"]]["content"])
         self.assertEqual(self.annotations(proc, "error"), [])
@@ -1532,19 +1729,19 @@ class CreateSigningTest(AscTest):
         self.fake.add_cert(KEYS.cert_der)                  # someone else's: never adopted
         self.fake.fail("POST", "/v1/certificates", 502, BAD_GATEWAY, effect=True)
         proc = self.create()
-        self.assert_one_certificate_recorded(proc)
+        self.assert_one_certificate_recorded(proc, unclear=True)
         self.assertEqual(self.calls("GET", "/v1/certificates")[0].query.get("filter[certificateType]"),
                          "DISTRIBUTION")
 
     def test_certificate_made_but_no_answer_at_all(self):
         self.fake.fail("POST", "/v1/certificates", 0, effect=True)
         proc = self.create()
-        self.assert_one_certificate_recorded(proc)
+        self.assert_one_certificate_recorded(proc, unclear=True)
 
     def test_certificate_not_made_is_asked_for_once_more(self):
         self.fake.fail("POST", "/v1/certificates", 503, error_doc(503, "SERVICE_UNAVAILABLE", "Unavailable"))
         proc = self.create()
-        self.assert_one_certificate_recorded(proc, posts=2)
+        self.assert_one_certificate_recorded(proc, posts=2, unclear=True)
 
     def test_429_on_the_certificate_request_is_repeated(self):
         self.fake.fail("POST", "/v1/certificates", 429,
@@ -1560,7 +1757,70 @@ class CreateSigningTest(AscTest):
         first, second = self.fake.created_certs
         self.assertEqual(self.outputs()["cert_id"], second)
         self.assertIn(f"/v1/certificates/{first}", [c.path for c in self.calls("DELETE")])
-        self.assert_one_certificate_recorded(proc, posts=2)
+        self.assert_one_certificate_recorded(proc, posts=2, unclear=True)
+
+    def test_a_list_that_lags_after_the_second_request_is_waited_for(self):
+        # The first request made a certificate but got no answer; the list misses it twice. It is
+        # trusted only once it shows the certificate the second request made, so the first one
+        # is found and revoked in this step (a build that reaches Apple has no other sweep).
+        self.fake.cert_list_lag = 2
+        self.fake.fail("POST", "/v1/certificates", 502, BAD_GATEWAY, effect=True)
+        proc = self.create()
+        first, second = self.fake.created_certs
+        self.assertEqual(self.outputs()["cert_id"], second)
+        self.assertIn(f"/v1/certificates/{first}", [c.path for c in self.calls("DELETE")])
+        self.assert_one_certificate_recorded(proc, posts=2, unclear=True)
+
+    def test_a_failing_list_after_the_second_request_leaves_the_duplicate_to_the_teardown(self):
+        f = self.fake
+        f.cert_list_lag = 1                       # the look after the unanswered request misses it
+        f.fail("POST", "/v1/certificates", 502, BAD_GATEWAY, effect=True)
+        real, listings = f.list_certs, []
+
+        def failing_after_the_first(rec):
+            if "cursor" not in rec.query:
+                listings.append(rec)
+            return (500, SERVER_ERROR) if len(listings) >= 2 else real(rec)
+        f.list_certs = failing_after_the_first
+        proc = self.create()
+        first, second = f.created_certs
+        out = self.outputs()
+        self.assertEqual((out["cert_id"], self.state()["cert_pending"]), (second, True))
+        self.assertEqual(self.alive(), [first, second])
+        self.assertEqual(self.annotations(proc, "error"), [])
+        # The teardown of a build that reached Apple: only the duplicate goes, the build's stays.
+        f.list_certs = real
+        os.unlink(os.path.join(self.out, "key.pem"))
+        proc = self.run_asc("cleanup", "--state", os.path.join(self.out, "state.json"), "--duplicates-only")
+        self.assertEqual(self.alive(), [second])
+        self.assertEqual(self.state(), {"cert_id": second, "profile_ids": [out["profile_app_id"], out["profile_mirror_id"]],
+                                        "cert_pending": True, "cert_unclear": True})
+        self.assertEqual(len(f.profiles), 2)
+        self.assertEqual(self.annotations(proc, "warning"), [])
+        self.assertIn(f"revocado un certificado duplicado de esta ejecución / revoked a duplicate certificate "
+                      f"of this run: {first}", self.summary())
+
+    def test_an_outage_is_explained_as_an_outage(self):
+        # Two requests without an answer, two listings that worked and showed nothing: Apple made
+        # no certificate. Not «could not check» and no manual revocation, but the outage advice.
+        self.fake.fail("POST", "/v1/certificates", 503, error_doc(503, "SERVICE_UNAVAILABLE", "Unavailable"), times=2)
+        proc = self.create(expect=1)
+        title, message = self.annotation(proc, "error")
+        self.assertEqual(title, "App Store Connect no responde / not responding (503)")
+        for needle in ("system-status", "Se buscó dos veces", "No hace falta revocar nada a mano",
+                       "looked for twice", "Nothing to revoke by hand", "Clean up"):
+            self.assertIn(needle, message)
+        for wrong in ("sin confirmar", "no se pudo comprobar", "could not be checked", "Revoca a mano"):
+            self.assertNotIn(wrong, message)
+        self.assert_new_run_advice(message)
+        self.assertEqual(len(self.calls("POST", "/v1/certificates")), 2)
+        self.assertEqual(self.state(), {"cert_id": None, "profile_ids": [], "cert_pending": True, "cert_unclear": True})
+        # The teardown looks once more (and a while) and has nothing to revoke: no warning either.
+        os.unlink(os.path.join(self.out, "key.pem"))
+        proc = self.run_asc("cleanup", "--state", os.path.join(self.out, "state.json"))
+        self.assertEqual(self.annotations(proc, "warning"), [])
+        self.assertIn("nada que revocar", self.summary())
+        self.assertEqual(self.fake.certificates, {})
 
     def test_unconfirmed_certificate_is_explained_and_cleanup_finds_it(self):
         self.fake.fail("POST", "/v1/certificates", 502, BAD_GATEWAY, effect=True)
@@ -1568,10 +1828,14 @@ class CreateSigningTest(AscTest):
         proc = self.create(expect=1)
         title, message = self.annotation(proc, "error")
         self.assertIn("Certificado sin confirmar", title)
-        for needle in ("certificates/list", "Revoca", "Revoke"):
+        for needle in ("no se pudo comprobar si llegó a crearlo", "could not be checked", "«Clean up»",
+                       "el certificado «Apple Distribution» creado hoy, púlsalo ▸ Revoke",
+                       "the «Apple Distribution» certificate created today, click it ▸ Revoke",
+                       "certificates/list"):
             self.assertIn(needle, message)
         self.assert_new_run_advice(message)
-        self.assertEqual(self.state(), {"cert_id": None, "profile_ids": [], "cert_pending": True})
+        self.assertEqual(self.state(), {"cert_id": None, "profile_ids": [], "cert_pending": True,
+                                        "cert_unclear": True})
         self.assertEqual(len(self.calls("POST", "/v1/certificates")), 1)
         # The build job's teardown: key.pem goes first, then cleanup finds it by the CSR's key.
         self.fake.faults.clear()
@@ -1641,6 +1905,8 @@ class CreateSigningTest(AscTest):
         self.assertIn("HotspotConfiguration", message)
         self.assertIn("wifi-info", message)
         self.assertIn("Prepare (App Store Connect)", message)      # the job name the UI shows
+        self.assertEqual(message.count("Access Wi-Fi Information"), 2)   # Apple's name, ES + EN
+        self.assertNotIn("WiFi", message)
 
     def test_profile_failure_keeps_the_certificate_recorded_for_cleanup(self):
         self.fake.fail("POST", "/v1/profiles", 422, error_doc(422, "ENTITY_ERROR", "The request entity is invalid"))
@@ -1823,6 +2089,98 @@ class UploadTest(AscTest):
         self.assertEqual(self.calls("DELETE"), [])
         self.assertEqual(self.outputs()["uploaded"], "true")
         self.assertTrue(os.path.isfile(self.marker))
+
+    def test_the_marker_exists_while_the_commit_is_at_apple(self):
+        # A cancel during the commit (or the check after an unclear one) stops asc.py with Apple
+        # possibly taking the file: the marker must already be there, so the teardown keeps the
+        # certificate and the finish job waits for the build.
+        seen, real = [], self.fake.patch_upload_file
+
+        def patch(rec, file_id):
+            seen.append(os.path.exists(self.marker))
+            return real(rec, file_id)
+        self.fake.patch_upload_file = patch
+        self.upload()
+        self.assertEqual(seen, [True])
+        self.assertTrue(os.path.isfile(self.marker))
+
+    def test_a_failing_file_read_does_not_hide_the_uploads_state(self):
+        # The commit's answer is lost after Apple took the file, and the file read keeps failing
+        # (a plain 404 here): the upload read says PROCESSING, so nothing is deleted or re-sent.
+        self.fake.fail("PATCH", r"/v1/buildUploadFiles/.*", 0, effect=True)
+        self.fake.fail("GET", r"/v1/buildUploadFiles/.*", 404,
+                       error_doc(404, "NOT_FOUND", "The specified resource does not exist",
+                                 "There is no resource of type 'buildUploadFiles' with id 'F0002'"), times=999)
+        proc = self.run_asc(*self.upload_args(), env={"ASC_POLL_SCALE": "0.01"})
+        self.assertTrue(self.calls("GET", r"/v1/buildUploads/.*"))
+        self.assertEqual(self.calls("DELETE"), [])
+        self.assertTrue(os.path.isfile(self.marker))
+        self.assertEqual((self.outputs()["committed"], self.outputs()["uploaded"]), ("true", "true"))
+        self.assertEqual(self.annotations(proc, "warning"), [])
+
+    def test_nothing_readable_after_an_unclear_commit_never_deletes(self):
+        unavailable = error_doc(503, "SERVICE_UNAVAILABLE", "Unavailable")
+        self.fake.fail("PATCH", r"/v1/buildUploadFiles/.*", 504,
+                       error_doc(504, "GATEWAY_TIMEOUT", "Gateway Timeout"), effect=True)
+        self.fake.fail("GET", r"/v1/buildUploadFiles/.*", 503, unavailable, times=10 ** 6)
+        self.fake.fail("GET", r"/v1/buildUploads/.*", 503, unavailable, times=10 ** 6)
+        proc = self.upload("--timeout-min", "0.5")
+        self.assertEqual(self.calls("DELETE"), [])
+        self.assertTrue(os.path.isfile(self.marker))
+        self.assertEqual(self.outputs()["uploaded"], "true")
+        self.assertIn("Apple sigue procesando", self.annotation(proc, "warning")[0])
+
+    def test_one_early_awaiting_read_then_failures_never_deletes(self):
+        # Just after a commit Apple can still say AWAITING_UPLOAD; only the last round's answers
+        # count, and here the last rounds could not read anything.
+        f = self.fake
+        f.fail("PATCH", r"/v1/buildUploadFiles/.*", 0, effect=True)
+        f.commit_lag = 2                        # the first file read and upload read: AWAITING_UPLOAD
+
+        def then_unavailable(real):
+            count = [0]
+
+            def handler(rec, *groups):
+                count[0] += 1
+                if count[0] > 1:
+                    return 503, error_doc(503, "SERVICE_UNAVAILABLE", "Unavailable")
+                return real(rec, *groups)
+            return handler
+        f.get_upload_file = then_unavailable(f.get_upload_file)
+        f.get_build_upload = then_unavailable(f.get_build_upload)
+        proc = self.upload("--timeout-min", "0.5")
+        self.assertIn("file AWAITING_UPLOAD, upload AWAITING_UPLOAD", proc.stdout)
+        self.assertEqual(self.calls("DELETE"), [])
+        self.assertTrue(os.path.isfile(self.marker))
+        self.assertEqual(self.outputs()["uploaded"], "true")
+
+    def test_a_presigned_url_is_never_printed(self):
+        # http.client refuses a URL with a space or a control character with an error that quotes
+        # the whole URL (signature included), and a header value with a line feed with one that
+        # quotes the value: neither may reach the public log, annotation or summary.
+        secret = "SIGSECRET42"
+        cases = {"a space in the query": lambda op: op.update(url=f"{op['url']}&X-Amz-Credential=AKIA {secret}"),
+                 "a control character": lambda op: op.update(url=f"{op['url']}&sig=\x01{secret}"),
+                 "a non-ASCII character": lambda op: op.update(url=f"{op['url']}&sig=\u00e9{secret}"),
+                 "a line feed in a header": lambda op: op["requestHeaders"].append(
+                     {"name": "X-Amz-Security-Token", "value": f"a\nb{secret}"})}
+        real = self.fake.create_upload_file
+        for name, change in cases.items():
+            with self.subTest(name):
+                def create(rec, change=change):
+                    status, doc = real(rec)
+                    change(doc["data"]["attributes"]["uploadOperations"][0])
+                    return status, doc
+                self.fake.create_upload_file = create
+                open(self.step_summary, "w").close()
+                proc = self.upload(expect=3)
+                for text in (proc.stdout, proc.stderr, self.summary()):
+                    for leak in (secret, "X-Signature", "/upload/"):
+                        self.assertNotIn(leak, text)
+                message = self.annotation(proc, "warning")[1]
+                self.assertIn("part 1/2: unusable upload", message)
+                self.assertEqual(self.calls("PUT"), [])        # nothing was sent
+                self.assertFalse(os.path.exists(self.marker))
 
     def test_commit_without_answer_and_never_received(self):
         self.fake.fail("PATCH", r"/v1/buildUploadFiles/.*", 0)          # nothing reached Apple
@@ -2016,7 +2374,8 @@ class WaitBuildTest(AscTest):
     def test_a_refused_upload_ends_the_wait_at_once(self):
         f = self.fake
         f.build_script["7"] = [None]
-        f.add_upload(APP_ID, "7", state="COMPLETE", created="2026-11-01T09:30:00Z")
+        f.add_upload(APP_ID, "7", state="FAILED", created="2026-11-01T09:30:00Z",
+                     errors=[{"code": "ITMS-90062", "description": "an older refusal"}])
         f.add_upload(APP_ID, "7", state="FAILED", created="2026-11-01T03:00:00.000-07:00",   # 10:00 UTC
                      errors=[{"code": "ITMS-90474", "description": "Invalid bundle: iPad orientations"},
                              {"code": "ITMS-90683", "description": "Missing purpose string"}])
@@ -2027,8 +2386,9 @@ class WaitBuildTest(AscTest):
         self.assertEqual((out["processed"], out["processing_state"], out["build_id"], out["beta_group"]),
                          ("true", "FAILED", "", ""))
         messages = [m for _, m in self.annotations(proc, "error")]
-        self.assertIn("ITMS-90474: Invalid bundle: iPad orientations", messages)
+        self.assertIn("ITMS-90474: Invalid bundle: iPad orientations", messages)    # the newest one
         self.assertIn("ITMS-90683: Missing purpose string", messages)
+        self.assertNotIn("ITMS-90062: an older refusal", messages)
         title, message = self.annotation(proc, "error")
         self.assertIn("Apple rechazó la subida", title)
         self.assert_new_run_advice(message)
@@ -2045,6 +2405,22 @@ class WaitBuildTest(AscTest):
         self.assertIn("sigue en proceso", self.annotation(proc, "warning")[0])
         self.assertEqual(self.outputs()["processing_state"], "NOT_FOUND")
         self.assertEqual(self.annotations(proc, "error"), [])
+
+    def test_a_coming_build_beats_a_newer_refused_upload(self):
+        # Two uploads of build 7: the first is still processing (its build will appear), a second
+        # one of the same number was refused later (e.g. a redundant altool upload): keep waiting.
+        for state in ("PROCESSING", "COMPLETE"):
+            with self.subTest(older=state):
+                f = self.fake
+                f.build_uploads.clear()
+                f.build_script["7"] = [None]
+                f.add_upload(APP_ID, "7", state=state, created="2026-11-01T09:30:00Z")
+                f.add_upload(APP_ID, "7", state="FAILED", created="2026-11-01T10:00:00Z",
+                             errors=[{"code": "ITMS-90189", "description": "Redundant Binary Upload"}])
+                proc = self.wait("--timeout-min", "1", "--poll-sec", "20")
+                self.assertIn("sigue en proceso", self.annotation(proc, "warning")[0])
+                self.assertEqual(self.annotations(proc, "error"), [])
+                self.assertEqual(self.outputs()["processing_state"], "NOT_FOUND")
 
     def test_the_upload_check_survives_apples_false_404(self):
         f = self.fake
@@ -2150,7 +2526,406 @@ class CleanupTest(AscTest):
             {"cert_id": None, "profile_ids": [], "cert_pending": True}))
         title, message = self.annotation(proc, "warning")
         self.assertIn("Certificado sin confirmar", title)
-        self.assertIn("certificates/list", message)
+        for needle in ("no se pudo comprobar", "certificates/list", "«Apple Distribution» creado hoy"):
+            self.assertIn(needle, message)
+
+    # A certificate request of this run that was cut off (a cancel) or got no clear answer
+    # (state.json: cert_pending) may still be completed by Apple after the teardown's first look.
+
+    def cut_off_request(self):
+        csr = make_csr(self.tmp)
+        os.unlink(os.path.join(self.tmp, "key.pem"))     # teardown deletes the key first
+        return csr, self.write_state({"cert_id": None, "profile_ids": [], "cert_pending": True})
+
+    def listings(self, after=None, fail_from=None):
+        """Wrap GET /v1/certificates: `after(n)` runs after the n-th listing; from listing
+        `fail_from` on, it answers 500."""
+        real, count = self.fake.list_certs, [0]
+
+        def listing(rec):
+            if "cursor" not in rec.query:
+                count[0] += 1
+            if fail_from and count[0] >= fail_from:
+                return 500, SERVER_ERROR
+            result = real(rec)
+            if after and "cursor" not in rec.query:
+                after(count[0])
+            return result
+        self.fake.list_certs = listing
+        return count
+
+    def ours_alive(self):
+        return [c for c in self.fake.created_certs if c in self.fake.certificates]
+
+    def test_a_cut_off_request_that_apple_completes_later_is_revoked(self):
+        csr, state = self.cut_off_request()
+        count = self.listings(after=lambda n: n == 1 and self.fake.issue(csr))
+        proc = self.run_asc("cleanup", "--state", state)
+        self.assertEqual(len(self.fake.created_certs), 1)
+        self.assertEqual(self.ours_alive(), [])
+        self.assertEqual(self.annotations(proc, "warning"), [])
+        self.assertEqual(count[0], 1 + len(asc.PENDING_RECHECK_SEC))
+
+    def test_two_requests_the_second_completes_after_the_first_was_found(self):
+        csr, state = self.cut_off_request()
+        self.fake.issue(csr)                               # the first request made one already
+        self.listings(after=lambda n: n == 1 and self.fake.issue(csr))
+        self.run_asc("cleanup", "--state", state)
+        self.assertEqual(len(self.fake.created_certs), 2)
+        self.assertEqual(self.ours_alive(), [])
+
+    def test_a_cut_off_request_whose_certificate_the_list_shows_late(self):
+        csr, state = self.cut_off_request()
+        self.fake.issue(csr)
+        self.fake.cert_list_lag = 1
+        self.run_asc("cleanup", "--state", state)
+        self.assertEqual(self.ours_alive(), [])
+
+    def test_a_failing_recheck_after_a_find_still_revokes_it_and_warns(self):
+        csr, state = self.cut_off_request()
+        self.fake.issue(csr)
+        self.listings(fail_from=2)
+        proc = self.run_asc("cleanup", "--state", state)
+        self.assertEqual(self.ours_alive(), [])
+        self.assertIn("Certificado sin confirmar", self.annotation(proc, "warning")[0])
+
+    def test_a_cut_off_request_that_never_shows_up_needs_nothing_by_hand(self):
+        _, state = self.cut_off_request()
+        count = self.listings()
+        proc = self.run_asc("cleanup", "--state", state)
+        self.assertIn("nada que revocar / nothing to revoke (se buscó un rato", self.summary())
+        self.assertEqual(self.annotations(proc, "warning"), [])
+        self.assertEqual(count[0], 1 + len(asc.PENDING_RECHECK_SEC))
+
+    def test_a_settled_run_is_listed_once(self):
+        csr = make_csr(self.tmp)
+        cert = self.fake.issue(csr)
+        count = self.listings()
+        self.run_asc("cleanup", "--state", self.write_state({"cert_id": cert, "profile_ids": [],
+                                                             "cert_unclear": True}))
+        self.assertEqual(count[0], 1)
+        self.assertEqual(self.ours_alive(), [])
+
+    def test_failures_name_the_certificate_the_way_the_portal_shows_it(self):
+        self.fake.certificates = {"C1": {}}
+        self.fake.profiles = {"P1": {}}
+        self.fake.fail("DELETE", "/v1/.*", 500, error_doc(500, "UNEXPECTED_ERROR", "boom"), times=99)
+        proc = self.run_asc("cleanup", "--cert-id", "C1", "--profile-ids", "P1")
+        message = self.annotation(proc, "warning")[1]
+        for needle in ("el certificado «Apple Distribution» creado hoy (id C1)", "«OpenCfMoto CI …» (id P1)",
+                       "the «Apple Distribution» certificate created today (id C1)"):
+            self.assertIn(needle, message)
+
+    # cleanup --duplicates-only: the teardown of a build that reached Apple.
+
+    def test_duplicates_only_revokes_a_second_certificate_and_keeps_the_builds(self):
+        csr = make_csr(self.tmp)
+        os.unlink(os.path.join(self.tmp, "key.pem"))
+        first, second = self.fake.issue(csr), self.fake.issue(csr)
+        foreign = self.fake.add_cert(KEYS.cert_der)
+        profile = self.fake.add_profile(f"OpenCfMoto CI r{REPO_ID}-5-1 app", [second])
+        proc = self.run_asc("cleanup", "--duplicates-only", "--state", self.write_state(
+            {"cert_id": second, "profile_ids": [profile], "cert_unclear": True}))
+        self.assertEqual([c.path for c in self.calls("DELETE")], [f"/v1/certificates/{first}"])
+        self.assertEqual(set(self.fake.certificates), {second, foreign})
+        self.assertEqual(list(self.fake.profiles), [profile])
+        self.assertEqual(self.annotations(proc, "warning"), [])
+
+    def test_duplicates_only_does_nothing_after_clear_answers(self):
+        make_csr(self.tmp)
+        for state in ({"cert_id": "C1", "profile_ids": ["P1"]}, None):
+            path = self.write_state(state) if state else os.path.join(self.tmp, "missing.json")
+            proc = self.run_asc("cleanup", "--duplicates-only", "--state", path)
+            self.assertEqual(self.fake.requests, [])
+            self.assertEqual(self.annotations(proc, "warning"), [])
+
+    def test_duplicates_only_never_points_at_the_builds_certificate(self):
+        # Its warnings never give the generic steps («revoke the certificate created today»):
+        # that one is still needed until the finish job has waited for Apple's processing.
+        make_csr(self.tmp)
+        state = self.write_state({"cert_id": "C9", "profile_ids": ["P1"], "cert_pending": True})
+        self.fake.fail("GET", "/v1/certificates", 500, SERVER_ERROR, times=99)
+        for env in ({}, {"ASC_KEY_ID": None}):
+            with self.subTest(env=env):
+                proc = self.run_asc("cleanup", "--duplicates-only", "--state", state, env=env)
+                title, message = self.annotation(proc, "warning")
+                self.assertEqual(title, "Certificado sin confirmar / Certificate not confirmed")
+                for needle in ("Cuando termine el trabajo «Processing, TestFlight group, revoke the certificate»",
+                               "Once the «Processing, TestFlight group, revoke the certificate» job has finished",
+                               "si aún queda un certificado «Apple Distribution» creado hoy"):
+                    self.assertIn(needle, message)
+                self.assertNotIn("Revoca a mano lo que quede", message)
+                self.assertEqual(self.calls("DELETE"), [])
+
+
+# ---------------------------------------------------------------- build_and_sign.sh steps
+
+class ScriptTest(AscTest):
+    """Runs shell code with /bin/bash (3.2 on macOS, as on the TestFlight runner) and a python3 on
+    PATH that is this interpreter, against the fake."""
+
+    def setUp(self):
+        super().setUp()
+        self.bindir = os.path.join(self.tmp, "bin")
+        os.makedirs(self.bindir)
+        shim = os.path.join(self.bindir, "python3")
+        with open(shim, "w", encoding="utf-8") as fh:
+            fh.write(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
+        os.chmod(shim, 0o755)
+
+    def bash(self, args, env, expect=0, cwd=None):
+        full = self.asc_env(env)
+        full["PATH"] = self.bindir + os.pathsep + full["PATH"]
+        proc = subprocess.run([BASH] + list(args), env=full, cwd=cwd or REPO, capture_output=True,
+                              encoding="utf-8", errors="replace", timeout=300)
+        if expect is not None:
+            self.assertEqual(proc.returncode, expect, f"bash {' '.join(args)} exited {proc.returncode}\n"
+                                                      f"{self.transcript(proc)}")
+        return proc
+
+
+class BuildScriptTest(ScriptTest):
+    """tools/testflight/build_and_sign.sh create-signing, install-profiles and teardown (the steps
+    that do not need macOS) with the real asc.py."""
+
+    def setUp(self):
+        super().setUp()
+        f = self.fake
+        self.app, self.mirror = f.add_bundle(APP_BID), f.add_bundle(MIRROR_BID)
+        f.capabilities[self.app["id"]] = ["APP_GROUPS", "HOT_SPOT", "ACCESS_WIFI_INFORMATION"]
+        f.capabilities[self.mirror["id"]] = ["APP_GROUPS"]
+        f.assigned_groups = {APP_BID: [GROUP], MIRROR_BID: [GROUP]}
+        self.work = os.path.join(self.tmp, "work")
+        self.signing = os.path.join(self.work, "signing")
+
+    def step(self, name, env=None, expect=0):
+        base = {"TF_WORK": self.work, "APP_BUNDLE_RESOURCE_ID": self.app["id"],
+                "MIRROR_BUNDLE_RESOURCE_ID": self.mirror["id"], "APP_BUNDLE_ID": APP_BID,
+                "MIRROR_BUNDLE_ID": MIRROR_BID, "APP_GROUP": GROUP, "GITHUB_RUN_ID": "4242",
+                "GITHUB_RUN_ATTEMPT": "1", "TF_LEFTOVER_WAIT_SEC": "0", "TF_KILL_WAIT_SEC": "1"}
+        base.update(env or {})
+        return self.bash([SCRIPT_PATH, name], base, expect=expect)
+
+    def alive(self):
+        return [c for c in self.fake.created_certs if c in self.fake.certificates]
+
+    def test_the_teardown_of_an_uploaded_build_revokes_only_a_duplicate_certificate(self):
+        f = self.fake
+        f.cert_list_lag = 1                 # the look after the unanswered request misses its certificate
+        f.fail("POST", "/v1/certificates", 502, BAD_GATEWAY, effect=True)
+        real, listings = f.list_certs, []
+
+        def failing_after_the_first(rec):
+            if "cursor" not in rec.query:
+                listings.append(rec)
+            return (500, SERVER_ERROR) if len(listings) >= 2 else real(rec)
+        f.list_certs = failing_after_the_first
+        self.step("create-signing")
+        first, second = f.created_certs
+        with open(os.path.join(self.signing, "state.json"), encoding="utf-8") as fh:
+            state = json.load(fh)
+        self.assertEqual((state["cert_id"], state.get("cert_pending")), (second, True))
+        f.list_certs = real
+        open(os.path.join(self.work, "uploaded"), "w").close()    # the upload step got through
+        proc = self.step("teardown")
+        self.assertEqual(self.alive(), [second])                   # the build's certificate stays
+        self.assertEqual(sorted(info["name"] for info in f.profiles.values()),
+                         [f"OpenCfMoto CI r{REPO_ID}-4242-1 app", f"OpenCfMoto CI r{REPO_ID}-4242-1 mirror"])
+        out = self.outputs()
+        self.assertEqual((out["uploaded"], out["teardown"]), ("true", "done"))
+        self.assertEqual(self.annotations(proc, "warning"), [])
+        self.assertFalse(os.path.exists(os.path.join(self.signing, "key.pem")))
+        # The finish job then revokes the build's certificate and profiles by their ids.
+        self.run_asc("cleanup", "--cert-id", out["cert_id"], "--profile-ids", out["profile_ids"])
+        self.assertEqual((self.alive(), f.profiles), ([], {}))
+
+    def test_the_teardown_of_an_uploaded_build_after_clear_answers_asks_apple_nothing(self):
+        self.step("create-signing")
+        open(os.path.join(self.work, "committed"), "w").close()   # Apple has (or may have) the file
+        before = len(self.fake.requests)
+        self.step("teardown")
+        self.assertEqual(len(self.fake.requests), before)
+        self.assertEqual(self.outputs()["uploaded"], "true")
+        self.assertEqual(len(self.alive()), 1)
+
+    def test_a_second_manual_run_installs_only_its_own_profiles(self):
+        # `build_and_sign.sh all` on a Mac, twice, with the same work directory (no GitHub run).
+        mac = {"GITHUB_RUN_ID": None, "GITHUB_RUN_ATTEMPT": None, "GITHUB_REPOSITORY_ID": None,
+               "GITHUB_ACTIONS": None, "GITHUB_OUTPUT": None, "GITHUB_STEP_SUMMARY": None}
+        names = []
+        for _ in range(2):
+            self.step("create-signing", env=mac)
+            self.assertEqual(len(os.listdir(os.path.join(self.signing, "profiles"))), 2)
+            names += [info["name"] for info in self.fake.profiles.values()]
+            self.step("install-profiles", env=mac)
+            installed = os.path.join(self.tmp, "Library", "MobileDevice", "Provisioning Profiles")
+            self.assertEqual(len(os.listdir(installed)), 2)
+            self.step("teardown", env=mac)                           # not uploaded: revoked at once
+            self.assertEqual((self.alive(), self.fake.profiles), ([], {}))
+        for name in names:
+            self.assertRegex(name, r"^OpenCfMoto CI local[0-9]{14}-1 (app|mirror)$")
+            self.assertTrue(asc.CI_PROFILE_RE.fullmatch(name))
+
+
+# ---------------------------------------------------------------- workflow shell blocks
+
+def workflow_steps(path=WORKFLOW_PATH):
+    """{(job id, step name): the step's `run:` script} of a workflow file. A small reader for this
+    repository's own layout (block scalars, two-space indents): the macOS python3 has no YAML
+    module."""
+    steps, job, name, in_jobs = {}, None, None, False
+    with open(path, encoding="utf-8") as fh:
+        lines = fh.read().splitlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        i += 1
+        if line == "jobs:":
+            in_jobs = True
+            continue
+        match = re.match(r"^  ([A-Za-z0-9_-]+):\s*$", line)
+        if in_jobs and match:
+            job, name = match.group(1), None
+            continue
+        match = re.match(r"^(\s*)- (name|uses): (.*)$", line)
+        if match:
+            name = match.group(3).strip() if match.group(2) == "name" else None
+            continue
+        match = re.match(r"^(\s*)run: (.*)$", line)
+        if match and job and name:
+            if match.group(2).strip() != "|":
+                steps[(job, name)] = match.group(2).strip()
+                continue
+            block, indent = [], None
+            while i < len(lines):
+                text = lines[i]
+                if text.strip():
+                    width = len(text) - len(text.lstrip(" "))
+                    if indent is None:
+                        indent = width
+                    if width < indent:
+                        break
+                block.append(text[indent:] if indent is not None else "")
+                i += 1
+            steps[(job, name)] = "\n".join(block).rstrip("\n") + "\n"
+    return steps
+
+
+class WorkflowTextTest(ScriptTest):
+    """What the TestFlight workflow's own shell blocks tell the owner, run the way GitHub runs them
+    (bash --noprofile --norc -eo pipefail) with each case's step environment."""
+
+    STEPS = None
+
+    def run_step(self, job, name, env, expect=0, cwd=None):
+        if WorkflowTextTest.STEPS is None:
+            WorkflowTextTest.STEPS = workflow_steps()
+        script = self.STEPS[(job, name)]
+        self.assertNotIn("${{", script)                       # only env reaches the scripts
+        path = os.path.join(self.tmp, "step.sh")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(script)
+        base = {"GITHUB_SERVER_URL": "https://github.com", "GITHUB_REPOSITORY": "owner/opencfmoto-ios",
+                "GITHUB_RUN_ID": "112", "MARKETING_VERSION": "2.3.4", "BUILD_NUMBER": "7"}
+        base.update(env)
+        return self.bash(["--noprofile", "--norc", "-eo", "pipefail", path], base, expect=expect, cwd=cwd)
+
+    def test_the_prefix_error_title_is_bilingual(self):
+        proc = self.run_step("prepare", "Bundle id prefix", {"PREFIX_VARIABLE": "com.bad prefix", "OWNER": "x"},
+                             expect=1)
+        title, message = self.annotation(proc, "error")
+        self.assertEqual(title, "Prefijo no válido / Invalid prefix")
+        self.assertIn("BUNDLE_ID_PREFIX", message)
+        self.run_step("prepare", "Bundle id prefix", {"PREFIX_VARIABLE": "", "OWNER": "Kevinparra535"})
+        self.assertEqual(self.outputs()["prefix"], "com.kevinparra535")
+
+    def build_summary(self, **env):
+        open(self.step_summary, "w").close()
+        self.run_step("build", "Summary", dict({"UPLOAD_OUTCOME": "", "METHOD": ""}, **env))
+        return self.summary()
+
+    def test_the_build_summary_names_a_revocation_only_when_a_certificate_was_made(self):
+        for outcome, made in (("skipped", False), ("failure", True), ("success", True)):
+            with self.subTest(signing=outcome):
+                text = self.build_summary(UPLOADED="false", UPLOAD_OUTCOME="skipped", SIGNING_OUTCOME=outcome)
+                self.assertIn("No se subió ninguna build", text)
+                self.assertEqual("El paso «Clean up» revoca el certificado" in text, made)
+                self.assertEqual("The «Clean up» step revokes the temporary certificate" in text, made)
+
+    def test_the_build_summary_after_a_cancel_during_the_upload_stays_true(self):
+        for outcome in ("cancelled", "failure"):
+            with self.subTest(upload=outcome):
+                text = self.build_summary(UPLOADED="true", UPLOAD_OUTCOME=outcome, SIGNING_OUTCOME="success")
+                for needle in ("Apple tiene (o puede tener) el archivo", "(si no cancelaste la ejecución)",
+                               "Apple has (or may have) the file", "(unless you cancelled the run)"):
+                    self.assertIn(needle, text)
+                self.assertNotIn("ya llegó a Apple", text)
+
+    def revoke_step(self, cwd=None, **env):
+        open(self.step_summary, "w").close()
+        return self.run_step("finish", "Revoke the temporary certificate and profiles",
+                             dict({"CERT_ID": "", "PROFILE_IDS": "", "UPLOADED": "false", "TEARDOWN": "done"}, **env),
+                             cwd=cwd)
+
+    def test_the_finish_job_names_no_revocation_when_no_certificate_was_made(self):
+        self.revoke_step()
+        self.assertIn("no hay nada que revocar: el trabajo «Build, sign and upload (macOS)» no llegó a crear ninguno",
+                      self.summary())
+        self.assertNotIn("ya lo revocó el paso «Clean up»", self.summary())
+        self.revoke_step(CERT_ID="C1", PROFILE_IDS="P1,P2")
+        self.assertIn("ya lo revocó el paso «Clean up»", self.summary())
+        self.assertEqual(self.fake.requests, [])
+
+    def test_the_finish_job_without_a_checkout_names_what_the_portal_shows(self):
+        empty = os.path.join(self.tmp, "no-checkout")
+        os.makedirs(empty)
+        for ids, cert, profiles in ((dict(CERT_ID="C1", PROFILE_IDS="P1,P2"), " (id C1)", " (ids P1,P2)"),
+                                    ({}, "", "")):
+            with self.subTest(ids=ids):
+                proc = self.revoke_step(cwd=empty, UPLOADED="true", **ids)
+                title, message = self.annotation(proc, "warning")
+                self.assertEqual(title, "Revoca a mano / Revoke by hand")
+                for needle in (f"revoca el certificado «Apple Distribution» creado hoy{cert} (púlsalo ▸ Revoke)",
+                               f"borra los perfiles «OpenCfMoto CI …»{profiles} (cada uno ▸ Remove)",
+                               f"revoke the «Apple Distribution» certificate created today{cert}",
+                               f"delete the «OpenCfMoto CI …» profiles{profiles}"):
+                    self.assertIn(needle, message)
+
+    def test_the_finish_job_sweeps_up_only_its_own_run(self):
+        f = self.fake
+        ours = f.add_cert(KEYS.cert_der)
+        for name in (f"OpenCfMoto CI r{REPO_ID}-112-1 app", f"OpenCfMoto CI r{REPO_ID}-112-1 mirror"):
+            f.add_profile(name, [ours])
+        kept = [f"OpenCfMoto CI r{REPO_ID}-111-1 app", "OpenCfMoto CI r999-112-1 app"]
+        for name in kept:
+            f.add_profile(name, [f.add_cert(KEYS.cert_der)], created=iso(48 * 3600))
+        proc = self.revoke_step(UPLOADED="", TEARDOWN="")       # the build job lost its runner
+        self.assertEqual(sorted(info["name"] for info in f.profiles.values()), sorted(kept))
+        self.assertNotIn(ours, f.certificates)
+        self.assertIn("Restos borrados", self.annotation(proc, "notice")[0])
+
+    def finish_summary(self, **env):
+        open(self.step_summary, "w").close()
+        self.run_step("finish", "Summary", dict({"STATE": "", "GROUP": "", "OUTCOME": "", "BUILD_RESULT": "success",
+                                                 "UPLOADED": "true", "TEARDOWN": "done"}, **env))
+        return self.summary()
+
+    def test_the_finish_summary_after_a_cancel_before_the_build_job_cleaned_up(self):
+        text = self.finish_summary(UPLOADED="", TEARDOWN="", BUILD_RESULT="cancelled", OUTCOME="skipped")
+        self.assertIn("La ejecución se canceló antes de que el trabajo «Build, sign and upload (macOS)» empezara "
+                      "o terminara su limpieza", text)
+        self.assertNotIn("se perdió el runner", text)
+        text = self.finish_summary(UPLOADED="", TEARDOWN="", BUILD_RESULT="failure", OUTCOME="skipped")
+        self.assertIn("se perdió el runner", text)
+
+    def test_the_finish_summary_never_promises_an_email(self):
+        for env in (dict(STATE="PROCESSING", OUTCOME="success"), dict(OUTCOME="skipped"), dict(OUTCOME="failure")):
+            with self.subTest(**env):
+                text = self.finish_summary(**env)
+                self.assertIn("(Apple suele avisar por correo)", text)
+                self.assertIn("(Apple usually e-mails you)", text)
+                for promise in ("te llegará un correo", "te llega un correo", "(Apple e-mails you)"):
+                    self.assertNotIn(promise, text)
 
 
 # ---------------------------------------------------------------- runner (annotations in CI)
