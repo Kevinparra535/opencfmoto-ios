@@ -10,7 +10,9 @@
 //   generated silent PCM loop (volume 0.01) while — and only while — capture is enabled.
 // - Consequence: enabling capture INTERRUPTS the rider's music (Spotify etc. pause), and if the rider
 //   starts music again that app becomes Now Playing and receives the keys. We do NOT auto-reclaim
-//   while `isOtherAudioPlaying`; we re-claim when an interruption ends.
+//   while `isOtherAudioPlaying`; we re-claim when an interruption ends. While we are not claimed,
+//   voice prompts use SpeechAnnouncer's own mixable session (`captureOwnsSession` is
+//   `isEnabled && isClaimed`), so they duck the rider's music instead of pausing it.
 // - Events are raw (`HandlebarRawEvent` + monotonic time); tap / double / hold detection is done by
 //   `HandlebarGestureEngine` in OpenCfMotoCore.
 //
@@ -144,9 +146,13 @@ public final class HandlebarRemote {
     }
 
     /// Capture mode is on (the user opted in).
-    public private(set) var isEnabled = false
+    public private(set) var isEnabled = false {
+        didSet { publishSessionOwnership() }
+    }
     /// We currently hold the non-mixable session and the silent loop is playing (Now Playing).
-    public private(set) var isClaimed = false
+    public private(set) var isClaimed = false {
+        didSet { publishSessionOwnership() }
+    }
 
     /// Experimental ▲/▼: observe `AVAudioSession.outputVolume` while capturing. Off by default; it
     /// never changes the volume back (no re-pinning), so presses really change the rider's volume.
@@ -206,7 +212,6 @@ public final class HandlebarRemote {
         player?.stop()
         player = nil
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
-        OCMAudioSessionCoordinator.shared.captureOwnsSession = false
         if isClaimed {
             try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         }
@@ -234,21 +239,44 @@ public final class HandlebarRemote {
 
     // MARK: Session / silent loop
 
+    /// The silent loop refused to start, so we are not Now Playing.
+    private struct SilentLoopDidNotStart: LocalizedError {
+        var errorDescription: String? { "the silent Now Playing loop did not start" }
+    }
+
+    /// Becomes Now Playing. `isClaimed` (and with it the coordinator's `captureOwnsSession`) turns true
+    /// only once the non-mixable session is active AND the loop plays; on any failure the session is
+    /// released again, so a half-claimed non-mixable session never silences the rider's music.
     private func claim() throws {
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playback, mode: .default, options: [])   // non-mixable
         try session.setActive(true)
-        OCMAudioSessionCoordinator.shared.captureOwnsSession = true
-        if player == nil {
-            let p = try AVAudioPlayer(data: SilentWAV.make(), fileTypeHint: AVFileType.wav.rawValue)
-            p.numberOfLoops = -1
-            p.volume = 0.01
-            p.prepareToPlay()
-            player = p
+        do {
+            if player == nil {
+                let p = try AVAudioPlayer(data: SilentWAV.make(), fileTypeHint: AVFileType.wav.rawValue)
+                p.numberOfLoops = -1
+                p.volume = 0.01
+                p.prepareToPlay()
+                player = p
+            }
+            guard player?.play() == true else { throw SilentLoopDidNotStart() }
+        } catch {
+            player?.stop()
+            try? session.setActive(false, options: .notifyOthersOnDeactivation)
+            throw error
         }
-        player?.play()
         isClaimed = true
         publishNowPlaying()
+    }
+
+    /// Voice prompts speak inside our session only while we really hold it (enabled AND claimed).
+    /// After another app took the session (interruption), while a reclaim is declined because other
+    /// audio plays, or after a failed claim, `SpeechAnnouncer` uses its own transient MIXABLE
+    /// `.voicePrompt` session again — otherwise every prompt would implicitly re-activate our
+    /// non-mixable category (pausing the rider's music for good in the foreground, or failing with
+    /// `cannotInterruptOthers` while locked so the prompt is never heard). Review finding IOS-1.
+    private func publishSessionOwnership() {
+        OCMAudioSessionCoordinator.shared.captureOwnsSession = isEnabled && isClaimed
     }
 
     private func publishNowPlaying() {

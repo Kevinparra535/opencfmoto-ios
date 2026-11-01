@@ -26,6 +26,12 @@ public enum LocalNetworkAccess: String, Sendable, Equatable, CustomStringConvert
     case unavailable
 
     public var description: String { rawValue }
+
+    /// Local Network privacy itself answered the probe: the system alert has been shown and answered
+    /// (or was answered earlier), so later quiet checks may probe again without popping the alert
+    /// out of context. `.unavailable` / `.undetermined` prove nothing — off Wi-Fi the probe never
+    /// touches the local network, so no alert was shown (review finding IOS-5).
+    public var isDecisive: Bool { self == .granted || self == .denied }
 }
 #endif
 

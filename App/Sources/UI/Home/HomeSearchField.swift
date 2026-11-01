@@ -6,6 +6,8 @@
 // for 2.5 s with the hint "Bike dash search — type here", a light haptic and a banner; while the
 // rider types for the dash, every edit goes to `NavigationModel.query` (its 350 ms / ≥ 2 characters
 // debounce feeds the dash suggestions) and Go stays on Home ("Searching "<q>" on the dash").
+// The request is taken only while Home is the visible screen (MainTypeOnPhone.swift): also when
+// it arrived while the phone was locked, under Ride Mode or behind a sheet — once that ends.
 
 import SwiftUI
 import UIKit
@@ -14,7 +16,6 @@ import OpenCfMotoAppModel
 struct HomeSearchField: View {
     @Environment(AppModel.self) private var model
     @Environment(\.mainRouter) private var router
-    @Environment(\.scenePhase) private var scenePhase
     @FocusState private var focused: Bool
     @State private var text = ""
     /// The dash asked to type here: live suggestions, Go keeps the rider on Home.
@@ -57,11 +58,9 @@ struct HomeSearchField: View {
         .onChange(of: text) { _, newValue in
             if typingForDash, model.navigation.query != newValue { model.navigation.query = newValue }
         }
-        .onChange(of: model.navigation.typeOnPhoneRequested, initial: true) { _, requested in
-            if requested { handleTypeOnPhone() }
-        }
-        .onAppear {
-            if model.navigation.typeOnPhoneRequested { handleTypeOnPhone() }
+        // Home is the root of the stack: it is the visible screen exactly when nothing is pushed.
+        .mainTypeOnPhone(isVisible: router?.path.isEmpty == true) {
+            handleTypeOnPhone()
         }
         .onChange(of: focused) { _, isFocused in
             if !isFocused { typingForDash = false }
@@ -90,15 +89,22 @@ struct HomeSearchField: View {
         }
     }
 
-    /// Only while Home is the visible screen; otherwise the Map hub / Dash view handle it.
+    /// Home is visible, active and uncovered (the Map hub / Dash view handle it when they are on top).
     private func handleTypeOnPhone() {
-        guard scenePhase == .active, let router, router.path.isEmpty, router.scanRequest == nil else { return }
         model.navigation.acknowledgeTypeOnPhone()
         typingForDash = true
         highlighted = true
-        focused = true
         text = model.navigation.query
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         model.showBanner(String(localized: "Bike search open — type here. Results appear on the dash."))
+        focused = true
+        // Home may only just be coming back (unlock, Ride Mode exit, a pop from another screen) and
+        // SwiftUI drops a focus asked before the field is on screen: ask once more shortly after.
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard highlighted, !focused else { return }
+            typingForDash = true
+            focused = true
+        }
     }
 }

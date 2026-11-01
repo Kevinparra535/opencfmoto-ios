@@ -226,10 +226,23 @@ public final class LocationService: NSObject, CLLocationManagerDelegate {
         manager.showsBackgroundLocationIndicator = true
     }
 
-    /// Orientation used to report the heading (match how the phone is mounted).
+    /// Device orientation CoreLocation measures headings against (default `.portrait`: the top edge
+    /// in portrait is "north"). The app keeps it equal to the interface orientation (LocationAdapter),
+    /// like Android remaps the rotation vector by the display rotation, so a landscape mount reports
+    /// the riding direction. `.unknown` / `.faceUp` / `.faceDown` are ignored (no effect per Apple).
+    /// A real change restarts the compass smoothing instead of easing through the 90° step.
     public var headingOrientation: CLDeviceOrientation {
         get { manager.headingOrientation }
-        set { manager.headingOrientation = newValue }
+        set {
+            switch newValue {
+            case .portrait, .portraitUpsideDown, .landscapeLeft, .landscapeRight: break
+            default: return
+            }
+            guard newValue != manager.headingOrientation else { return }
+            manager.headingOrientation = newValue
+            smoother.reset()
+            Log.i("LOC", "heading reference: device orientation \(newValue.rawValue)")
+        }
     }
 
     static var backgroundLocationDeclared: Bool {

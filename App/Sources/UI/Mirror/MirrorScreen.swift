@@ -27,7 +27,8 @@ struct MirrorScreen: View {
                 } else {
                     connectStep(phase: phase, mode: connection.mode)
                 }
-                if phase.showsStop {
+                // Also while an .error link keeps re-arming: the session is still alive (CL-1).
+                if phase.showsStop || connection.isSessionActive {
                     stopSection
                 }
                 if AppPlatform.shared.isDemoMode {

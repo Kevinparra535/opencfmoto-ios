@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // First run (Android: SetupActivity "Get started" + setup_seen, app-features §7.5.2) for iOS:
 // welcome → location (When-In-Use) → Local Network → pair the bike (QR / manual Wi-Fi, or skip)
-// → done. The steps come from `PermissionsModel.step`; "done" persists the onboarding flag and
-// RootView switches to Home (which then auto-connects if enabled).
+// → done. The steps come from `PermissionsModel.step`. Every exit from the pair-bike step
+// (Continue, "Skip for now", a scanner / manual entry that paired) only `advance()`s to the "done"
+// page — "You're all set", the ride-safety note and the Ride Mode advice (review finding UI-3).
+// Only its "Start riding" calls `completeOnboarding()`, which persists the onboarding flag; RootView
+// then switches to Home (which auto-connects if enabled).
 
 import SwiftUI
 import OpenCfMotoAppModel

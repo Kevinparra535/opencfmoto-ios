@@ -4,7 +4,8 @@
 // list the dash encoder draws (or a phone-only preview on a chosen canvas when no dash is linked),
 // taps / drags / long-presses are dash touches in canvas pixels, the keypad sends handlebar keys,
 // and GPS runs while the view is open so the map moves. "Type on phone" from the dash search shows
-// a search field here when this screen is the visible one.
+// a search field here when this screen is the visible one (MainTypeOnPhone.swift) — also when the
+// request arrived while the phone was locked or under Ride Mode, once that ends.
 
 import SwiftUI
 import UIKit
@@ -72,14 +73,13 @@ struct DashPreviewScreen: View {
         .onAppear {
             isVisible = true
             model.ride.startLocationPreview()
-            if model.navigation.typeOnPhoneRequested { openDashSearch() }
         }
         .onDisappear {
             isVisible = false
             model.ride.stopLocationPreview()
         }
-        .onChange(of: model.navigation.typeOnPhoneRequested) { _, requested in
-            if requested { openDashSearch() }
+        .mainTypeOnPhone(isVisible: isVisible) {
+            openDashSearch()
         }
     }
 
@@ -141,19 +141,41 @@ struct DashPreviewScreen: View {
             }
 
             if !ride.isProjecting {
-                HStack {
+                // Caption above a full-width menu whose label wraps inside its own frame: the system
+                // menu picker beside the caption wrapped its long label over the keypad (portrait,
+                // landscape and Spanish).
+                VStack(alignment: .leading, spacing: 6) {
                     Text("Preview canvas")
                         .font(.subheadline)
                         .foregroundStyle(Theme.textSecondary)
-                    Spacer(minLength: 8)
-                    Picker(selection: $ride.previewCanvas) {
-                        ForEach(DashPreviewCanvas.allCases) { canvas in
-                            Text(MainStrings.previewCanvasLabel(canvas)).tag(canvas)
+                    Menu {
+                        Picker(selection: $ride.previewCanvas) {
+                            ForEach(DashPreviewCanvas.allCases) { canvas in
+                                Text(MainStrings.previewCanvasLabel(canvas)).tag(canvas)
+                            }
+                        } label: {
+                            Text("Preview canvas")
                         }
+                        .pickerStyle(.inline)
                     } label: {
-                        Text("Preview canvas")
+                        HStack(spacing: 8) {
+                            Text(MainStrings.previewCanvasLabel(ride.previewCanvas))
+                                .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 4)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption.weight(.semibold))
+                                .accessibilityHidden(true)
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Theme.brand)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Theme.surfaceHigh, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                     }
-                    .pickerStyle(.menu)
+                    .accessibilityLabel(Text("Preview canvas"))
+                    .accessibilityValue(Text(MainStrings.previewCanvasLabel(ride.previewCanvas)))
                 }
             }
 
@@ -203,12 +225,18 @@ struct DashPreviewScreen: View {
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.brand, lineWidth: 2))
     }
 
+    /// Called only while this screen is visible, active and uncovered (`mainTypeOnPhone`).
     private func openDashSearch() {
-        guard isVisible, scenePhase == .active else { return }
         model.navigation.acknowledgeTypeOnPhone()
         showsDashSearch = true
         searchFocused = true
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        // The field is inserted by this very update (and the screen may only just be back from the
+        // lock screen or Ride Mode): SwiftUI can drop that first focus, so ask once more.
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(300))
+            if showsDashSearch, !searchFocused { searchFocused = true }
+        }
     }
 }
 

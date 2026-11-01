@@ -59,16 +59,26 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         UIBackgroundModes: [location, audio]
         ITSAppUsesNonExemptEncryption: false
+        # Purpose strings: keep in sync with App/Resources/{en,es}.lproj/InfoPlist.strings (localized).
         NSCameraUsageDescription: "OpenCfMoto uses the camera to scan the pairing QR code shown on your bike's dash."
-        NSLocationWhenInUseUsageDescription: "OpenCfMoto uses your location to draw the map and turn-by-turn guidance on your bike's dash and to log your rides."
+        NSLocationWhenInUseUsageDescription: "OpenCfMoto uses your location, also while your iPhone is locked during a ride, to show the map and turn-by-turn guidance on your bike's dash and to log your rides on this iPhone. To find places, routes and speed limits, it sends your searches and positions to OpenStreetMap-based online services."
         UIRequiresPersistentWiFi: true
         NSLocalNetworkUsageDescription: "OpenCfMoto talks to your motorcycle's dashboard over its Wi-Fi to show the map on the dash."
         NSBonjourServices: [_EasyConn._tcp]
         OCMAppGroupIdentifier: $(APP_GROUP_ID)
+        # Files opened with the app (AppModel.handleOpenURL): GPX tracks, and settings / map-data packs
+        # (JSON, app-features §3.7.6) which wait for the rider's "Import settings?" confirmation.
+        # Copy semantics (the system hands over a copy in Documents/Inbox, removed after reading):
+        # AppModel reads with a plain security-scoped read, no NSFileCoordinator (ITMS-90737 wants
+        # the key either way).
+        LSSupportsOpeningDocumentsInPlace: false
         CFBundleDocumentTypes:
           - CFBundleTypeName: GPX track
             LSHandlerRank: Alternate
             LSItemContentTypes: [com.topografix.gpx]
+          - CFBundleTypeName: OpenCfMoto settings or map data
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [public.json]
         UTImportedTypeDeclarations:
           - UTTypeIdentifier: com.topografix.gpx
             UTTypeDescription: GPX track

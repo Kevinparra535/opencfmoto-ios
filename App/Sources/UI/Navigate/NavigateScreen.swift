@@ -12,7 +12,9 @@
 //   Park here, Go Home, Set Home here, parked bike, GPX import);
 // - GPX import (.fileImporter → security-scoped read off the main actor → loadGpx);
 // - the dash's "type on the phone" request focuses the search field (highlight + haptic) and is
-//   acknowledged; toasts / last error are shown as banners (VoiceOver announces toasts);
+//   acknowledged — only while this screen is the visible one (not under the Dash view it pushed,
+//   Ride Mode or the lock screen: MainTypeOnPhone.swift); toasts / last error are shown as banners
+//   (VoiceOver announces toasts);
 // - "Show dash" opens the phone preview of the dash picture.
 
 import SwiftUI
@@ -32,6 +34,8 @@ struct NavigateScreen: View {
     @State private var showGpxImporter = false
     @State private var importError: String?
     @State private var hapticTrigger = 0
+    /// On screen (false while the Dash view it pushed covers it).
+    @State private var isVisible = false
     @FocusState private var searchFocused: Bool
 
     private var lease: FeatureLocationLease { .mapHub }
@@ -58,6 +62,7 @@ struct NavigateScreen: View {
             .sensoryFeedback(.impact(weight: .light), trigger: hapticTrigger)
             .animation(.easeInOut(duration: 0.2), value: navigation.toast)
             .onAppear {
+                isVisible = true
                 lease.acquire(model)
                 if snapshot.preview != nil {
                     fitPreview()
@@ -65,9 +70,12 @@ struct NavigateScreen: View {
                     followRider()
                 }
             }
-            .onDisappear { lease.release(model) }
-            .onChange(of: navigation.typeOnPhoneRequested, initial: true) { _, requested in
-                if requested { openDashSearch() }
+            .onDisappear {
+                isVisible = false
+                lease.release(model)
+            }
+            .mainTypeOnPhone(isVisible: isVisible) {
+                openDashSearch()
             }
             .onChange(of: NavigatePreviewFraming(snapshot.preview)) { _, framing in
                 if framing != nil { fitPreview() }
