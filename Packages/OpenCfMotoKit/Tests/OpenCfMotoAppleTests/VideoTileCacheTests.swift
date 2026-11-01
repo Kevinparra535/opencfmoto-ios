@@ -47,6 +47,32 @@ final class VideoTileCacheTests: XCTestCase {
         XCTAssertTrue(TileDiskLayout.sourceKey(for: "garbage").hasPrefix("tiles-"))
     }
 
+    /// INT:SEC-2-tilelog: a template may carry an API key — the log only ever sees the source key
+    /// (host + hash) and URLs inside error descriptions are cut down to scheme + host.
+    func testLogTextNeverContainsTheTemplateOrItsKey() {
+        let template = "https://tile.thunderforest.com/cycle/{z}/{x}/{y}.png?apikey=SECRET123"
+        let source = TileLogText.source(template)
+        XCTAssertEqual(source, TileDiskLayout.sourceKey(for: template))
+        XCTAssertTrue(source.hasPrefix("tile.thunderforest.com-"), source)
+        XCTAssertFalse(source.contains("SECRET123"))
+        XCTAssertFalse(source.contains("{z}"))
+        let pathKey = "https://maps.example.com/KEY-IN-PATH/{z}/{x}/{y}.png"
+        XCTAssertFalse(TileLogText.source(pathKey).contains("KEY-IN-PATH"))
+
+        struct FakeURLError: Error, CustomStringConvertible {
+            var description: String {
+                "Error Domain=NSURLErrorDomain Code=-1001 \"timed out\" UserInfo={NSErrorFailingURLStringKey=https://tile.thunderforest.com/cycle/16/1/2.png?apikey=SECRET123, NSErrorFailingURLKey=http://a.example.org/KEY-IN-PATH/1/2/3.png}"
+            }
+        }
+        let text = TileLogText.describe(FakeURLError())
+        XCTAssertFalse(text.contains("SECRET123"), text)
+        XCTAssertFalse(text.contains("KEY-IN-PATH"), text)
+        XCTAssertTrue(text.contains("https://tile.thunderforest.com/…"), text)
+        XCTAssertTrue(text.contains("http://a.example.org/…"), text)
+        XCTAssertTrue(text.contains("timed out"), text)
+        XCTAssertEqual(TileLogText.redactingURLs("no url here"), "no url here")
+    }
+
     // MARK: Web Mercator (reference values: independent Python implementation of the OSM wiki formula)
 
     func testTileCoordinates() {

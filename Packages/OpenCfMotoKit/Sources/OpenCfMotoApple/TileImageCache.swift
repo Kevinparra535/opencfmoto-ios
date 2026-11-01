@@ -83,6 +83,28 @@ enum TileDiskLayout {
     static func relativePath(_ key: TileCacheKey) -> String { "\(key.z)/\(key.x)/\(key.y).png" }
 }
 
+/// What the tile cache may write to the log. A tile URL template can carry an API key (in the
+/// query or in the path, e.g. `…/{z}/{x}/{y}.png?apikey=…`), and logs are shared in problem
+/// reports: log the source folder name (sanitized host + hash) instead of the template, and keep
+/// only scheme + host of any URL inside an error description.
+enum TileLogText {
+    /// `TileDiskLayout.sourceKey`, e.g. "tile.openstreetmap.org-1a2b3c4d" — never the template.
+    static func source(_ template: String) -> String { TileDiskLayout.sourceKey(for: template) }
+
+    private static let urlPattern = try? NSRegularExpression(pattern: "(https?)://([^/\\s?#\"'<>,;]+)[^\\s\"'<>,;]*",
+                                                             options: [.caseInsensitive])
+
+    /// `text` with every http(s) URL reduced to `scheme://host/…` (path and query dropped).
+    static func redactingURLs(_ text: String) -> String {
+        guard let re = urlPattern else { return text }
+        let range = NSRange(text.startIndex ..< text.endIndex, in: text)
+        return re.stringByReplacingMatches(in: text, options: [], range: range, withTemplate: "$1://$2/…")
+    }
+
+    /// An error description safe for the log.
+    static func describe(_ error: Error) -> String { redactingURLs(String(describing: error)) }
+}
+
 /// Web-Mercator tile math and route-corridor coverage.
 enum TileCoverage {
     static let maxLatitude = 85.051_128_779_806_59
@@ -469,7 +491,7 @@ public final class TileImageCache: @unchecked Sendable {
         ) { [weak self] _ in self?.purgeMemory() }
         ioQueue.asyncAfter(deadline: .now() + 3) { [weak self] in self?.purgeDiskIfNeeded(force: true) }
         if !TileURLTemplate.isValid(configuration.urlTemplate) {
-            Log.w("OSM", "tile URL template looks invalid: \(configuration.urlTemplate)")
+            Log.w("OSM", "tile URL template looks invalid (source \(TileLogText.source(configuration.urlTemplate)))")
         }
     }
 
@@ -497,7 +519,7 @@ public final class TileImageCache: @unchecked Sendable {
             netPending.removeAll(); netStack.removeAll(); prefetchQueue.removeAll()
             retryNotBefore.removeAll()
             lock.unlock()
-            Log.i("OSM", "tile source → \(newValue)")
+            Log.i("OSM", "tile source → \(TileLogText.source(newValue))\(TileURLTemplate.isValid(newValue) ? "" : " (template looks invalid)")")
         }
     }
 
@@ -846,7 +868,7 @@ public final class TileImageCache: @unchecked Sendable {
             } catch {
                 transportError = true
                 retryDelay = 5
-                Log.shared.throttled("tile-net", interval: 30, .warn, "OSM", "tile download failed: \(error)")
+                Log.shared.throttled("tile-net", interval: 30, .warn, "OSM", "tile download failed: \(TileLogText.describe(error))")
             }
         } else {
             retryDelay = 3_600
