@@ -58,6 +58,9 @@ public final class AppModel {
     @ObservationIgnored var inboxDirectory: URL? = AppModel.defaultInboxDirectory()
     @ObservationIgnored private var started = false
     @ObservationIgnored private var bannerTask: Task<Void, Never>?
+    /// Saves the session log every `sessionLogInterval` while a Connect / Mirror session runs.
+    @ObservationIgnored private var sessionLogTask: Task<Void, Never>?
+    @ObservationIgnored var sessionLogInterval: TimeInterval = 30
 
     public init(services: AppServices) {
         let core = AppCore(services: services)
@@ -81,6 +84,9 @@ public final class AppModel {
         started = true
         let system = core.services.system
         LogRedactor.install(on: .shared, includeSecrets: core.currentSettings.includeSecretsInLogs)
+        // The previous session's log (saved on background / while linked) and a pending crash report.
+        logs.hydrate()
+        startSessionLogSaver()
         Log.i("APP", "OpenCfMoto iOS \(system.appVersion) (\(system.buildNumber)) \u{00B7} \(system.deviceModel) \(system.systemVersion) \u{00B7} \(system.flavor.rawValue) build \u{00B7} lang=\(core.language.rawValue)")
         let core = self.core
         Task.detached(priority: .utility) {
@@ -103,6 +109,8 @@ public final class AppModel {
         ride.scenePhaseChanged(phase)
         connection.scenePhaseChanged(phase)
         if phase == .background {
+            // A jetsam kill or a force-quit from here on must not lose the ride log (review SPEC:CL-6).
+            logs.persistSession()
             // No share sheet is open once the app left the foreground (review SEC-6 / IOS-6).
             LogicData.purgeExports(in: core.services.files.exportsDirectory, olderThan: LogicData.backgroundExportAge,
                                    now: Date())
@@ -119,6 +127,20 @@ public final class AppModel {
         let message = openURLMessage(url)
         if let message { showBanner(message) }
         return message
+    }
+
+    /// Every `sessionLogInterval` while a session is active: the session log goes to disk (off the main
+    /// actor), so a crash mid-ride keeps it (app-features §6.4: "every ~30 s while linked").
+    private func startSessionLogSaver() {
+        sessionLogTask?.cancel()
+        let interval = sessionLogInterval
+        sessionLogTask = Task { [weak self] in
+            while !Task.isCancelled {
+                await sleepSeconds(interval)
+                guard !Task.isCancelled, let self else { return }
+                if self.connection.isSessionActive { self.logs.persistSession(synchronously: false) }
+            }
+        }
     }
 
     public func showBanner(_ text: String) {

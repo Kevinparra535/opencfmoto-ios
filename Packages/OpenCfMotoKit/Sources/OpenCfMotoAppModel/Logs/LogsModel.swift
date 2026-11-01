@@ -26,6 +26,12 @@
 //   (`ConnectionPhase` raw value or the Android NAME), `detail`, `profile`, `ssid`, `git`; every
 //   other key is appended as an extra `key=value` line after the Android block.
 // - `clear()` re-logs the session banner like Android (`[BUILD] …` lines).
+// - Session log persistence (§6.4 iOS, review SPEC:CL-6, see SessionLogFiles.swift): AppModel calls
+//   `hydrate()` once at launch (the previous session's log — and a pending crash report — is shown
+//   first in `entries` and shared first by `exportLogs()` / `problemReport(…)`) and `persistSession`
+//   when the app leaves the foreground and every ~30 s while a session runs. The app's MetricKit
+//   subscriber hands crashes to `recordCrashReport(_:)`; `crashReport` drives the "Recovered after a
+//   crash" dialog until `dismissCrashReport()`.
 
 import Foundation
 import Observation
@@ -37,6 +43,9 @@ public final class LogsModel {
     @ObservationIgnored let core: AppCore
 
     public private(set) var entries: [LogEntry] = []
+    /// The previous run's crash report (MetricKit, handed over by the app), kept until dismissed: the
+    /// UI shows "Recovered after a crash" (Share Logs / Keep logs / Dismiss) while it is non-nil.
+    public private(set) var crashReport: String?
     /// Filter shown in the UI (nil = all levels).
     public var minimumLevel: LogLevelTag? = nil {
         didSet { if minimumLevel != oldValue { refresh() } }
@@ -76,6 +85,15 @@ public final class LogsModel {
     }
 
     @ObservationIgnored let log: Log
+    /// `last_session.log` / `last_crash.txt` (Application Support/logs).
+    @ObservationIgnored let sessionFiles: SessionLogFiles
+    /// The previous session's log (consumed at launch), nil when none.
+    @ObservationIgnored private(set) var restoredSession: String?
+    /// Restored session + previous crash, under the Android banners: shown and shared before the live
+    /// lines until Clear.
+    @ObservationIgnored private(set) var restoredSection = ""
+    @ObservationIgnored private var restoredEntriesCache: (redacting: Bool, entries: [LogEntry])?
+    @ObservationIgnored private var hydrated = false
     @ObservationIgnored private let lifetime = LogicData.Lifetime()
     @ObservationIgnored private let refreshLatch = LogicData.Latch()
     @ObservationIgnored private var cache: [UInt64: LogEntry] = [:]
@@ -91,6 +109,7 @@ public final class LogsModel {
     public init(core: AppCore) {
         self.core = core
         self.log = .shared
+        sessionFiles = SessionLogFiles(directory: SessionLogFiles.directory(for: core.services.files))
         start()
     }
 
@@ -98,13 +117,35 @@ public final class LogsModel {
     init(core: AppCore, log: Log) {
         self.core = core
         self.log = log
+        sessionFiles = SessionLogFiles(directory: SessionLogFiles.directory(for: core.services.files))
         start()
+    }
+
+    /// The app's crash reporter (MetricKit `MXCrashDiagnostic` on the next launch) hands over a crash
+    /// of a previous run: saved as `last_crash.txt`, shown by the crash dialog and shared with the logs.
+    public func recordCrashReport(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        do {
+            try sessionFiles.writeCrash(trimmed)
+        } catch {
+            log.log(.warn, Self.tag, "crash report not saved: \(LogicData.detail(of: error))")
+        }
+        crashReport = SessionLogFiles.tail(trimmed, maxBytes: SessionLogFiles.maxCrashBytes)
+        setRestoredSection(SessionLogFiles.restoredSection(session: restoredSession, crash: crashReport))
+        log.log(.warn, "FATAL", "the previous run crashed \u{2014} report saved (Logs \u{25B8} Share Logs)")
+    }
+
+    /// "Dismiss" on the crash dialog: deletes `last_crash.txt` (the block stays in this run's log).
+    public func dismissCrashReport() {
+        sessionFiles.deleteCrash()
+        crashReport = nil
     }
 
     /// Redacted unless "Include secrets in shared logs" is on.
     public func exportLogs() throws -> ExportedFile {
         let include = syncRedactor()
-        var text = log.export(redacted: !include)
+        var text = combinedLog(redacted: !include)
         if !text.isEmpty { text += "\n" }
         let stamp = LogicData.posixStamp(core.services.now(), format: "yyyyMMdd-HHmmss", timeZone: timeZone)
         let fileName = "opencfmoto-log-\(stamp).txt"
@@ -121,6 +162,8 @@ public final class LogsModel {
 
     public func clear() {
         log.clear()
+        restoredSession = nil
+        setRestoredSection("", refresh: false)
         cache.removeAll()
         if !entries.isEmpty { entries = [] }
         logSessionBanner()
@@ -133,7 +176,7 @@ public final class LogsModel {
         var setup = diagnosticsBlock()
         if !include, let redactor = log.redactor { setup = redactor(setup) }
         let report = ProblemReport.build(problem: problem, model: bikeModel, year: bikeYear, diagnostics: setup,
-                                         log: log.export(redacted: !include), appVersion: system.appVersion)
+                                         log: combinedLog(redacted: !include), appVersion: system.appVersion)
         var text = report.fileText
         if !text.hasSuffix("\n") { text += "\n" }
         do {
@@ -147,9 +190,75 @@ public final class LogsModel {
         }
     }
 
+    // MARK: Session log persistence (model-to-model)
+
+    /// Once per process (AppModel.start): consumes the previous session's `last_session.log` and picks
+    /// up a pending `last_crash.txt`.
+    func hydrate() {
+        guard !hydrated else { return }
+        hydrated = true
+        restoredSession = sessionFiles.takeSession()
+        crashReport = sessionFiles.readCrash()
+        setRestoredSection(SessionLogFiles.restoredSection(session: restoredSession, crash: crashReport))
+        if let restored = restoredSession {
+            let count = restored.split(whereSeparator: \.isNewline).count
+            log.log(.info, Self.tag, "restored the previous session log (\(count) lines, shown and shared first)")
+        }
+        if crashReport != nil {
+            log.log(.warn, Self.tag, "the previous run crashed \u{2014} open Logs and tap Share Logs")
+        }
+    }
+
+    /// Writes the redacted tail of the ring buffer to `last_session.log` (app → background, and every
+    /// ~30 s while a session runs). `synchronously: false` formats and writes off the main actor.
+    func persistSession(synchronously: Bool = true) {
+        let lines = log.lines()
+        let files = sessionFiles
+        let zone = timeZone
+        let work: @Sendable () -> Void = {
+            do {
+                try files.writeSession(SessionLogFiles.snapshot(lines, timeZone: zone))
+            } catch {
+                Log.w("LOGS", "session log not saved: \(LogicData.detail(of: error))")
+            }
+        }
+        if synchronously { work() } else { Task.detached(priority: .utility) { work() } }
+    }
+
     // MARK: Private
 
     private static let tag = "LOGS"
+
+    /// Restored section (if any) followed by the live ring, for Share Logs and the problem report.
+    private func combinedLog(redacted: Bool) -> String {
+        let live = log.export(redacted: redacted)
+        guard !restoredSection.isEmpty else { return live }
+        // The restored session is redacted already; the crash block is redacted here like any line.
+        let restored = redacted
+            ? restoredSection.split(separator: "\n", omittingEmptySubsequences: false)
+                .map { LogRedactor.redactAll(String($0)) }.joined(separator: "\n")
+            : restoredSection
+        return live.isEmpty ? restored : restored + "\n" + live
+    }
+
+    private func setRestoredSection(_ text: String, refresh doRefresh: Bool = true) {
+        restoredSection = text
+        restoredEntriesCache = nil
+        if doRefresh { refresh() }
+    }
+
+    /// The restored section as log entries (negative ids, oldest first, newest `maxEntries`).
+    private func restoredEntries(redacting: Bool) -> [LogEntry] {
+        guard !restoredSection.isEmpty else { return [] }
+        if let cached = restoredEntriesCache, cached.redacting == redacting { return cached.entries }
+        let lines = restoredSection.split(separator: "\n").suffix(Self.maxEntries)
+        let entries = lines.enumerated().map { index, raw -> LogEntry in
+            let text = redacting ? LogRedactor.redactAll(String(raw)) : String(raw)
+            return LogEntry(id: -(lines.count - index), text: text, level: Self.levelTag(ofLine: text) ?? .info)
+        }
+        restoredEntriesCache = (redacting, entries)
+        return entries
+    }
 
     private var strings: LogicData.Strings { LogicData.Strings(core.language) }
 
@@ -240,6 +349,8 @@ public final class LogsModel {
             nextCache[line.id] = entry
         }
         cache = nextCache
+        let restored = restoredEntries(redacting: redactor != nil).filter { Self.rank($0.level) >= minimumRank }
+        if !restored.isEmpty { fresh = restored + fresh }
         if fresh != entries { entries = fresh }
     }
 
