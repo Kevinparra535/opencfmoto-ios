@@ -543,12 +543,18 @@ public final class MirrorRelayServer: VideoFrameSource, @unchecked Sendable {
         let cfg = MirrorRelayConfig(canvas: canvas, parameters: parameters, fit: _fit, margins: _margins)
         _config = cfg
         lock.unlock()
-        if old.map({ $0.width != canvas.width || $0.height != canvas.height }) ?? true {
+        let sizeChanged = old.map { $0.width != canvas.width || $0.height != canvas.height } ?? true
+        if sizeChanged {
             // An IDR of the previous (or the extension's default) canvas must never answer a pull
             // for this one (RLY 17 = encoded size, MP-3).
             frameQueue.invalidateKeyframe()
         }
         send(.config(cfg))
+        if sizeChanged, old != nil {
+            // Frames of the old size may still be queued or in flight: gate + flush, and the
+            // extension (which just got the CONFIG) re-encodes an IDR at the new size.
+            frameQueue.resynchronize()
+        }
         buildPlaceholderIfNeeded(canvas: canvas, parameters: parameters)
     }
 
