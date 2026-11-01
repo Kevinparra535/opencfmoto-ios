@@ -213,7 +213,7 @@ jobs:
             exit 1
           fi
           python3 tools/testflight/lint_bundle.py --archive "$archive" --unsigned --expect-build 1 --min-sdk-major 26
-      - name: TestFlight dry run — keychain plumbing (self-signed identity)
+      - name: TestFlight dry run — keychain and profile plumbing (self-signed identity)
         run: |
           set -euo pipefail
           d="$RUNNER_TEMP/tf-keychain-dry-run"
@@ -239,12 +239,17 @@ jobs:
             exit 1
           fi
           /usr/bin/openssl x509 -in "$d/signing/cert.pem" -outform DER -out "$d/signing/cert.cer"
+          mkdir -p "$d/signing/profiles"
+          for u in 00000000-0000-4000-8000-0000000000A1 00000000-0000-4000-8000-0000000000B2; do
+            echo "dry run" > "$d/signing/profiles/$u.mobileprovision"
+          done
           export TF_WORK="$d" TF_SIGNING_DIR="$d/signing" TF_ALLOW_UNTRUSTED_IDENTITY=1
-          bash tools/testflight/build_and_sign.sh setup-keychain
+          # macOS's own /bin/bash (3.2) here; the settings step above used the bash on PATH.
+          /bin/bash tools/testflight/build_and_sign.sh setup-keychain
           kc="$d/testflight.keychain-db"
           fail() {
             echo "::error title=TestFlight dry run (keychain)::$1"
-            bash tools/testflight/build_and_sign.sh teardown > /dev/null 2>&1 || true
+            /bin/bash tools/testflight/build_and_sign.sh teardown > /dev/null 2>&1 || true
             exit 1
           }
           # (Outputs go through variables: `cmd | grep -q` can fail on SIGPIPE under pipefail.)
@@ -253,6 +258,10 @@ jobs:
           identities=$(security find-identity -p codesigning "$kc")
           sha=$(awk '/"Apple Distribution: CI Dry Run \(ABCDE12345\)"/ { print $2; exit }' <<< "$identities")
           if [ -z "$sha" ]; then fail "find-identity -p codesigning does not list the identity: $identities"; fi
+          /bin/bash tools/testflight/build_and_sign.sh install-profiles
+          for p in "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
+            [ -f "$p/00000000-0000-4000-8000-0000000000B2.mobileprovision" ] || fail "install-profiles did not fill $p"
+          done
           cp /usr/bin/true "$d/scratch"
           # set-key-partition-list must spare codesign the key-access dialog: a hang fails after 60 s.
           status=0
@@ -262,12 +271,15 @@ jobs:
           codesign -dvv "$d/scratch" > "$d/verify.log" 2>&1 || true
           grep -q -F "Authority=Apple Distribution: CI Dry Run (ABCDE12345)" "$d/verify.log" \
             || fail "the scratch binary is not signed by the dry-run identity: $(tr '\n' ' ' < "$d/verify.log")"
-          bash tools/testflight/build_and_sign.sh teardown
+          /bin/bash tools/testflight/build_and_sign.sh teardown
           if [ -e "$kc" ]; then fail "teardown left the keychain behind"; fi
           search=$(security list-keychains -d user)
           if grep -q -F "$kc" <<< "$search"; then fail "teardown left the keychain in the search list: $search"; fi
           if [ -e "$d/signing/key.pem" ]; then fail "teardown left the private key behind"; fi
-          echo "::notice title=TestFlight dry run (keychain)::identity $sha imported; codesign signed without a prompt; teardown removed keychain, search-list entry and key"
+          left=$(find "$HOME/Library/MobileDevice" "$HOME/Library/Developer/Xcode/UserData" -name '00000000-0000-4000-8000-*' 2> /dev/null || true)
+          if [ -n "$left" ]; then fail "teardown left installed profiles behind: $left"; fi
+          shells="/bin/bash $(/bin/bash -c 'echo $BASH_VERSION'), PATH bash $(bash -c 'echo $BASH_VERSION')"
+          echo "::notice title=TestFlight dry run (keychain)::identity $sha imported; codesign signed without a prompt; profiles installed in both Xcode folders; teardown removed keychain, search-list entry, key and profiles ($shells)"
 
   # The REAL app in the iOS Simulator: screenshots of every screen (demo services + demo content)
   # and end-to-end runs against tools/fakedash/fakedash.py on 127.0.0.1 (real sockets, link,

@@ -509,10 +509,12 @@ cmd_teardown() {
     fi
     if [ -f "$WORK/keychains.orig" ]; then
       local -a list=()
+      local count=0
       while IFS= read -r line; do
-        if [ -n "$line" ]; then list+=("$line"); fi
+        if [ -n "$line" ]; then list+=("$line"); count=$((count + 1)); fi
       done < "$WORK/keychains.orig"
-      if [ ${#list[@]} -gt 0 ]; then security list-keychains -d user -s "${list[@]}"; fi
+      # Never set an empty search list (a Mac would lose its login keychain from it).
+      if [ "$count" -gt 0 ]; then security list-keychains -d user -s "${list[@]}"; fi
       rm -f "$WORK/keychains.orig"
     fi
   fi
