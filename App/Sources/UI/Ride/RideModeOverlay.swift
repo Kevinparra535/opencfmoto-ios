@@ -3,14 +3,57 @@
 // the app stays frontmost with the idle timer disabled (RideModel), the screen is black (OLED
 // pixels off) and swallows touches, and the dash keeps streaming. Minimal, static large text:
 // connection phase, speed, the next maneuver. No animations. Long-press 1.5 s to exit.
+// The screen brightness is lowered while the overlay is up ("lowered UIScreen.brightness, restored
+// by the system at lock" — review finding UI-6): on LCD iPhones black is a lit backlight, and on
+// OLED the large text would stay at full brightness for the whole ride, adding heat to the encoder,
+// Wi-Fi and GPS load. Restored on exit and whenever the app leaves the foreground (an app's
+// brightness would otherwise carry into other apps), re-applied when the rider comes back.
 // The dash's "type on phone" request is NOT taken under this cover (the search field is hidden by
 // it — review finding UI-2): it stays pending with a hint here and the visible screen takes it
 // once the rider long-presses out; never answered within 2 minutes, it is dropped. Ride Mode does
 // not leave by itself: in a pocket a lit screen with a keyboard would take stray touches.
 
 import SwiftUI
+import UIKit
 import OpenCfMotoAppModel
 import OpenCfMotoCore
+
+/// Ride Mode's dimmed screen: saves the brightness, lowers it, and puts it back.
+@MainActor
+final class RideModeBrightness {
+    /// Brightness while Ride Mode is on screen (a darker screen is never brightened).
+    static let level: CGFloat = 0.15
+
+    private weak var screen: UIScreen?
+    private var saved: CGFloat?
+    private var applied: CGFloat?
+
+    /// Saves the current brightness and dims; a no-op while already dimmed.
+    func dim() {
+        guard applied == nil, let screen = Self.activeScreen() else { return }
+        let current = screen.brightness
+        let target = min(current, Self.level)
+        self.screen = screen
+        saved = current
+        applied = target
+        if target < current { screen.brightness = target }
+    }
+
+    /// Puts the saved brightness back, unless the rider changed it meanwhile (Control Center).
+    func restore() {
+        let screen = self.screen, saved = self.saved, applied = self.applied
+        self.screen = nil
+        self.saved = nil
+        self.applied = nil
+        guard let screen, let saved, let applied else { return }
+        if abs(screen.brightness - applied) < 0.02 { screen.brightness = saved }
+    }
+
+    private static func activeScreen() -> UIScreen? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        return (scenes.first { $0.activationState == .foregroundActive } ?? scenes.first)?.screen
+    }
+}
 
 /// Enter / leave Ride Mode without the cover's slide animation.
 enum MainRideMode {
@@ -31,7 +74,9 @@ enum MainRideMode {
 
 struct RideModeOverlay: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var scenePhase
     @ScaledMetric(relativeTo: .largeTitle) private var speedSize: CGFloat = 92
+    @State private var brightness = RideModeBrightness()
 
     var body: some View {
         let phase = model.connection.phase
@@ -122,6 +167,21 @@ struct RideModeOverlay: View {
             guard !Task.isCancelled, model.navigation.typeOnPhoneRequested, model.ride.isRideModeActive else { return }
             Log.i("UI", "type-on-phone request expired under Ride Mode")
             model.navigation.acknowledgeTypeOnPhone()
+        }
+        .onAppear {
+            if scenePhase == .active { brightness.dim() }
+        }
+        .onDisappear {
+            brightness.restore()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Back from the lock screen (the system restored the brightness) → dim again; leaving the
+            // foreground (call, Control Center, app switcher, lock) → the rider's brightness.
+            if phase == .active {
+                brightness.dim()
+            } else {
+                brightness.restore()
+            }
         }
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
