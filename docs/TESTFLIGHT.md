@@ -109,8 +109,9 @@ en TestFlight cuando Apple termine.
 ## 7. Instálala en el iPhone
 
 1. Instala **TestFlight** desde la App Store.
-2. Abre en el iPhone el correo de invitación de TestFlight y pulsa **Ver en TestFlight**. También
-   puedes abrir TestFlight con el mismo Apple ID de tu cuenta de desarrollador.
+2. Abre TestFlight con el mismo Apple ID de tu cuenta de desarrollador. Si te llegó el correo de
+   invitación de TestFlight (Apple suele enviarlo), también puedes abrirlo en el iPhone y pulsar
+   **Ver en TestFlight**.
 3. **OpenCfMoto** ▸ **Instalar**.
 
 Si no aparece, comprueba que TestFlight usa ese mismo Apple ID y mira si la ejecución dejó el aviso
@@ -122,7 +123,8 @@ parte de Xcode: la app ya está instalada.
 ## Actualizar
 
 Cuando quieras una versión nueva (por ejemplo, después de un arreglo), lanza una ejecución nueva:
-**Actions** ▸ **TestFlight** ▸ **Run workflow**. El número de build sube solo y TestFlight te avisa.
+**Actions** ▸ **TestFlight** ▸ **Run workflow**. El número de build sube solo y TestFlight suele
+avisarte.
 Cada build caduca a los 90 días; para seguir usando la app, lanza otra ejecución.
 
 ## Si algo falla
@@ -136,7 +138,7 @@ hace falta para pedir ayuda (por ejemplo, en un *issue* del repositorio). Los t�
 | Faltan secretos / Missing secrets<br>ASC_PRIVATE_KEY no válida / invalid<br>Clave de API rechazada / API key rejected (401) | Revisa los tres secretos del paso 2: el `.p8` completo, sin cortar, y el *Key ID* y el *Issuer ID* de una clave **de equipo** |
 | Permiso denegado / Not allowed (403) | La clave no es de **Administrador**: crea otra en el paso 1 y actualiza `ASC_KEY_ID` y `ASC_PRIVATE_KEY` (si ya lo es, mira la fila siguiente) |
 | Acuerdos pendientes / Agreements to accept (403) | Como titular, entra en [developer.apple.com/account](https://developer.apple.com/account) y acepta el acuerdo que aparece arriba; después, en App Store Connect ▸ **Negocios** (*Business*), acepta lo que esté pendiente |
-| Bundle ID no disponible / Bundle ID not available<br>BUNDLE_ID_PREFIX | Crea o corrige la variable `BUNDLE_ID_PREFIX` (paso 2) con un prefijo tuyo, como `com.tunombre` |
+| Bundle ID no disponible / Bundle ID not available<br>Prefijo no válido / Invalid prefix | Crea o corrige la variable `BUNDLE_ID_PREFIX` (paso 2) con un prefijo tuyo, como `com.tunombre`. Si «Bundle ID no disponible» sale en la primera ejecución, prueba antes con una ejecución nueva: puede ser pasajero |
 | Falta la app en App Store Connect / App record missing | Pasos 4 y 5 |
 | Falta el App Group en los perfiles / App Group missing from the profiles<br>TestFlight: App Group | Paso 4, en los **dos** identificadores |
 | Límite de certificados / Certificate limit | developer.apple.com ▸ **Certificates**: revoca los *Apple Distribution* que no uses |
@@ -144,7 +146,7 @@ hace falta para pedir ayuda (por ejemplo, en un *issue* del repositorio). Los t�
 | La build ya existe / Build already exists<br>Fallo temporal de Apple / Temporary Apple error (404)<br>Error de red / Network error<br>App Store Connect no responde / not responding (5xx)<br>Límite de peticiones / Rate limited (429) | Nada que corregir: espera unos minutos (una hora si es el 429) y lanza una ejecución nueva |
 | La build sigue en proceso / Build still processing (aviso, en una ejecución en verde) | Nada: Apple tarda más de lo normal; la build aparecerá en TestFlight cuando termine |
 | TestFlight: añade el tester a mano / add the tester by hand (aviso) | Añádete tú, como dice el aviso: App Store Connect ▸ **Apps** ▸ OpenCfMoto ▸ **TestFlight** ▸ **Pruebas internas** ▸ el grupo ▸ **Testers** **+** |
-| Limpieza incompleta / Cleanup incomplete<br>Revoca a mano / Revoke by hand<br>Certificado sin confirmar / Certificate not confirmed | Revoca a mano lo que indique el aviso: en developer.apple.com, el *Apple Distribution* creado hoy (**Certificates**) y los perfiles «OpenCfMoto CI …» (**Profiles**) |
+| Limpieza incompleta / Cleanup incomplete<br>Revoca a mano / Revoke by hand<br>Certificado sin confirmar / Certificate not confirmed | Lo que diga el aviso. A veces no hace falta nada (la próxima ejecución lo intenta otra vez). Si pide revocar a mano, en developer.apple.com: solo el certificado *Apple Distribution* que describe (**Certificates**: el creado hoy, o el de la fecha de caducidad que da) y los perfiles «OpenCfMoto CI …» (**Profiles**). El *id* entre paréntesis es solo una referencia: esas listas no lo muestran |
 | Cualquier otro | Haz lo que diga el aviso y lanza una ejecución nueva; si se repite, pide ayuda con ese texto |
 
 **Para reintentar**, cuando hayas hecho lo que dice el aviso, lanza siempre una ejecución **nueva**:
@@ -162,7 +164,10 @@ Lo que el workflow resuelve solo:
 - Si una ejecución se interrumpe (por ejemplo, si la cancelas) y deja restos (perfiles
   «OpenCfMoto CI …» y su certificado temporal), los borra el último trabajo de esa ejecución o, si
   no, la siguiente al prepararse, con la nota «Restos borrados / Leftovers removed». No tienes que
-  hacer nada.
+  hacer nada. Solo se borran perfiles con el nombre exacto que les da el workflow: los de este
+  repositorio siempre; los de otro repositorio (un *fork*) o de un Mac con la misma cuenta, solo
+  si tienen más de 12 horas, porque esa otra ejecución podría seguir en marcha. Tus propios
+  perfiles no se tocan, ni ningún certificado que use alguno de ellos.
 - Apple puede enviarte un correo por cada certificado temporal revocado (uno por ejecución, alguno
   más si se borraron restos). Es normal.
 
@@ -206,7 +211,8 @@ GitHub builds the app on a cloud Mac, signs it with your Apple Developer account
    On a green run, the "TestFlight — resultado / result" summary says whether the build is ready. If
    Apple takes longer than the 90-minute wait, the run still ends green, with the warning "La build
    sigue en proceso / Build still processing", and the build shows up in TestFlight once Apple is done.
-7. On the iPhone: install TestFlight, open the invitation, install OpenCfMoto.
+7. On the iPhone: install TestFlight, open it with your developer account's Apple ID (or the
+   invitation e-mail, which Apple usually sends) and install OpenCfMoto.
 
 **If a run fails**, its Annotations box and summary say why and what to do, in Spanish and English; the
 table under [Si algo falla](#si-algo-falla) lists the usual titles.
@@ -219,7 +225,10 @@ table under [Si algo falla](#si-algo-falla) lists the usual titles.
   for the build, then revokes the temporary certificate.
 - Leftovers of an interrupted run ("OpenCfMoto CI …" profiles and their temporary certificate) are
   removed by that run's last job or by the next run's preparation, with the notice "Restos borrados /
-  Leftovers removed": nothing to do.
+  Leftovers removed": nothing to do. Only profiles with the exact names the workflow gives are
+  removed: this repository's always; another repository's (a fork) or a Mac's with the same account
+  only when older than 12 hours, as that run may still be going. Your own profiles are never touched,
+  nor any certificate one of them uses.
 - Apple may e-mail you about each revoked temporary certificate; that is expected.
 
 Builds expire after 90 days: start a new run to keep using the app.
