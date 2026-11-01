@@ -96,6 +96,48 @@ jobs:
             swift-test.log
           if-no-files-found: ignore
 
+  # Riders install with the newest Xcode (it is the one that supports the newest iOS on their iPhone),
+  # not the runner's default: build the iPhone slice with the newest stable Xcode on the image too.
+  iphone-newest-xcode:
+    name: iPhone build (newest Xcode on the runner)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select the newest stable Xcode
+        run: |
+          installed=$(ls -d /Applications/Xcode*.app | xargs -n1 basename | tr '\n' ' ')
+          newest=$(ls -d /Applications/Xcode_*.app | grep -v -i -E 'beta|_rc|release_candidate' | sort -V | tail -1)
+          if [ -n "$newest" ]; then sudo xcode-select -s "$newest/Contents/Developer"; fi
+          version=$(xcodebuild -version | tr '\n' ' ')
+          echo "::notice title=Newest Xcode::$version selected (installed: $installed)"
+          xcodebuild -showsdks | grep -i iphoneos || true
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate
+      - name: Build iOS app (iPhone arm64, unsigned) — Debug and Release
+        run: |
+          set -o pipefail
+          for config in Debug Release; do
+            xcodebuild \
+              -project OpenCfMoto.xcodeproj \
+              -scheme OpenCfMoto \
+              -configuration "$config" \
+              -destination 'generic/platform=iOS' \
+              CODE_SIGNING_ALLOWED=NO \
+              build 2>&1 | tee "build-device-$config.log" | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
+            grep -q "BUILD SUCCEEDED" "build-device-$config.log"
+          done
+      - name: Annotate iPhone build errors
+        if: failure()
+        run: |
+          for config in Debug Release; do
+            if [ -f "build-device-$config.log" ]; then
+              python3 tools/ci/annotate.py "build-device-$config.log" "iPhone build, newest Xcode ($config)"
+            fi
+          done
+          grep -h -E "xcodebuild: error|is not installed|Unable to find a destination" build-device-*.log 2>/dev/null | head -5 | while read -r line; do echo "::error title=xcodebuild::$line"; done
+
   # The REAL app in the iOS Simulator: screenshots of every screen (demo services + demo content)
   # and end-to-end runs against tools/fakedash/fakedash.py on 127.0.0.1 (real sockets, link,
   # renderer, VideoToolbox encoder). Evidence is force-pushed to the orphan branch `ci-artifacts`
