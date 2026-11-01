@@ -20,8 +20,9 @@ final class IOSSystem: SystemControlling {
 
     private let store: KeyValueStore
     private var observers: [NSObjectProtocol] = []
-    /// Set once the onboarding asked for Local Network access: probing before that would pop the
-    /// system alert out of context (`checkLocalNetworkAccess` must never show it by itself).
+    /// Set once an explicit request got a decisive answer from Local Network privacy (the alert was
+    /// shown and answered, or answered earlier): probing before that would pop the system alert out
+    /// of context (`checkLocalNetworkAccess` must never show it by itself).
     private static let localNetworkRequestedKey = "ios.local_network_requested"
 
     init(flavor: BuildFlavor, store: KeyValueStore) {
@@ -74,8 +75,15 @@ final class IOSSystem: SystemControlling {
     }
 
     func requestLocalNetworkAccess() async -> LocalNetworkAccessState {
-        store.set(true, forKey: Self.localNetworkRequestedKey)
-        return Self.map(await LocalNetworkPermission.request())
+        let access = await LocalNetworkPermission.request()
+        // Off Wi-Fi the probe never reaches the local network (`.unavailable`, no alert shown):
+        // remembering the request then would let every later quiet check send the probe datagram
+        // and pop the alert at a random moment (review finding IOS-5). Leave the flag unset until an
+        // explicit request (onboarding, on Wi-Fi) or the first Connect probe triggers the alert.
+        if access.isDecisive {
+            store.set(true, forKey: Self.localNetworkRequestedKey)
+        }
+        return Self.map(access)
     }
 
     private static func map(_ access: LocalNetworkAccess) -> LocalNetworkAccessState {
