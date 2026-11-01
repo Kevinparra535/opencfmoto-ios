@@ -424,7 +424,7 @@ final class ConnectionModelTests: XCTestCase {
         XCTAssertTrue(mirror.isRunning)
         XCTAssertEqual(h.connection.mode, .mirror)
         XCTAssertEqual(h.connection.detail, bike.name)
-        XCTAssertEqual(mirror.fits.first?.0, h.core.currentSettings.screenFit)
+        XCTAssertEqual(mirror.fits.first?.0, .fit) // mirror default when no fit was chosen (media-video §15.7)
         mirror.setExtensionConnected(true)
         let connected = await eventually { h.connection.isMirrorExtensionConnected }
         XCTAssertTrue(connected)

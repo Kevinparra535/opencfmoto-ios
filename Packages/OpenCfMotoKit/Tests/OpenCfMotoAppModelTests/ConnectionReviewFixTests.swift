@@ -553,6 +553,40 @@ final class ConnectionReviewFixTests: XCTestCase {
         XCTAssertEqual(h.connection.mode, .dashUI)
         h.connection.stop()
     }
+
+    // MARK: SPEC:CL-7 / MED:MP-4 — mirror fit default and live margins
+
+    @MainActor
+    func testMirrorUsesFitUntilTheRiderChoosesAndAppliesMarginsAndFitLive() async {
+        let mirror = TestMirrorHost()
+        let h = AppTestHarness(mirror: mirror)
+        h.addBike()
+        h.connection.startMirror()
+        XCTAssertEqual(mirror.fits.count, 1)
+        XCTAssertEqual(mirror.fits.last?.0, .fit)
+
+        // Margins edited on the margins screen reach the running relay right away.
+        h.model.settings.setScreenMargins(ScreenMargins(top: 40, bottom: 0, left: 10, right: 0))
+        XCTAssertEqual(mirror.fits.count, 2)
+        XCTAssertEqual(mirror.fits.last?.1, ScreenMargins(customised: true, top: 40, bottom: 0, left: 10, right: 0))
+        // So does an explicit fit.
+        h.model.settings.setScreenFit(.fill)
+        XCTAssertEqual(mirror.fits.count, 3)
+        XCTAssertEqual(mirror.fits.last?.0, .fill)
+        // Unrelated settings do not push the same configuration again.
+        h.model.settings.setPowerMode(.saver)
+        XCTAssertEqual(mirror.fits.count, 3)
+        h.model.settings.resetScreenMargins()
+        XCTAssertEqual(mirror.fits.count, 4)
+        h.connection.stop()
+
+        // Outside a mirror session nothing is pushed.
+        h.connection.connect()
+        let pushed = mirror.fits.count
+        h.model.settings.setScreenMargins(ScreenMargins(top: 5, bottom: 5, left: 5, right: 5))
+        XCTAssertEqual(mirror.fits.count, pushed)
+        h.connection.stop()
+    }
 }
 
 /// Free-flavor Wi-Fi whose network switches to the bike (SSID unknown, dash subnet) at the second

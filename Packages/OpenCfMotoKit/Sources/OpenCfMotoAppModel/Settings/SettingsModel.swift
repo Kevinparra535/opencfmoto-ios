@@ -63,8 +63,8 @@ public final class SettingsModel {
     public init(core: AppCore, garage: GarageModel) {
         self.core = core
         self.garage = garage
-        current = core.currentSettings
         bikeId = garage.selected?.id
+        current = Self.effectiveSettings(core.settings, bikeId: garage.selected?.id)
         presence = core.settings.presence(forBike: bikeId)
         savedPlaces = core.settings.savedPlaces
         identifyAsAndroidPhone = core.services.keyValueStore.bool(forKey: Self.identifyAsAndroidKey) ?? false
@@ -82,7 +82,7 @@ public final class SettingsModel {
 
     public func setScreenFit(_ value: ScreenFit) {
         core.settings.setScreenFit(value, forBike: bikeId)
-        logChange("screen fit \(value.rawValue) (applies next connect)")
+        logChange("screen fit \(value.rawValue) (mirror: applies right away; otherwise next connect)")
         refreshCurrent()
     }
 
@@ -372,6 +372,20 @@ public final class SettingsModel {
 
     // MARK: Model-to-model (internal)
 
+    /// The Screen fit mirror mode uses: the stored choice, or FIT while the rider never chose one
+    /// (media-video.md §15.7 — iOS cannot rotate other apps; FILL would show only a slice of a portrait
+    /// phone). The stored / exported default stays FILL (Android settings packs). Review MED:MP-4.
+    nonisolated static func mirrorScreenFit(_ store: SettingsStore, bikeId: String?) -> ScreenFit {
+        store.hasStoredScreenFit(forBike: bikeId) ? store.settings(forBike: bikeId).screenFit : .fit
+    }
+
+    /// The store's settings with the iOS effective Screen fit, so the picker shows what mirroring uses.
+    nonisolated static func effectiveSettings(_ store: SettingsStore, bikeId: String?) -> BikeSettings {
+        var s = store.settings(forBike: bikeId)
+        s.screenFit = mirrorScreenFit(store, bikeId: bikeId)
+        return s
+    }
+
     /// Called after every change of `current` (main actor).
     func observe(_ handler: @escaping @MainActor (BikeSettings) -> Void) {
         handlers.append(handler)
@@ -396,7 +410,7 @@ public final class SettingsModel {
         let scopeChanged = id != bikeId
         bikeId = id
         refreshSecondary()
-        let fresh = core.settings.settings(forBike: id)
+        let fresh = Self.effectiveSettings(core.settings, bikeId: id)
         let valuesChanged = fresh != current
         if valuesChanged { current = fresh }
         if valuesChanged || scopeChanged { notifyHandlers() }
@@ -404,7 +418,7 @@ public final class SettingsModel {
 
     /// Re-reads `current`; notifies the handlers when it changed.
     private func refreshCurrent() {
-        let fresh = core.settings.settings(forBike: bikeId)
+        let fresh = Self.effectiveSettings(core.settings, bikeId: bikeId)
         guard fresh != current else { return }
         current = fresh
         notifyHandlers()

@@ -263,4 +263,24 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(s.settings(forBike: bike).powerMode, .auto)
         XCTAssertEqual(s.settings(forBike: other).powerMode, .auto)
     }
+
+    func testHasStoredScreenFit() {
+        let s = SettingsStore(store: InMemoryKeyValueStore())
+        XCTAssertFalse(s.hasStoredScreenFit(forBike: nil))
+        XCTAssertFalse(s.hasStoredScreenFit(forBike: "b1"))
+        XCTAssertEqual(s.settings(forBike: "b1").screenFit, .fill) // read default unchanged
+        s.setScreenFit(.fill, forBike: "b1")
+        XCTAssertTrue(s.hasStoredScreenFit(forBike: "b1"))
+        XCTAssertFalse(s.hasStoredScreenFit(forBike: "b2"))
+        s.setScreenFit(.stretch, forBike: nil) // global key: every bike inherits it
+        XCTAssertTrue(s.hasStoredScreenFit(forBike: "b2"))
+        s.store.set("bogus", forKey: "screen_fit#b3")
+        // An unreadable scoped value shadows the global one on read too (the read falls back to the
+        // FILL default), so nothing valid is stored for that bike.
+        XCTAssertFalse(s.hasStoredScreenFit(forBike: "b3"))
+        XCTAssertEqual(s.settings(forBike: "b3").screenFit, .fill)
+        let fresh = SettingsStore(store: InMemoryKeyValueStore())
+        fresh.store.set("bogus", forKey: "screen_fit")
+        XCTAssertFalse(fresh.hasStoredScreenFit(forBike: nil))
+    }
 }

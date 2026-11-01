@@ -160,6 +160,8 @@ public final class ConnectionModel {
     @ObservationIgnored private var sessionEverStreamed = false
     /// Mirror was tapped while the location permission was undetermined: start once it is answered.
     @ObservationIgnored private(set) var pendingMirrorAfterPermission = false
+    /// Fit + margins last pushed to the mirror relay this session (no duplicate CONFIG pushes).
+    @ObservationIgnored private var appliedMirrorFit: (fit: ScreenFit, margins: ScreenMargins)?
     /// `issue = .localNetworkDenied` was raised in this episode (since the session began or last
     /// streamed). The link re-arms every 20 s while auto-recovery is on and fails the same way each
     /// time: raising the issue again would bring the dialog back after every Dismiss (CON:CL-1).
@@ -181,6 +183,9 @@ public final class ConnectionModel {
         core.services.mirror.onExtensionConnectionChange = { [weak self] connected in
             Task { @MainActor [weak self] in self?.mirrorExtensionChanged(connected) }
         }
+        // Screen margins (and fit) edited while mirroring apply to the running relay right away, as the
+        // margins screen promises (app-features §2.6; review SPEC:CL-7, MED:MP-4).
+        settings.observe { [weak self] _ in self?.mirrorSettingsChanged() }
     }
 
     /// Home "Connect" (own dash UI). While busy/live the same button means `stop()`.
@@ -397,10 +402,8 @@ public final class ConnectionModel {
                 setPhase(.error, detail: message)
                 return
             }
-            let st = core.currentSettings
-            let early = BikeProfiles.selectByQR(qr, override: st.profileOverride,
-                                                learnedCanvas: core.dashMemory.learnedCanvas(forSSID: qr.ssid))
-            applyMirrorFit(profile: early)
+            appliedMirrorFit = nil
+            applyMirrorFit(profile: earlyProfile(qr))
         }
         generation &+= 1
         let gen = generation
@@ -976,10 +979,25 @@ public final class ConnectionModel {
 
     // MARK: - Mirror
 
+    /// The profile before the dash identified itself (QR model id, override, learned canvas).
+    private func earlyProfile(_ qr: BikeQR) -> BikeProfile {
+        BikeProfiles.selectByQR(qr, override: core.currentSettings.profileOverride,
+                                learnedCanvas: core.dashMemory.learnedCanvas(forSSID: qr.ssid))
+    }
+
     private func applyMirrorFit(profile: BikeProfile) {
         let st = core.currentSettings
+        let fit = SettingsModel.mirrorScreenFit(core.settings, bikeId: core.garage.selected?.id)
         let margins = CanvasFit.effectiveMargins(st.screenMargins, profileDefault: profile.defaultMargins)
-        core.services.mirror.setFit(st.screenFit, margins: margins)
+        if let applied = appliedMirrorFit, applied.fit == fit, applied.margins == margins { return }
+        appliedMirrorFit = (fit, margins)
+        core.services.mirror.setFit(fit, margins: margins)
+    }
+
+    /// A settings change while mirroring: push the new fit / margins to the running relay.
+    private func mirrorSettingsChanged() {
+        guard let s = session, s.mode == .mirror else { return }
+        applyMirrorFit(profile: link?.currentProfile ?? earlyProfile(s.qr))
     }
 
     private func mirrorExtensionChanged(_ connected: Bool) {
