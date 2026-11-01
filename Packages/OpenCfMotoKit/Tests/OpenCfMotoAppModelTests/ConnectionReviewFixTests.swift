@@ -275,6 +275,9 @@ final class ConnectionReviewFixTests: XCTestCase {
         h.wifi.setNetwork(.unavailable)
         first.forEach { $0() }
         _ = await eventually { h.connection.phase == .waitingForBike }
+        // The unconfirmed attempt gets a fresh grace: long enough here for the handshake on any runner
+        // (with the harness's 0.3 s the attempt would correctly be parked again mid-handshake).
+        h.connection.tuning.wifiParkGrace = 10
         let accepted = dash.acceptedCount.current
         h.wifi.setNetwork(AppTestHarness.bikeNetwork(ssid: nil))
         _ = await eventually { dash.acceptedCount.current > accepted }
@@ -437,6 +440,43 @@ final class ConnectionReviewFixTests: XCTestCase {
         XCTAssertTrue(armed)
         XCTAssertTrue(h.connection.isSessionActive)
         h.connection.stop()
+    }
+
+    // MARK: IOS:IOS-3 — a saved phone-hotspot bike is refused at Connect with a clear message
+
+    nonisolated static let zontesHotspotQR = "http://www.carbit.com.cn/down6/645/644/_ylqxos?modelid=21322&sn=t6J4&action=128&bm=DD%3A0D%3A30%3A24%3A87%3A6D"
+
+    @MainActor
+    func testAPhoneHotspotBikeIsRefusedAtConnectInsteadOfAskingForAManualJoin() async {
+        for flavor in BuildFlavor.allCases {
+            let h = AppTestHarness(flavor: flavor)
+            h.addBike(raw: Self.zontesHotspotQR) // saved before pairing refused such QRs
+            let message = SessionText.phoneHotspotUnsupported(h.language)
+            h.connection.connect()
+            XCTAssertEqual(h.connection.issue, .other(message), "\(flavor)")
+            XCTAssertEqual(h.connection.phase, .error)
+            XCTAssertEqual(h.connection.detail, message)
+            XCTAssertNil(h.connection.session)
+            XCTAssertNil(h.connection.manualJoin)
+            await settle(0.1)
+            XCTAssertTrue(h.wifi.joinedSSIDs.isEmpty, "\(flavor)") // never a join of PHONE-HOTSPOT-…
+            h.connection.dismissIssue()
+            h.connection.startMirror()
+            XCTAssertEqual(h.connection.issue, .other(message))
+            XCTAssertNil(h.connection.session)
+        }
+    }
+
+    @MainActor
+    func testAPhoneHotspotBikeNeverAutoConnects() async {
+        let h = AppTestHarness(flavor: .free)
+        h.wifi.setNetwork(AppTestHarness.bikeNetwork(ssid: nil))
+        h.addBike(raw: Self.zontesHotspotQR)
+        h.connection.maybeAutoConnect()
+        await settle(0.3)
+        XCTAssertNil(h.connection.session)
+        XCTAssertNil(h.connection.issue) // auto-connect never shows a dialog
+        XCTAssertTrue(h.wifi.joinedSSIDs.isEmpty)
     }
 }
 
