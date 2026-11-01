@@ -142,7 +142,10 @@ public final class AppModel {
 
     private func wire() {
         controls.inputSink = { [weak ride] input in ride?.handleDashInput(input) }
-        permissions.onLocationPermissionChange = { [weak ride] p in ride?.locationPermissionChanged(p) }
+        permissions.onLocationPermissionChange = { [weak ride, weak connection] p in
+            ride?.locationPermissionChanged(p)
+            connection?.locationPermissionChanged(p)
+        }
         permissions.onOnboardingCompleted = { [weak connection] in connection?.maybeAutoConnect() }
         logs.diagnostics = { [weak self] in self?.problemDiagnostics() ?? [:] }
     }

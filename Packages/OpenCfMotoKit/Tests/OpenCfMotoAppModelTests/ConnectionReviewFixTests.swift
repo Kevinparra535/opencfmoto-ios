@@ -478,6 +478,81 @@ final class ConnectionReviewFixTests: XCTestCase {
         XCTAssertNil(h.connection.issue) // auto-connect never shows a dialog
         XCTAssertTrue(h.wifi.joinedSSIDs.isEmpty)
     }
+
+    // MARK: IOS:IOS-2 — mirroring needs background location to survive other apps
+
+    @MainActor
+    func testMirrorIsRefusedWithAClearMessageWhenLocationIsOff() async {
+        for denied in [LocationPermission.denied, .restricted] {
+            let mirror = TestMirrorHost()
+            let h = AppTestHarness(mirror: mirror)
+            h.location.permission = denied
+            h.addBike()
+            h.connection.startMirror()
+            XCTAssertEqual(h.connection.issue, .other(SessionText.mirrorNeedsLocation(h.language)))
+            XCTAssertNil(h.connection.session)
+            XCTAssertFalse(mirror.isRunning)
+            XCTAssertEqual(h.connection.mode, .none)
+            await settle(0.1)
+            XCTAssertTrue(h.wifi.joinedSSIDs.isEmpty)
+        }
+    }
+
+    @MainActor
+    func testMirrorAsksForLocationFirstAndStartsWhenAllowed() async {
+        let location = DeferredPermissionLocation()
+        let mirror = TestMirrorHost()
+        let h = AppTestHarness(mirror: mirror) { $0.location = location }
+        h.addBike()
+        h.connection.startMirror()
+        XCTAssertEqual(location.requests, 1)
+        XCTAssertTrue(h.connection.pendingMirrorAfterPermission)
+        XCTAssertNil(h.connection.session) // waits for the answer
+        location.answer(.whenInUse)
+        XCTAssertEqual(h.connection.mode, .mirror)
+        XCTAssertTrue(mirror.isRunning)
+        XCTAssertFalse(h.connection.pendingMirrorAfterPermission)
+        XCTAssertTrue(location.isUpdating)
+        XCTAssertTrue(location.isRideActive) // background location keeps the host alive
+        h.connection.stop()
+    }
+
+    @MainActor
+    func testMirrorIsRefusedWhenTheLocationPromptIsDenied() async {
+        let location = DeferredPermissionLocation()
+        let h = AppTestHarness { $0.location = location }
+        h.addBike()
+        h.connection.startMirror()
+        location.answer(.denied)
+        XCTAssertEqual(h.connection.issue, .other(SessionText.mirrorNeedsLocation(h.language)))
+        XCTAssertNil(h.connection.session)
+        XCTAssertFalse(h.connection.pendingMirrorAfterPermission)
+    }
+
+    @MainActor
+    func testASynchronousLocationAnswerStartsTheMirrorRightAway() async {
+        let h = AppTestHarness()
+        h.location.permission = .notDetermined // PreviewLocation grants synchronously
+        h.addBike()
+        h.connection.startMirror()
+        XCTAssertEqual(h.connection.mode, .mirror)
+        XCTAssertNotNil(h.connection.session)
+        XCTAssertNil(h.connection.issue)
+        h.connection.stop()
+    }
+
+    @MainActor
+    func testConnectWhileTheMirrorWaitsForLocationCancelsTheWait() async {
+        let location = DeferredPermissionLocation()
+        let h = AppTestHarness { $0.location = location }
+        h.addBike()
+        h.connection.startMirror()
+        h.connection.connect() // the rider chose the own dash UI instead
+        XCTAssertFalse(h.connection.pendingMirrorAfterPermission)
+        location.answer(.whenInUse)
+        XCTAssertEqual(h.connection.mode, .dashUI)
+        h.connection.stop()
+    }
 }
 
 /// Free-flavor Wi-Fi whose network switches to the bike (SSID unknown, dash subnet) at the second
@@ -530,4 +605,30 @@ final class LocalNetworkDeniedNetwork: NetworkProvider, @unchecked Sendable {
         attempts.withLock { $0 += 1 }
         throw LinkFailure.localNetworkDenied
     }
+}
+
+/// Location whose permission prompt is answered later by the test (like CoreLocation).
+@MainActor
+final class DeferredPermissionLocation: LocationProviding {
+    var permission: LocationPermission = .notDetermined
+    var isPrecise = true
+    private(set) var isUpdating = false
+    private(set) var isRideActive = false
+    var lastFix: LocationFix?
+    var onFix: ((LocationFix) -> Void)?
+    var onRawHeading: ((Double) -> Void)?
+    var onPermissionChange: ((LocationPermission) -> Void)?
+    private(set) var requests = 0
+
+    func requestPermission() { requests += 1 }
+
+    /// The rider answered the system prompt.
+    func answer(_ p: LocationPermission) {
+        permission = p
+        onPermissionChange?(p)
+    }
+
+    func start(rideActive: Bool) { isUpdating = true; isRideActive = rideActive }
+    func setRideActive(_ active: Bool) { isRideActive = active }
+    func stop() { isUpdating = false; isRideActive = false }
 }

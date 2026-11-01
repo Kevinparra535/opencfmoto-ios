@@ -158,6 +158,8 @@ public final class ConnectionModel {
     @ObservationIgnored private var loggedNotOnBikeWifi = false
     /// The session reached STREAMING at least once.
     @ObservationIgnored private var sessionEverStreamed = false
+    /// Mirror was tapped while the location permission was undetermined: start once it is answered.
+    @ObservationIgnored private(set) var pendingMirrorAfterPermission = false
     /// `issue = .localNetworkDenied` was raised in this episode (since the session began or last
     /// streamed). The link re-arms every 20 s while auto-recovery is on and fails the same way each
     /// time: raising the issue again would bring the dialog back after every Dismiss (CON:CL-1).
@@ -197,6 +199,27 @@ public final class ConnectionModel {
                 return
             }
         }
+        // The rider leaves OpenCfMoto to show other apps, but this process owns the PXC link and the
+        // relay: only background location keeps it running then (the handlebar audio loop is released
+        // for mirroring). Without it iOS suspends the app seconds after the switch and the dash drops
+        // the picture (review IOS-2).
+        let location = core.services.location
+        switch location.permission {
+        case .whenInUse, .always:
+            break
+        case .notDetermined:
+            Log.i("MIRROR", "asking for location first \u{2014} it keeps the mirror link alive while other apps are open")
+            pendingMirrorAfterPermission = true
+            location.requestPermission()
+            // Providers may answer synchronously (with or without a callback).
+            if pendingMirrorAfterPermission, location.permission != .notDetermined {
+                locationPermissionChanged(location.permission)
+            }
+            return
+        case .denied, .restricted:
+            refuseMirrorWithoutLocation(location.permission)
+            return
+        }
         cancelAutoConnect(unlatch: false)
         begin(mode: .mirror, trigger: .user)
     }
@@ -204,6 +227,7 @@ public final class ConnectionModel {
     /// "Stop everything".
     public func stop() {
         cancelAutoConnect(unlatch: false)
+        pendingMirrorAfterPermission = false
         let had = session != nil
         teardownSession(keepWifi: false)
         forgetLingeringWifi(except: nil)
@@ -285,6 +309,24 @@ public final class ConnectionModel {
         }
     }
 
+    /// Location permission changed (AppModel wiring): a Mirror tap waiting for the answer goes on.
+    func locationPermissionChanged(_ permission: LocationPermission) {
+        guard pendingMirrorAfterPermission, permission != .notDetermined else { return }
+        pendingMirrorAfterPermission = false
+        if permission.isAuthorized {
+            Log.i("MIRROR", "location allowed \u{2014} starting the mirror session")
+            cancelAutoConnect(unlatch: false)
+            begin(mode: .mirror, trigger: .user)
+        } else {
+            refuseMirrorWithoutLocation(permission)
+        }
+    }
+
+    private func refuseMirrorWithoutLocation(_ permission: LocationPermission) {
+        Log.w("MIRROR", "location is \(permission.rawValue) \u{2014} mirroring would stop as soon as another app is open; not starting")
+        issue = .other(SessionText.mirrorNeedsLocation(core.language))
+    }
+
     func scenePhaseChanged(_ phase: AppScenePhase) {
         switch phase {
         case .background:
@@ -333,6 +375,7 @@ public final class ConnectionModel {
             }
             return
         }
+        pendingMirrorAfterPermission = false
         // Hard switch: the previous projection and link die first; the Wi-Fi association stays
         // (unless the previous session was for another bike).
         let previousSSID = session?.qr.ssid

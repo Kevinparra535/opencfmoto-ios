@@ -122,6 +122,13 @@ enum SessionText {
         LogicData.Strings(l).qrHint(BikeQR.iosPhoneHotspotUnsupportedHint)
     }
 
+    /// Mirror tapped with location denied / restricted (review IOS-2): background location is what
+    /// keeps the host's dash link alive while the rider uses other apps.
+    static func mirrorNeedsLocation(_ l: NavLanguage) -> String {
+        pick(l, "Mirroring needs Location access (While Using the App): it keeps the dash link alive while you use other apps. Allow it in Settings \u{25B8} OpenCfMoto \u{25B8} Location, then tap Mirror again.",
+             "El modo Espejo necesita acceso a la ubicación (Al usar la app): mantiene el enlace con el tablero mientras usas otras apps. Actívalo en Ajustes \u{25B8} OpenCfMoto \u{25B8} Ubicación y vuelve a tocar Espejo.")
+    }
+
     static func mirrorUnavailable(_ l: NavLanguage) -> String {
         pick(l, "Couldn't start mirroring \u{2014} see Logs", "No se pudo iniciar la duplicación: mira Registros")
     }

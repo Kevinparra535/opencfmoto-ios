@@ -241,6 +241,8 @@ final class AppModelTests: XCTestCase {
             (SessionText.manualJoinMessage(ssid: "X", .en), SessionText.manualJoinMessage(ssid: "X", .es)),
             (SessionText.alreadyMirroring(.en), SessionText.alreadyMirroring(.es)),
             (SessionText.mirrorUnavailable(.en), SessionText.mirrorUnavailable(.es)),
+            (SessionText.mirrorNeedsLocation(.en), SessionText.mirrorNeedsLocation(.es)),
+            (SessionText.phoneHotspotUnsupported(.en), SessionText.phoneHotspotUnsupported(.es)),
             (SessionText.holdMessage(.en), SessionText.holdMessage(.es)),
             (SessionText.reconnectingBanner(.en), SessionText.reconnectingBanner(.es)),
             (SessionText.waitingForWifiBanner(.en), SessionText.waitingForWifiBanner(.es)),
