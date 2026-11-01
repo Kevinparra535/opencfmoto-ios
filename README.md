@@ -111,6 +111,10 @@ Para probar sin moto (por ejemplo en el **Simulador**), añade el argumento de a
 (Xcode ▸ Product ▸ Scheme ▸ Edit Scheme ▸ Run ▸ Arguments). La app usa servicios simulados: sin
 Wi-Fi ni tablero, con una ruta GPS de demostración para ver la interfaz del tablero en el teléfono.
 
+### Primera prueba en la moto
+
+Sigue la guía paso a paso [docs/PRUEBA-EN-LA-MOTO.md](docs/PRUEBA-EN-LA-MOTO.md): qué esperar en cada fase de la conexión, cómo compartir registros, grabar el vídeo enviado al tablero y qué opciones probar si algo falla.
+
 ## Limitaciones conocidas
 
 - **Modo ruta en primer plano**: iOS solo garantiza el codificador de vídeo por hardware y el
