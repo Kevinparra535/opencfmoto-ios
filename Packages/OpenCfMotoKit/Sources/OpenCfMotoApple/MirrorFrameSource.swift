@@ -318,7 +318,7 @@ public final class MirrorFrameSource: VideoFrameSource, @unchecked Sendable {
     public func prepare(canvas: VideoCanvas, parameters: EncoderParameters) {
         lock.lock()
         deliversToQueue = true
-        var cfg = _configuration
+        var cfg = _configuration ?? MirrorRelayConfig(canvas: canvas)
         cfg.canvas = canvas
         cfg.parameters = parameters
         lock.unlock()
