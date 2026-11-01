@@ -15,13 +15,16 @@ permiso de red local, el codificador de video del teléfono y el comportamiento 
 ## Antes de salir
 
 1. **Instala la app** desde Xcode en tu iPhone (README → *Compilar e instalar*). Con la cuenta de
-   pago usa `OCM_FLAVOR = full`, que permite que la app se una sola al Wi-Fi de la moto.
+   pago usa `OCM_FLAVOR = full`, que permite que la app se una sola al Wi-Fi de la moto. Para la
+   moto compílala en **Release** (va más fluida); después ábrela desde la pantalla de inicio, sin
+   el Mac.
 2. **Abre la app una vez en casa** y completa la bienvenida: permiso de ubicación *Al usar la app* y
    precisa.
 3. **Opcional, para probar sin moto**: en tu Mac ejecuta
-   `python3 tools/fakedash/fakedash.py --bonjour --ffplay --scenario cfdl16`, empareja a mano tu Wi-Fi
-   de casa en Garaje ▸ *Ingresar Wi-Fi manualmente* y pulsa **Conectar**. Si en una ventana del Mac
-   ves el mapa, toda la cadena funciona en tu iPhone (ver `tools/fakedash/README.md`).
+   `python3 tools/fakedash/fakedash.py --bonjour --ffplay --scenario cfdl16 --seconds 120`
+   (`--ffplay` necesita `brew install ffmpeg`), empareja a mano tu Wi-Fi de casa en Garaje ▸
+   *Ingresar Wi-Fi manualmente* y pulsa **Conectar** antes de 90 s. Si en una ventana del Mac ves el
+   mapa durante 2 minutos, toda la cadena funciona en tu iPhone (ver `tools/fakedash/README.md`).
 
 ## En la moto (con el motor parado y la moto segura)
 

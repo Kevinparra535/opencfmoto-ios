@@ -98,12 +98,18 @@ xcodegen generate
 open OpenCfMoto.xcodeproj
 ```
 
-En Xcode elige el esquema **OpenCfMoto**, tu iPhone como destino y pulsa **Run** (en el iPhone
-activa antes el **Modo de desarrollador**: Ajustes ▸ Privacidad y seguridad ▸ Modo de
-desarrollador). La primera vez iOS pedirá confiar en el desarrollador (Ajustes ▸ General ▸ VPN y
-gestión de dispositivos) y, al conectar con la moto, permiso de **red local** y de **ubicación**:
-acéptalos, sin ellos la app no puede hablar con el tablero ni dibujar el mapa.
+En Xcode elige el esquema **OpenCfMoto**, tu iPhone como destino y pulsa **Run**. Antes, en el
+iPhone, activa el **Modo de desarrollador** (Ajustes ▸ Privacidad y seguridad ▸ Modo de
+desarrollador; la opción aparece después de conectar el iPhone al Mac con Xcode abierto). Usa el
+Xcode más reciente: tiene que ser compatible con la versión de iOS de tu iPhone. Si iOS dice
+«Desarrollador no confiable» (pasa con la cuenta gratuita), confía en él en Ajustes ▸ General ▸ VPN
+y gestión de dispositivos. Al conectar con la moto, iOS pide permiso de **red local** y de
+**ubicación**: acéptalos, sin ellos la app no puede hablar con el tablero ni dibujar el mapa.
 `Config/Local.xcconfig` no se sube al repositorio.
+
+Para la prueba en la moto compílala en **Release** (Product ▸ Scheme ▸ Edit Scheme ▸ Run ▸ Build
+Configuration ▸ Release), que va más fluida que Debug. Después no necesitas el Mac: abre la app desde
+la pantalla de inicio. Con la cuenta de pago la instalación dura hasta un año (con la gratuita, 7 días).
 
 ### Modo demostración
 
@@ -296,11 +302,17 @@ xcodegen generate
 open OpenCfMoto.xcodeproj
 ```
 
-In Xcode pick the **OpenCfMoto** scheme and your iPhone, then **Run** (turn on **Developer Mode** on
-the iPhone first: Settings ▸ Privacy & Security ▸ Developer Mode). The first time, iOS asks you to
-trust the developer (Settings ▸ General ▸ VPN & Device Management) and, when connecting to the bike,
-for **Local Network** and **Location** access: allow both, the app cannot talk to the dash or draw
-the map without them. `Config/Local.xcconfig` is git-ignored.
+In Xcode pick the **OpenCfMoto** scheme and your iPhone, then **Run**. First turn on **Developer
+Mode** on the iPhone (Settings ▸ Privacy & Security ▸ Developer Mode; the option appears after the
+iPhone has been connected to the Mac with Xcode open). Use the newest Xcode: it must support the iOS
+version on your iPhone. If iOS says "Untrusted Developer" (free accounts), trust it in Settings ▸
+General ▸ VPN & Device Management. When connecting to the bike, iOS asks for **Local Network** and
+**Location** access: allow both, the app cannot talk to the dash or draw the map without them.
+`Config/Local.xcconfig` is git-ignored.
+
+For the bike test build it in **Release** (Product ▸ Scheme ▸ Edit Scheme ▸ Run ▸ Build
+Configuration ▸ Release), which runs smoother than Debug. After that you do not need the Mac: open the
+app from the Home Screen. With a paid account the install lasts up to a year (7 days with a free one).
 
 ### Demo mode
 
