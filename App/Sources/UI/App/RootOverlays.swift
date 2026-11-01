@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Ported from OpenCfMoto (Android) MainActivity.kt: toasts (→ banner) and the error dialogs of
-// app-features §7.5.8 / §9.13 (official app holding the ports, Wi-Fi off, …) adapted to iOS.
+// app-features §7.5.8 / §9.13 (official app holding the ports, Wi-Fi off, …) adapted to iOS, plus
+// the "Import settings?" confirmation for a settings / map-data pack opened from another app
+// (app-features §3.5 / §3.7.6).
 
 import SwiftUI
 import OpenCfMotoAppModel
@@ -140,5 +142,50 @@ private struct ConnectionIssueAlertModifier: ViewModifier {
         case .noBikePaired:
             return Text(verbatim: "")
         }
+    }
+}
+
+// MARK: - Opened settings / map-data packs (§3.5, §3.7.6)
+
+extension View {
+    /// Asks before a settings / map-data pack opened from Files, AirDrop, Mail… replaces anything
+    /// (`AppModel.pendingImport`): the same "Import settings?" / "Import map data?" question as the
+    /// Settings screen's Import…. Attach it next to `connectionIssueAlert`, at exactly one active
+    /// presentation level.
+    func pendingImportAlert(isActive: Bool) -> some View {
+        modifier(PendingImportAlertModifier(isActive: isActive))
+    }
+}
+
+private struct PendingImportAlertModifier: ViewModifier {
+    @Environment(AppModel.self) private var model
+    var isActive: Bool
+
+    func body(content: Content) -> some View {
+        let pending = presentedImport
+        content.alert(
+            Self.question(for: pending)?.title ?? Text(verbatim: ""),
+            isPresented: Binding(get: { pending != nil }, set: { _ in /* both buttons resolve it */ }),
+            presenting: pending
+        ) { _ in
+            Button("Import") { model.confirmPendingImport() }
+            Button("Cancel", role: .cancel) { model.cancelPendingImport() }
+        } message: { pending in
+            Self.question(for: pending)?.message ?? Text(verbatim: "")
+        }
+    }
+
+    /// One alert at a time: a connection issue shown at this level goes first.
+    private var presentedImport: PendingImport? {
+        guard isActive, let pending = model.pendingImport else { return nil }
+        if let issue = model.connection.issue, issue != .noBikePaired { return nil }
+        return pending
+    }
+
+    /// The Settings screen's confirmation (same title and message, so the same translations).
+    private static func question(for pending: PendingImport?) -> SettingsAlert? {
+        guard let pending else { return nil }
+        let target: SettingsImportTarget = pending.kind == .settings ? .settings : .mapData
+        return .confirmImport(target, pending.text)
     }
 }

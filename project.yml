@@ -66,10 +66,19 @@ targets:
         NSLocalNetworkUsageDescription: "OpenCfMoto talks to your motorcycle's dashboard over its Wi-Fi to show the map on the dash."
         NSBonjourServices: [_EasyConn._tcp]
         OCMAppGroupIdentifier: $(APP_GROUP_ID)
+        # Files opened with the app (AppModel.handleOpenURL): GPX tracks, and settings / map-data packs
+        # (JSON, app-features §3.7.6) which wait for the rider's "Import settings?" confirmation.
+        # Copy semantics (the system hands over a copy in Documents/Inbox, removed after reading):
+        # AppModel reads with a plain security-scoped read, no NSFileCoordinator (ITMS-90737 wants
+        # the key either way).
+        LSSupportsOpeningDocumentsInPlace: false
         CFBundleDocumentTypes:
           - CFBundleTypeName: GPX track
             LSHandlerRank: Alternate
             LSItemContentTypes: [com.topografix.gpx]
+          - CFBundleTypeName: OpenCfMoto settings or map data
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [public.json]
         UTImportedTypeDeclarations:
           - UTTypeIdentifier: com.topografix.gpx
             UTTypeDescription: GPX track

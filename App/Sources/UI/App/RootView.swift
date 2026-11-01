@@ -5,8 +5,9 @@
 // RootView owns:
 // - the NavigationStack (typed `MainRoute` destinations; Home pushes them),
 // - the onboarding gate (`permissions.hasCompletedOnboarding`),
-// - the app-wide overlays: transient banner, ConnectionIssue alerts, the manual Wi-Fi join sheet,
-//   the root QR scanner sheet and the Ride Mode full-screen cover.
+// - the app-wide overlays: transient banner, ConnectionIssue alerts, the "Import settings?"
+//   confirmation of a pack opened from another app, the manual Wi-Fi join sheet, the root QR
+//   scanner sheet and the Ride Mode full-screen cover.
 // Alerts are attached to exactly one level at a time (the root when nothing is presented, else
 // inside the presented sheet / cover) because a view that is already presenting cannot present an
 // alert on iOS.
@@ -46,6 +47,7 @@ struct RootView: View {
             RootBannerOverlay()
         }
         .connectionIssueAlert(isActive: !isRootPresenting)
+        .pendingImportAlert(isActive: !isRootPresenting)
         .sheet(item: $router.scanRequest, onDismiss: runScanFollowUp) { request in
             NavigationStack {
                 ScanScreen(showsCancelButton: true) { _ in
@@ -53,14 +55,17 @@ struct RootView: View {
                 }
             }
             .connectionIssueAlert(isActive: true)
+            .pendingImportAlert(isActive: true)
         }
         .sheet(item: manualJoinBinding) { prompt in
             ManualJoinPromptSheet(prompt: prompt)
                 .connectionIssueAlert(isActive: true)
+                .pendingImportAlert(isActive: true)
         }
         .fullScreenCover(isPresented: rideModeBinding) {
             RideModeOverlay()
                 .connectionIssueAlert(isActive: true)
+                .pendingImportAlert(isActive: true)
         }
         .onChange(of: model.permissions.hasCompletedOnboarding) { _, completed in
             // Settings ▸ "Show onboarding again": show it right away instead of under the stack.
