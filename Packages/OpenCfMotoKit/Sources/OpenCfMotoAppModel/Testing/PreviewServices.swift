@@ -23,6 +23,9 @@ public final class PreviewSystem: SystemControlling {
     public var thermalLevel: ThermalLevel = .none
     public var onPowerStateChange: (() -> Void)?
     public var localNetwork: LocalNetworkAccessState = .granted
+    /// ADDITION (fix-media, SPEC:CL-10): the simulated system appearance (tests flip it and call
+    /// `onPowerStateChange`).
+    public var isSystemDarkMode = false
     public private(set) var openedSettingsCount = 0
     public private(set) var hapticCount = 0
 

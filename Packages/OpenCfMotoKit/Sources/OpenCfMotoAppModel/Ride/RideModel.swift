@@ -494,6 +494,8 @@ public final class RideModel {
                               lowPowerMode: core.services.system.isLowPowerModeEnabled) {
             pushEncoderPlan(force: false)
         }
+        // The system port also reports appearance changes here: theme AUTO follows dark mode.
+        setNeedsModelUpdate()
     }
 
     // MARK: - Dash model
@@ -521,7 +523,9 @@ public final class RideModel {
         let profileDefault = (identifiedProfile ?? earlyProfile).defaultMargins
         let margins = CanvasFit.effectiveMargins(s.screenMargins, profileDefault: profileDefault)
         let wall = core.services.now()
-        let night = nightMonitor.evaluate(theme: s.map.theme, phoneDarkMode: false, date: wall, now: clock.now())
+        // AUTO = phone in dark mode OR 19:00–06:59 (navigation-dash §10.3, app-features §2.2).
+        let night = nightMonitor.evaluate(theme: s.map.theme, phoneDarkMode: core.services.system.isSystemDarkMode,
+                                          date: wall, now: clock.now())
         let lap = core.navigation.lapCard().map { DashLapTimer(title: $0.current, meta: $0.meta) }
         // The clock chip shows HH:mm: a minute-aligned date keeps the model stable within a minute.
         let minute = Date(timeIntervalSince1970: (wall.timeIntervalSince1970 / 60).rounded(.down) * 60)

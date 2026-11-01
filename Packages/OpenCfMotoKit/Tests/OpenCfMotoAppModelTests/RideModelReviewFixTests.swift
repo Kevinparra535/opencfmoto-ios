@@ -88,6 +88,40 @@ final class RideModelReviewFixTests: XCTestCase {
         XCTAssertNil(RideModel.routeKey(nil))
     }
 
+    // MARK: SPEC:CL-10 — theme AUTO follows the phone's dark mode
+
+    private func fix(lat: Double = 4.6584, lon: Double = -74.0930) -> LocationFix {
+        LocationFix(lat: lat, lon: lon, speedMps: 0, courseDeg: nil, accuracyM: 5, altitudeM: 2600, timeMs: 1_790_000_000_000)
+    }
+
+    /// The invert flags of the map tiles in a display list (night = inverted tiles).
+    private func tileInverts(_ list: DashDisplayList) -> Set<Bool> {
+        Set(list.commands.compactMap { if case let .tile(_, _, _, _, invert) = $0 { return invert }; return nil })
+    }
+
+    @MainActor
+    func testThemeAutoFollowsTheSystemDarkMode() async throws {
+        var noonParts = DateComponents()
+        noonParts.year = 2026; noonParts.month = 1; noonParts.day = 15; noonParts.hour = 12
+        let noon = try XCTUnwrap(Calendar.current.date(from: noonParts)) // local time: the clock says day
+        let h = AppTestHarness { $0.now = { noon } }
+        XCTAssertEqual(h.core.currentSettings.map.theme, .auto)
+        h.location.emit(fix())
+        h.ride.flushModel()
+        let clock = h.core.services.clock
+        let day = await eventually { self.tileInverts(h.ride.displayList(now: clock.now())) == [false] }
+        XCTAssertTrue(day, "noon, light appearance: day tiles")
+        // Appearance → Dark (or Automatic after sunset): the system port reports it.
+        h.system.isSystemDarkMode = true
+        h.system.onPowerStateChange?()
+        let night = await eventually { self.tileInverts(h.ride.displayList(now: clock.now())) == [true] }
+        XCTAssertTrue(night, "AUTO = dark mode OR 19:00–06:59")
+        // An explicit DAY theme ignores the phone appearance.
+        h.core.settings.update(forBike: nil) { $0.map.theme = .day }
+        let forcedDay = await eventually { self.tileInverts(h.ride.displayList(now: clock.now())) == [false] }
+        XCTAssertTrue(forcedDay)
+    }
+
     // MARK: SPEC:CL-8 — no screen kept awake while parked
 
     @MainActor

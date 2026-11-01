@@ -58,6 +58,18 @@ public protocol SystemControlling: AnyObject {
     func checkLocalNetworkAccess() async -> LocalNetworkAccessState
     /// Triggers the Local Network prompt if needed and waits for the answer (bounded).
     func requestLocalNetworkAccess() async -> LocalNetworkAccessState
+    /// ADDITION (fix-media, SPEC:CL-10): the phone's SYSTEM appearance is dark (Settings ▸
+    /// Display & Brightness, including "Automatic" after sunset) — read from the screen traits,
+    /// unaffected by the app's own forced dark scheme. Map theme AUTO = this OR 19:00–06:59
+    /// (navigation-dash §10.3). Implementations should call `onPowerStateChange` when it changes
+    /// (the ride re-evaluates night mode then; it also re-reads it at least once a minute).
+    /// Default (protocol extension): false.
+    var isSystemDarkMode: Bool { get }
+}
+
+public extension SystemControlling {
+    /// Conformers that cannot tell report a light system appearance (AUTO = clock only).
+    var isSystemDarkMode: Bool { false }
 }
 
 /// Where the app keeps its files.
