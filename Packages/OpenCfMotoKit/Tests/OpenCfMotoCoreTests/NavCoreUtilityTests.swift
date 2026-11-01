@@ -16,7 +16,7 @@ final class NavCoreUtilityTests: XCTestCase {
         XCTAssertEqual(NavNumberFormat.fixed(0.05, decimals: 1), "0.1")
         XCTAssertEqual(NavNumberFormat.fixed(0.04, decimals: 1), "0.0")
         XCTAssertEqual(NavNumberFormat.fixed(1e-7, decimals: 3), "0.000")
-        XCTAssertEqual(NavNumberFormat.fixed(5e-324, decimals: 2), "0.00")
+        XCTAssertEqual(NavNumberFormat.fixed(Double.leastNonzeroMagnitude, decimals: 2), "0.00")
         XCTAssertEqual(NavNumberFormat.fixed(1e20, decimals: 1), "100000000000000000000.0")
         XCTAssertEqual(NavNumberFormat.fixed(123456.0, decimals: 0), "123456")
         XCTAssertEqual(NavNumberFormat.fixed(-2.5, decimals: 0), "-3")       // HALF_UP is away from zero on magnitude

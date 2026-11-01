@@ -3851,6 +3851,16 @@
         }
       }
     },
+    "Record the dash video stream": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grabar el vídeo enviado al tablero"
+          }
+        }
+      }
+    },
     "Recording": {
       "localizations": {
         "es": {
@@ -4221,6 +4231,16 @@
         }
       }
     },
+    "Saves the first 600 frames sent to the dash (raw H.264) for a problem report.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guarda los primeros 600 fotogramas enviados al tablero (H.264 sin procesar) para un informe de problemas."
+          }
+        }
+      }
+    },
     "Scan": {
       "localizations": {
         "es": {
@@ -4577,6 +4597,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Compartir configuración"
+          }
+        }
+      }
+    },
+    "Share the recording": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compartir la grabación"
           }
         }
       }
