@@ -59,8 +59,9 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         UIBackgroundModes: [location, audio]
         ITSAppUsesNonExemptEncryption: false
+        # Purpose strings: keep in sync with App/Resources/{en,es}.lproj/InfoPlist.strings (localized).
         NSCameraUsageDescription: "OpenCfMoto uses the camera to scan the pairing QR code shown on your bike's dash."
-        NSLocationWhenInUseUsageDescription: "OpenCfMoto uses your location to draw the map and turn-by-turn guidance on your bike's dash and to log your rides."
+        NSLocationWhenInUseUsageDescription: "OpenCfMoto uses your location, also while your iPhone is locked during a ride, to show the map and turn-by-turn guidance on your bike's dash and to log your rides on this iPhone. To find places, routes and speed limits, it sends your searches and positions to OpenStreetMap-based online services."
         UIRequiresPersistentWiFi: true
         NSLocalNetworkUsageDescription: "OpenCfMoto talks to your motorcycle's dashboard over its Wi-Fi to show the map on the dash."
         NSBonjourServices: [_EasyConn._tcp]

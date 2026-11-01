@@ -1,0 +1,12 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Purpose strings shown in the system permission alerts (English). Keep in sync with project.yml
+   (the Info.plist base values) and es.lproj/InfoPlist.strings. */
+
+/* Camera alert: the QR pairing scanner. */
+"NSCameraUsageDescription" = "OpenCfMoto uses the camera to scan the pairing QR code shown on your bike's dash.";
+
+/* Location alert: background use while riding (screen locked) and the online map services. */
+"NSLocationWhenInUseUsageDescription" = "OpenCfMoto uses your location, also while your iPhone is locked during a ride, to show the map and turn-by-turn guidance on your bike's dash and to log your rides on this iPhone. To find places, routes and speed limits, it sends your searches and positions to OpenStreetMap-based online services.";
+
+/* Local Network alert: the dash link over the bike's Wi-Fi. */
+"NSLocalNetworkUsageDescription" = "OpenCfMoto talks to your motorcycle's dashboard over its Wi-Fi to show the map on the dash.";
