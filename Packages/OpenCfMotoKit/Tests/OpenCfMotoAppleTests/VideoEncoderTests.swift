@@ -359,13 +359,15 @@ final class VideoEngineTests: XCTestCase {
         defer { engine.stop() }
         engine.prepare(canvas: canvas, parameters: EncoderParameters(bitrate: 1_000_000, frameRate: 30))
         engine.resynchronize()
+        // A 30 fps dash pulling for ~0.5 s: fewer frames than one GOP (VideoToolbox also counts
+        // MaxKeyFrameInterval in frames — 30 here — so an unpaced loop would see periodic IDRs).
         var frames: [EncodedFrame] = []
-        let start = Date()
-        while Date().timeIntervalSince(start) < 0.6 {
+        for _ in 0 ..< 15 {
             if let f = await engine.nextFrame(timeout: 1) { frames.append(f) }
+            try? await Task.sleep(nanoseconds: 33_000_000)
         }
         XCTAssertTrue(frames.first?.isKeyframe ?? false, "the first frame after 112 is an IDR")
-        XCTAssertGreaterThan(frames.count, 3)
+        XCTAssertGreaterThan(frames.count, 10)
         XCTAssertEqual(frames.filter(\.isKeyframe).count, 1, "one IDR, then P-frames: \(frames.map(\.isKeyframe))")
     }
 
