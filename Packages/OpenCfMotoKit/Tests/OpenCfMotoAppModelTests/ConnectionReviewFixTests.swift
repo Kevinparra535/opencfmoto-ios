@@ -71,6 +71,58 @@ final class ConnectionReviewFixTests: XCTestCase {
         XCTAssertNil(h.connection.manualJoin)
         h.connection.stop()
     }
+
+    // MARK: CON:CL-1 / SPEC:CL-1 — a re-arming .error keeps a session that the big button must stop
+
+    @MainActor
+    func testTheBigButtonStopsAReArmingErrorSessionInsteadOfRestartingIt() async {
+        let h = AppTestHarness()
+        let (_, qr) = h.addBike()
+        h.connection.connect()
+        XCTAssertTrue(h.connection.isSessionActive)
+        // PreviewNetwork never answers: dash not found → .error, the session stays armed.
+        let armed = await eventually { h.connection.phase == .error }
+        XCTAssertTrue(armed)
+        XCTAssertFalse(h.connection.phase.showsStop) // frozen contract: the UI keys on isSessionActive
+        XCTAssertTrue(h.connection.isSessionActive)
+        XCTAssertNotNil(h.connection.session)
+
+        h.connection.toggle()
+        XCTAssertEqual(h.connection.phase, .stopped)
+        XCTAssertFalse(h.connection.isSessionActive)
+        XCTAssertNil(h.connection.session)
+        XCTAssertEqual(h.wifi.joinedSSIDs, [qr.ssid]) // no second join
+        XCTAssertFalse(h.location.isUpdating)
+        XCTAssertFalse(h.system.isIdleTimerDisabled)
+    }
+
+    @MainActor
+    func testTheLocalNetworkIssueIsRaisedOncePerEpisodeSoDismissSticks() async {
+        let net = LocalNetworkDeniedNetwork()
+        let h = AppTestHarness(network: net)
+        h.addBike()
+        h.connection.connect()
+        let raised = await eventually { h.connection.issue == .localNetworkDenied }
+        XCTAssertTrue(raised)
+        XCTAssertEqual(h.connection.phase, .error)
+        XCTAssertTrue(h.connection.isSessionActive) // auto-recovery keeps re-arming
+        h.connection.dismissIssue()
+        let attempts = net.connectAttempts
+        // Several watchdog re-arms (0.4 s in the test timings), each failing the same way.
+        let rearmed = await eventually { net.connectAttempts >= attempts + 3 }
+        XCTAssertTrue(rearmed)
+        await settle(0.2)
+        XCTAssertNil(h.connection.issue)
+        XCTAssertEqual(h.connection.phase, .error)
+        XCTAssertEqual(h.connection.detail, SessionText.localNetworkDenied(h.language))
+
+        // A new session is a new episode: the dialog comes back once.
+        h.connection.stop()
+        h.connection.connect()
+        let again = await eventually { h.connection.issue == .localNetworkDenied }
+        XCTAssertTrue(again)
+        h.connection.stop()
+    }
 }
 
 /// Free-flavor Wi-Fi whose network switches to the bike (SSID unknown, dash subnet) at the second
@@ -109,5 +161,18 @@ final class RacyManualJoinWifi: WifiJoining, @unchecked Sendable {
     func networkUpdates() -> AsyncStream<WifiNetworkInfo> {
         touch()
         return inner.networkUpdates()
+    }
+}
+
+/// Listens fine, but every outbound connection reports the Local Network privacy denial.
+final class LocalNetworkDeniedNetwork: NetworkProvider, @unchecked Sendable {
+    private let attempts = Locked(0)
+    var connectAttempts: Int { attempts.current }
+
+    func listen(port: UInt16) async throws -> any StreamListener { PreviewListener(port: port) }
+
+    func connect(host: String, port: UInt16, timeout: TimeInterval) async throws -> any ByteStream {
+        attempts.withLock { $0 += 1 }
+        throw LinkFailure.localNetworkDenied
     }
 }

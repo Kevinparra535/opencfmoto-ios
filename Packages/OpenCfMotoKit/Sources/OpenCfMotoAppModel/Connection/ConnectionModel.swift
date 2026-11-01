@@ -138,6 +138,10 @@ public final class ConnectionModel {
     @ObservationIgnored private(set) var isParked = false
     @ObservationIgnored private var lastFrameSentAt: TimeInterval?
     @ObservationIgnored private(set) var autoConnectLatched = false
+    /// `issue = .localNetworkDenied` was raised in this episode (since the session began or last
+    /// streamed). The link re-arms every 20 s while auto-recovery is on and fails the same way each
+    /// time: raising the issue again would bring the dialog back after every Dismiss (CON:CL-1).
+    @ObservationIgnored private var localNetworkIssueRaised = false
     @ObservationIgnored private var loggedAutoConnectIdle = false
     /// Bike Wi-Fi configuration kept after a failed session (Android keeps the network until Stop);
     /// forgotten by Stop, by a session to another bike, or when the app leaves the foreground idle.
@@ -306,6 +310,7 @@ public final class ConnectionModel {
         generation &+= 1
         let gen = generation
         issue = nil
+        localNetworkIssueRaised = false
         manualJoin = nil
         wifiLostAt = nil
         isParked = false
@@ -715,6 +720,7 @@ public final class ConnectionModel {
             controls.linkStreamingChanged(true, mirror: s.mode == .mirror)
             ride.setLinkBanner(nil)
             if s.mode == .dashUI { ride.projectionChanged(active: true) }
+            localNetworkIssueRaised = false
             switch issue {
             case .dashNotFound?, .lostLink?, .localNetworkDenied?, .wifiUnavailable?: issue = nil
             default: break
@@ -738,7 +744,11 @@ public final class ConnectionModel {
         case .localNetworkDenied:
             let d = SessionText.localNetworkDenied(l)
             if recovery {
-                issue = .localNetworkDenied
+                // Once per episode: the watchdog re-arm fails the same way every 20 s.
+                if !localNetworkIssueRaised {
+                    localNetworkIssueRaised = true
+                    issue = .localNetworkDenied
+                }
                 setPhase(.error, detail: d)
             } else {
                 endSession(.error, detail: d, issue: .localNetworkDenied)
