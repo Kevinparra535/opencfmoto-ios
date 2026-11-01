@@ -147,6 +147,11 @@ the owner, signatures are frozen). Spanish strings: each UI agent writes its own
    last IDR (a "hold" picture) so the dash does not drop the link.
 8. Dash rendering: CoreGraphics only (no GPU map views in front of the encoder), BGRA buffers at
    exactly the negotiated canvas, top-left origin; dash touches map 1:1 to canvas pixels.
+9. Deliberate iOS deviations of the dash map, each with an Android-parity switch: the follow camera
+   and the puck ease between fixes (cubic ease-out over `DashUIController.Options.followEaseDuration`
+   = 0.35 s; osmdroid jumps, 0 = parity; explicit camera actions still jump), and night tiles use a
+   hue-preserving HSL lightness inversion dimmed ×0.9 (`TileImageCache.Configuration.nightStyle =
+   .rgbInvert` = osmdroid INVERT_COLORS, which turns parks magenta and water orange).
 
 ## 6. Concurrency conventions
 

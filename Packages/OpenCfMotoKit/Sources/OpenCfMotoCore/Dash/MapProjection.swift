@@ -3,7 +3,8 @@
 // tiles (osmdroid-style; `tileSize = 256 × density` reproduces `isTilesScaledToDpi = true`),
 // heading-up rotation about an anchor, geo ↔ canvas both ways, metres per pixel, the set of tiles
 // covering a rotated viewport (integer tile zoom = floor(zoom), drawn scaled by 2^(zoom − floor),
-// over-zoom past the source's max zoom), and "fit these points into this rect" (overview).
+// over-zoom past the source's max zoom), "fit these points into this rect" (overview), and the
+// camera centre / Mercator interpolation helpers of the follow ease (DashFollowEase.swift).
 //
 // Coordinate spaces:
 // - world px: Mercator pixels at `zoom` (x east, y south, origin = top-left of the world).
@@ -126,6 +127,27 @@ public struct MapProjection: Hashable, Sendable {
         let m = screenToMap.apply(s)
         let c = centerWorld
         return Self.geoPoint(world: DashPoint(c.x + m.x, c.y + m.y), zoom: zoom, tileSize: tileSize)
+    }
+
+    /// The camera centre that draws `p` at `offset` screen px from the anchor (x right, y down)
+    /// for a zoom and map rotation — the inverse of `screenPoint(p) − anchor`. The animated follow
+    /// camera uses it to keep the rider puck exactly where the follow policy puts it.
+    public static func center(placing p: GeoPoint, atScreenOffset offset: DashPoint, zoom: Double, bearingDeg: Double,
+                              tileSize: Double = 256) -> GeoPoint {
+        let w = worldPoint(p, zoom: zoom, tileSize: tileSize)
+        let m = DashTransform.rotation(bearingDeg * .pi / 180).apply(offset) // screen axes → map-local
+        return geoPoint(world: DashPoint(w.x - m.x, w.y - m.y), zoom: zoom, tileSize: tileSize)
+    }
+
+    /// The point a `fraction` of the way from `a` to `b` on the Web Mercator plane (a straight line
+    /// on the map, the short way across the antimeridian). 0 → `a` and 1 → `b` exactly.
+    public static func interpolate(_ a: GeoPoint, _ b: GeoPoint, fraction k: Double) -> GeoPoint {
+        if k <= 0 || a == b { return a }
+        if k >= 1 { return b }
+        let wa = worldPoint(a, zoom: 0, tileSize: 1), wb = worldPoint(b, zoom: 0, tileSize: 1) // 0…1 coordinates
+        var dx = wb.x - wa.x
+        if dx > 0.5 { dx -= 1 } else if dx < -0.5 { dx += 1 }
+        return geoPoint(world: DashPoint(wa.x + dx * k, wa.y + (wb.y - wa.y) * k), zoom: 0, tileSize: 1)
     }
 
     // MARK: Tiles

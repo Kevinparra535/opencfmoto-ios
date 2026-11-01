@@ -171,5 +171,164 @@ final class VideoTileCacheTests: XCTestCase {
         var px: [UInt8] = [1, 2, 3, 255]
         px.withUnsafeMutableBytes { TileNightInversion.invertPremultiplied($0, width: 2, height: 1, bytesPerRow: 8) }
         XCTAssertEqual(px, [1, 2, 3, 255])
+        px.withUnsafeMutableBytes { TileNightInversion.lightnessInvertPremultiplied($0, width: 2, height: 1, bytesPerRow: 8) }
+        XCTAssertEqual(px, [1, 2, 3, 255])
+        px.withUnsafeMutableBytes { TileNightInversion.lightnessInvertPremultiplied($0, width: 1, height: 1, bytesPerRow: 4, alphaIndex: 4) }
+        XCTAssertEqual(px, [1, 2, 3, 255], "invalid alpha index")
+    }
+
+    // MARK: night lightness inversion (iOS default: HSL L' = 1 − L, hue and saturation kept)
+
+    /// HSL (hue degrees, saturation, lightness) of an opaque 0xRRGGBB colour.
+    private func hsl(_ rgb: UInt32) -> (h: Double, s: Double, l: Double) {
+        let r = Double((rgb >> 16) & 0xFF) / 255, g = Double((rgb >> 8) & 0xFF) / 255, b = Double(rgb & 0xFF) / 255
+        let mx = max(r, g, b), mn = min(r, g, b), c = mx - mn
+        let l = (mx + mn) / 2
+        let s = c == 0 ? 0 : c / (1 - abs(2 * l - 1))
+        var h = 0.0
+        if c > 0 {
+            if mx == r {
+                h = 60 * ((g - b) / c).truncatingRemainder(dividingBy: 6)
+            } else if mx == g {
+                h = 60 * ((b - r) / c + 2)
+            } else {
+                h = 60 * ((r - g) / c + 4)
+            }
+        }
+        return (h < 0 ? h + 360 : h, s, l)
+    }
+
+    func testLightnessInversionOfOSMColours() {
+        // (day colour, night colour without dimming): c' = c + 255 − (max + min)
+        let vectors: [(String, UInt32, UInt32)] = [
+            ("white", 0xFFFFFF, 0x000000),
+            ("black", 0x000000, 0xFFFFFF),
+            ("OSM land", 0xF2EFE9, 0x16130D),
+            ("park", 0xC8FACC, 0x053709),
+            ("water", 0xAAD3DF, 0x204955),
+            ("road (minor)", 0xFFFFFF, 0x000000),
+            ("road (secondary)", 0xF7FABF, 0x3D4005),
+            ("mid grey", 0x808080, 0x7F7F7F),
+            ("pure red", 0xFF0000, 0xFF0000), // L = 0.5 is its own mirror image
+        ]
+        for (name, day, night) in vectors {
+            let got = TileNightInversion.lightnessInverted(rgb: day)
+            XCTAssertEqual(got, night, "\(name): got \(String(format: "%06X", got))")
+        }
+        // greys behave exactly like osmdroid's 255 − c
+        for grey: UInt32 in [0x000000, 0x404040, 0x808080, 0xBBBBBB, 0xFFFFFF] {
+            XCTAssertEqual(TileNightInversion.lightnessInverted(rgb: grey), 0xFFFFFF - grey)
+        }
+        // hue and saturation kept, lightness mirrored (within 8-bit quantisation)
+        for (name, day, night) in vectors where hsl(day).s > 0.05 {
+            let a = hsl(day), b = hsl(night)
+            XCTAssertEqual(b.l, 1 - a.l, accuracy: 0.5 / 255, name)
+            XCTAssertEqual(b.s, a.s, accuracy: 0.02, name)
+            XCTAssertLessThanOrEqual(abs(DashEasing.shortestTurnDeg(from: a.h, to: b.h)), 1.5, name)
+        }
+        // osmdroid's 255 − c turned parks magenta and water orange (hue + 180°)
+        XCTAssertEqual(0xFFFFFF - 0xC8FACC, 0x370533)
+        XCTAssertEqual(abs(DashEasing.shortestTurnDeg(from: hsl(0xC8FACC).h, to: hsl(0x370533).h)), 180, accuracy: 1.5)
+        XCTAssertEqual(abs(DashEasing.shortestTurnDeg(from: hsl(0xAAD3DF).h, to: hsl(0xFFFFFF - 0xAAD3DF).h)), 180, accuracy: 1.5)
+    }
+
+    func testLightnessInversionDoublesAndDimming() {
+        let w = TileNightInversion.lightnessInverted(r: 1, g: 1, b: 1)
+        XCTAssertEqual([w.r, w.g, w.b], [0, 0, 0])
+        let k = TileNightInversion.lightnessInverted(r: 0, g: 0, b: 0)
+        XCTAssertEqual([k.r, k.g, k.b], [1, 1, 1])
+        let p = TileNightInversion.lightnessInverted(r: 200 / 255, g: 250 / 255, b: 204 / 255)
+        XCTAssertEqual(p.r * 255, 5, accuracy: 1e-9)
+        XCTAssertEqual(p.g * 255, 55, accuracy: 1e-9)
+        XCTAssertEqual(p.b * 255, 9, accuracy: 1e-9)
+        for _ in 0 ..< 200 {
+            let (r, g, b) = (Double.random(in: 0 ... 1), Double.random(in: 0 ... 1), Double.random(in: 0 ... 1))
+            let o = TileNightInversion.lightnessInverted(r: r, g: g, b: b)
+            for c in [o.r, o.g, o.b] { XCTAssertTrue(c >= -1e-12 && c <= 1 + 1e-12, "\(c)") }
+            XCTAssertEqual(max(o.r, o.g, o.b) - min(o.r, o.g, o.b), max(r, g, b) - min(r, g, b), accuracy: 1e-12) // chroma kept
+            let back = TileNightInversion.lightnessInverted(r: o.r, g: o.g, b: o.b) // an involution
+            XCTAssertEqual(back.r, r, accuracy: 1e-12)
+            XCTAssertEqual(back.b, b, accuracy: 1e-12)
+        }
+        // ×0.9 against night glare, rounded half away from zero; 1 = none; clamped to 0…1
+        XCTAssertEqual(TileNightInversion.lightnessInverted(rgb: 0xF2EFE9, dimming: 0.9), 0x14110C) // (22,19,13) → (20,17,12)
+        XCTAssertEqual(TileNightInversion.lightnessInverted(rgb: 0x808080, dimming: 0.9), 0x727272) // 127 → 114.3
+        XCTAssertEqual(TileNightInversion.lightnessInverted(rgb: 0x000000, dimming: 0.9), 0xE6E6E6) // 229.5 → 230
+        XCTAssertEqual(TileNightInversion.lightnessInverted(rgb: 0xF2EFE9, dimming: 1), 0x16130D)
+        XCTAssertEqual(TileNightInversion.lightnessInverted(rgb: 0x000000, dimming: 7), 0xFFFFFF)
+        XCTAssertEqual(TileNightInversion.lightnessInverted(rgb: 0x000000, dimming: -1), 0x000000)
+        XCTAssertEqual(TileNightInversion.lightnessInverted(rgb: 0x000000, dimming: .nan), 0xFFFFFF)
+    }
+
+    func testLightnessInversionOfPremultipliedPixels() {
+        // opaque: same as the 0xRRGGBB maths
+        XCTAssertTrue(TileNightInversion.lightnessInvertedPremultiplied(200, 250, 204, alpha: 255) == (5, 55, 9))
+        // park at half alpha, premultiplied (100,125,102,128): c' = c + a − max − min = c − 97 …
+        XCTAssertTrue(TileNightInversion.lightnessInvertedPremultiplied(100, 125, 102, alpha: 128) == (3, 28, 5))
+        // … which is the un-premultiplied maths, premultiplied again
+        let u = TileNightInversion.lightnessInverted(r: 100 / 128, g: 125 / 128, b: 102 / 128)
+        XCTAssertEqual(u.r * 128, 3, accuracy: 1e-9)
+        XCTAssertEqual(u.g * 128, 28, accuracy: 1e-9)
+        XCTAssertEqual(u.b * 128, 5, accuracy: 1e-9)
+        // white at alpha 128 (128,128,128) → black; black at alpha 128 → white at alpha 128
+        XCTAssertTrue(TileNightInversion.lightnessInvertedPremultiplied(128, 128, 128, alpha: 128) == (0, 0, 0))
+        XCTAssertTrue(TileNightInversion.lightnessInvertedPremultiplied(0, 0, 0, alpha: 128) == (128, 128, 128))
+        // transparent stays transparent; invalid channels above alpha are clamped to alpha first
+        XCTAssertTrue(TileNightInversion.lightnessInvertedPremultiplied(0, 0, 0, alpha: 0) == (0, 0, 0))
+        XCTAssertTrue(TileNightInversion.lightnessInvertedPremultiplied(9, 200, 3, alpha: 0) == (0, 0, 0))
+        XCTAssertTrue(TileNightInversion.lightnessInvertedPremultiplied(255, 90, 10, alpha: 64) == (54, 54, 0)) // (64,64,10) − 10
+        // every valid premultiplied input stays valid (c ≤ a), random sweep
+        for _ in 0 ..< 2_000 {
+            let a = UInt8.random(in: 0 ... 255)
+            let c = (UInt8.random(in: 0 ... a), UInt8.random(in: 0 ... a), UInt8.random(in: 0 ... a))
+            let o = TileNightInversion.lightnessInvertedPremultiplied(c.0, c.1, c.2, alpha: a, dimming: 0.9)
+            XCTAssertLessThanOrEqual(o.0, a)
+            XCTAssertLessThanOrEqual(o.1, a)
+            XCTAssertLessThanOrEqual(o.2, a)
+        }
+    }
+
+    func testLightnessInversionInPlaceKeepsAlphaAndPadding() {
+        // 2×2 BGRA (alpha last) with 4 bytes of row padding: land, park @ α128, transparent, water.
+        var px: [UInt8] = [
+            0xE9, 0xEF, 0xF2, 255, 102, 125, 100, 128, 0xAA, 0xAA, 0xAA, 0xAA,
+            0, 0, 0, 0, 0xDF, 0xD3, 0xAA, 255, 0xBB, 0xBB, 0xBB, 0xBB,
+        ]
+        px.withUnsafeMutableBytes { TileNightInversion.lightnessInvertPremultiplied($0, width: 2, height: 2, bytesPerRow: 12) }
+        XCTAssertEqual(Array(px[0 ..< 4]), [0x0D, 0x13, 0x16, 255], "land → #16130D (BGRA)")
+        XCTAssertEqual(Array(px[4 ..< 8]), [5, 28, 3, 128], "premultiplied park")
+        XCTAssertEqual(Array(px[8 ..< 12]), [0xAA, 0xAA, 0xAA, 0xAA], "padding untouched")
+        XCTAssertEqual(Array(px[12 ..< 16]), [0, 0, 0, 0], "transparent")
+        XCTAssertEqual(Array(px[16 ..< 20]), [0x55, 0x49, 0x20, 255], "water → #204955 (BGRA)")
+        XCTAssertEqual(Array(px[20 ..< 24]), [0xBB, 0xBB, 0xBB, 0xBB])
+        // alpha first (ARGB): the colour bytes are the three others
+        var argb: [UInt8] = [255, 0xC8, 0xFA, 0xCC]
+        argb.withUnsafeMutableBytes {
+            TileNightInversion.lightnessInvertPremultiplied($0, width: 1, height: 1, bytesPerRow: 4, alphaIndex: 0)
+        }
+        XCTAssertEqual(argb, [255, 5, 55, 9])
+        // dimming through the lookup table equals the scalar maths
+        var dim: [UInt8] = [0xE9, 0xEF, 0xF2, 255, 0, 0, 0, 255]
+        dim.withUnsafeMutableBytes {
+            TileNightInversion.lightnessInvertPremultiplied($0, width: 2, height: 1, bytesPerRow: 8, dimming: 0.9)
+        }
+        XCTAssertEqual(Array(dim[0 ..< 4]), [12, 17, 20, 255])
+        XCTAssertEqual(Array(dim[4 ..< 8]), [230, 230, 230, 255])
+    }
+
+    func testNightFilterIdentityAndStyles() {
+        XCTAssertEqual(TileNightStyle.allCases, [.lightnessInvert, .rgbInvert])
+        XCTAssertEqual(TileNightFilter(style: .lightnessInvert, dimming: 0.9), TileNightFilter(style: .lightnessInvert, dimming: 0.9))
+        XCTAssertNotEqual(TileNightFilter(style: .lightnessInvert, dimming: 0.9), TileNightFilter(style: .lightnessInvert, dimming: 1))
+        XCTAssertNotEqual(TileNightFilter(style: .lightnessInvert, dimming: 1), TileNightFilter(style: .rgbInvert))
+        // the parity style is never dimmed: its identity ignores the dimming
+        XCTAssertEqual(TileNightFilter(style: .rgbInvert, dimming: 0.5), TileNightFilter(style: .rgbInvert, dimming: 1))
+        XCTAssertEqual(TileNightFilter(style: .lightnessInvert, dimming: 3).dimming, 1)
+        let park: [UInt8] = [0xCC, 0xFA, 0xC8, 255] // BGRA
+        var a = park, b = park
+        a.withUnsafeMutableBytes { TileNightFilter(style: .rgbInvert).apply(to: $0, width: 1, height: 1, bytesPerRow: 4) }
+        XCTAssertEqual(a, [0x33, 0x05, 0x37, 255], "osmdroid: magenta park")
+        b.withUnsafeMutableBytes { TileNightFilter(style: .lightnessInvert).apply(to: $0, width: 1, height: 1, bytesPerRow: 4) }
+        XCTAssertEqual(b, [9, 55, 5, 255], "iOS: dark green park")
     }
 }

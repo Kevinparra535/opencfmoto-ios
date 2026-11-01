@@ -9,6 +9,10 @@ import Foundation
 
 /// The bike map camera: centre, fractional zoom, rotation, follow / heading-up / speed-zoom flags
 /// and the 12 s free-pan auto-recenter.
+///
+/// This is the TARGET camera: every policy below jumps, like osmdroid. `DashUIController` eases
+/// what it draws from the previous picture towards it after each follow update
+/// (`DashUIController.Options.followEaseDuration`, DashFollowEase.swift).
 public struct DashCamera: Hashable, Sendable {
     /// Bike zoom range (DashMapController: minZoomLevel 5, maxZoomLevel 20).
     public static let minZoom = 5.0
@@ -55,6 +59,11 @@ public struct DashCamera: Hashable, Sendable {
 
     public var isPositioned: Bool { center != nil }
 
+    /// Same centre, zoom and rotation (flags and timers ignored).
+    public func hasSameGeometry(as o: DashCamera) -> Bool {
+        center == o.center && zoom == o.zoom && bearingDeg == o.bearingDeg
+    }
+
     // MARK: Ladders
 
     /// `GpxNav.zoomForSpeedKmh` (phone ladder): <8 → 17.8, <20 → 17.0, <35 → 16.2, <55 → 15.4,
@@ -96,7 +105,8 @@ public struct DashCamera: Hashable, Sendable {
 
     /// `DashMapController.follow`: heading-up rotates the map by −bearing (north-up: 0), the centre
     /// is pushed `lookAheadMeters` ahead along the bearing (so the puck sits below the anchor), and
-    /// the zoom is re-applied only when it differs by ≥ 0.35. No animation.
+    /// the zoom is re-applied only when it differs by ≥ 0.35. The camera jumps (osmdroid); the
+    /// controller animates the drawn picture towards it.
     /// - Parameter maxLookAheadPx: iOS fix (navigation-dash.md §4.9 / R9) — caps the look-ahead in
     ///   screen pixels so the puck stays above the bottom cards; nil = Android parity.
     public mutating func applyFollow(me: GeoPoint, bearingDeg bearing: Double, targetZoom: Double, moving: Bool,
