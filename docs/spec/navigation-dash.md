@@ -1413,8 +1413,10 @@ and every music intent counts as activity.
 
 **Re-render cadence.** The scene extrapolates the position to the frame time; the display list changes
 only when what is drawn changes: on the sheet once per elapsed second (labels and bar move together:
-remaining = rounded length − elapsed seconds), on the tile when the bar gains a whole pixel, never while
-paused. The app updates `DashModel.music` only on meaningful changes (song, state, seek / drift).
+remaining = whole seconds of the length − elapsed seconds, so the two labels always add up to ⌊length⌋
+and, the position being clamped to the length, the remaining label reaches "-0:00" at the end — 245.6 s:
+"-4:05" … "-0:00", fix F8), on the tile when the bar gains a whole pixel, never while paused. The app
+updates `DashModel.music` only on meaningful changes (song, state, seek / drift).
 
 ---
 
