@@ -1400,13 +1400,15 @@ the tile, the menu's "Music" or the open sheet. The handlebar focus then never f
 item — End while navigating, where the rider's next ★, meant for the tile, ⏯ or "Music", would end
 navigation without confirmation. `DashFocusPreference.musicGone` → the first listed of `fab.menu` (map)
 and `menu.circuit` (menu; ★ without a previewed place only shows a hint), else the usual keep / first
-item. It applies when the focused `music.*` / `menu.music` id is no longer listed, when the sheet closes
-because `music == nil` (arrival keeps its own rule), and when the closing sheet's `.musicTile` finds no
-tile (no room for it, or the song went away in the same frame; preview / arrival keep their first item
-as before). The focus stays there when the song comes back (one ▶ from `fab.menu` reaches the tile).
-Nothing else hands the focus to End this way: while navigating the map list is End, the FABs and the
-tile, and the menu's ids are fixed except `menu.music`; a search row that vanishes falls back to the
-sheet's first item, and a route chip of a preview to Go.
+item. It applies when the focused `music.*` / `menu.music` id is no longer listed (the song went away,
+or a lap card took the tile's room), when the sheet closes because `music == nil` (arrival keeps its own
+rule), and when the closing sheet's `.musicTile` finds no tile (no room for it, or the song went away in
+the same frame; preview / arrival keep their first item as before). The focus stays there when the song
+comes back (one ▶ from `fab.menu` reaches the tile). Nothing else hands the focus to End this way (F2
+audit, pinned by `testNothingButMusicCanVanishFromTheListsThatFallBackToEnd`): while navigating the map
+list is End, the FABs and the tile (the pill is not drawn; cards, toasts and the banner are not
+focusable), and the menu's ids are fixed except `menu.music`; a search row that vanishes falls back to
+the sheet's first item, a route chip of a preview to Go, and a preview only ends on an explicit action.
 
 **Safety rules** (`DashUIController`): the sheet never opens by itself and closes on ✕ / BACK; after
 10 s without dash input while the bike moves or has no fix (`Options.musicSheetIdleTimeout`; it stays
