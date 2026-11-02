@@ -128,7 +128,8 @@ public final class RideModel {
     @ObservationIgnored private var earlyProfile: BikeProfile = .legacy
     @ObservationIgnored private var linkBanner: String?
     @ObservationIgnored private var nightMonitor = NightModeMonitor()
-    @ObservationIgnored private var lastModel: DashModel?
+    /// The model last handed to the dash UI (tests read it: the controller keeps its own private).
+    @ObservationIgnored private(set) var lastModel: DashModel?
     @ObservationIgnored private var updateScheduled = false
     @ObservationIgnored private var lastRequestedTiles: [DashMapTile] = []
     @ObservationIgnored private var lastRouteKey: String?
@@ -152,6 +153,19 @@ public final class RideModel {
     @ObservationIgnored private var scenePhase: AppScenePhase = .active
     /// Which source the running recording is attached to (true = mirror relay).
     @ObservationIgnored private var dashVideoSourceIsMirror: Bool?
+
+    // MARK: Apple Music (iOS addition) — wired by AppModel to MusicModel
+
+    /// The Music app's now playing for `DashModel.music` (MusicModel.dashNowPlaying).
+    @ObservationIgnored var nowPlayingProvider: (() -> DashNowPlaying?)?
+    /// The dash's ⏮ ⏯ ⏭ (`DashIntent.musicPrevious / musicPlayPause / musicNext`) → MusicModel.perform
+    /// (command, fromDash).
+    @ObservationIgnored var musicCommandSink: ((MusicCommand, Bool) -> Void)?
+    /// The own dash UI went live (true) or stopped (false): a Connect session in own-UI mode, the phone
+    /// preview (Dash view / Map hub) or Ride Mode. Mirror sessions draw no dash UI (contract R7).
+    @ObservationIgnored var onDashActivityChange: ((Bool) -> Void)?
+    /// What `onDashActivityChange` reported last.
+    @ObservationIgnored private(set) var isDashUIActive = false
 
     public init(core: AppCore, settings: SettingsModel, navigation: NavigationModel, trips: TripsModel) {
         self.core = core
@@ -185,6 +199,17 @@ public final class RideModel {
     public nonisolated func displayList(now: TimeInterval) -> DashDisplayList {
         ui.displayList(now: now)
     }
+
+    /// Activates a dash control from the phone (as if the rider used it on the dash): the
+    /// `-uiDashSheet` launch option and the E2E music timeline open / drive the Music sheet with it.
+    public func performDashIntent(_ intent: DashIntent) {
+        if updateScheduled { flushModel() } // the controller must see the current model (e.g. `music`)
+        perform(ui.perform(intent, now: clock.now()), fromDash: false)
+        uiChanged()
+    }
+
+    /// The dash UI's state (open sheet, focus order…) for the phone UI and the E2E status.
+    public var dashUIState: DashUIState { ui.state }
 
     /// Phone preview interactions (taps/drags on the preview are dash touches in canvas pixels;
     /// on-screen buttons may send handlebar keys).
@@ -382,6 +407,22 @@ public final class RideModel {
         let intents = ui.handle(input, now: clock.now())
         perform(intents, fromDash: true)
         uiChanged()
+    }
+
+    /// Contract R2: the rider started Apple Music while the phone media remote drives the dash — the
+    /// Music app took Now Playing, so the bars control the music now. The Music sheet closes (the bars
+    /// could not close it any more) and the dash says so.
+    func handlebarHandedToMusic() {
+        Log.i("BTN", "[BTN] Apple Music took the handlebar buttons")
+        if ui.state.sheet == .music {
+            perform(ui.perform(.closeSheets, now: clock.now()), fromDash: false)
+        }
+        showDashToast(SessionText.musicTakesHandlebar(core.language))
+    }
+
+    /// Contract R3: the song was paused and the phone media remote claimed the buttons back.
+    func handlebarBackToDash() {
+        showDashToast(SessionText.handlebarBackToDash(core.language))
     }
 
     /// Short banner on the dash ("Reconnecting…"), nil to clear.
@@ -647,7 +688,7 @@ public final class RideModel {
                          preferences: s.map, isNight: night, date: minute, timeZone: .current, language: dashLanguage,
                          places: places, search: dashSearch, recording: core.tripRecorder.isRecording, lapTimer: lap,
                          toastText: nil, linkBanner: linkBanner, holdMessage: nil, showClock: true,
-                         handlebarFocus: s.handlebarControl)
+                         handlebarFocus: s.handlebarControl, music: nowPlayingProvider?())
     }
 
     /// The dash picture changed: re-render, warm the visible tiles, redraw the phone preview.
@@ -682,6 +723,11 @@ public final class RideModel {
     // MARK: - Timers
 
     private func updateLoops() {
+        let dashUI = (sessionActive && !sessionIsMirror) || previewRequests > 0 || isRideModeActive
+        if dashUI != isDashUIActive {
+            isDashUIActive = dashUI
+            onDashActivityChange?(dashUI)
+        }
         let wanted = sessionActive || previewRequests > 0 || isRideModeActive
         if wanted, uiTickTask == nil {
             uiTickTask = Task { [weak self] in
@@ -949,8 +995,12 @@ public final class RideModel {
             Task { await nav.navigateToSavedPlace(slot) }
         case .openMusic:
             break // UI-only (the controller opened the Music sheet)
-        case .musicPlayPause, .musicNext, .musicPrevious:
-            break // logic-session (music): forward to MusicModel
+        case .musicPlayPause:
+            musicCommandSink?(.playPause, fromDash)
+        case .musicNext:
+            musicCommandSink?(.next, fromDash)
+        case .musicPrevious:
+            musicCommandSink?(.previous, fromDash)
         }
     }
 
