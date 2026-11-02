@@ -162,16 +162,28 @@ final class LinkFieldFollowUpTests: XCTestCase {
 
     // MARK: LOG-1 — the failure summary says what happened
 
+    /// The first "EasyConn never answered" summary logged since `id`, waiting for the line itself:
+    /// LinkSession publishes `.failed(.dashNotFound)` and writes the summary just after it, outside its
+    /// lock, so a test that waited for the state could read the log before the line was there (flaky
+    /// test, music fix round F9). The fast timings re-arm the link 0.4 s later, so the state is checked
+    /// in the recorded events, not live.
+    private func notFoundSummary(since id: UInt64) async -> String? {
+        func find() -> String? { messages(since: id).first { $0.hasPrefix("!! Wi-Fi is up but EasyConn never answered") } }
+        _ = await linkEventually(timeout: 10) { find() != nil }
+        return find()
+    }
+
     func testTheNotFoundSummaryDescribesTimeoutsBonjourAndTheScan() async {
         let net = LinkMemoryNetwork(phoneHost: "192.168.0.50")
         net.blackhole(host: "192.168.0.1", port: 10930) // every connect to :10930 times out (field log 1)
         let link = makeLink(net, discovery: ListingBonjour())
+        let recorder = LinkEventRecorder(link)
         let before = lastLogID()
         link.start()
-        let failed = await linkEventually(timeout: 10) { link.state == .failed(.dashNotFound) }
-        XCTAssertTrue(failed, "\(link.state)")
-        let summary = messages(since: before).first { $0.hasPrefix("!! Wi-Fi is up but EasyConn never answered") }
-        XCTAssertNotNil(summary)
+        let summary = await notFoundSummary(since: before)
+        XCTAssertNotNil(summary, "\(link.state)")
+        let failed = await linkEventually { recorder.states.contains(.failed(.dashNotFound)) }
+        XCTAssertTrue(failed, "\(recorder.states)")
         let s = summary ?? ""
         XCTAssertTrue(s.contains("Bonjour: listed 192.168.0.1:10930"), s)
         // Gateway ×5 + Bonjour ×3 twice (one re-browse): every one timed out — none was "refused".
@@ -185,11 +197,14 @@ final class LinkFieldFollowUpTests: XCTestCase {
     func testTheNotFoundSummaryDescribesRefusalsWithoutBonjour() async {
         let net = LinkMemoryNetwork(phoneHost: "192.168.0.50") // nothing registered: every connect is refused
         let link = makeLink(net)
+        let recorder = LinkEventRecorder(link)
         let before = lastLogID()
         link.start()
-        let failed = await linkEventually(timeout: 10) { link.state == .failed(.dashNotFound) }
-        XCTAssertTrue(failed, "\(link.state)")
-        let s = messages(since: before).first { $0.hasPrefix("!! Wi-Fi is up but EasyConn never answered") } ?? ""
+        let summary = await notFoundSummary(since: before)
+        XCTAssertNotNil(summary, "\(link.state)")
+        let failed = await linkEventually { recorder.states.contains(.failed(.dashNotFound)) }
+        XCTAssertTrue(failed, "\(recorder.states)")
+        let s = summary ?? ""
         XCTAssertTrue(s.contains("Bonjour: not available"), s)
         XCTAssertTrue(s.contains("192.168.0.1:10930 refused \u{00D7}5"), s)
         XCTAssertTrue(s.contains("port scan 10915\u{2013}10935: none open"), s)

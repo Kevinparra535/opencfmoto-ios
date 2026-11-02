@@ -254,6 +254,33 @@ final class DashSnapshotTests: XCTestCase {
         snapshot("land-music-paused", list)
     }
 
+    /// Fix F3: the ring on the tile has no fill and runs OUTSIDE the cover (the artwork stays clean).
+    private func focusedTile(_ model: DashModel, _ state: DashNowPlaying.State) -> DashDisplayList {
+        let list = frame(music(model, DashFixtures.song(state)), now: musicNow) { ui in
+            _ = ui.handle(.knob(-1), now: self.musicNow)
+            XCTAssertEqual(ui.state.focusedId, "music.tile")
+        }
+        XCTAssertFalse(list.commands.contains { if case let .fill(_, c, _) = $0 { return c == DashPalette.focusFill }; return false })
+        return list
+    }
+
+    func testLandscapeMusicTileFocus() {
+        snapshot("land-music-tile-focus", focusedTile(DashFixtures.navigating(), .playing))
+    }
+
+    func testLandscapeMarginsMusicTileFocus() {
+        // the tightest landscape case: 1 px from the safe area's right edge, 3 px under the Menu FAB,
+        // the clock gives way
+        var m = DashFixtures.navigating()
+        m.margins = ScreenMargins(top: 22, bottom: 10, left: 12, right: 14)
+        snapshot("land-margins-music-tile-focus", focusedTile(m, .playing))
+    }
+
+    func testPortraitMusicPausedFocus() {
+        // portrait: the ring ends 3 px under the clock chip
+        snapshot("port-music-paused-focus", focusedTile(DashFixtures.navigating(DashFixtures.port), .paused))
+    }
+
     func testLandscapeMusicSheet() {
         let list = sheet(touchDash(music(DashFixtures.freeRide())))
         assertHas(list, ["music.sheet", "music.previous", "music.playPause", "music.next", "music.close"])

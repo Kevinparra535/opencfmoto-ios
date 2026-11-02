@@ -74,12 +74,14 @@ public enum DashMusicFormat {
         return h > 0 ? String(format: "%d:%02d:%02d", h, m, sec) : String(format: "%d:%02d", m, sec)
     }
 
-    /// "-3:51": time left at `now` = the rounded song length minus the whole seconds played, so the
-    /// elapsed and remaining labels change together (one re-render per second) and reach "-0:00" at
-    /// the end.
+    /// "-3:51": time left at `now` = the whole seconds of the song length minus the whole seconds
+    /// played, so the elapsed and remaining labels change together (one re-render per second) and
+    /// always add up to ⌊length⌋. The position is clamped to the length, so the label reaches "-0:00"
+    /// at the end even for a fractional length (245.6 s: "-4:05" … "-0:00"; the rounded length would
+    /// start at "-4:06" and stop at "-0:01" — fix F8).
     public static func remaining(_ music: DashNowPlaying, at now: TimeInterval) -> String? {
         guard let d = music.knownDuration else { return nil }
-        let left = max(0, DashFormat.roundHalfUp(d) - music.elapsedSeconds(at: now))
+        let left = max(0, DashFormat.roundHalfUp(d.rounded(.down)) - music.elapsedSeconds(at: now))
         return "-" + time(left)
     }
 }

@@ -603,10 +603,13 @@ public final class DashUIController: @unchecked Sendable {
             pendingPreference = .default
         }
         // Apple Music: the sheet closes when the song is gone (feature off, another app plays…) and
-        // when arrival starts (a preview / navigation start already closed every sheet above).
+        // when arrival starts (a preview / navigation start already closed every sheet above). A song
+        // that went away may be back in a moment, and the rider's next ★ was meant for ⏯: never the
+        // default item, End while navigating (F2). Arrival keeps its own rule below.
         if sheet == .music && (new.music == nil || (new.showsArrival && !prev.showsArrival)) {
             sheet = .none
-            pendingPreference = DashFocusEngine.defaultPreference(inPreview: new.inPreview, navigating: new.navigating)
+            pendingPreference = new.music == nil ? .musicGone
+                : DashFocusEngine.defaultPreference(inPreview: new.inPreview, navigating: new.navigating)
         }
         if new.showsArrival && !prev.showsArrival {
             focus.clear()
@@ -707,7 +710,11 @@ public final class DashUIController: @unchecked Sendable {
             focus.ensure(s.focusOrder, prefer: pref)
             pendingPreference = nil
         } else if focus.focusedId.map({ !s.focusOrder.contains($0) }) ?? true {
-            focus.ensure(s.focusOrder, prefer: defaultPref)
+            // F2: a Music control that vanished under the focus (the tile or the menu's "Music" while
+            // the song is gone for a moment) never hands it to the default item: while navigating that
+            // is End, and the rider's next ★ would end navigation without confirmation.
+            let musicGone = focus.focusedId.map(DashFocusEngine.isMusicControl) ?? false
+            focus.ensure(s.focusOrder, prefer: musicGone ? .musicGone : defaultPref)
         }
         // Scroll the focused control into view only when the focus moved (never fight a drag).
         if focus.focusedId != before || revealFocus {
@@ -1048,6 +1055,15 @@ public final class DashUIController: @unchecked Sendable {
             if w.circular {
                 cmds.append(.fill(DashPath.ellipse(in: r), DashPalette.focusFill, .nonZero))
                 cmds.append(.stroke(DashPath.ellipse(in: r.insetBy(dx: sw / 2, dy: sw / 2)),
+                                    DashStroke(width: sw, color: DashPalette.focusStroke, cap: .butt, join: .round)))
+            } else if id == DashFocusEngine.musicTileId {
+                // Fix F3: the ring parks on the tile after every close of the Music sheet, so a fill or
+                // an inset stroke would wash out the album cover (the point of the tile) for the rest of
+                // the ride. No fill, and the stroke OUTSIDE the cover: path r grown by sw/2, so the band
+                // covers r … r + sw and follows the cover's corners. Room for it on every canvas: the tile
+                // is 8 dp under the last FAB and 8 dp above the clock (DashMusicLayoutTests).
+                let rad = min(c.dp(DashDimens.musicTileRadius), min(r.width, r.height) / 2)
+                cmds.append(.stroke(DashPath.roundedRect(r.insetBy(dx: -sw / 2, dy: -sw / 2), radius: rad + sw / 2),
                                     DashStroke(width: sw, color: DashPalette.focusStroke, cap: .butt, join: .round)))
             } else {
                 let rad = min(c.dp(DashPalette.focusRadius), min(r.width, r.height) / 2)
