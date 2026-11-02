@@ -1307,9 +1307,11 @@ Engine inputs on iOS:
 | `navBackLong` | ◀ hold | DOWN…UP ≥ 600 ms | `seekBackward` begin/end (if the dash sends REWIND) | unverified | none | **none** |
 | `navFwdLong` | ▶ hold | DOWN…UP ≥ 600 ms | `seekForward` begin/end | unverified | none | **none** |
 
-Now Playing metadata, for the dash's own "now playing" widget:
-- title `"Dash control"`
-- artist `"◀ ▶ move · ★ OK · ★★ Back · ▶▶ Menu · ◀◀ Group"`
+Now Playing metadata, for the dash's own "now playing" widget. Printable ASCII only: the 450MT dash
+drew ◀ ▶ ★ · as empty boxes in its media pill (second field test), and the pill shows the title and
+only the start of the artist, so the most-used keys come first:
+- title `"OpenCfMoto"`
+- artist `"< > move  * OK  ** Back  >> Menu  << Group"`
 - album `"OpenCfMoto"`
 - duration 3600 s
 

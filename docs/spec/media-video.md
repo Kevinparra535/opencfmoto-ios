@@ -953,7 +953,7 @@ Port `AdaptivePolicy` verbatim (pure, testable; use the §14.1 vectors) and tick
 
 ### 15.7 ReplayKit mirror mode
 
-- The broadcast extension gets full-screen `CMSampleBuffer`s (often 420f/420v at native or scaled size; honour `RPVideoSampleOrientationKey`). Fit into the canvas with §10.3: `VTPixelTransferSession` scaling modes map neatly — FIT → `kVTScalingMode_Letterbox`, FILL → `kVTScalingMode_Trim`, STRETCH → `kVTScalingMode_Normal`. Margins need a destination sub-rect (vImage/Core Image).
+- The broadcast extension gets full-screen `CMSampleBuffer`s (often 420f/420v at native or scaled size; honour `RPVideoSampleOrientationKey`, whose quarter turns are the opposite of EXIF: ios-platform-facts.md §f). Fit into the canvas with §10.3: `VTPixelTransferSession` scaling modes map neatly — FIT → `kVTScalingMode_Letterbox`, FILL → `kVTScalingMode_Trim`, STRETCH → `kVTScalingMode_Normal`. Margins need a destination sub-rect (vImage/Core Image).
 - Default to **FIT** for mirror: iOS cannot rotate other apps the way Android's `MATCH_DASH` lock does, and FILL on a portrait phone shows only a horizontal slice (§10.3 table).
 - ReplayKit stops delivering frames on a static screen, just like Android's surface input: the 0.9 s keep-alive re-encode is mandatory. Recompute the fit whenever the buffer size or orientation changes (Android's `onCapturedContentResize` equivalent). Keep chroma-aligned (even) destination rects for 4:2:0.
 - No touch back: dash touches are dropped or used only for an overlay (Android does the same).

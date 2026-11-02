@@ -79,4 +79,8 @@ permiso de red local, el codificador de video del teléfono y el comportamiento 
 1. Modelo de moto y año, y el texto que aparece en el tablero en la pantalla de conexión.
 2. Hasta qué paso de la tabla llegaste y cuánto tardó cada uno.
 3. Si el mapa se ve completo, nítido y fluido, y si los toques responden en el lugar correcto.
-4. El archivo de registros compartido (y el `.h264` si algo se ve mal).
+4. **Espejo con el iPhone en horizontal** (por ejemplo, un vídeo de YouTube a pantalla completa): si
+   la imagen se ve derecha en el tablero girando el iPhone hacia un lado y hacia el otro. Y con los
+   **botones del manillar** activados, si el recuadro de música del tablero dice «OpenCfMoto < > move»
+   sin cuadros vacíos.
+5. El archivo de registros compartido (y el `.h264` si algo se ve mal).

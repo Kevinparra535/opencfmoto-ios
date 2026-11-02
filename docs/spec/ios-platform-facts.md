@@ -673,7 +673,7 @@ technologies.
 | Local Network permission | Shared with the container app. Extensions "assumed to be running in the background" are **silently denied** while the state is undetermined, so the host must get the permission first. Put the keys in the host `Info.plist`. | High |
 | Starting it from the app | `RPSystemBroadcastPickerView`: set `preferredExtension` to the extension bundle ID and `showsMicrophoneButton = false`. The user taps, the system shows the sheet and a countdown. Programmatically "tapping" the internal button is undocumented and fragile. One report says `preferredExtension` was ignored on some devices. | High / Medium |
 | Buffers | Video `CMSampleBuffer`s at native screen pixel size, in `420YpCbCr8BiPlanarFullRange` (forum 127985). Variable frame rate, **up to 30 fps**, only when the screen changes (Twilio). | Medium |
-| Orientation | `RPVideoSampleOrientationKey` attachment, an `NSNumber` holding a `CGImagePropertyOrientation`. Rotate with `VTPixelRotationSession` and scale with `VTPixelTransferSession` (both iOS 16+). | High |
+| Orientation | `RPVideoSampleOrientationKey` attachment, an `NSNumber` holding a `CGImagePropertyOrientation` raw value. The buffer stays portrait; in landscape the picture lies on its side in it. **Its quarter turns are the opposite of the EXIF meaning:** 6 (`.right`) needs a 90° counter-clockwise turn to be upright, 8 (`.left`) a 90° clockwise one (1–4 read the same either way). **Field-verified** (second field test: iPhone 14 Pro Max, iOS 27.0.1, CFMOTO 450MT): read as EXIF, a full-screen YouTube video in landscape came out upside down on the dash, the 180° error that inverted quarter turns give, while portrait was right. WebDriverAgent PR #39 measured the same on iOS 26.6.1, and react-native-webrtc maps `.left` to a 90° clockwise rotation and `.right` to 270°. The app converts the tag with `MirrorFitMath.displayOrientation(replayKitValue:)` (not yet ridden). Rotate with `VTPixelRotationSession` and scale with `VTPixelTransferSession` (both iOS 16+). | High (field) |
 | Threading | "ReplayKit invokes methods in your `RPBroadcastSampleHandler` subclass in a serial fashion". Return from `processSampleBuffer` quickly. | High |
 | Screen lock | A secondary source says recording "stops automatically when the screen locks or there is an incoming call". Expect the broadcast to end or pause, so the user must restart it. | Low |
 | Talking to the host app | App Group container (shared `UserDefaults(suiteName:)`), Darwin notifications (no payload), and an **AF_UNIX socket file in the App Group container**. Jitsi's sample does this: socket `rtc_SSFD`, plus Darwin notifications for start and stop. Watch the 104-byte `sun_path` limit. App Groups are allowed on free teams. | High (pattern) |
@@ -681,9 +681,10 @@ technologies.
 ### Practical guidance
 
 ```swift
-let o = CMGetAttachment(sampleBuffer, key: RPVideoSampleOrientationKey as CFString,
-                        attachmentModeOut: nil) as? NSNumber
-let orientation = CGImagePropertyOrientation(rawValue: o?.uint32Value ?? 1) ?? .up
+let tag = (CMGetAttachment(sampleBuffer, key: RPVideoSampleOrientationKey as CFString,
+                           attachmentModeOut: nil) as? NSNumber)?.uint32Value ?? 1
+// Not an EXIF correction: 6 and 8 are swapped (see Orientation above).
+let orientation = CGImagePropertyOrientation(rawValue: MirrorFitMath.displayOrientation(replayKitValue: tag)) ?? .up
 // rotate (VTPixelRotationSession) + scale to ≤ 800×944 (VTPixelTransferSession) → VTCompressionSession
 // → send Annex-B NAL units over the App-Group Unix socket to the host, which owns the dash link.
 ```
@@ -704,6 +705,10 @@ let orientation = CGImagePropertyOrientation(rawValue: o?.uint32Value ?? 1) ?? .
   and SocketConnection.swift in the same folder
 - Screen-lock behavior (search excerpt only): https://www.tencentcloud.com/document/product/1071/41878
 - https://developer.apple.com/documentation/videotoolbox/vtpixelrotationsession
+- ReplayKit quarter turns measured on a device (iPhone 15 Pro, iOS 26.6.1):
+  https://github.com/droidrun/WebDriverAgent/pull/39
+- Tag → `RTCVideoRotation` in react-native-webrtc (Jitsi's screen sharing):
+  https://github.com/react-native-webrtc/react-native-webrtc/blob/master/ios/RCTWebRTC/ScreenCapturer.m
 
 ---
 
@@ -727,6 +732,11 @@ A voice-prompt session using `.duckOthers` or `.interruptSpokenAudioAndMixWithOt
 - When the rider starts music in another app, that app becomes Now Playing and receives the handlebar keys.
 - `MPNowPlayingInfoCenter.playbackState` "only applies to macOS". On iOS, "playing" comes from actual audio
   plus `MPNowPlayingInfoPropertyPlaybackRate`.
+
+**Now Playing text on the dash.** The dash shows our Now Playing title and the start of the artist in its
+own media pill over the projected picture, in its own font. **Field-verified** (second field test, CFMOTO
+450MT): that font drew ◀ ▶ ★ · as empty boxes ("OpenCfMoto ▯ ▯ mov…"). The metadata is printable ASCII
+only (`HandlebarNowPlayingMetadata`, input-controls.md §9.1).
 
 **Silent audio loop.** It works technically and the Android port uses an equivalent. It is an App Review
 risk under 2.5.4: the standard rejection is "unable to play any audible content when the app was running in
