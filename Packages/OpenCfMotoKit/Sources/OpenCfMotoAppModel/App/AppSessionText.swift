@@ -95,6 +95,36 @@ enum SessionText {
              "El acceso a la red local está desactivado: actívalo en Ajustes \u{25B8} OpenCfMoto")
     }
 
+    /// The system dropped the link's connect() although Local Network access works (review POSIX-2).
+    static func systemBlocksBikeLink(_ l: NavLanguage) -> String {
+        pick(l, "Something on the phone blocks the bike Wi-Fi (VPN, data restriction or filter)",
+             "Algo en el teléfono bloquea el Wi-Fi de la moto (VPN, restricción de datos o filtro)")
+    }
+
+    /// Dialog text for `systemBlocksBikeLink`.
+    static func systemBlocksBikeLinkMessage(_ l: NavLanguage) -> String {
+        pick(l, "Local Network access is on, but iOS still blocked the connection to the dash. A VPN without local-network access, a Wi-Fi data restriction for OpenCfMoto or a content filter does that: turn it off, then tap Connect again. Share Logs if it keeps happening.",
+             "El acceso a la red local está activado, pero iOS bloqueó igualmente la conexión con el tablero. Eso lo hace una VPN sin acceso a la red local, una restricción de datos Wi-Fi para OpenCfMoto o un filtro de contenido: desactívalo y vuelve a tocar Conectar. Comparte los registros si sigue pasando.")
+    }
+
+    /// The system dropped the link's connect() and the Local Network check could not tell why.
+    static func bikeLinkBlocked(_ l: NavLanguage) -> String {
+        pick(l, "The phone blocked the connection to the dash \u{2014} check Local Network access and any VPN",
+             "El teléfono bloqueó la conexión con el tablero: revisa el acceso a la red local y cualquier VPN")
+    }
+
+    /// Dialog text for `bikeLinkBlocked`.
+    static func bikeLinkBlockedMessage(_ l: NavLanguage) -> String {
+        pick(l, "iOS blocked the connection to the dash. Check that Local Network access is on for OpenCfMoto (Settings \u{25B8} OpenCfMoto \u{25B8} Local Network) and that no VPN, Wi-Fi data restriction or content filter blocks the bike Wi-Fi, then tap Connect again.",
+             "iOS bloqueó la conexión con el tablero. Comprueba que el acceso a la red local esté activado para OpenCfMoto (Ajustes \u{25B8} OpenCfMoto \u{25B8} Red local) y que ninguna VPN, restricción de datos Wi-Fi o filtro de contenido bloquee el Wi-Fi de la moto; luego vuelve a tocar Conectar.")
+    }
+
+    /// The rider tapped "I've joined" while iOS still reports another Wi-Fi (review SESS-1).
+    static func manualJoinStillOnOtherWifi(other: String, ssid: String, _ l: NavLanguage) -> String {
+        pick(l, "iOS still reports \u{201C}\(other)\u{201D}. Join \u{201C}\(ssid)\u{201D} in Settings \u{25B8} Wi-Fi with the password below, then come back \u{2014} OpenCfMoto continues automatically.",
+             "iOS sigue indicando «\(other)». Únete a «\(ssid)» en Ajustes \u{25B8} Wi-Fi con la contraseña de abajo y vuelve: OpenCfMoto seguirá automáticamente.")
+    }
+
     static func noWifiAddress(_ l: NavLanguage) -> String {
         pick(l, "not connected to the bike Wi-Fi \u{2014} join it, then tap Connect",
              "no estás conectado al Wi-Fi de la moto: únete y vuelve a tocar Conectar")

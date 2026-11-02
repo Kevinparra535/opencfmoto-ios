@@ -40,7 +40,9 @@ final class LinkSession: @unchecked Sendable {
         case dead
     }
 
-    private enum DiscoveryResult { case accepted, notFound, denied, aborted }
+    /// `denied`: a probe's connect() was dropped by the system (no evidence that Local Network access
+    /// works); `blocked`: the same, while this session proved access works (review POSIX-2).
+    private enum DiscoveryResult { case accepted, notFound, denied, blocked, aborted }
 
     static let controlPort: UInt16 = 10922
     static let mediaControlPort: UInt16 = 10921
@@ -95,6 +97,12 @@ final class LinkSession: @unchecked Sendable {
     /// When the oldest 114 left without a frame since the last frame sent (or reconnect) was
     /// given up (`.pullMissed`): the watchdog's "never got a first frame" check (MP-1).
     private var firstUnansweredPullAt: TimeInterval?
+    /// Local Network access works in this session: the Bonjour browse listed the dash (iOS delivers
+    /// results only with access) or a probe's TCP connect went through. A later EHOSTUNREACH from
+    /// connect() is then a VPN / data rule / filter, not privacy (review POSIX-2).
+    private var localNetworkProven = false
+    /// What the current discovery run saw, for its failure summary (review LOG-1).
+    private var tally = DiscoveryTally()
     /// Log lines produced while holding `lock` (flushed by `withLock`).
     private var pendingLogs: [String] = []
 
@@ -330,23 +338,20 @@ final class LinkSession: @unchecked Sendable {
             let stream: any ByteStream
             do {
                 stream = try await listener.accept()
+                relistens = 0 // a working listener earns a fresh budget (several suspensions in one ride)
             } catch {
                 guard isAlive else { return }
-                // A listener dying mid-session would make every reconnect fail silently: re-listen.
+                // A listener dying mid-session (iOS reclaims the sockets of a suspended app) would make
+                // every reconnect fail silently: listen again. The dead one still holds the port (a new
+                // bind would get EADDRINUSE): close and forget it first (review POSIX-1).
                 Log.e("LINK", "[:\(port)] accept ended: \(error)")
-                guard relistens < 5, await LinkIO.sleep(max(0.05, timings.reconnectBackoffBase)) else { return }
-                relistens += 1
-                guard let fresh = try? await network.listen(port: port) else { continue }
-                let ok: Bool = withLock {
-                    if alive { listeners[port] = fresh }
-                    return alive
+                let dead = listener
+                dead.close()
+                withLock {
+                    if let current = listeners[port], current === dead { listeners[port] = nil }
                 }
-                if !ok {
-                    fresh.close()
-                    return
-                }
+                guard let fresh = await listenAgain(port: port, attempts: &relistens) else { return }
                 listener = fresh
-                Log.i("LINK", "[:\(port)] listening again")
                 continue
             }
             switch register(stream) {
@@ -368,6 +373,34 @@ final class LinkSession: @unchecked Sendable {
                 return
             }
         }
+    }
+
+    /// Binds `port` again after its listener died: up to 5 tries per death (`attempts`, reset by the
+    /// next successful accept), with a growing pause. nil when the session ended or every try failed.
+    private func listenAgain(port: UInt16, attempts: inout Int) async -> (any StreamListener)? {
+        while attempts < 5 {
+            attempts += 1
+            guard await LinkIO.sleep(max(0.05, timings.reconnectBackoffBase * Double(attempts))), isAlive else { return nil }
+            let fresh: any StreamListener
+            do {
+                fresh = try await network.listen(port: port)
+            } catch {
+                Log.e("LINK", "[:\(port)] listening again failed (try \(attempts)/5): \(error)")
+                continue
+            }
+            let ok: Bool = withLock {
+                if alive { listeners[port] = fresh }
+                return alive
+            }
+            guard ok else {
+                fresh.close()
+                return nil
+            }
+            Log.i("LINK", "[:\(port)] listening again")
+            return fresh
+        }
+        Log.e("LINK", "[:\(port)] !! cannot listen on this port any more — the dash cannot call back on it until the link restarts (Stop, then Connect)")
+        return nil
     }
 
     /// Accounting for an accepted bike socket (Android `spawnAccept`): everConnected, budget reset,
@@ -608,11 +641,12 @@ final class LinkSession: @unchecked Sendable {
             guard alive, !discovering else { return false }
             discovering = true
             probeAttemptCounter = 0
+            tally = DiscoveryTally()
             return true
         }
         guard start else { return }
         let result = await discoveryLadder()
-        enum Next { case none, connectBackTimer, logNotFound }
+        enum Next { case none, connectBackTimer, logNotFound(String), logDenied(String), logBlocked(String) }
         let next: Next = withLock {
             discovering = false
             guard alive else { return .none }
@@ -624,10 +658,15 @@ final class LinkSession: @unchecked Sendable {
             case .notFound:
                 guard connections.isEmpty else { return .none }
                 failLocked(.dashNotFound)
-                return .logNotFound
+                return .logNotFound(tally.summary)
             case .denied:
-                if connections.isEmpty { failLocked(.localNetworkDenied) }
-                return .none
+                guard connections.isEmpty else { return .none }
+                failLocked(.localNetworkDenied)
+                return .logDenied(tally.summary)
+            case .blocked:
+                guard connections.isEmpty else { return .none }
+                failLocked(.localNetworkBlocked)
+                return .logBlocked(tally.summary)
             case .aborted:
                 return .none
             }
@@ -635,11 +674,23 @@ final class LinkSession: @unchecked Sendable {
         switch next {
         case .connectBackTimer:
             spawn { [self] in await self.connectBackTimer() }
-        case .logNotFound:
-            Log.e("LINK", "!! Wi-Fi is up but EasyConn never answered (Bonjour empty, :10930 refused, nearby ports quiet). Keep the pairing QR open on the dash.")
+        case let .logNotFound(summary):
+            // What actually happened (review LOG-1), e.g. "Bonjour: listed 192.168.0.1:10930 · probes:
+            // 192.168.0.1:10930 timed out ×11 · port scan 10915–10935: none open".
+            Log.e("LINK", "!! Wi-Fi is up but EasyConn never answered (\(summary)). Keep the pairing QR open on the dash.")
+        case let .logDenied(summary):
+            Log.e("LINK", "!! the system dropped every connection to the dash (EHOSTUNREACH straight from connect()): Local Network access is probably off for OpenCfMoto, else a VPN / Wi-Fi data restriction / filter (\(summary))")
+        case let .logBlocked(summary):
+            Log.e("LINK", "!! the system dropped every connection to the dash (EHOSTUNREACH straight from connect()) although Local Network access works (Bonjour answered / a probe connected): a VPN without local-network access, a Wi-Fi data restriction for OpenCfMoto or a content filter (\(summary))")
         case .none:
             break
         }
+    }
+
+    /// A probe's connect() was dropped by the system: Local Network privacy as far as the link can tell,
+    /// unless this session proved access works — then a VPN / data rule / filter (review POSIX-2).
+    private func droppedBySystem() -> DiscoveryResult {
+        withLock { localNetworkProven } ? .blocked : .denied
     }
 
     /// Initial ladder (iOS order, control-plane.md §18.5): Bonjour raced with gateway:10930 ×5 → other
@@ -661,7 +712,7 @@ final class LinkSession: @unchecked Sendable {
             paths.append { [self] in await self.bonjourPath(discovery, gate: gate, denied: denied) }
         }
         if await LinkSession.firstTrue(paths) { return .accepted }
-        if denied.current { return .denied }
+        if denied.current { return droppedBySystem() }
         guard canProbe else { return .aborted }
 
         // 2. Other guessed gateways.
@@ -670,7 +721,7 @@ final class LinkSession: @unchecked Sendable {
                            gate: gate, denied: denied) {
                 return .accepted
             }
-            if denied.current { return .denied }
+            if denied.current { return droppedBySystem() }
             guard canProbe else { return .aborted }
         }
 
@@ -678,15 +729,26 @@ final class LinkSession: @unchecked Sendable {
         let open = await probeClient.scanOpenPorts(host: primary, ports: timings.portScanRange,
                                                    timeout: timings.portScanConnectTimeout,
                                                    shouldContinue: { [weak self] in self?.canProbe ?? false })
+        let scanned = timings.portScanRange
+        withLock { tally.scan = DiscoveryTally.Scan(range: scanned, open: open) }
         for port in open {
             if await probe(host: primary, port: port, attempts: timings.scannedPortProbeAttempts, gate: gate, denied: denied) {
                 return .accepted
             }
-            if denied.current { return .denied }
+            if denied.current { return droppedBySystem() }
             guard canProbe else { return .aborted }
         }
-        if denied.current { return .denied }
+        if denied.current { return droppedBySystem() }
         return canProbe ? .notFound : .aborted
+    }
+
+    /// Bonjour results seen by the session: they prove Local Network access (POSIX-2) and go into the
+    /// discovery summary (LOG-1).
+    private func noteBonjourResults(_ found: [DiscoveredDash], tallied: Bool) {
+        withLock {
+            if !found.isEmpty { localNetworkProven = true }
+            if tallied { tally.bonjourListed(found.map { "\($0.host):\($0.port)" }) }
+        }
     }
 
     private func bonjourPath(_ discovery: DashDiscovery, gate: ProbeGate, denied: Locked<Bool>) async -> Bool {
@@ -694,6 +756,7 @@ final class LinkSession: @unchecked Sendable {
             guard canProbe, await !gate.accepted else { return false }
             Log.i("LINK", "[DISC] discovering _EasyConn._tcp.…")
             let found = await discovery.discover(timeout: timings.bonjourBrowseTimeout)
+            noteBonjourResults(found, tallied: true)
             guard let endpoint = found.first else {
                 Log.i("LINK", "[DISC] NSD timed out / no usable EasyConn advertisement")
                 return false
@@ -727,6 +790,10 @@ final class LinkSession: @unchecked Sendable {
             }
             let outcome = await probeClient.probeOnce(host: host, port: port, attempt: attempt)
             await gate.release(accepted: outcome == .accepted)
+            withLock {
+                if outcome.connected { localNetworkProven = true }
+                if !reconnecting { tally.probed("\(host):\(port)", outcome.summaryKind) }
+            }
             switch outcome {
             case .accepted:
                 withLock {
@@ -854,7 +921,9 @@ final class LinkSession: @unchecked Sendable {
             }
             if !accepted, canProbe, !denied.current, let discovery {
                 Log.i("LINK", "[DISC] discovering _EasyConn._tcp.…")
-                if let endpoint = await discovery.discover(timeout: timings.bonjourBrowseTimeout).first {
+                let found = await discovery.discover(timeout: timings.bonjourBrowseTimeout)
+                noteBonjourResults(found, tallied: false)
+                if let endpoint = found.first {
                     Log.i("LINK", "[DISC] NSD → \(endpoint.host):\(endpoint.port)")
                     accepted = await probe(host: endpoint.host, port: endpoint.port, attempts: timings.reconnectProbeAttempts,
                                            gate: gate, denied: denied, reconnecting: true)
@@ -915,7 +984,8 @@ final class LinkSession: @unchecked Sendable {
                     lastRecoveryAt = now
                     noFirstFrame = true
                 }
-                if case let .failed(f) = state, f == .lostLink || f == .dashNotFound || f == .localNetworkDenied,
+                if case let .failed(f) = state,
+                   f == .lostLink || f == .dashNotFound || f == .localNetworkDenied || f == .localNetworkBlocked,
                    let interval = timings.errorRearmInterval, now - lastRecoveryAt > interval, connections.isEmpty {
                     lastRecoveryAt = now
                     rearm = true
@@ -953,6 +1023,77 @@ final class LinkSession: @unchecked Sendable {
         } else {
             spawn { [self] in await self.runDiscovery() }
         }
+    }
+}
+
+/// What one discovery run saw, for its "EasyConn never answered" summary (review LOG-1: the line used
+/// to be a fixed "Bonjour empty, :10930 refused, nearby ports quiet" whatever happened).
+struct DiscoveryTally: Sendable, Equatable {
+    struct Count: Sendable, Equatable {
+        var kind: String
+        var count: Int
+    }
+
+    struct Target: Sendable, Equatable {
+        var target: String
+        var counts: [Count]
+    }
+
+    struct Scan: Sendable, Equatable {
+        var range: ClosedRange<UInt16>
+        var open: [UInt16]
+    }
+
+    /// Endpoints Bonjour listed ("host:port"); nil = no browse ran (no discovery service), [] = nothing.
+    var bonjour: [String]?
+    /// Probe outcomes per target, in first-probed order, kinds in first-seen order.
+    var targets: [Target] = []
+    /// The last-resort port scan (nil = not reached).
+    var scan: Scan?
+
+    mutating func bonjourListed(_ endpoints: [String]) {
+        var all = bonjour ?? []
+        for e in endpoints where !all.contains(e) { all.append(e) }
+        bonjour = all
+    }
+
+    mutating func probed(_ target: String, _ kind: String) {
+        let i = targets.firstIndex { $0.target == target } ?? {
+            targets.append(Target(target: target, counts: []))
+            return targets.count - 1
+        }()
+        if let k = targets[i].counts.firstIndex(where: { $0.kind == kind }) {
+            targets[i].counts[k].count += 1
+        } else {
+            targets[i].counts.append(Count(kind: kind, count: 1))
+        }
+    }
+
+    /// "Bonjour: listed 192.168.0.1:10930 · probes: 192.168.0.1:10930 timed out ×11 · port scan
+    /// 10915–10935: none open".
+    var summary: String {
+        var parts: [String] = []
+        switch bonjour {
+        case nil: parts.append("Bonjour: not available")
+        case let list? where list.isEmpty: parts.append("Bonjour: nothing listed")
+        case let list?: parts.append("Bonjour: listed \(list.joined(separator: ", "))")
+        }
+        if targets.isEmpty {
+            parts.append("probes: none sent")
+        } else {
+            let each = targets.map { t in
+                "\(t.target) " + t.counts.map { "\($0.kind) \u{00D7}\($0.count)" }.joined(separator: ", ")
+            }
+            parts.append("probes: " + each.joined(separator: "; "))
+        }
+        if let scan {
+            let range = "\(scan.range.lowerBound)\u{2013}\(scan.range.upperBound)"
+            let open = scan.open.isEmpty ? "none open" : "open \(scan.open.map(String.init).joined(separator: ", "))"
+            parts.append("port scan \(range): \(open)")
+        } else {
+            parts.append("port scan: not reached")
+        }
+        return parts.joined(separator: " \u{00B7} ")
     }
 }
 

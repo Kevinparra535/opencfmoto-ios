@@ -65,11 +65,22 @@ public protocol SystemControlling: AnyObject {
     /// (the ride re-evaluates night mode then; it also re-reads it at least once a minute).
     /// Default (protocol extension): false.
     var isSystemDarkMode: Bool { get }
+    /// ADDITION (field follow-up, review POSIX-2): the Local Network check after the bike link's
+    /// connect() was dropped by the system (EHOSTUNREACH: Local Network privacy, or a VPN / Wi-Fi data
+    /// restriction / filter, which look the same to a BSD socket). That connect already brought up the
+    /// system alert if it was due, so unlike `checkLocalNetworkAccess` this may probe without an earlier
+    /// explicit request. Default (protocol extension): `checkLocalNetworkAccess()`.
+    func checkLocalNetworkAccessAfterBlockedConnect() async -> LocalNetworkAccessState
 }
 
 public extension SystemControlling {
     /// Conformers that cannot tell report a light system appearance (AUTO = clock only).
     var isSystemDarkMode: Bool { false }
+
+    /// Conformers without a separate post-block check answer with the quiet one.
+    func checkLocalNetworkAccessAfterBlockedConnect() async -> LocalNetworkAccessState {
+        await checkLocalNetworkAccess()
+    }
 }
 
 /// Where the app keeps its files.

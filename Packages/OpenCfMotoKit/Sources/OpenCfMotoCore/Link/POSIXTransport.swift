@@ -13,7 +13,12 @@
 //   dash calls back (session-network.md §4.5). Loopback destinations, our own addresses and
 //   destinations outside every local subnet connect unbound. Linux has no unprivileged equivalent
 //   (SO_BINDTODEVICE needs CAP_NET_RAW): the choice is only logged there.
-// - Listeners: 0.0.0.0:<port> with SO_REUSEADDR (NWNetworkProvider's allowLocalEndpointReuse).
+// - Listeners: 0.0.0.0:<port> with SO_REUSEADDR (NWNetworkProvider's allowLocalEndpointReuse). A parked
+//   accept looks at the listener's SO_ERROR every `listenerCheckInterval` (5 s): XNU reclaims ("defuncts")
+//   every socket of an app it suspends, and a non-blocking defunct listener never wakes the parked accept
+//   (kqueue reports a listener readable only with a completed connection queued; none completes, the
+//   dash's SYN gets a RST) while accept(2) keeps answering EAGAIN. Its SO_ERROR (EBADF, set by
+//   sodefunct) is the only sign: accept then throws and the link listens again (review POSIX-1).
 // - Every stream: non-blocking, close-on-exec, TCP_NODELAY, SO_NOSIGPIPE (Darwin) / MSG_NOSIGNAL.
 // - One reactor thread sleeps in poll(2) over the descriptors with a parked operation (plus a wake
 //   pipe). An operation tries its syscall first and parks only on EAGAIN: no busy loop, no thread per
@@ -28,7 +33,9 @@
 // |---------------------------------------------|--------------------------------------------|--------------------------------|
 // | listen: port held by another process        | .failed("EADDRINUSE: …")                   | LinkFailure.portInUse(port)    |
 // | listen: any other failure                   | .failed("listen :<port> failed: …")        | LinkFailure.portInUse(port)    |
-// | connect: Local Network privacy denial (*)   | .failed("localNetworkDenied")              | LinkFailure.localNetworkDenied |
+// | accept: listener reclaimed (SO_ERROR set)   | .failed("accept :<port> failed: listener…")| listens again on that port     |
+// | connect: dropped by the system (*)          | .failed("localNetworkDenied")              | LinkFailure.localNetworkDenied |
+// |   … while Bonjour proved access (**)        | (same)                                     | LinkFailure.localNetworkBlocked|
 // | connect: no answer within `timeout`         | .timeout                                   | probe attempt failed           |
 // | connect: refused                            | .failed("ECONNREFUSED: …")                 | probe attempt failed           |
 // | connect: any other errno                    | .failed("<ERRNO>: …") e.g. EHOSTUNREACH    | probe attempt failed           |
@@ -42,6 +49,12 @@
 // later, through SO_ERROR. So only a synchronous EHOSTUNREACH towards a local subnet on an Apple
 // platform counts. It is retried until the deadline (TN3179: the system "may deny the operation
 // immediately, before the user has responded to the alert") and then thrown as localNetworkDenied.
+// (**) Every other NECP drop looks the same to a BSD socket (a VPN with includeAllNetworks and no
+// excludeLocalNetworks, a per-app Wi-Fi data rule, a content filter: tcp_output.c / ip_output.c return
+// the same synchronous EHOSTUNREACH). Only Network.framework clients see the Local Network tag. So the
+// link calls it privacy only without evidence to the contrary: when its own Bonjour browse listed the
+// dash (results are only delivered with Local Network access) it reports `.localNetworkBlocked`, and the
+// app checks the Local Network state before showing the Local Network dialog (review POSIX-2).
 
 import Foundation
 #if canImport(Darwin)
@@ -750,14 +763,21 @@ public final class POSIXStreamListener: StreamListener, @unchecked Sendable {
     public let port: UInt16
     private let socket: POSIXSocket
     private let noDelay: Bool
+    /// A parked accept wakes this often to look at the listener's SO_ERROR (see the file header).
+    private let checkInterval: TimeInterval
+    /// Test seam replacing getsockopt(SO_ERROR) (nil = the real one).
+    private let errorCall: POSIXNetworkProvider.ListenerErrorCall?
     private let onAccept: (@Sendable (POSIXByteStream) -> Void)?
     private let onStreamClose: (@Sendable (POSIXByteStream) -> Void)?
 
-    init(socket: POSIXSocket, port: UInt16, noDelay: Bool, onAccept: (@Sendable (POSIXByteStream) -> Void)?,
+    init(socket: POSIXSocket, port: UInt16, noDelay: Bool, checkInterval: TimeInterval = 5,
+         errorCall: POSIXNetworkProvider.ListenerErrorCall? = nil, onAccept: (@Sendable (POSIXByteStream) -> Void)?,
          onStreamClose: (@Sendable (POSIXByteStream) -> Void)?) {
         self.socket = socket
         self.port = port
         self.noDelay = noDelay
+        self.checkInterval = checkInterval
+        self.errorCall = errorCall
         self.onAccept = onAccept
         self.onStreamClose = onStreamClose
     }
@@ -787,12 +807,18 @@ public final class POSIXStreamListener: StreamListener, @unchecked Sendable {
             switch e {
             case EAGAIN, EWOULDBLOCK:
                 aborted = 0
-                try await socket.park(.read)
+                do {
+                    try await socket.park(.read, deadline: monotonicNanos() + nanos(max(0.05, checkInterval)))
+                } catch TransportError.timeout {
+                    // Nothing came in for a while: make sure iOS did not reclaim the listener meanwhile.
+                    try checkNotReclaimed()
+                }
             case EINTR:
                 continue
             case ECONNABORTED, EPROTO:
-                // A client gave up before accept; endless repeats mean a dead (defunct) listener:
-                // fail so the link listens again.
+                // A client gave up before accept (Linux reports it, XNU drops it from the queue). Endless
+                // repeats mean a dead blocking listener: fail so the link listens again. (A non-blocking
+                // defunct listener answers EAGAIN instead, never ECONNABORTED: the SO_ERROR check finds it.)
                 aborted += 1
                 if aborted >= 32 { throw TransportError.failed("accept :\(port) failed: \(POSIXErrno.describe(e)), repeatedly") }
             case EMFILE, ENFILE, ENOBUFS, ENOMEM:
@@ -806,6 +832,20 @@ public final class POSIXStreamListener: StreamListener, @unchecked Sendable {
     }
 
     public func close() { socket.close() }
+
+    /// XNU defuncts the sockets of a suspended app (sodefunct sets SO_ERROR = EBADF). A defunct
+    /// listener never wakes a parked accept and accept(2) answers EAGAIN before looking at the error,
+    /// so the periodic SO_ERROR read is the only way to notice. Throws (the link then closes this
+    /// listener and listens again); returns when the listener is fine.
+    private func checkNotReclaimed() throws {
+        if socket.isClosed { throw TransportError.closed }
+        let err = errorCall?(port) ?? socket.pendingError() // reading SO_ERROR clears it
+        if socket.isClosed { throw TransportError.closed }
+        guard err != 0 else { return }
+        let what = POSIXErrno.describe(err)
+        Log.w("NET", "listener :\(port) reclaimed by the system (SO_ERROR \(what), e.g. while the app was suspended) — failing its accept so the link listens again")
+        throw TransportError.failed("accept :\(port) failed: listener reclaimed (\(what))")
+    }
 }
 
 // MARK: - Provider
@@ -834,11 +874,14 @@ public final class POSIXNetworkProvider: NetworkProvider, @unchecked Sendable {
         public var detectLocalNetworkDenial: Bool
         /// Pause between connect attempts while that denial lasts (the alert may still be open).
         public var localNetworkRetryInterval: TimeInterval
+        /// How often a parked accept checks its listener's SO_ERROR (XNU reclaims the sockets of a
+        /// suspended app; a reclaimed listener never wakes the accept by itself). Minimum 50 ms.
+        public var listenerCheckInterval: TimeInterval
 
         public init(bindHost: String? = nil, noDelay: Bool = true, backlog: Int32 = 16, bindToInterface: Bool = true,
                     interfaceProvider: @escaping @Sendable () -> [InterfaceAddress] = { InterfaceAddresses.current() },
                     detectLocalNetworkDenial: Bool = POSIXNetworkProvider.platformHasLocalNetworkPrivacy,
-                    localNetworkRetryInterval: TimeInterval = 0.25) {
+                    localNetworkRetryInterval: TimeInterval = 0.25, listenerCheckInterval: TimeInterval = 5) {
             self.bindHost = bindHost
             self.noDelay = noDelay
             self.backlog = backlog
@@ -846,6 +889,7 @@ public final class POSIXNetworkProvider: NetworkProvider, @unchecked Sendable {
             self.interfaceProvider = interfaceProvider
             self.detectLocalNetworkDenial = detectLocalNetworkDenial
             self.localNetworkRetryInterval = localNetworkRetryInterval
+            self.listenerCheckInterval = listenerCheckInterval
         }
     }
 
@@ -880,10 +924,13 @@ public final class POSIXNetworkProvider: NetworkProvider, @unchecked Sendable {
 
     /// Test seam replacing connect(2): returns its result and errno.
     typealias ConnectCall = @Sendable (_ fd: Int32, _ address: sockaddr_in) -> (rc: Int32, errno: Int32)
+    /// Test seam replacing a listener's getsockopt(SO_ERROR) read: returns the pending error (0 = none).
+    typealias ListenerErrorCall = @Sendable (_ port: UInt16) -> Int32
 
     public let options: Options
     private let trace: Trace?
     private let connectCall: ConnectCall?
+    private let listenerErrorCall: ListenerErrorCall?
     private let counters = Locked(Counters())
     /// Last route logged per destination (logged again only when it changes).
     private let loggedRoutes = Locked([String: Route]())
@@ -892,10 +939,11 @@ public final class POSIXNetworkProvider: NetworkProvider, @unchecked Sendable {
         self.init(options: options, trace: trace, connectCall: nil)
     }
 
-    init(options: Options, trace: Trace?, connectCall: ConnectCall?) {
+    init(options: Options, trace: Trace?, connectCall: ConnectCall?, listenerErrorCall: ListenerErrorCall? = nil) {
         self.options = options
         self.trace = trace
         self.connectCall = connectCall
+        self.listenerErrorCall = listenerErrorCall
     }
 
     public var snapshot: Counters { counters.current }
@@ -939,7 +987,8 @@ public final class POSIXNetworkProvider: NetworkProvider, @unchecked Sendable {
         let tr = trace
         let ctr = counters
         return POSIXStreamListener(
-            socket: sock, port: boundPort, noDelay: options.noDelay,
+            socket: sock, port: boundPort, noDelay: options.noDelay, checkInterval: options.listenerCheckInterval,
+            errorCall: listenerErrorCall,
             onAccept: { s in
                 ctr.withLock {
                     $0.accepted += 1
@@ -1020,7 +1069,7 @@ public final class POSIXNetworkProvider: NetworkProvider, @unchecked Sendable {
                     continue
                 }
                 counters.withLock { $0.connectDenied += 1 }
-                Log.w("NET", "connect \(target)\(route.label): EHOSTUNREACH on all \(denials) attempt(s) in \(millis(since: started)) ms — Local Network access denied")
+                Log.w("NET", "connect \(target)\(route.label): EHOSTUNREACH on all \(denials) attempt(s) in \(millis(since: started)) ms — dropped by the system (Local Network access off, or a VPN / data rule / filter)")
                 throw error
             }
         }

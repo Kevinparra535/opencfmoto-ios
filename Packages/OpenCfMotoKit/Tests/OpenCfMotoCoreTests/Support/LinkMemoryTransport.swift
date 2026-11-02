@@ -179,10 +179,25 @@ final class LinkMemoryListener: StreamListener, @unchecked Sendable {
     private var waiter: (id: UInt64, cont: CheckedContinuation<any ByteStream, Error>)?
     private var nextId: UInt64 = 0
     private var closed = false
+    private var pendingFailure: Error?
 
     init(port: UInt16) { self.port = port }
 
     var isClosed: Bool { lock.lock(); defer { lock.unlock() }; return closed }
+
+    /// The pending (else the next) accept throws `error` while the listener stays open and keeps its
+    /// port: a socket iOS reclaimed while the app was suspended (POSIX-1).
+    func failAccept(with error: Error) {
+        lock.lock()
+        if let w = waiter {
+            waiter = nil
+            lock.unlock()
+            w.cont.resume(throwing: error)
+            return
+        }
+        pendingFailure = error
+        lock.unlock()
+    }
 
     func enqueue(_ s: any ByteStream) -> Bool {
         lock.lock()
@@ -215,6 +230,10 @@ final class LinkMemoryListener: StreamListener, @unchecked Sendable {
                 if closed {
                     lock.unlock()
                     cont.resume(throwing: TransportError.closed)
+                } else if let failure = pendingFailure {
+                    pendingFailure = nil
+                    lock.unlock()
+                    cont.resume(throwing: failure)
                 } else if !queue.isEmpty {
                     let s = queue.removeFirst()
                     lock.unlock()
@@ -299,6 +318,21 @@ final class LinkMemoryNetwork: NetworkProvider, @unchecked Sendable {
     func blackhole(host: String, port: UInt16) {
         lock.lock(); silentEndpoints.insert("\(host):\(port)"); lock.unlock()
     }
+
+    /// The open listener on `port` fails its accept with `error` but keeps holding the port (a listener
+    /// reclaimed by iOS while the app was suspended). false if no open listener is on that port.
+    @discardableResult
+    func failAccept(port: UInt16, with error: Error) -> Bool {
+        lock.lock()
+        let l = listeners[port]
+        lock.unlock()
+        guard let l, !l.isClosed else { return false }
+        l.failAccept(with: error)
+        return true
+    }
+
+    /// Successful listens on `port` so far.
+    func listenCount(_ port: UInt16) -> Int { listenLog.filter { $0 == port }.count }
 
     // MARK: NetworkProvider (phone side)
 

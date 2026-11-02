@@ -51,10 +51,40 @@ struct DashProbeClient: Sendable {
         case rejected(String)
         /// The dash closed before replying.
         case noReply
+        /// Connected, but no reply within the read timeout.
+        case unanswered
         /// Connect / write / read / frame error.
         case failed(String)
-        /// The provider reported `LinkFailure.localNetworkDenied`.
+        /// The provider reported `LinkFailure.localNetworkDenied` (the system dropped the connect).
         case localNetworkDenied
+
+        /// The TCP connection to the dash was established, so Local Network access works.
+        var connected: Bool {
+            switch self {
+            case .accepted, .rejected, .noReply, .unanswered: return true
+            case .failed, .localNetworkDenied: return false
+            }
+        }
+
+        /// Short kind for the discovery summary (review LOG-1): "timed out", "refused", "unreachable",
+        /// "connected, no reply", "closed without a reply", "not accepted", "blocked by the system"…
+        var summaryKind: String {
+            switch self {
+            case .accepted: return "accepted"
+            case .rejected: return "not accepted"
+            case .noReply: return "closed without a reply"
+            case .unanswered: return "connected, no reply"
+            case .localNetworkDenied: return "blocked by the system"
+            case let .failed(message):
+                let m = message.lowercased()
+                if m.contains("timed out") || m.contains("etimedout") { return "timed out" }
+                if m.contains("refused") { return "refused" }
+                if ["ehostunreach", "enetunreach", "ehostdown", "enetdown"].contains(where: { m.contains($0) }) {
+                    return "unreachable"
+                }
+                return "failed"
+            }
+        }
     }
 
     let network: NetworkProvider
@@ -73,7 +103,7 @@ struct DashProbeClient: Sendable {
             stream = try await network.connect(host: host, port: port, timeout: connectTimeout)
         } catch {
             if DashProbeClient.isLocalNetworkDenied(error) {
-                Log.e("LINK", "[PROBE] !! Local Network access denied — allow it in Settings ▸ Privacy ▸ Local Network")
+                Log.e("LINK", "[PROBE] !! the system dropped the connection (Local Network access off for OpenCfMoto, or a VPN / Wi-Fi data restriction / filter)")
                 return .localNetworkDenied
             }
             Log.i("LINK", "[PROBE] failed: \(error)")
@@ -104,6 +134,9 @@ struct DashProbeClient: Sendable {
         } catch TransportError.closed {
             Log.i("LINK", "[PROBE] bike closed before responding")
             return .noReply
+        } catch TransportError.timeout {
+            Log.i("LINK", "[PROBE] connected, but no reply within \(readTimeout)s")
+            return .unanswered
         } catch {
             Log.i("LINK", "[PROBE] failed: \(error)")
             return .failed("\(error)")

@@ -100,6 +100,9 @@ final class ConnectionReviewFixTests: XCTestCase {
     func testTheLocalNetworkIssueIsRaisedOncePerEpisodeSoDismissSticks() async {
         let net = LocalNetworkDeniedNetwork()
         let h = AppTestHarness(network: net)
+        // The evidence says privacy: the Local Network check (Bonjour) is refused too (review POSIX-2;
+        // ConnectionFieldFollowUpTests covers the other answers).
+        h.system.localNetwork = .denied
         h.addBike()
         h.connection.connect()
         let raised = await eventually { h.connection.issue == .localNetworkDenied }

@@ -109,6 +109,17 @@ final class IOSSystem: SystemControlling {
         return Self.map(access)
     }
 
+    /// After the bike link's connect() was dropped by the system (review POSIX-2): that connect already
+    /// brought up the alert if it was due, so the check may probe now. A decisive answer is remembered
+    /// like an explicit request's (the alert has been answered: later quiet checks may probe too).
+    func checkLocalNetworkAccessAfterBlockedConnect() async -> LocalNetworkAccessState {
+        let access = await LocalNetworkPermission.check()
+        if access.isDecisive {
+            store.set(true, forKey: Self.localNetworkRequestedKey)
+        }
+        return Self.map(access)
+    }
+
     private static func map(_ access: LocalNetworkAccess) -> LocalNetworkAccessState {
         switch access {
         case .granted: return .granted

@@ -50,9 +50,14 @@
 // - "Wi-Fi back" builds a fresh `EasyConnLink` with the new address / gateway (a clean restart:
 //   Android `prober.stop()` + `prober.start(newNetwork)`).
 // - STREAMING always shows the bike name as detail (Android keeps "attempt N", §6.1 quirk).
-// - Errors that the link re-arms by itself (dash not found, lost link, Local Network denied) keep
-//   the session alive while auto-recovery is on; terminal errors end it (Wi-Fi stays associated
+// - Errors that the link re-arms by itself (dash not found, lost link, connect() dropped by the system)
+//   keep the session alive while auto-recovery is on; terminal errors end it (Wi-Fi stays associated
 //   until Stop, like Android).
+// - A connect() dropped by the system (EHOSTUNREACH) is Local Network privacy OR a VPN / Wi-Fi data
+//   rule / filter: the Local Network dialog only on evidence of privacy (the Bonjour-based Local Network
+//   check refused); proof that access works means a system policy; else a neutral hint (review POSIX-2).
+// - The big button right after an auto-connect started a session (< 2 s) does not stop it: that tap
+//   was meant as Connect (field log 1: the rider tapped 0.44 s after the auto-connect check).
 // - Auto-connect never prompts: a free-flavor manual join or a failed join ends quietly (idle, retried
 //   on the next foreground after a background).
 // - Stop must stay reachable: `isSessionActive` is true for every session, including an .error phase
@@ -68,6 +73,9 @@ import OpenCfMotoCore
 struct ConnectionTuning {
     /// Delay between the auto-connect decision and Connect (MainActivity.kt:785-800).
     var autoConnectDelay: TimeInterval = 1.2
+    /// A tap on the big button this soon after auto-connect started the session keeps it running: the
+    /// rider saw "Connect" and meant it (the button flipped to Stop under the finger). A later tap stops.
+    var autoConnectTapGuard: TimeInterval = 2
     /// Bike Wi-Fi gone this long → WAITING_FOR_BIKE (AndroidAutoService GRACE_MS).
     var wifiParkGrace: TimeInterval = 180
     /// Duplicate Mirror tap guard (MainActivity.kt:1497-1508).
@@ -95,6 +103,20 @@ struct ConnectionSession {
     var qr: BikeQR
     var mode: ProjectionMode
     var trigger: ConnectionTrigger
+    /// `clock.now()` when the session began (the auto-connect tap guard).
+    var startedAt: TimeInterval = 0
+}
+
+/// Why the system dropped the bike link's connect() (EHOSTUNREACH straight from connect(2)), on the
+/// evidence (review POSIX-2: a BSD socket gets the same errno from every NECP drop).
+enum LinkBlockCause: Equatable {
+    /// Local Network privacy: the Local Network check (Bonjour) was refused.
+    case privacy
+    /// Local Network access works (the link's Bonjour browse listed the dash or a probe connected, or the
+    /// check said granted again after an immediate retry): a VPN, a Wi-Fi data rule or a filter.
+    case systemPolicy
+    /// The check could not tell.
+    case unclear
 }
 
 @MainActor
@@ -170,10 +192,18 @@ public final class ConnectionModel {
     @ObservationIgnored private(set) var pendingMirrorAfterPermission = false
     /// Fit + margins last pushed to the mirror relay this session (no duplicate CONFIG pushes).
     @ObservationIgnored private var appliedMirrorFit: (fit: ScreenFit, margins: ScreenMargins)?
-    /// `issue = .localNetworkDenied` was raised in this episode (since the session began or last
-    /// streamed). The link re-arms every 20 s while auto-recovery is on and fails the same way each
-    /// time: raising the issue again would bring the dialog back after every Dismiss (CON:CL-1).
-    @ObservationIgnored private var localNetworkIssueRaised = false
+    /// Why the system dropped the link's connect() in this episode (since the session began or last
+    /// streamed), once the evidence is in (review POSIX-2).
+    @ObservationIgnored private(set) var blockCause: LinkBlockCause?
+    /// The cause whose dialog was raised in this episode, and that dialog. The link re-arms every 20 s
+    /// while auto-recovery is on and fails the same way each time: raising the same issue again would
+    /// bring the dialog back after every Dismiss (CON:CL-1). New evidence (another cause) raises its own.
+    @ObservationIgnored private var raisedBlock: (cause: LinkBlockCause, issue: ConnectionIssue)?
+    /// The Local Network check after a dropped connect() is running.
+    @ObservationIgnored private var blockCheckTask: Task<Void, Never>?
+    /// That check said "granted" once in this episode and the link was retried at once: the first drop
+    /// may have come while the system alert was still open (TN3179).
+    @ObservationIgnored private(set) var retriedAfterGrantedCheck = false
     @ObservationIgnored private var loggedAutoConnectIdle = false
     /// The local-only Wi-Fi (SSID, else subnet + gateway) whose "no internet" note was logged last.
     @ObservationIgnored private var loggedLocalOnlyNetwork: String?
@@ -255,9 +285,25 @@ public final class ConnectionModel {
         setPhase(.stopped, detail: "")
     }
 
-    /// Connect if idle/stopped/error, stop otherwise (the big button).
+    /// Connect if idle/stopped/error, stop otherwise (the big button). A tap within
+    /// `autoConnectTapGuard` of an auto-connect starting the session keeps it: the rider saw "Connect"
+    /// and the button became Stop under the finger. The session then counts as the rider's own Connect.
     public func toggle() {
-        if isSessionActive || phase.showsStop { stop() } else { connect() }
+        guard isSessionActive || phase.showsStop else {
+            connect()
+            return
+        }
+        if var s = session, s.trigger == .auto {
+            let age = core.services.clock.now() - s.startedAt
+            if age >= 0, age < tuning.autoConnectTapGuard {
+                s.trigger = .user
+                session = s
+                retryAutoConnectAfterBackground = false
+                Log.i("APP", "\u{2192} Connect: '\(s.bike.name)' \u{2014} auto-connect started it \(Int(age * 1000)) ms ago; keeping it (tap again to stop)")
+                return
+            }
+        }
+        stop()
     }
 
     /// The rider says they joined the bike Wi-Fi in Settings.
@@ -309,9 +355,11 @@ public final class ConnectionModel {
             let current = await wifi.currentNetwork()
             guard !Task.isCancelled, let self else { return }
             self.autoConnectTask = nil
-            self.noteWifi(current)
             guard !self.phase.isBusy, !self.phase.isLive, self.session == nil else { return }
             guard let bike = self.core.garage.selected, let qr = self.core.garage.qr(for: bike.id) else { return }
+            // The "no internet, using the interface directly" note only for a network the app uses
+            // (review LOG-2: an action cam's or a car's Wi-Fi is not used).
+            self.noteWifi(current, used: Self.isAlreadyOnBikeNetwork(current, ssid: qr.ssid))
             guard Self.isAlreadyOnBikeNetwork(current, ssid: qr.ssid) else {
                 self.autoConnectLatched = false
                 if !self.loggedNotOnBikeWifi {
@@ -419,7 +467,7 @@ public final class ConnectionModel {
         generation &+= 1
         let gen = generation
         issue = nil
-        localNetworkIssueRaised = false
+        resetBlockEpisode()
         sessionEverStreamed = false
         loggedNotOnBikeWifi = false
         if trigger == .user { retryAutoConnectAfterBackground = false }
@@ -432,7 +480,8 @@ public final class ConnectionModel {
         linkState = .idle
         diagnostics = LinkDiagnostics()
         mode = newMode
-        session = ConnectionSession(bike: bike, qr: qr, mode: newMode, trigger: trigger)
+        session = ConnectionSession(bike: bike, qr: qr, mode: newMode, trigger: trigger,
+                                    startedAt: core.services.clock.now())
         isSessionActive = true
         Log.i("APP", "→ \(newMode == .mirror ? "Mirror" : "Connect")\(trigger == .auto ? " (auto)" : ""): '\(bike.name)'")
         ride.sessionChanged(active: true, mirror: newMode == .mirror)
@@ -451,6 +500,8 @@ public final class ConnectionModel {
         wifiWatchTask = nil
         parkTask?.cancel()
         parkTask = nil
+        blockCheckTask?.cancel()
+        blockCheckTask = nil
         finishManualJoinSignal()
         stopLink()
         wifiLostAt = nil
@@ -659,12 +710,32 @@ public final class ConnectionModel {
         for await item in stream {
             if Task.isCancelled { return nil }
             guard let info = item else {
+                let current = await wifi.currentNetwork()
+                if Task.isCancelled { return nil }
+                // "I've joined" while iOS names another Wi-Fi (the home one): not the bike's, so never
+                // start the link there (no probes / port scan on that LAN, no false "Wi-Fi joined"
+                // line). Say so on the sheet and keep waiting (review SESS-1).
+                if let other = Self.otherKnownSSID(current, than: ssid) {
+                    Log.i("WIFI", "[wifi] rider confirmed the manual join, but iOS reports \(other) \u{2014} still waiting for \(ssid)")
+                    if var prompt = manualJoin, prompt.ssid == ssid {
+                        prompt.message = SessionText.manualJoinStillOnOtherWifi(other: other, ssid: ssid, core.language)
+                        manualJoin = prompt
+                    }
+                    continue
+                }
                 Log.i("WIFI", "[wifi] rider confirmed the manual join")
-                return await wifi.currentNetwork()
+                return current
             }
             if Self.matchesManualJoin(info, ssid: ssid, baseline: baseline) { return info }
         }
         return nil
+    }
+
+    /// The SSID iOS reports when it is known and not `ssid` (Wi-Fi up): the phone is positively on
+    /// another network.
+    nonisolated static func otherKnownSSID(_ info: WifiNetworkInfo, than ssid: String) -> String? {
+        guard info.isWifiAvailable, let current = info.ssid, current != ssid else { return nil }
+        return current
     }
 
     private func finishManualJoinSignal() {
@@ -672,13 +743,15 @@ public final class ConnectionModel {
         manualJoinSignal = nil
     }
 
-    /// A local-only Wi-Fi is used like any other: say so plainly, once per network.
-    private func noteWifi(_ info: WifiNetworkInfo) {
+    /// A local-only Wi-Fi is used like any other: say so plainly, once per network — only for a network
+    /// the app actually uses (`used`: the bike's; review LOG-2).
+    private func noteWifi(_ info: WifiNetworkInfo, used: Bool = true) {
         guard info.isWifiAvailable else { return }
         guard info.isLocalOnly else {
             loggedLocalOnlyNetwork = nil
             return
         }
+        guard used else { return }
         let key = info.ssid ?? "\(info.phoneIPv4.flatMap(Self.subnet24) ?? "?")|\(info.gateway ?? "?")"
         guard key != loggedLocalOnlyNetwork else { return }
         loggedLocalOnlyNetwork = key
@@ -700,9 +773,10 @@ public final class ConnectionModel {
     private func wifiChanged(_ info: WifiNetworkInfo, gen: UInt64) {
         guard let s = session else { return }
         let l = core.language
-        noteWifi(info)
+        let onBike = Self.isOnBikeNetwork(info, ssid: s.qr.ssid, joined: sessionNetwork)
+        noteWifi(info, used: onBike)
         if let d = dashlessNetwork, d != info { dashlessNetwork = nil }
-        if Self.isOnBikeNetwork(info, ssid: s.qr.ssid, joined: sessionNetwork) {
+        if onBike {
             guard wifiLostAt != nil else { return }
             if linkState == .streaming, link != nil {
                 // A path blip: the link never stopped streaming.
@@ -948,7 +1022,8 @@ public final class ConnectionModel {
             controls.linkStreamingChanged(true, mirror: s.mode == .mirror)
             ride.setLinkBanner(nil)
             if s.mode == .dashUI { ride.projectionChanged(active: true) }
-            localNetworkIssueRaised = false
+            if let raised = raisedBlock?.issue, issue == raised { issue = nil }
+            resetBlockEpisode()
             sessionEverStreamed = true
             switch issue {
             case .dashNotFound?, .lostLink?, .localNetworkDenied?, .wifiUnavailable?: issue = nil
@@ -971,17 +1046,14 @@ public final class ConnectionModel {
             Log.e("APP", "link ports are held by another app (:\(port)) \u{2014} close the official CFMoto / Carbit app")
             endSession(.error, detail: SessionText.officialAppInTheWay(l), issue: .portsInUse)
         case .localNetworkDenied:
-            let d = SessionText.localNetworkDenied(l)
-            if recovery {
-                // Once per episode: the watchdog re-arm fails the same way every 20 s.
-                if !localNetworkIssueRaised {
-                    localNetworkIssueRaised = true
-                    issue = .localNetworkDenied
-                }
-                setPhase(.error, detail: d)
-            } else {
-                endSession(.error, detail: d, issue: .localNetworkDenied)
-            }
+            // EHOSTUNREACH straight from connect(): Local Network privacy, or a VPN / Wi-Fi data rule /
+            // filter (the same errno for a BSD socket). Look at the evidence before any dialog.
+            checkBlockedConnect()
+        case .localNetworkBlocked:
+            // The link proved Local Network access works (its Bonjour browse listed the dash, or a probe
+            // connected): something else on the phone drops the connection.
+            Log.w("APP", "the system blocks the dash connection although Local Network access works \u{2014} a VPN, a Wi-Fi data restriction or a filter")
+            applyBlockCause(.systemPolicy, session: s)
         case .noWifiAddress:
             endSession(.error, detail: SessionText.noWifiAddress(l), issue: .wifiUnavailable)
         case .dashNotFound:
@@ -1002,6 +1074,95 @@ public final class ConnectionModel {
             Log.e("LINK", "link failed: \(message)")
             let d = SessionText.connectFailed(l)
             endSession(.error, detail: d, issue: .other(d))
+        }
+    }
+
+    // MARK: - connect() dropped by the system (review POSIX-2)
+
+    /// The link reported `.localNetworkDenied`: the transport's EHOSTUNREACH, which Local Network privacy
+    /// and every other NECP drop (VPN without local-network access, Wi-Fi data rule, filter) produce
+    /// alike. The status says what is known at once; the Local Network check (Bonjour, the evidence that
+    /// tells privacy apart) decides the dialog.
+    private func checkBlockedConnect() {
+        setPhase(.error, detail: Self.blockDetail(blockCause ?? .unclear, core.language))
+        guard blockCheckTask == nil else { return }
+        let gen = generation
+        let serial = linkSerial
+        let system = core.services.system
+        let wifi = core.services.wifi
+        blockCheckTask = Task { [weak self] in
+            let pathDenied = await wifi.currentNetwork().isLocalNetworkDenied
+            let access: LocalNetworkAccessState
+            if pathDenied {
+                access = .denied
+            } else {
+                access = await system.checkLocalNetworkAccessAfterBlockedConnect()
+            }
+            guard !Task.isCancelled, let self, gen == self.generation else { return }
+            self.blockCheckTask = nil
+            self.blockedConnectChecked(access, pathDenied: pathDenied, serial: serial)
+        }
+    }
+
+    private func blockedConnectChecked(_ access: LocalNetworkAccessState, pathDenied: Bool, serial: UInt64) {
+        Log.i("APP", "[LAN] Local Network check after the dropped connect: \(access.rawValue)\(pathDenied ? " (the Wi-Fi path says localNetworkDenied)" : "")")
+        // The link moved on meanwhile (re-armed and reached the dash, or another link): nothing to say.
+        guard let s = session, serial == linkSerial, linkState == .failed(.localNetworkDenied) else { return }
+        switch access {
+        case .denied:
+            applyBlockCause(.privacy, session: s)
+        case .granted:
+            if !retriedAfterGrantedCheck, let link {
+                // The first drop may have come while the system alert was still open (TN3179: iOS "may
+                // deny the operation immediately, before the user has responded"): retry right away.
+                retriedAfterGrantedCheck = true
+                Log.i("APP", "Local Network access is on \u{2014} retrying the dash at once")
+                link.start()
+            } else {
+                applyBlockCause(.systemPolicy, session: s)
+            }
+        case .undetermined, .unavailable:
+            applyBlockCause(.unclear, session: s)
+        }
+    }
+
+    /// Status line and dialog for a known cause. Auto-recovery on: the session stays (the link re-arms
+    /// every 20 s) and each cause raises its dialog once per episode; off: the session ends.
+    private func applyBlockCause(_ cause: LinkBlockCause, session s: ConnectionSession) {
+        let l = core.language
+        blockCause = cause
+        let detail = Self.blockDetail(cause, l)
+        let dialog: ConnectionIssue
+        switch cause {
+        case .privacy: dialog = .localNetworkDenied
+        case .systemPolicy: dialog = .other(SessionText.systemBlocksBikeLinkMessage(l))
+        case .unclear: dialog = .other(SessionText.bikeLinkBlockedMessage(l))
+        }
+        guard core.currentSettings.autoRecovery else {
+            endSession(.error, detail: detail, issue: dialog)
+            return
+        }
+        if raisedBlock?.cause != cause {
+            raisedBlock = (cause, dialog)
+            issue = dialog
+        }
+        setPhase(.error, detail: detail)
+    }
+
+    /// A new episode: the session began, or the dash streamed.
+    private func resetBlockEpisode() {
+        blockCheckTask?.cancel()
+        blockCheckTask = nil
+        blockCause = nil
+        raisedBlock = nil
+        retriedAfterGrantedCheck = false
+    }
+
+    nonisolated static func blockDetail(_ cause: LinkBlockCause, _ l: NavLanguage) -> String {
+        switch cause {
+        case .privacy: return SessionText.localNetworkDenied(l)
+        case .systemPolicy: return SessionText.systemBlocksBikeLink(l)
+        case .unclear: return SessionText.bikeLinkBlocked(l)
         }
     }
 

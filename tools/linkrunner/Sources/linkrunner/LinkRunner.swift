@@ -314,7 +314,7 @@ final class LinkRunner: @unchecked Sendable {
     static func isFatal(_ f: LinkFailure) -> Bool {
         switch f {
         case .portInUse, .noWifiAddress, .other: return true
-        case .localNetworkDenied, .dashNotFound, .lostLink: return false // the watchdog re-arms these
+        case .localNetworkDenied, .localNetworkBlocked, .dashNotFound, .lostLink: return false // the watchdog re-arms these
         }
     }
 

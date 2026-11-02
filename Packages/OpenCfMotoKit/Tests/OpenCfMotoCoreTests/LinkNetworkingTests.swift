@@ -107,7 +107,7 @@ final class LinkProbeTests: XCTestCase {
         net.registerEndpoint(host: "192.168.0.2", port: 10930) { _ in }
         let start = Date()
         let silent = await client(net, read: 0.2).probeOnce(host: "192.168.0.2", port: 10930, attempt: 1)
-        XCTAssertEqual(silent, .failed("\(TransportError.timeout)"))
+        XCTAssertEqual(silent, .unanswered, "connected, but no reply within the read timeout")
         XCTAssertLessThan(Date().timeIntervalSince(start), 2)
     }
 

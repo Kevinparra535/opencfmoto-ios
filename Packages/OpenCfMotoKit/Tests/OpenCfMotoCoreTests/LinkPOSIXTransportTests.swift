@@ -503,6 +503,128 @@ final class LinkPOSIXTransportTests: XCTestCase {
     }
 }
 
+// MARK: - Listener reclaimed while the app was suspended (review POSIX-1)
+
+/// XNU defuncts the sockets of a suspended app: a non-blocking defunct listener never wakes a parked
+/// accept and keeps answering EAGAIN; only its SO_ERROR (EBADF) tells. Linux cannot defunct a socket,
+/// so the SO_ERROR read is scripted through the provider's test seam where a reclaim is needed.
+final class LinkPOSIXListenerReclaimTests: XCTestCase {
+    /// SO_ERROR answers: 0 for the first `healthyChecks` reads, then `error`.
+    private final class ScriptedListenerError: @unchecked Sendable {
+        let reads = Locked(0)
+        let healthyChecks: Int
+        let error: Int32
+        init(healthyChecks: Int, error: Int32 = EBADF) {
+            self.healthyChecks = healthyChecks
+            self.error = error
+        }
+
+        func call(_ port: UInt16) -> Int32 {
+            let n = reads.withLock { r -> Int in
+                r += 1
+                return r
+            }
+            return n > healthyChecks ? error : 0
+        }
+    }
+
+    private func provider(checkEvery interval: TimeInterval, script: ScriptedListenerError? = nil) -> POSIXNetworkProvider {
+        var errorCall: POSIXNetworkProvider.ListenerErrorCall?
+        if let script { errorCall = { @Sendable port in script.call(port) } }
+        return POSIXNetworkProvider(options: .init(listenerCheckInterval: interval), trace: nil, connectCall: nil,
+                                    listenerErrorCall: errorCall)
+    }
+
+    func testTheDefaultCheckIntervalIsFiveSeconds() {
+        XCTAssertEqual(POSIXNetworkProvider.Options().listenerCheckInterval, 5)
+    }
+
+    func testAReclaimedListenerFailsTheParkedAcceptAtTheNextCheck() async throws {
+        let script = ScriptedListenerError(healthyChecks: 2)
+        let net = provider(checkEvery: 0.1, script: script)
+        let l = try net.openListener(port: 0)
+        defer { l.close() }
+        let t0 = now()
+        do {
+            // Without the periodic check the parked accept would never return: bounded here.
+            let s = try await withTimeout(3, label: "reclaimed listener") { try await l.accept() }
+            s.close()
+            XCTFail("accepted on a reclaimed listener")
+        } catch {
+            guard case let .failed(m)? = error as? TransportError else { return XCTFail("\(error)") }
+            XCTAssertTrue(m.hasPrefix("accept :\(l.port) failed: listener reclaimed (EBADF"), m)
+        }
+        let dt = now() - t0
+        XCTAssertGreaterThanOrEqual(dt, 0.25, "two healthy checks first")
+        XCTAssertLessThan(dt, 2.0)
+        XCTAssertEqual(script.reads.current, 3)
+        XCTAssertFalse(PlatformTransportErrors.isAddressInUse(TransportError.failed("accept :\(l.port) failed: listener reclaimed (EBADF)")))
+    }
+
+    /// Real getsockopt(SO_ERROR) on a healthy listener: the periodic checks find nothing and a
+    /// connection arriving after several of them is accepted as usual.
+    func testAHealthyListenerSurvivesItsChecksAndStillAccepts() async throws {
+        let net = provider(checkEvery: 0.05)
+        let l = try net.openListener(port: 0)
+        defer { l.close() }
+        async let accepted = l.accept()
+        try await Task.sleep(nanoseconds: 400_000_000) // ≈ 8 checks
+        let c = try await net.openStream(host: "127.0.0.1", port: l.port, timeout: 2)
+        defer { c.close() }
+        let s = try await accepted
+        defer { s.close() }
+        try await c.write(Data([5]))
+        let got = try await s.read(exactly: 1)
+        XCTAssertEqual(got, Data([5]))
+    }
+
+    func testClosingBetweenChecksStillThrowsClosed() async throws {
+        let net = provider(checkEvery: 0.05, script: ScriptedListenerError(healthyChecks: .max))
+        let l = try net.openListener(port: 0)
+        let acceptor = Task { () -> Error? in
+            do {
+                _ = try await l.accept()
+                return nil
+            } catch {
+                return error
+            }
+        }
+        try await Task.sleep(nanoseconds: 200_000_000)
+        l.close()
+        let error = await acceptor.value
+        XCTAssertEqual(error as? TransportError, .closed)
+    }
+
+    /// The link closes a reclaimed listener before binding its port again: the new bind then succeeds
+    /// (with the dead one still open it fails with EADDRINUSE).
+    func testThePortCanBeBoundAgainOnceTheReclaimedListenerIsClosed() async throws {
+        let net = provider(checkEvery: 0.05, script: ScriptedListenerError(healthyChecks: 0))
+        let l = try net.openListener(port: 0)
+        let port = l.port
+        do {
+            _ = try await withTimeout(3, label: "reclaimed listener") { try await l.accept() }
+            XCTFail("accepted")
+        } catch {
+            XCTAssertFalse(error is TimeoutError, "the reclaim was never noticed")
+        }
+        do {
+            let again = try net.openListener(port: port)
+            again.close()
+            XCTFail("bound :\(port) while the reclaimed listener is still open")
+        } catch {
+            XCTAssertTrue(PlatformTransportErrors.isAddressInUse(error), "\(error)")
+        }
+        l.close()
+        let fresh = try POSIXNetworkProvider().openListener(port: port)
+        defer { fresh.close() }
+        async let accepted = fresh.accept()
+        let c = try await POSIXNetworkProvider().openStream(host: "127.0.0.1", port: port, timeout: 2)
+        defer { c.close() }
+        let s = try await accepted
+        s.close()
+    }
+}
+
 // MARK: - Interface choice
 
 final class LinkOutboundInterfaceTests: XCTestCase {

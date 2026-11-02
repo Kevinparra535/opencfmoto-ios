@@ -97,8 +97,14 @@ public struct DashInfo: Sendable, Equatable {
 public enum LinkFailure: Error, Sendable, Equatable, CustomStringConvertible {
     /// A listener port is already bound (typically the official CFMoto/Carbit app is running).
     case portInUse(UInt16)
-    /// iOS Local Network permission denied.
+    /// The system dropped the connection to the dash: iOS Local Network permission denied as far as the
+    /// link can tell (a BSD socket gets the same EHOSTUNREACH from a VPN / data rule / filter, so the app
+    /// checks the Local Network state before saying so).
     case localNetworkDenied
+    /// The system dropped the connection to the dash although Local Network access works (the session's
+    /// Bonjour browse listed the dash, or a probe connected): a VPN without local-network access, a
+    /// per-app Wi-Fi data rule or a content filter (review POSIX-2). Re-armed like `.localNetworkDenied`.
+    case localNetworkBlocked
     /// The phone has no IPv4 address on the bike Wi-Fi.
     case noWifiAddress
     /// No dash answered the :10930 probe (Bonjour, gateway and port scan exhausted).
@@ -111,6 +117,7 @@ public enum LinkFailure: Error, Sendable, Equatable, CustomStringConvertible {
         switch self {
         case let .portInUse(p): return "port \(p) is in use — close the official CFMoto / Carbit app"
         case .localNetworkDenied: return "Local Network access denied"
+        case .localNetworkBlocked: return "connection to the dash blocked by the system (VPN, data restriction or filter)"
         case .noWifiAddress: return "not connected to the bike Wi-Fi"
         case .dashNotFound: return "dash not found on this Wi-Fi"
         case .lostLink: return "lost bike link"
