@@ -464,6 +464,54 @@ final class DashMusicControllerTests: XCTestCase {
         }
     }
 
+    func testNothingButMusicCanVanishFromTheListsThatFallBackToEnd() {
+        // F2 audit: while navigating, the map list and the menu start with End, where a control that
+        // vanished under the focus used to send it. In both, every id but the Music controls is fixed
+        // whatever the dash shows next to them (lap card, banner + toast, night, no clock, off route,
+        // canvas, options), so nothing else can go away under the focus and hand it to End.
+        var parity = DashUIController.Options()
+        parity.handlebarReachesSettings = false
+        parity.lapReachableByHandlebar = false
+        let wideLap = DashLapTimer(title: String(repeating: "LAP 12  1:31.20 ", count: 6), meta: "LAST 1:30.00   BEST 1:30.00")
+        var menus: [Bool: [String]] = [:]
+        for size in [DashFixtures.land, DashFixtures.port, DashFixtures.wide] {
+            var lap = DashFixtures.navigating(size)
+            lap.lapTimer = wideLap
+            var overlays = DashFixtures.navigating(size)
+            overlays.linkBanner = "Reconnecting…"
+            overlays.toastText = "Handlebar buttons control the dash again"
+            var night = DashFixtures.navigating(size)
+            night.isNight = true
+            var noClock = DashFixtures.navigating(size)
+            noClock.showClock = false
+            for base in [DashFixtures.navigating(size), DashFixtures.navigating(size, offRoute: true), lap, overlays, night, noClock] {
+                for m in [base, music(base), music(base, DashFixtures.song(.paused))] {
+                    for opts in [DashUIController.Options(), parity] {
+                        let ui = controller(m, options: opts)
+                        XCTAssertEqual(ui.state.focusOrder.filter { !DashFocusEngine.isMusicControl($0) }, ["metrics.end"] + fabs)
+                        _ = ui.handle(.key(.home), now: t0)
+                        XCTAssertEqual(ui.state.sheet, .menu)
+                        let menu = ui.state.focusOrder.filter { !DashFocusEngine.isMusicControl($0) }
+                        XCTAssertEqual(menu.first, "menu.end")
+                        if let same = menus[opts.handlebarReachesSettings] { XCTAssertEqual(menu, same) } else { menus[opts.handlebarReachesSettings] = menu }
+                    }
+                }
+            }
+        }
+        XCTAssertEqual(menus.count, 2)
+        // A lap card that takes the tile's room is one more way for the tile to vanish: the Menu FAB.
+        let ui = controller(music(DashFixtures.navigating()))
+        _ = ui.handle(.knob(-1), now: t0)
+        XCTAssertEqual(ui.state.focusedId, "music.tile")
+        var lap = music(DashFixtures.navigating())
+        lap.lapTimer = wideLap
+        ui.update(lap)
+        _ = ui.displayList(now: t0 + 1)
+        XCTAssertFalse(ui.state.focusOrder.contains("music.tile"))
+        XCTAssertEqual(ui.state.focusedId, "fab.menu")
+        XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 2), [.openMenu])
+    }
+
     func testOpenMusicWithoutMusicToasts() {
         let ui = controller(DashFixtures.freeRide())
         XCTAssertEqual(ui.perform(.openMusic, now: t0), [.openMusic])
