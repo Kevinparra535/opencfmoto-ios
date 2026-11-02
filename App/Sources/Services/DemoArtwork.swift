@@ -114,10 +114,15 @@ enum DemoArtwork {
 
     /// A crescent moon, a few stars and a road curving into the dark.
     private static func nightRide(_ ctx: CGContext, _ s: CGFloat, _ p: Palette) {
+        // Crescent: the moon disc minus an offset disc (even-odd clip), so the sky gradient shows through.
+        ctx.saveGState()
+        ctx.beginPath()
+        ctx.addRect(CGRect(x: 0, y: 0, width: s, height: s))
+        ctx.addEllipse(in: CGRect(x: s * 0.67, y: s * 0.68, width: s * 0.22, height: s * 0.22))
+        ctx.clip(using: .evenOdd)
         ctx.setFillColor(color(p.accent))
         ctx.fillEllipse(in: CGRect(x: s * 0.62, y: s * 0.64, width: s * 0.22, height: s * 0.22))
-        ctx.setFillColor(color(p.skyTop))
-        ctx.fillEllipse(in: CGRect(x: s * 0.67, y: s * 0.68, width: s * 0.22, height: s * 0.22))
+        ctx.restoreGState()
         ctx.setFillColor(color(p.accent, alpha: 0.85))
         for (x, y) in [(0.12, 0.86), (0.24, 0.74), (0.38, 0.90), (0.50, 0.70), (0.20, 0.60), (0.90, 0.56)] {
             ctx.fillEllipse(in: CGRect(x: s * x, y: s * y, width: s * 0.012, height: s * 0.012))
