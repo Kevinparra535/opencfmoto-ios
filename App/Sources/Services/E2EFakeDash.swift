@@ -4,8 +4,8 @@
 // stack). Real: POSIXNetworkProvider (the bike-link transport; loopback destinations connect
 // unbound), EasyConnLink, the RSA identity (SecKey, pure-Swift fallback), DashProjectionEngine +
 // VideoToolbox + DashRenderer + TileImageCache, the internet client for tiles. Simulated: the bike
-// Wi-Fi (a port that is "already joined" with the fake dash as gateway), GPS (DemoRoutePlayer),
-// speech, handlebar, mirror. The garage holds one bike whose pairing QR matches the fakedash model
+// Wi-Fi (a port that is "already joined" with the fake dash as gateway, local-only like the dash's
+// access point in the field), GPS (DemoRoutePlayer), speech, handlebar, mirror. The garage holds one bike whose pairing QR matches the fakedash model
 // (`-e2eDash`), the onboarding is done and auto-connect starts the session right after launch.
 //
 // Evidence for the CI job, in the app's Documents folder (`xcrun simctl get_app_container booted
@@ -47,7 +47,8 @@ enum E2EFakeDashBike {
 }
 
 /// A Wi-Fi port that is already on the "bike" network: the fake dash address is the gateway, the
-/// phone is presented as 127.0.0.2 (`ConnectionTestingOverrides.loopback`).
+/// phone is presented as 127.0.0.2 (`ConnectionTestingOverrides.loopback`). Local-only, as the dash's
+/// access point is in the field (no internet: iOS reports the Wi-Fi path unsatisfied, field log 1).
 final class E2ELoopbackWifi: WifiJoining, @unchecked Sendable {
     let supportsAutomaticJoin = true
     private let network: WifiNetworkInfo
@@ -56,7 +57,8 @@ final class E2ELoopbackWifi: WifiJoining, @unchecked Sendable {
 
     init(ssid: String, dashHost: String, phoneIPv4: String) {
         network = WifiNetworkInfo(isWifiAvailable: true, ssid: ssid, interfaceName: "lo0", phoneIPv4: phoneIPv4,
-                                  gateway: dashHost, dashHostCandidates: [dashHost])
+                                  gateway: dashHost, dashHostCandidates: [dashHost],
+                                  isLocalOnly: true, pathUnsatisfiedReason: "notAvailable")
     }
 
     func join(ssid: String, passphrase: String?) async throws -> WifiJoinResult {
