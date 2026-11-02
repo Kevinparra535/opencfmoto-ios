@@ -393,6 +393,31 @@ final class DashMusicControllerTests: XCTestCase {
         XCTAssertEqual(radio.displayList(now: t0), radio.displayList(now: t0 + 60))
     }
 
+    func testShortSongStepsAtMostOncePerSecond() {
+        // 30 s on a 52-px bar: the bar would gain ~1.7 px per second; it moves with whole seconds only.
+        let jingle = DashNowPlaying(title: "Jingle", duration: 30, position: 13, positionAt: t0)
+        let ui = controller(music(DashFixtures.freeRide(), jingle))
+        let a = ui.displayList(now: t0 + 0.05)
+        XCTAssertEqual(a, ui.displayList(now: t0 + 0.5))
+        XCTAssertEqual(a, ui.displayList(now: t0 + 0.95))
+        XCTAssertNotEqual(a, ui.displayList(now: t0 + 1.05))
+        XCTAssertEqual(DashSceneBuilder.musicFill(jingle, width: 52, now: t0 + 0.95), 22) // 13 s × 52 / 30 = 22.5
+        XCTAssertEqual(DashSceneBuilder.musicFill(jingle, width: 52, now: t0 + 1.05), 24) // 14 s → 24.3
+    }
+
+    func testFillHelper() {
+        let song = DashFixtures.song() // 364 s
+        XCTAssertEqual(DashSceneBuilder.musicFill(song, width: 52, now: t0), 19, "133 × 52 / 364 = 19 exactly")
+        XCTAssertEqual(DashSceneBuilder.musicFill(song, width: 52, now: t0 + 6.99), 19)
+        XCTAssertEqual(DashSceneBuilder.musicFill(song, width: 52, now: t0 + 7), 20)
+        XCTAssertEqual(DashSceneBuilder.musicFill(song, width: 52, now: t0 + 10_000), 52, "clamped at the end")
+        XCTAssertEqual(DashSceneBuilder.musicFill(DashFixtures.song(.paused), width: 52, now: t0 + 60), 19, "frozen while paused")
+        XCTAssertNil(DashSceneBuilder.musicFill(DashFixtures.song(duration: 0), width: 52, now: t0))
+        XCTAssertNil(DashSceneBuilder.musicFill(song, width: 0, now: t0))
+        XCTAssertNil(DashSceneBuilder.musicFill(song, width: .nan, now: t0))
+        XCTAssertEqual(DashSceneBuilder.musicFill(DashFixtures.song(duration: 364.4), width: 59.15, now: t0 + 1_000), 59)
+    }
+
     func testTimeKey() {
         let song = DashFixtures.song()
         XCTAssertNil(DashSceneBuilder.musicTimeKey(nil, sheetOpen: true, tileBarWidth: 52, now: t0))

@@ -227,12 +227,22 @@ struct DashSceneBuilder {
     /// What the time-dependent Apple Music drawing depends on (nil: nothing moves with time): only
     /// while playing with a known duration; the open sheet → the whole elapsed seconds (labels and
     /// bar); the tile → the whole px of its progress fill. The controller rebuilds the scene when the
-    /// key changes, so a playing song re-renders at most once per second.
+    /// key changes, so a playing song re-renders at most once per second (the tile less often).
     static func musicTimeKey(_ music: DashNowPlaying?, sheetOpen: Bool, tileBarWidth: Double?, now: TimeInterval) -> Int? {
         guard let music, music.state == .playing, music.knownDuration != nil else { return nil }
         if sheetOpen { return music.elapsedSeconds(at: now) }
-        guard let width = tileBarWidth, let fraction = music.fraction(at: now) else { return nil }
-        return DashFormat.roundHalfUp((fraction * width).rounded(.down))
+        guard let width = tileBarWidth, let fill = musicFill(music, width: width, now: now) else { return nil }
+        return DashFormat.roundHalfUp(fill)
+    }
+
+    /// Filled width (whole px) of a `width`-px progress bar at `now`, nil without a known duration.
+    /// It follows the whole elapsed seconds, like the time labels: the bar never steps more than once
+    /// per second, even for a song shorter than the bar is wide (no animation on the dash).
+    static func musicFill(_ music: DashNowPlaying, width: Double, now: TimeInterval) -> Double? {
+        guard let duration = music.knownDuration, width.isFinite, width > 0 else { return nil }
+        // elapsed × width / duration (not fraction × width): exact on whole-px boundaries
+        let px = (Double(music.elapsedSeconds(at: now)) * width / duration + 1e-9).rounded(.down)
+        return min(max(0, px), width.rounded(.down))
     }
 
     // MARK: Map layer
@@ -637,10 +647,9 @@ struct DashSceneBuilder {
         let f = t.frame
         drawArtwork(f, radius: t.cornerRadius, artworkId: music.artworkId)
         roundRect(f, radius: t.cornerRadius, fill: nil, stroke: DashPalette.musicTileStroke, strokeWidth: c.dp(1))
-        if let fraction = music.fraction(at: input.musicNow) {
-            let bar = t.progressRect
+        let bar = t.progressRect
+        if let w = Self.musicFill(music, width: bar.width, now: input.musicNow) {
             roundRect(bar, radius: bar.height / 2, fill: DashPalette.musicTileBarTrack)
-            let w = (fraction * bar.width).rounded(.down)
             if w > 0 {
                 roundRect(DashRect(x: bar.minX, y: bar.minY, width: w, height: bar.height), radius: bar.height / 2,
                           fill: DashPalette.musicFill)
@@ -679,10 +688,9 @@ struct DashSceneBuilder {
         // Progress and times move in whole seconds only (one re-render per second while playing).
         let now = input.musicNow
         let elapsed = music.elapsedSeconds(at: now)
-        if let bar = l.progressRect, let duration = music.knownDuration {
+        if let bar = l.progressRect, let w = Self.musicFill(music, width: bar.width, now: now) {
             let radius = c.dp(3)
             roundRect(bar, radius: radius, fill: DashPalette.musicTrack)
-            let w = (min(1, max(0, Double(elapsed) / duration)) * bar.width).rounded(.down)
             if w > 0 { roundRect(DashRect(x: bar.minX, y: bar.minY, width: w, height: bar.height), radius: radius, fill: DashPalette.musicFill) }
         }
         if let er = l.elapsedRect, let rr = l.remainingRect {

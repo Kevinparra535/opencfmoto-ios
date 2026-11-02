@@ -511,7 +511,7 @@ final class DashLayoutInvariantTests: XCTestCase {
                 }
                 if model.music == nil {
                     XCTAssertNil(regions["music.tile"], tag)
-                } else if name != "musicLap" { // a lap card may legitimately drop it on narrow canvases
+                } else {
                     XCTAssertNotNil(regions["music.tile"], "\(tag): no tile")
                 }
             }
