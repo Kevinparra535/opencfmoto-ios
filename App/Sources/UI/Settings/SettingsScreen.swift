@@ -26,8 +26,28 @@ struct SettingsScreen: View {
     @State private var showImporter = false
     @State private var alert: SettingsAlert?
     @State private var shareErrors = FeatureShareErrors()
+    /// `-uiSettingsAnchor <name>` (CI screenshots, review fix F10): the section to scroll to once.
+    private let scrollAnchor: String?
+    @State private var anchorApplied = false
+    /// The row the launch anchor scrolls to, set once the first layout pass is done.
+    @State private var scrollTarget: String?
+
+    init(scrollAnchor: String? = nil) {
+        self.scrollAnchor = scrollAnchor
+    }
 
     var body: some View {
+        ScrollViewReader { proxy in
+            settingsForm
+                .task { await armLaunchAnchor() }
+                .onChange(of: scrollTarget) { _, row in
+                    guard let row else { return }
+                    proxy.scrollTo(row, anchor: .center)
+                }
+        }
+    }
+
+    private var settingsForm: some View {
         Form {
             Group {
                 scopeSection
@@ -71,6 +91,25 @@ struct SettingsScreen: View {
             present(.exportFailed(message))
         }
         .task { await model.permissions.refresh() }
+    }
+
+    // MARK: Launch anchor (CI screenshots)
+
+    /// `-uiSettingsAnchor` names → the row each one scrolls to.
+    private static var anchorRows: [String: String] { ["music": SettingsMusicSection.anchorID] }
+
+    /// Scrolls the section into view after the first layout pass, so the screenshot shows it
+    /// (tools/ci/e2e/screenshots.sh: `settings_music`, `es_settings_music`).
+    private func armLaunchAnchor() async {
+        guard let name = scrollAnchor, !anchorApplied else { return }
+        anchorApplied = true
+        guard let row = Self.anchorRows[name] else {
+            Log.w("UI", "-uiSettingsAnchor \(name): unknown section (music)")
+            return
+        }
+        try? await Task.sleep(for: .milliseconds(500))
+        scrollTarget = row
+        Log.i("UI", "-uiSettingsAnchor \(name)")
     }
 
     // MARK: Bindings
