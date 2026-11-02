@@ -125,6 +125,9 @@ public struct DashRendererStats: Sendable, Equatable {
     public var tilesMissing = 0
     public var tilesFromParent = 0
     public var textBlocks = 0
+    /// `DashDrawCommand.image` drawn from the image store (album artwork) / not found there.
+    public var imagesDrawn = 0
+    public var imagesMissing = 0
     public init() {}
 }
 
@@ -134,6 +137,7 @@ public final class DashRenderer: @unchecked Sendable {
     public let fonts: DashFontProvider
     private let lock = NSLock()
     private var _tileCache: TileImageCache?
+    private var _imageStore: DashImageStore?
     private var colors: [UInt32: CGColor] = [:]
     private var textLayouts: [TextLayoutKey: TextLayout] = [:]
     private var _stats = DashRendererStats()
@@ -150,14 +154,21 @@ public final class DashRenderer: @unchecked Sendable {
     /// BGRA in memory, premultiplied alpha: the CVPixelBuffer 32BGRA layout.
     static let bitmapInfo: UInt32 = CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
 
-    public init(tileCache: TileImageCache? = nil, fonts: DashFontProvider = .shared) {
+    public init(tileCache: TileImageCache? = nil, imageStore: DashImageStore? = nil, fonts: DashFontProvider = .shared) {
         self.fonts = fonts
         _tileCache = tileCache
+        _imageStore = imageStore
     }
 
     public var tileCache: TileImageCache? {
         get { lock.lock(); defer { lock.unlock() }; return _tileCache }
         set { lock.lock(); _tileCache = newValue; lock.unlock() }
+    }
+
+    /// Raster images drawn by `DashDrawCommand.image` (Apple Music artwork); nil draws none.
+    public var imageStore: DashImageStore? {
+        get { lock.lock(); defer { lock.unlock() }; return _imageStore }
+        set { lock.lock(); _imageStore = newValue; lock.unlock() }
     }
 
     /// Statistics of the last render.
@@ -217,6 +228,7 @@ public final class DashRenderer: @unchecked Sendable {
         var stats = DashRendererStats()
         stats.commands = list.commands.count
         let tiles = _tileCache
+        let images = _imageStore
 
         ctx.saveGState()
         ctx.translateBy(x: 0, y: CGFloat(pixelHeight))
@@ -268,8 +280,8 @@ public final class DashRenderer: @unchecked Sendable {
                 drawText(text, rect: rect, style: style, in: ctx)
             case let .tile(z, x, y, rect, invert):
                 drawTile(z: z, x: x, y: y, rect: rect, night: invert, cache: tiles, in: ctx, stats: &stats)
-            case .image:
-                break // apple (music): DashImageStore lookup, aspect fill, rounded clip
+            case let .image(id, rect, cornerRadius):
+                drawImage(id: id, rect: rect, cornerRadius: cornerRadius, store: images, in: ctx, stats: &stats)
             case .save:
                 ctx.saveGState()
                 depth += 1
@@ -394,6 +406,50 @@ public final class DashRenderer: @unchecked Sendable {
         }
         ctx.setFillColor(cgColor(night ? tilePlaceholderNight : tilePlaceholderDay))
         ctx.fill(r)
+    }
+
+    // MARK: images (album artwork)
+
+    /// `DashDrawCommand.image`: the store's variant for the rect's DEVICE pixel size (the current
+    /// transform's scale included, so a 2× phone preview gets a 2× variant), aspect filled and
+    /// centre-cropped by the store, clipped to a rounded rect. An unknown id draws nothing (the
+    /// scene's placeholder underneath shows). Never inverted at night (the scene dims it).
+    private func drawImage(id: String, rect: DashRect, cornerRadius: Double, store: DashImageStore?,
+                           in ctx: CGContext, stats: inout DashRendererStats) {
+        let r = CGRect(x: rect.x, y: rect.y, width: rect.width, height: rect.height)
+        guard r.minX.isFinite, r.minY.isFinite, r.width.isFinite, r.height.isFinite,
+              r.width > 0, r.height > 0 else { return }
+        let size = Self.devicePixelSize(of: r, transform: ctx.userSpaceToDeviceSpaceTransform)
+        guard let store, let image = store.image(id: id, pixelWidth: size.width, pixelHeight: size.height) else {
+            stats.imagesMissing += 1
+            return
+        }
+        ctx.saveGState()
+        let maxRadius = Double(min(r.width, r.height)) / 2
+        let radius = CGFloat(cornerRadius.isFinite ? min(max(0, cornerRadius), maxRadius) : 0)
+        ctx.beginPath()
+        if radius > 0 {
+            ctx.addPath(CGPath(roundedRect: r, cornerWidth: radius, cornerHeight: radius, transform: nil))
+        } else {
+            ctx.addRect(r)
+        }
+        ctx.clip()
+        ctx.interpolationQuality = .high
+        Self.drawImage(image, in: r, ctx: ctx) // the variant has the rect's aspect: it fills `r` exactly
+        ctx.restoreGState()
+        stats.imagesDrawn += 1
+    }
+
+    /// Pixel size of user-space rect `r` on the device: its sides scaled by the transform's axis
+    /// scales (rotation-safe), at least 1 × 1.
+    static func devicePixelSize(of r: CGRect, transform t: CGAffineTransform) -> (width: Int, height: Int) {
+        let sx = Double((t.a * t.a + t.b * t.b).squareRoot())
+        let sy = Double((t.c * t.c + t.d * t.d).squareRoot())
+        func px(_ v: Double) -> Int {
+            guard v.isFinite else { return 1 }
+            return max(1, min(DashImageStore.maxVariantPixels, Int(v.rounded())))
+        }
+        return (px(Double(r.width) * sx), px(Double(r.height) * sy))
     }
 
     /// Draws an image upright into `r` of the y-down user space.
