@@ -26,12 +26,16 @@ struct RootView: View {
     private let launchLandscape: Bool
     /// `-uiDashSheet` (with `-uiScreen dash`): a dash sheet to open on the Dash view ("music").
     private let launchDashSheet: String?
+    /// `-uiSettingsAnchor` (with `-uiScreen settings`): the Settings section to scroll to ("music").
+    private let launchSettingsAnchor: String?
     @State private var launchApplied = false
 
-    init(launchScreen: RootLaunchScreen? = nil, launchLandscape: Bool = false, launchDashSheet: String? = nil) {
+    init(launchScreen: RootLaunchScreen? = nil, launchLandscape: Bool = false, launchDashSheet: String? = nil,
+         launchSettingsAnchor: String? = nil) {
         self.launchScreen = launchScreen
         self.launchLandscape = launchLandscape
         self.launchDashSheet = launchDashSheet
+        self.launchSettingsAnchor = launchSettingsAnchor
     }
 
     var body: some View {
@@ -163,7 +167,7 @@ struct RootView: View {
         case .navigate: NavigateScreen()
         case .dashPreview: DashPreviewScreen()
         case .controls: ControlsScreen()
-        case .settings: SettingsScreen()
+        case .settings: SettingsScreen(scrollAnchor: launchSettingsAnchor)
         case .garage: GarageScreen()
         case .trips: TripsScreen()
         case .logs: LogsScreen()

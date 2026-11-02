@@ -321,6 +321,16 @@
         }
       }
     },
+    "Allow access to Media & Apple Music": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permitir el acceso a Multimedia y Apple Music"
+          }
+        }
+      }
+    },
     "Allow local network access": {
       "localizations": {
         "es": {
@@ -3521,6 +3531,16 @@
         }
       }
     },
+    "OpenCfMoto needs access to Media & Apple Music to show the song.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenCfMoto necesita acceso a Multimedia y Apple Music para mostrar la canción."
+          }
+        }
+      }
+    },
     "OpenCfMoto problem report": {
       "localizations": {
         "es": {
@@ -5736,7 +5756,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mientras suena Apple Music, los botones ◀ ▶ ★ de la moto controlan la música. Con el control multimedia del teléfono activado, pausa la canción con ★ para devolvérselos al tablero."
+            "value": "Mientras suena Apple Music, los botones ◀ ▶ ★ de la moto controlan la música. Con el mando multimedia del teléfono activado, pausa la canción con ★ para devolvérselos al tablero."
           }
         }
       }

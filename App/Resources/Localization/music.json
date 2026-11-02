@@ -1,10 +1,12 @@
 {
   "Access to Media & Apple Music is off": "El acceso a Multimedia y Apple Music está desactivado",
+  "Allow access to Media & Apple Music": "Permitir el acceso a Multimedia y Apple Music",
   "Apple Music": "Apple Music",
   "Apple Music on the dash": "Apple Music en el tablero",
   "Cover, song and controls on the dash map. Only Apple Music: iOS doesn't let apps see what other music apps play.": "Portada, canción y controles en el mapa del tablero. Solo Apple Music: iOS no deja que las apps vean lo que reproducen otras apps de música.",
   "Not available": "No disponible",
+  "OpenCfMoto needs access to Media & Apple Music to show the song.": "OpenCfMoto necesita acceso a Multimedia y Apple Music para mostrar la canción.",
   "Show Apple Music on the dash": "Mostrar Apple Music en el tablero",
   "Starting Apple Music from the dash gives these buttons to the music until you pause it.": "Si pones Apple Music desde el tablero, estos botones pasan a la música hasta que la pauses.",
-  "While Apple Music plays, the bike's ◀ ▶ ★ buttons control the music. With the phone media remote on, pause the song with ★ to give them back to the dash.": "Mientras suena Apple Music, los botones ◀ ▶ ★ de la moto controlan la música. Con el control multimedia del teléfono activado, pausa la canción con ★ para devolvérselos al tablero."
+  "While Apple Music plays, the bike's ◀ ▶ ★ buttons control the music. With the phone media remote on, pause the song with ★ to give them back to the dash.": "Mientras suena Apple Music, los botones ◀ ▶ ★ de la moto controlan la música. Con el mando multimedia del teléfono activado, pausa la canción con ★ para devolvérselos al tablero."
 }

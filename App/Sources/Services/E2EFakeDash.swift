@@ -326,6 +326,9 @@ final class E2EFakeDashHarness {
             "output_fps": (e.outputFPS * 10).rounded() / 10,
         ] as [String: Any]
         let music = model.music
+        // `track_id` is the raw id on purpose (not a log token, F4): the e2e run only ever sees the
+        // fictional DemoSeed songs (`-e2eMusic`; otherwise no Music port), and the CI evidence should
+        // say which of them plays.
         status["music"] = [
             "enabled": music.isEnabled,
             "authorization": music.authorization.rawValue,

@@ -99,7 +99,9 @@ final class ProjectionAdapter: DashProjecting, @unchecked Sendable {
     func setDashImage(id: String, data: Data?) {
         if let data {
             if !images.set(id: id, data: data) {
-                Log.w("MUSIC", "artwork bytes rejected id=\(id)")
+                // No id (F4): "music.art.<track id>" holds the song's catalog id. MusicModel's artwork
+                // line just before this one names the song by its salted token.
+                Log.w("MUSIC", "artwork bytes rejected (\(data.count) bytes)")
             }
         } else {
             images.remove(id: id)

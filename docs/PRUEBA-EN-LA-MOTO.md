@@ -3,7 +3,7 @@
 Esta guía es para la **primera prueba real** de OpenCfMoto para iOS con tu tablero CFMoto / Carbit.
 Todo lo que se pudo probar sin moto ya pasó:
 
-- **1253 pruebas automáticas.**
+- **Más de 1400 pruebas automáticas.**
 - **Comparación byte a byte del protocolo con la app Android**: en 6 escenarios se comporta igual
   (ver `docs/verification/pxc-differential.md`).
 - **La app real en el simulador de iOS conectada a un tablero simulado**, sin violaciones del
@@ -50,35 +50,41 @@ permiso de red local, el codificador de video del teléfono y el comportamiento 
 
 ## Apple Music en el tablero
 
-Antes: Ajustes de OpenCfMoto ▸ **Apple Music en el tablero** ▸ activa **«Mostrar Apple Music en el
-tablero»** y permite **Multimedia y Apple Music** (con la moto parada). Solo funciona con la app
-**Música** de Apple: iOS no deja ver lo que suena en Spotify, YouTube Music y otras apps.
+Actívalo **en casa o con la moto parada**: Ajustes ▸ **Apple Music en el tablero** ▸ **«Mostrar Apple
+Music en el tablero»** y permite **Multimedia y Apple Music**. Si el interruptor ya está activado y
+aparece **«Permitir el acceso a Multimedia y Apple Music»**, tócalo (iOS aún no lo había preguntado).
+Solo funciona con la app **Música** de Apple: iOS no deja ver lo que suena en Spotify u otras apps.
 
-Comprueba y comparte los registros (las líneas `MUSIC` y `BTN`):
+Comparte los registros (líneas `MUSIC` y `BTN`). No llevan títulos, artistas ni identificadores: cada
+canción es un código que cambia en cada arranque de la app, por ejemplo
+`state paused track=p3f9a01c2 other=1` (`other=1`: iOS oye otro audio, o todavía el final de la
+canción justo tras una pausa).
 
-1. **Permiso**: el texto del aviso de iOS. Con **No permitir** no aparece nada de música en el tablero;
-   actívalo luego en Ajustes de iOS ▸ OpenCfMoto ▸ **Multimedia y Apple Music** y, al volver a la app,
-   aparece la portada sin reiniciarla.
-2. **Una canción descargada** en tu biblioteca: la portada en el recuadro del mapa (abajo a la
-   derecha), la barra de progreso, la hoja **Música** al tocarlo y sus botones ⏮ ⏯ ⏭. ⏮ con más de
-   3 s de canción vuelve al principio; con menos, va a la anterior.
-3. **Una canción en streaming** que no está en tu biblioteca: si sale la portada y de dónde (registros:
-   `artwork source=mp`, `musickit` o `none`, y los `ms=`). Repítelo con los **datos móviles
-   desactivados para OpenCfMoto** (Ajustes de iOS ▸ Datos móviles).
+1. **Permiso**: el texto del aviso de iOS. Con **No permitir** no aparece música en el tablero;
+   actívalo luego en Ajustes de iOS ▸ OpenCfMoto ▸ **Multimedia y Apple Music** y, al volver a la
+   app, aparece la portada sin reiniciarla.
+2. **Una canción descargada**: la portada en el recuadro del mapa (abajo a la derecha), la barra de
+   progreso y, al tocarlo, la hoja **Música** con ⏮ ⏯ ⏭. **Pausar con ⏯ deja la hoja abierta** y
+   ⏯ la reanuda. ⏮ con más de 3 s de canción vuelve al principio; con menos, va a la anterior.
+3. **Una canción en streaming** que no está en tu biblioteca: si sale la portada (registro
+   `artwork source=mp`, `musickit` o `none`, y `ms=`). Repítelo con los **datos móviles desactivados
+   para OpenCfMoto** (Ajustes de iOS ▸ Datos móviles).
 4. **Una radio o emisora en directo**: sin barra ni tiempos, con el título.
-5. **Música en primer plano y OpenCfMoto en segundo plano**: al pasar de canción en Música, el tablero
-   cambia en unos 2 s; el ⏯ del tablero funciona.
-6. **Tablero sin táctil** (Ajustes ▸ «Desactivar pantalla táctil») **con el control multimedia del
+5. **Música en primer plano y OpenCfMoto en segundo plano**: al pasar de canción en Música, el
+   tablero cambia en unos 2 s; el ⏯ del tablero funciona.
+6. **Tablero sin táctil** (Ajustes ▸ «Desactivar pantalla táctil») **con el mando multimedia del
    teléfono activado** (Controles): ◀ lleva al recuadro, ★ abre la hoja, ★ pone la música → aviso
    «Los botones del manillar controlan ahora Apple Music» y la hoja se cierra; los botones pasan de
-   canción. ★ en el manillar pausa la música → aviso «Los botones del manillar vuelven a controlar el
-   tablero» (registros: `handlebar buttons back on the dash`). Un aviso de voz con música baja la
+   canción. ★ en el manillar pausa la música → aviso «Los botones del manillar vuelven a controlar
+   el tablero» (registro `handlebar buttons back on the dash`). Un aviso de voz con música baja la
    música sin pararla.
-7. **Spotify sonando con Música en pausa**: no aparece el recuadro.
-8. **Navegando**: la hoja Música se cierra sola unos 200 m antes de un giro y tras 10 s sin tocarla en
-   marcha; con la moto parada sigue abierta.
-9. **Bloquear y desbloquear el iPhone**: la imagen fija de «Teléfono bloqueado» y, al desbloquear, el
-   recuadro correcto.
+7. **Spotify con Música en pausa**: si Spotify ya sonaba al abrir el tablero, no aparece el recuadro;
+   si empieza después, el recuadro se va a los 3 s (registro `other audio for 3 s: song hidden`). Un
+   sonido corto de otra app no lo quita.
+8. **Navegando**: la hoja Música se cierra sola unos 200 m antes de un giro y tras 10 s sin tocarla
+   en marcha; con la moto parada sigue abierta.
+9. **Bloquear y desbloquear el iPhone**: la imagen fija de «Teléfono bloqueado» y, al desbloquear,
+   el recuadro correcto.
 
 ## Si algo falla
 

@@ -15,6 +15,7 @@
 // | `-uiScreen <name>`               | open that screen after launch (RootLaunchScreen names)              |
 // | `-uiOrientation landscape`       | rotate the interface to landscape after launch                      |
 // | `-uiDashSheet music`             | with `-uiScreen dash`: open the dash's Music sheet once it shows music |
+// | `-uiSettingsAnchor music`        | with `-uiScreen settings`: scroll to "Apple Music on the dash"      |
 
 import Foundation
 
@@ -37,6 +38,9 @@ struct AppLaunchOptions: Equatable {
     var e2eMusic = false
     /// `-uiDashSheet <name>`: a dash sheet to open on the phone's Dash view ("music").
     var uiDashSheet: String?
+    /// `-uiSettingsAnchor <name>`: the Settings section to scroll to ("music"; the CI screenshot of
+    /// the Apple Music section, review fix F10).
+    var uiSettingsAnchor: String?
 
     init() {}
 
@@ -64,6 +68,8 @@ struct AppLaunchOptions: Equatable {
                 if let v = value(after: i) { landscape = v.lowercased().hasPrefix("land"); i += 1 }
             case "-uiDashSheet":
                 if let v = value(after: i) { uiDashSheet = v.lowercased(); i += 1 }
+            case "-uiSettingsAnchor":
+                if let v = value(after: i) { uiSettingsAnchor = v.lowercased(); i += 1 }
             default:
                 break
             }
@@ -84,6 +90,7 @@ struct AppLaunchOptions: Equatable {
         if let uiScreen { parts.append("-uiScreen \(uiScreen)") }
         if landscape { parts.append("-uiOrientation landscape") }
         if let uiDashSheet { parts.append("-uiDashSheet \(uiDashSheet)") }
+        if let uiSettingsAnchor { parts.append("-uiSettingsAnchor \(uiSettingsAnchor)") }
         return parts.joined(separator: " ")
     }
 }

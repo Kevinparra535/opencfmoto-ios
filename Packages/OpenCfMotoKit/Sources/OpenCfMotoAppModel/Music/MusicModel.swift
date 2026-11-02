@@ -10,13 +10,19 @@
 // - Observing = dash UI live (session / phone preview / Ride Mode, from RideModel) ∧ enabled ∧
 //   authorized. The port reports changes only (song, state, other audio, seeks / drift ≥ 1.5 s);
 //   the dash extrapolates the progress itself, so the model does not change every second.
+// - A song the Music app is not playing hides while another app's audio plays (contract D7) — only
+//   once that outlasted `otherAudioGrace` (review fix F1): right after a pause iOS still counts the
+//   Music app's own fading audio as "other audio", and one short sound is no reason to close the
+//   rider's Music sheet. A song already silent, or other audio already playing, when observing
+//   starts counts as "long ago": Spotify at dash start still hides a paused song at once.
 // - Artwork per song: placeholder at once, then the in-memory cache (4 songs) or attempts at 0, +1,
 //   +3 and +10 s after the song became current; an image is registered BEFORE its id is published
 //   and images no longer referenced are removed AFTER the next dash model went out.
 // - Handlebar hand-over (contract §7): `onPlaybackStarted` (→ toast, sheet closed) and
 //   `onPlaybackPaused` (→ ControlsModel re-claims the buttons) fire on transitions only, never on the
 //   first reading after observing starts.
-// - Privacy: logs carry track ids, states and artwork sources — never titles, artists, albums or URLs.
+// - Privacy: logs carry states, artwork sources and salted per-run song tokens
+//   (`MusicTrackID.logToken`, F4) — never titles, artists, albums, track / store / image ids or URLs.
 
 import Foundation
 import Observation
@@ -63,6 +69,12 @@ public final class MusicModel {
     /// The waits of the artwork retries and of the re-reads after a command (tests inject one that
     /// records the duration and returns at once).
     @ObservationIgnored var sleeper: @MainActor (TimeInterval) async -> Void = { await sleepSeconds($0) }
+    /// F1: a song the Music app stopped making sound for is hidden for another app's audio only once
+    /// that lasted this long, counted from the later of "went silent" and "other audio started".
+    static let otherAudioGrace: TimeInterval = 3
+    /// F1: the wait until the end of the grace — separate from `sleeper`, so the waits tests record
+    /// there stay the artwork retries and the command re-reads (tests end this one by hand).
+    @ObservationIgnored var graceSleeper: @MainActor (TimeInterval) async -> Void = { await sleepSeconds($0) }
 
     /// The dash model must be rebuilt (RideModel.setNeedsModelUpdate coalesces).
     @ObservationIgnored var onDashChange: (() -> Void)?
@@ -91,6 +103,14 @@ public final class MusicModel {
     /// Most recent first.
     @ObservationIgnored private var artworkCache: [(trackID: String, artwork: MusicArtwork)] = []
     @ObservationIgnored private var cleanupScheduled = false
+    /// F1: when the Music app was seen going from audible to silent; nil while audible, or silent
+    /// since before observing started ("long ago").
+    @ObservationIgnored private var silentSince: TimeInterval?
+    /// F1: when another app's audio was seen starting; nil while there is none, or it already played
+    /// when observing started ("long ago").
+    @ObservationIgnored private var otherSince: TimeInterval?
+    /// F1: the one re-evaluation at the end of the grace (every reading reschedules or cancels it).
+    @ObservationIgnored private var graceTask: Task<Void, Never>?
 
     public init(core: AppCore) {
         self.core = core
@@ -136,17 +156,28 @@ public final class MusicModel {
     // MARK: - Dash (RideModel / AppModel)
 
     /// `DashModel.music` (contract §3.1): nil unless enabled, authorized, observing and a song is
-    /// loaded — and a paused song is hidden while another app's audio plays (it would be stale).
+    /// loaded — and a song the Music app is not playing is hidden once another app's audio played
+    /// through the F1 grace (it would be stale: Spotify plays).
     var dashNowPlaying: DashNowPlaying? {
         guard isEnabled, authorization == .authorized, isObserving, let track = snapshot.track else { return nil }
+        guard !isHiddenForOtherAudio(at: core.services.clock.now()) else { return nil }
         let playing = snapshot.state == .playing
-        guard playing || !snapshot.otherAudioPlaying else { return nil }
         let artworkId = published.flatMap { $0.trackID == track.id ? $0.imageID : nil }
         return DashNowPlaying(title: track.title, artist: track.artist, album: track.album, artworkId: artworkId,
                               state: playing ? .playing : .paused, duration: track.duration,
                               position: snapshot.position, positionAt: snapshot.sampledAt,
                               rate: playing ? snapshot.rate : 0)
     }
+
+    /// D7 with the F1 grace: the Music app makes no sound, another app's does, and that has lasted
+    /// `otherAudioGrace` since the later of "went silent" and "other audio started".
+    private func isHiddenForOtherAudio(at now: TimeInterval) -> Bool {
+        guard !Self.isAudible(snapshot.state), snapshot.otherAudioPlaying else { return false }
+        return now - graceAnchor >= Self.otherAudioGrace
+    }
+
+    /// F1: the later of `silentSince` and `otherSince`; −∞ when both are "long ago".
+    private var graceAnchor: TimeInterval { max(silentSince ?? -.infinity, otherSince ?? -.infinity) }
 
     /// RideModel: the own dash UI is live (Connect session in own-UI mode, the phone Dash preview /
     /// Map hub, Ride Mode).
@@ -218,6 +249,7 @@ public final class MusicModel {
         let wanted = dashActive && isEnabled && authorization == .authorized
         guard wanted != isObserving else { return }
         let port = core.services.music
+        resetGrace() // F1: whatever was seen before is "long ago" for the next observation
         if wanted {
             isObserving = true
             transitionsArmed = false
@@ -247,8 +279,13 @@ public final class MusicModel {
         guard reading != old || first else { return }
         transitionsArmed = true
         snapshot = reading
-        if first || reading.track?.id != old.track?.id || reading.state != old.state {
-            Log.i("MUSIC", "state \(reading.state.rawValue) track=\(reading.track?.id ?? "none") other=\(reading.otherAudioPlaying ? 1 : 0)")
+        noteAudio(reading, old: old, first: first)
+        // Also when only `other` flips (F1): the field log then shows how long iOS still reported
+        // the Music app's own audio after a pause.
+        if first || reading.track?.id != old.track?.id || reading.state != old.state
+            || reading.otherAudioPlaying != old.otherAudioPlaying {
+            let token = reading.track.map { MusicTrackID.logToken($0.id) } ?? "none"
+            Log.i("MUSIC", "state \(reading.state.rawValue) track=\(token) other=\(reading.otherAudioPlaying ? 1 : 0)")
         }
         let songChanged = reading.track?.id != artworkTrackID
         if songChanged { startArtwork(for: reading.track) }
@@ -263,6 +300,58 @@ public final class MusicModel {
         }
         onDashChange?()
         if songChanged { scheduleImageCleanup() } // the previous song's image, once the model moved on
+    }
+
+    // MARK: - Other audio grace (F1)
+
+    /// The two times the grace counts from. The first reading after observing starts sets neither:
+    /// a song already silent, or other audio already playing, counts as "long ago" — so a paused song
+    /// still hides at once when the dash goes live while Spotify plays.
+    private func noteAudio(_ reading: MusicSnapshot, old: MusicSnapshot, first: Bool) {
+        let now = core.services.clock.now()
+        if Self.isAudible(reading.state) {
+            silentSince = nil
+        } else if !first, Self.isAudible(old.state) {
+            silentSince = now
+        }
+        if !reading.otherAudioPlaying {
+            otherSince = nil
+        } else if !first, !old.otherAudioPlaying {
+            otherSince = now
+        }
+        scheduleGraceEnd()
+    }
+
+    /// While a song is shown only thanks to the grace: ONE re-evaluation at its end. The port reports
+    /// changes only, so other audio that simply goes on would never hide the song without it: read the
+    /// player again, then rebuild the dash model.
+    private func scheduleGraceEnd() {
+        graceTask?.cancel()
+        graceTask = nil
+        guard isObserving, snapshot.track != nil, !Self.isAudible(snapshot.state), snapshot.otherAudioPlaying else { return }
+        let wait = graceAnchor + Self.otherAudioGrace - core.services.clock.now()
+        guard wait > 0 else { return } // "long ago" (−∞) or over: already hidden
+        let sleep = graceSleeper
+        graceTask = Task { @MainActor [weak self] in
+            await sleep(wait)
+            guard !Task.isCancelled, let self, self.isObserving else { return }
+            self.graceTask = nil
+            self.core.services.music.refresh() // a reading that changed reschedules or cancels by itself
+            self.onDashChange?()
+            if self.isHiddenForOtherAudio(at: self.core.services.clock.now()) {
+                Log.i("MUSIC", "other audio for \(Int(Self.otherAudioGrace)) s: song hidden")
+            } else if self.graceTask == nil {
+                self.scheduleGraceEnd() // woke before the end (the sleep's clock is not the uptime clock)
+            }
+        }
+    }
+
+    /// Observing turned on or off: nothing seen before counts.
+    private func resetGrace() {
+        graceTask?.cancel()
+        graceTask = nil
+        silentSince = nil
+        otherSince = nil
     }
 
     private func scheduleRefreshes() {
@@ -325,7 +414,7 @@ public final class MusicModel {
             self.artworkTask = nil
             self.lastArtworkSource = "none"
             let ms = Self.milliseconds(since: startedAt, now: self.core.services.clock.now())
-            Log.i("MUSIC", "artwork source=none kind=\(Self.kind(track)) attempt=\(delays.count) ms=\(ms) track=\(track.id)")
+            Log.i("MUSIC", "artwork source=none kind=\(Self.kind(track)) attempt=\(delays.count) ms=\(ms) track=\(MusicTrackID.logToken(track.id))")
         }
     }
 
@@ -340,7 +429,7 @@ public final class MusicModel {
         lastArtworkSource = artwork.source.rawValue
         let ms = Self.milliseconds(since: startedAt, now: core.services.clock.now())
         // attempt=0: from the in-memory cache (the song played a moment ago).
-        Log.i("MUSIC", "artwork source=\(artwork.source.rawValue) kind=\(Self.kind(track)) attempt=\(attempt) ms=\(ms) px=\(MusicArtworkInfo.pixelSizeText(of: artwork.data)) bytes=\(artwork.data.count) track=\(track.id)")
+        Log.i("MUSIC", "artwork source=\(artwork.source.rawValue) kind=\(Self.kind(track)) attempt=\(attempt) ms=\(ms) px=\(MusicArtworkInfo.pixelSizeText(of: artwork.data)) bytes=\(artwork.data.count) track=\(MusicTrackID.logToken(track.id))")
         onDashChange?()
         scheduleImageCleanup()
     }
@@ -381,6 +470,11 @@ public final class MusicModel {
         if artworkCache.count > Self.artworkCacheCapacity {
             artworkCache.removeLast(artworkCache.count - Self.artworkCacheCapacity)
         }
+    }
+
+    /// The Music app makes sound (F1): it plays, or it scans — seeking plays audio too.
+    static func isAudible(_ state: MusicPlaybackState) -> Bool {
+        state == .playing || state == .seekingForward || state == .seekingBackward
     }
 
     /// Seeking and interruptions pass: the song is still "playing" for the hand-over rules.

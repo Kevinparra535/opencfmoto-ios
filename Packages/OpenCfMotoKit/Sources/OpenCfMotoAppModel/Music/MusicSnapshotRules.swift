@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Apple Music on the dash (iOS addition, no Android counterpart): the platform-neutral rules the iOS
 // adapter (App/Sources/Services/MusicAdapter.swift) and MusicModel share, unit-tested on Linux.
-// - `MusicTrackID`: a stable id per song that is safe inside the dash image id "music.art.<id>".
+// - `MusicTrackID`: a stable id per song that is safe inside the dash image id "music.art.<id>", and
+//   `logToken(_:)`, the only form of it a log line may carry (review fix F4).
 // - `MusicSnapshot.differsMeaningfully(from:)`: what counts as a change worth an `onChange` (song,
 //   state, other audio, rate, a seek or a drift ≥ 1.5 s) — never the steady advance of the position.
+// - `MusicEntryMatch`: is MusicKit's playing entry the song MediaPlayer reports (F5)?
 // - `MusicArtworkInfo.pixelSize(of:)`: width × height of PNG / JPEG bytes for the artwork log line,
 //   without ImageIO.
 // Privacy: none of these helpers logs anything; titles / artists / albums only feed the hash.
@@ -37,6 +39,25 @@ public enum MusicTrackID {
               s.unicodeScalars.contains(where: { $0 != "0" }) else { return nil }
         return s
     }
+
+    /// What a log line may say about a song (F4): its kind letter ("p" library item, "s" catalog id,
+    /// "h" hash) + 8 hex digits of FNV-1a 64 over (a random per-process salt ‖ the id). Equal within
+    /// one run of the app, so a log still shows "the same song again" — but a raw id never reaches a
+    /// log or a shared problem report: a catalog id ("s" + ~10 digits) names the song on
+    /// music.apple.com, and an unsalted hash of one is brute-forced in seconds. The salt is never
+    /// stored, so the tokens of two runs cannot be matched either.
+    public static func logToken(_ id: String) -> String { logToken(id, salt: logSalt) }
+
+    /// `logToken(_:)` with an explicit salt (tests).
+    static func logToken(_ id: String, salt: UInt64) -> String {
+        let kind = id.first.map(String.init) ?? "-"
+        let saltBytes = (0 ..< 8).map { UInt8(truncatingIfNeeded: salt >> (8 * $0)) }
+        return kind + String(hex16(fnv1a64(saltBytes + Array(id.utf8))).prefix(8))
+    }
+
+    /// Random once per process, never persisted (F4: a known salt would make the ~10-digit catalog
+    /// ids brute-forceable again).
+    static let logSalt = UInt64.random(in: .min ... .max)
 
     /// FNV-1a 64-bit.
     static func fnv1a64(_ bytes: [UInt8]) -> UInt64 {
@@ -88,6 +109,49 @@ public extension MusicSnapshot {
         let expected = old.extrapolatedPosition(at: sampledAt)
         let now = position.isFinite ? position : 0
         return abs(now - expected) >= Self.driftTolerance
+    }
+}
+
+/// F5: is MusicKit's playing entry (`SystemMusicPlayer.shared.queue.currentEntry`) the song MediaPlayer
+/// reports? The two update independently, so right after a song change the entry can still be the
+/// previous song — and two songs in a row can share a title (covers, "Intro" tracks). The entry's
+/// artwork is used only when the titles AND the artists match, and the catalog ids too when both
+/// sides have one; otherwise the song keeps the placeholder (never another song's cover).
+public enum MusicEntryMatch {
+    /// - `entryTitle`, `entrySubtitle`: the queue entry's.
+    /// - `songArtist`, `songID`: the entry's `Song` (`artistName`, `id.rawValue`); nil when the entry
+    ///   holds no song (a music video, a station).
+    /// - `itemTitle`, `itemArtist`, `itemStoreID`: MediaPlayer's item (`title`, `artist ?? albumArtist`,
+    ///   `playbackStoreID`).
+    public static func matches(entryTitle: String, entrySubtitle: String?, songArtist: String?, songID: String?,
+                               itemTitle: String, itemArtist: String, itemStoreID: String?) -> Bool {
+        let title = normalized(itemTitle)
+        guard !title.isEmpty, normalized(entryTitle) == title else { return false }
+        let artist = normalized(itemArtist)
+        if !artist.isEmpty { // only when MediaPlayer names no artist do the title (and ids) decide alone
+            if let songArtist {
+                guard normalized(songArtist) == artist else { return false }
+            } else {
+                guard let subtitle = entrySubtitle, normalized(subtitle).contains(artist) else { return false }
+            }
+        }
+        // Catalog ids only: a song added from Apple Music has a library id ("i.…") in MusicKit and its
+        // catalog `playbackStoreID` in MediaPlayer — no reason to reject it (it would lose its cover).
+        if let songID, isCatalogID(songID), let store = MusicTrackID.normalizedStoreID(itemStoreID) {
+            return songID == store
+        }
+        return true
+    }
+
+    /// Case-, diacritic- and surrounding-whitespace-insensitive.
+    public static func normalized(_ s: String) -> String {
+        s.trimmingCharacters(in: .whitespacesAndNewlines)
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+    }
+
+    /// A MusicKit catalog id: ASCII digits only (library ids look like "i.…").
+    static func isCatalogID(_ id: String) -> Bool {
+        !id.isEmpty && id.unicodeScalars.allSatisfy { $0 >= "0" && $0 <= "9" }
     }
 }
 

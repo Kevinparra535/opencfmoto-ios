@@ -348,15 +348,20 @@ on the dash** (KeyValueStore `ios.dash_music`, default **off**; not per bike and
 asked (an explicit phone action — never from the dash or during a ride); when access is denied or
 restricted the section says "Access to Media & Apple Music is off" with an **Open Settings** button,
 and an access granted later in iOS Settings is picked up when the app becomes active (no relaunch).
+When the toggle is on but iOS never asked (Reset Location & Privacy, the app closed while the prompt
+was up), the section says "OpenCfMoto needs access to Media & Apple Music to show the song." with an
+**Allow access to Media & Apple Music** button that shows the system prompt (iOS lists the switch in
+its own Settings only after an app asked).
 The toggle is disabled where there is no system music player. Only the system Music app (Apple Music
 and the music library) can be shown: iOS gives apps no access to what other players play. The
 Permissions section lists **Apple Music** (Allowed / Denied / Not asked yet / Restricted / Not
 available) and the Controls ▸ Phone media remote footer says that starting Apple Music from the dash
 gives the handlebar buttons to the music until it is paused. What the dash shows and the handlebar
 hand-over: `navigation-dash.md` §15 and `input-controls.md` §10 item 15. Nothing is sent anywhere:
-titles, artists and albums stay on the phone and never reach logs or problem reports (the report
-carries `music=on/authorized/playing/art=mp`); the artwork of streamed songs is loaded by Apple's
-MusicKit from Apple.
+titles, artists, albums and song ids stay on the phone and never reach logs or problem reports — a
+log line names a song by a token salted per app run (`track=s1a2b3c4d`), and the report carries
+`music=on/authorized/playing/art=mp`; the artwork of streamed songs is loaded by Apple's MusicKit
+from Apple.
 
 ---
 

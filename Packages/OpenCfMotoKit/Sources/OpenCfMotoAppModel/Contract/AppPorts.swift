@@ -272,8 +272,9 @@ public extension HandlebarRemoteProviding {
 // (App/Sources/Services/MusicAdapter.swift), never in OpenCfMotoApple: the ReplayKit extension links
 // OpenCfMotoApple, and App Store Connect checks NSAppleMusicUsageDescription bundle by bundle
 // (ITMS-90683, tools/testflight/lint_bundle.py).
-// Privacy: song titles, artists, albums, store ids and artwork URLs never go to logs, problem
-// reports or any server of ours; log track ids, states and artwork sources only.
+// Privacy: song titles, artists, albums, track / store / image ids and artwork URLs never go to logs,
+// problem reports or any server of ours; log states, artwork sources and the salted per-run token of
+// a track id only (`MusicTrackID.logToken`, review fix F4: a catalog id names the song).
 
 /// The media-library permission (Settings ▸ "Media & Apple Music"; MPMediaLibrary and MusicKit share
 /// it and the NSAppleMusicUsageDescription purpose string).
@@ -333,8 +334,9 @@ public struct MusicSnapshot: Sendable, Equatable {
     /// Playback rate when sampled (1 while playing, 0 otherwise).
     public var rate: Double
     /// Another app's audio is playing (`AVAudioSession.isOtherAudioPlaying`; the Music app itself counts
-    /// as "other" for us). Only meaningful while `state` is not `.playing`: a paused Music song is stale
-    /// while Spotify plays, so the dash hides it.
+    /// as "other" for us, also for a moment after it paused). Only meaningful while the Music app makes
+    /// no sound: a paused Music song is stale while Spotify plays, so the dash hides it — once that
+    /// lasted MusicModel's 3 s grace (F1).
     public var otherAudioPlaying: Bool
 
     public init(track: MusicTrack?, state: MusicPlaybackState, position: TimeInterval, sampledAt: TimeInterval,

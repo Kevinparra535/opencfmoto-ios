@@ -3,7 +3,9 @@
 // Music app through MediaPlayer's `MPMusicPlayerController.systemMusicPlayer` — song, state,
 // position and the transport controls — plus the song's artwork: the media item's own picture
 // (local, no network) or, for streamed songs without one, MusicKit's artwork of the playing entry
-// (loaded by Apple's own URL handling through `URLSession.shared`; no iTunes / catalog API).
+// (loaded by Apple's own URL handling through `URLSession.shared`; no iTunes / catalog API) — only
+// when that entry is the same song by title, artist and catalog id, before and after the download
+// (review fix F5: the two players update independently).
 //
 // Lives in the APP target, never in OpenCfMotoApple: the ReplayKit extension links that package
 // and App Store Connect checks NSAppleMusicUsageDescription bundle by bundle (ITMS-90683;
@@ -16,7 +18,7 @@
 // updates) + a settle read 0.6 s after a song or state change (late metadata, `isOtherAudioPlaying`
 // right after a pause). `onChange` fires only for meaningful changes (MusicSnapshot.differsMeaningfully),
 // never for the steady advance of the position: the dash extrapolates it.
-// Privacy: titles, artists, albums and artwork URLs are never logged.
+// Privacy: titles, artists, albums, track / store ids and artwork URLs are never logged (F4).
 
 import AVFoundation
 import Foundation
@@ -176,16 +178,30 @@ final class MusicAdapter: MusicPlaying {
            let data = Self.jpeg(picture, maxPixelSize: side) {
             return MusicArtwork(data: data, source: .mediaItem)
         }
-        // 2. MusicKit's artwork of the playing entry (same title), loaded by Apple from Apple.
+        // 2. MusicKit's artwork of the playing entry — when it is this song (F5), loaded by Apple from Apple.
         guard Self.usesMusicKitArtwork, MusicAuthorization.currentStatus == .authorized,
-              let entry = SystemMusicPlayer.shared.queue.currentEntry,
-              Self.sameTitle(entry.title, item.title ?? ""),
+              let entry = SystemMusicPlayer.shared.queue.currentEntry, Self.entryMatches(entry, item),
               let url = entry.artwork?.url(width: side, height: side) else { return nil }
         guard let bytes = await Self.download(url) else { return nil }
-        // Still the same song after the download?
+        // Still the same song after the download? MediaPlayer's item AND MusicKit's entry, read again
+        // (F5): the two update independently, and a wrong cover would be cached under this song.
         guard observedPlayer != nil, let now = player?.nowPlayingItem, Self.trackID(of: now) == trackID,
+              let entryNow = SystemMusicPlayer.shared.queue.currentEntry, Self.entryMatches(entryNow, now),
               let data = Self.thumbnailJPEG(bytes, maxPixelSize: side) else { return nil }
         return MusicArtwork(data: data, source: .musicKit)
+    }
+
+    /// F5: MusicKit's queue entry is MediaPlayer's item (`MusicEntryMatch`: title AND artist, and the
+    /// catalog ids when both sides have one — never a library id "i.…" against a catalog one).
+    /// (`MusicKit.` because AudioToolbox, through AVFoundation, has a `MusicPlayer` too.)
+    static func entryMatches(_ entry: MusicKit.MusicPlayer.Queue.Entry, _ item: MPMediaItem) -> Bool {
+        let entryItem: MusicKit.MusicPlayer.Queue.Entry.Item? = entry.item
+        var song: MusicKit.Song?
+        if case .song(let s)? = entryItem { song = s }
+        return MusicEntryMatch.matches(entryTitle: entry.title, entrySubtitle: entry.subtitle,
+                                       songArtist: song?.artistName, songID: song?.id.rawValue,
+                                       itemTitle: item.title ?? "", itemArtist: item.artist ?? item.albumArtist ?? "",
+                                       itemStoreID: item.playbackStoreID)
     }
 
     /// `URLSession.shared` on purpose: MusicKit's `musicKit://` artwork URLs only load through the
@@ -260,15 +276,6 @@ final class MusicAdapter: MusicPlaying {
         case .authorized: return .authorized
         @unknown default: return .denied
         }
-    }
-
-    /// Case-, diacritic- and whitespace-insensitive title match (MusicKit's entry vs MediaPlayer's item).
-    static func sameTitle(_ a: String, _ b: String) -> Bool {
-        func norm(_ s: String) -> String {
-            s.trimmingCharacters(in: .whitespacesAndNewlines)
-                .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
-        }
-        return !norm(a).isEmpty && norm(a) == norm(b)
     }
 
     // MARK: - Encoding (JPEG ≤ maxPixelSize)
