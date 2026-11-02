@@ -261,6 +261,13 @@ public enum DashDrawCommand: Hashable, Sendable {
     case transform(DashTransform)
     /// Intersect the clip with a path (non-zero rule).
     case clip(DashPath)
+    /// ADDITION (music): the raster image registered under `id` (album artwork; the app hands the
+    /// encoded bytes to the renderer through `DashProjecting.setDashImage(id:data:)`), drawn into
+    /// `rect` in the current transform, scaled to FILL the rect (aspect fill, centred crop) and
+    /// clipped to a rounded rect of `cornerRadius` (canvas px, 0 = square). An id the renderer does
+    /// not know draws NOTHING: the scene draws its own placeholder underneath. SVG export draws a
+    /// deterministic placeholder (or `DashSVGExporter.images[id]`).
+    case image(id: String, rect: DashRect, cornerRadius: Double)
 }
 
 /// A tappable area produced by the UI builder (renderers ignore it). `id` is interpreted by the

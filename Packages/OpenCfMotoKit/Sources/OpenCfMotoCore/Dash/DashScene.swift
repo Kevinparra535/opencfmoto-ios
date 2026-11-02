@@ -12,6 +12,8 @@ import Foundation
 /// Which sheet covers the map.
 public enum DashSheet: String, Sendable, Equatable {
     case none, menu, search
+    /// Apple Music (iOS addition).
+    case music
 }
 
 /// A hit-testable element of a built frame.
@@ -186,6 +188,8 @@ struct DashSceneBuilder {
             drawMenu()
         case .search:
             drawSearch()
+        case .music:
+            break // core-dash: drawMusicSheet()
         case .none:
             break
         }
@@ -767,6 +771,8 @@ struct DashSceneBuilder {
             return Self.menuFocusBase + ["menu.close"]
         case .search:
             return searchFocus
+        case .music:
+            return [] // core-dash: previous, playPause, next, close
         case .none:
             break
         }

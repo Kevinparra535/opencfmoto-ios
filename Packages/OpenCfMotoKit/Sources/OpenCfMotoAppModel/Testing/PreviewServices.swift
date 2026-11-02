@@ -167,6 +167,15 @@ public final class PreviewHandlebar: HandlebarRemoteProviding {
     public func enable() { isEnabled = true }
     public func disable() { isEnabled = false }
 
+    /// ADDITION (music): `reclaimIfPossible()` calls so far, and what they answer while capture is
+    /// enabled (`.refused` = "other audio is playing / app in the background").
+    public private(set) var reclaimRequests = 0
+    public var reclaimAnswer: HandlebarReclaimResult = .reclaimed
+    public func reclaimIfPossible() -> HandlebarReclaimResult {
+        reclaimRequests += 1
+        return isEnabled ? reclaimAnswer : .refused
+    }
+
     /// Simulates a handlebar button (tests / demo).
     public func emit(_ signal: HandlebarSignal) {
         guard isEnabled else { return }
@@ -260,6 +269,17 @@ public final class PreviewProjection: DashProjecting, @unchecked Sendable {
     public func prefetchCorridor(_ points: [GeoPoint]) {}
     public func setTileURLTemplate(_ template: String) { lock.lock(); tileURLTemplate = template; lock.unlock() }
     public func clearTileCache() {}
+    /// ADDITION (music): the images registered for `DashDrawCommand.image` (id → encoded bytes) and
+    /// every call in order (id, registered: true / removed: false).
+    public private(set) var dashImages: [String: Data] = [:]
+    public private(set) var dashImageCalls: [(id: String, registered: Bool)] = []
+    public func setDashImage(id: String, data: Data?) {
+        lock.lock()
+        dashImages[id] = data
+        dashImageCalls.append((id, data != nil))
+        invalidations += 1
+        lock.unlock()
+    }
 }
 
 public final class PreviewMirror: MirrorHosting, @unchecked Sendable {

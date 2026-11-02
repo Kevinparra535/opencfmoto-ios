@@ -98,6 +98,9 @@ public struct DashSVGExporter: Sendable {
                 out.append(contentsOf: text(s, rect, style))
             case let .tile(z, x, y, rect, invert):
                 out.append(tile(z: z, x: x, y: y, rect: rect, invert: invert))
+            case let .image(_, rect, _):
+                // core-dash: rounded, clipped, deterministic placeholder (or `images[id]`).
+                out.append("<rect x=\"\(Self.n(rect.x))\" y=\"\(Self.n(rect.y))\" width=\"\(Self.n(rect.width))\" height=\"\(Self.n(rect.height))\" fill=\"#3A4658\"/>")
             case .save:
                 stack.append(0)
             case .restore:
