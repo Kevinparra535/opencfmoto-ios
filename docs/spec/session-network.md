@@ -1366,13 +1366,21 @@ platform knowledge, not from the Android repo. Verify each platform claim on a d
   `BikeLink.onWifiReacquired` (stop + start, fresh IP, rebound listeners).
 - Treat `.alreadyAssociated` as success; `.userDenied` → "approve the join prompt" (Android picker ERROR analogue).
   The completion handler can report success without association — always confirm with `fetchCurrent` and wait for
-  an IPv4 on `en0` (poll 500 ms up to 10 s, like `BikeWifiP2p.kt:50-51`; ignore 169.254/16).
+  an IPv4 on `en0` (poll 500 ms up to 10 s, like `BikeWifiP2p.kt:50-51`; ignore 169.254/16). Already on the dash AP
+  with the SSID unreadable and `apply()` answering without `.alreadyAssociated`, nothing changes in the window: at its
+  end accept that unchanged network if it has no internet (path unsatisfied) and sits on a dash subnet, instead of
+  failing the join (a home LAN on the dash's plan has a satisfied path; a readable other SSID decides by itself).
+- "I've joined" on the manual-join sheet while iOS still names another SSID: keep waiting and say so on the sheet;
+  never start the link on that network (no probes / port scan on a home LAN).
 - **Wi-Fi up does not need a satisfied path.** First field test (iOS 27): on the dash AP, which has no internet,
   `NWPathMonitor(requiredInterfaceType: .wifi)` stays unsatisfied (`notAvailable`, no interface listed) while `en0`
   holds its DHCP address. A usable IPv4 on the Wi-Fi interface (the path's, else the `SIOCGIFFUNCTIONALTYPE` Wi-Fi
   one, else `en0`) counts as up, "local-only", gateway = subnet `.1`: the SSID is read, the join confirmed, the
-  session supervised and the Local Network check browses `_EasyConn._tcp` there. Logs:
-  `wifi=up(local-only, path=unsatisfied:notAvailable)`. The link itself needs BSD sockets there (§11.2).
+  session supervised and the Local Network check browses `_EasyConn._tcp` there (a listed service, or a browser that
+  got ready and was never refused, means granted: nothing may advertise the dash yet; PolicyDenied means denied).
+  Logs: `wifi=up(local-only, path=unsatisfied:notAvailable)`; the "no internet — using the interface directly" note
+  only for a network the app uses. The link itself needs BSD sockets there (§11.2). Point-to-point interfaces (utun,
+  ipsec) never count as the Wi-Fi interface: a VPN running over Wi-Fi reads as Wi-Fi in `SIOCGIFFUNCTIONALTYPE`.
 - `DIRECT-…` SSIDs: join like any SSID (worked on the 1000 MT-X via Android's specifier, §3.3). P2P-only QRs: still
   try the SSID/PSK join; if it fails, explain that this dash may need Wi-Fi Direct, which iOS lacks.
 - Hidden SSIDs are not used by any known dash (Android cannot join them either); expose `hidden = true` only as a
@@ -1389,16 +1397,29 @@ platform knowledge, not from the Android repo. Verify each platform claim on a d
   (probe, port scan) times out, while Bonjour still resolves the dash. The kernel's connected route works: a BSD socket
   bound with `IP_BOUND_IF` to the interface whose subnet contains the dash reaches it.
 - Listeners on 10922/10921/10920: `0.0.0.0:<port>`, `SO_REUSEADDR`, backlog 16 (accepting needs no Local Network
-  access). Expect two concurrent connections on 10922.
+  access). Expect two concurrent connections on 10922. iOS reclaims ("defuncts") every socket of a suspended app, and
+  a non-blocking defunct listener never wakes a parked accept (`accept(2)` answers `EAGAIN`; kqueue reports a
+  listener readable only with a completed connection, and none completes): a parked accept reads the listener's
+  `SO_ERROR` every 5 s (`EBADF` once defunct) and fails, and the session closes that listener and binds the port
+  again (closing first: the dead socket still holds the port), with 5 tries per death.
 - Probe/scan connections: IPv4, `IP_BOUND_IF` = the interface whose IPv4/netmask contains the destination (longest
   prefix, `getifaddrs`; never by name), so the source address is the Wi-Fi IPv4 the dash will call back (§4.5).
   Loopback destinations and destinations outside every local subnet connect unbound. TCP connect timeout 3 s, own 5 s
   read timer. Accept rule: `cmd == 0x70000011 && body.contains("true")`. Send exactly the bytes of §5.3.
 - Local Network privacy: `NSLocalNetworkUsageDescription` + `NSBonjourServices = [_EasyConn._tcp]` (both already in
-  `project.yml`). Denial blocks the probe **and** inbound call-backs; trigger the prompt early (e.g. right after a
-  QR scan) and detect `.localNetworkDenied` path reasons. A BSD-sockets connect denied by it fails at once with
-  `EHOSTUNREACH` (XNU drops the SYN inside `connect(2)`; no dedicated errno exists): retry until the connect timeout
-  (the alert may still be open), then report the denial. Bonjour via `NWBrowser` needs no multicast entitlement.
+  `project.yml`). Denial blocks the probe (outbound connect) and Bonjour browse/resolve; accepting the dash's
+  call-backs on 10922/10921/10920 needs no Local Network access (TN3179, ios-platform-facts.md (c)). Trigger the
+  prompt early (e.g. right after a QR scan) and detect `.localNetworkDenied` path reasons. A BSD-sockets connect denied
+  by it fails at once with `EHOSTUNREACH` (XNU drops the SYN inside `connect(2)`; no dedicated errno exists): retry
+  until the connect timeout (the alert may still be open), then report it. Bonjour via `NWBrowser` needs no multicast
+  entitlement.
+- That `EHOSTUNREACH` is not proof of privacy: every NECP drop (a VPN with `includeAllNetworks` and no
+  `excludeLocalNetworks`, a per-app Wi-Fi data rule, a content filter) gives a BSD socket the same errno. The link
+  reports `.localNetworkBlocked` instead of `.localNetworkDenied` when the session proved access works (its Bonjour
+  browse listed the dash, or a probe connected). The app shows the Local Network dialog only on evidence of privacy:
+  its Bonjour-based Local Network check is refused (or the Wi-Fi path says `localNetworkDenied`). Check granted → one
+  immediate retry (the alert may have been answered meanwhile), then "something on the phone blocks the bike Wi-Fi
+  (VPN, data restriction or filter)"; no answer → a neutral hint naming both. Both kinds re-arm every 20 s.
 - Bonjour: `NWBrowser(.bonjourWithTXTRecord(type: "_EasyConn._tcp", domain: nil))`; connect the probe directly to the
   result endpoint (resolution happens in `NWConnection`, IPv4 forced), or use TXT `ip`/`port` as a fallback. Never
   wait on Bonjour alone: race it with `gateway:10930` (`control-plane.md` §18.5). Keep the 10915–10935 scan as the
@@ -1408,7 +1429,9 @@ platform knowledge, not from the Android repo. Verify each platform claim on a d
 - `EADDRINUSE` on a listener ⇒ another process holds the ports (official CFMoto / Carbit iOS app, or our own
   ReplayKit extension). iOS cannot kill other apps: tell the rider to close the official app (swipe it away), retry.
 - VPN: a profile with `includeAllNetworks` and without `excludeLocalNetworks` can black-hole bike traffic like the
-  Android kill-switch. Detect "Wi-Fi up, probe fails" + active VPN and explain.
+  Android kill-switch. Explained when it drops the connect while Local Network access works (above); a VPN that lets
+  the SYN go but loses the answers still ends as "EasyConn never answered", whose line lists what Bonjour, the probes
+  (timed out / refused / unreachable / connected without a reply) and the port scan actually saw.
 
 ### 11.3 Session engine
 - Model one session as a structured-concurrency tree with a generation id; cancel everything on stop (fixes the
@@ -1458,6 +1481,9 @@ platform knowledge, not from the Android repo. Verify each platform claim on a d
   launch can surface "Unable to join the network" alerts when the bike is off. Suggested rule: auto-start the session
   if the phone is **already** on the bike SSID (iOS auto-joined it), otherwise only when the rider taps Connect
   (or offer "try anyway" as an opt-in). Delay 1200 ms after launch like Android.
+- The big button turns Connect → Stop when auto-connect starts the session: a tap within 2 s of that start keeps the
+  session (the rider meant Connect; first field test: a tap 0.44 s after the check) and makes it the rider's own
+  Connect; a later tap stops.
 
 ### 11.9 Logging parity
 - Keep the stage tags and the `hb#` 5 s line (§9.3) so Android-trained helpers can read iOS logs. Port the four

@@ -63,6 +63,14 @@ permiso de red local, el codificador de video del teléfono y el comportamiento 
 - **«Cierra la app oficial de CFMoto»**: otra app ocupa los puertos 10920–10922. Ciérrala desde el
   selector de apps y pulsa **Reintentar**.
 - **«El acceso a la red local está desactivado»**: Ajustes de iOS ▸ OpenCfMoto ▸ **Red local** → activar.
+- **«Algo en el teléfono bloquea el Wi-Fi de la moto (VPN, restricción de datos o filtro)»**: la red
+  local está permitida, pero iOS cortó igualmente la conexión con el tablero. Desactiva la VPN (o su
+  opción de bloquear el tráfico fuera de la VPN), los filtros de contenido o la restricción de datos
+  Wi-Fi para OpenCfMoto, y vuelve a conectar. La app lo reintenta sola cada 20 s.
+- **«El teléfono bloqueó la conexión con el tablero»**: iOS no dijo por qué. Revisa las dos cosas de
+  arriba (red local activada, ninguna VPN ni restricción) y comparte los registros.
+- **Pulsaste Conectar justo cuando la app ya conectaba sola**: ese toque no la detiene (cuenta como
+  Conectar). Para detenerla, vuelve a pulsar.
 - **El tablero muestra «Teléfono bloqueado»**: es lo esperado si bloqueas el iPhone. iOS no deja
   codificar vídeo en segundo plano. Usa **Modo ruta** en lugar de bloquear.
 
