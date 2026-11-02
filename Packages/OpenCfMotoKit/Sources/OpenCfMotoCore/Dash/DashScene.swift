@@ -4,8 +4,10 @@
 //
 // Builds one dash frame as draw commands + hit-testable widgets + the handlebar focus order.
 // Z-order (back → front, Android XML order): map · search pill · lap card · nav card · metrics
-// card · speed chip · preview card · arrive card · FAB column · (clock) · dimmer · search sheet /
-// menu sheet. The controller adds the focus ring, toasts, link banner and hold card on top.
+// card · speed chip · preview card · arrive card · FAB column · (now-playing tile) · (clock) ·
+// dimmer · search sheet / menu sheet. The Apple Music sheet (iOS addition) is opaque: only the sheet
+// and, while navigating, the nav card on top of it are drawn. The controller adds the focus ring,
+// toasts, link banner and hold card on top.
 
 import Foundation
 
@@ -54,6 +56,11 @@ struct DashScene: Sendable {
     /// Bottom of the top chrome (pill / nav card / banner) — toasts go below it.
     var topChromeBottom: Double = 0
     var fabs: [DashRect] = []
+    /// Apple Music: what the time-dependent drawing (progress, times) was built for
+    /// (`DashSceneBuilder.musicTimeKey`); nil = nothing in this scene moves with time.
+    var musicTimeKey: Int?
+    /// px width of the now-playing tile's progress track (nil: no tile or no known duration).
+    var musicTileBarWidth: Double?
 
     func widget(_ id: String) -> DashWidget? { widgets.last(where: { $0.id == id }) }
 }
@@ -74,6 +81,8 @@ struct DashSceneInput: Sendable {
     var previewChipScroll: Double
     var lapReachableByHandlebar: Bool
     var handlebarReachesSettings: Bool
+    /// The time the Apple Music progress / times are drawn for (same clock as `positionAt`).
+    var musicNow: TimeInterval = 0
 }
 
 struct DashSceneBuilder {
@@ -148,10 +157,14 @@ struct DashSceneBuilder {
     // MARK: Build
 
     mutating func build() -> DashScene {
-        drawMap()
         let navigating = model.navigating
         let fabs = DashLayout.fabColumn(c)
         scene.fabs = fabs
+        if input.sheet == .music, let music = model.music {
+            buildMusicSheet(music, navigating: navigating)
+            return scene
+        }
+        drawMap()
 
         // Search pill (free ride & preview)
         var pillFrame: DashRect?
@@ -166,21 +179,34 @@ struct DashSceneBuilder {
         let arrive: DashArriveCardLayout? = model.showsArrival ? model.nav.arrival.map {
             DashLayout.arriveCard(c, arrival: $0, language: L)
         } : nil
+        var lapFrame: DashRect?
         if let lap = model.lapTimer {
             let above = [metrics?.frame.minY, preview?.frame.minY, arrive?.frame.minY].compactMap { $0 }.min()
-            drawLapCard(DashLayout.lapCard(c, lap: lap, aboveY: above))
+            let l = DashLayout.lapCard(c, lap: lap, aboveY: above)
+            drawLapCard(l)
+            lapFrame = l.frame
         }
         var navFrame: DashRect?
         if navigating {
             navFrame = drawNavCard()
             if let metrics { drawMetrics(metrics) }
         }
-        drawSpeedChip(navigating: navigating, metrics: metrics, bannerBottom: navFrame?.maxY,
-                      coveringCard: preview?.frame ?? arrive?.frame)
+        let speedFrame = drawSpeedChip(navigating: navigating, metrics: metrics, bannerBottom: navFrame?.maxY,
+                                       coveringCard: preview?.frame ?? arrive?.frame)
         if let preview, let p = model.nav.preview { drawPreview(preview, p) }
         if let arrive { drawArrive(arrive) }
-        if input.sheet == .none { drawFabs(fabs) }
-        if model.showClock && input.sheet == .none { drawClock(fabs) }
+        // FAB lane (no sheet): FABs, the Apple Music now-playing tile under them, the clock chip.
+        var tile: DashMusicTileLayout?
+        if input.sheet == .none {
+            let clock = model.showClock ? clockChip(fabs) : nil
+            if model.music != nil {
+                let cards = [metrics?.frame, speedFrame, preview?.frame, arrive?.frame, lapFrame].compactMap { $0 }
+                tile = DashLayout.musicTile(c, fabs: fabs, clock: clock?.rect, avoiding: cards)
+            }
+            drawFabs(fabs)
+            if let tile, let music = model.music { drawMusicTile(tile, music) }
+            if let clock, !(tile?.hidesClock ?? false) { drawClock(clock) }
+        }
         scene.topChromeBottom = (navFrame?.maxY ?? pillFrame?.maxY ?? c.safe.minY) + c.dp(8)
 
         switch input.sheet {
@@ -188,13 +214,25 @@ struct DashSceneBuilder {
             drawMenu()
         case .search:
             drawSearch()
-        case .music:
-            break // core-dash: drawMusicSheet()
-        case .none:
-            break
+        case .music, .none:
+            break // .music without a song: nothing to show (the controller closes the sheet)
         }
-        scene.focusOrder = focusOrder(navigating: navigating, pillVisible: pillFrame != nil)
+        if let tile, model.music?.knownDuration != nil { scene.musicTileBarWidth = tile.progressRect.width }
+        scene.musicTimeKey = Self.musicTimeKey(model.music, sheetOpen: false, tileBarWidth: scene.musicTileBarWidth,
+                                               now: input.musicNow)
+        scene.focusOrder = focusOrder(navigating: navigating, pillVisible: pillFrame != nil, tileVisible: tile != nil)
         return scene
+    }
+
+    /// What the time-dependent Apple Music drawing depends on (nil: nothing moves with time): only
+    /// while playing with a known duration; the open sheet → the whole elapsed seconds (labels and
+    /// bar); the tile → the whole px of its progress fill. The controller rebuilds the scene when the
+    /// key changes, so a playing song re-renders at most once per second.
+    static func musicTimeKey(_ music: DashNowPlaying?, sheetOpen: Bool, tileBarWidth: Double?, now: TimeInterval) -> Int? {
+        guard let music, music.state == .playing, music.knownDuration != nil else { return nil }
+        if sheetOpen { return music.elapsedSeconds(at: now) }
+        guard let width = tileBarWidth, let fraction = music.fraction(at: now) else { return nil }
+        return DashFormat.roundHalfUp((fraction * width).rounded(.down))
     }
 
     // MARK: Map layer
@@ -443,8 +481,10 @@ struct DashSceneBuilder {
         widget(DashFocusEngine.endId, l.endRect, .control(.endNavigation))
     }
 
+    /// Returns the chip's frame.
+    @discardableResult
     private mutating func drawSpeedChip(navigating: Bool, metrics: DashMetricsLayout?, bannerBottom: Double?,
-                                        coveringCard: DashRect?) {
+                                        coveringCard: DashRect?) -> DashRect {
         let limit = Self.speedLimitLabel(model)
         let stackY: Double? = (c.isLandscape && navigating && Self.stacksSpeedChip(model, c)) ? metrics?.frame.minY : nil
         var l = DashLayout.speedChip(c, hasLimit: limit != nil, navigating: navigating, belowY: bannerBottom, stackAboveY: stackY)
@@ -467,6 +507,7 @@ struct DashSceneBuilder {
             text(limit, lr.insetBy(dx: inset, dy: 0), l.limitFont, DashPalette.limitText, align: .center)
         }
         widget("speed.chip", l.frame, .blocker)
+        return l.frame
     }
 
     private mutating func drawPreview(_ l: DashPreviewCardLayout, _ p: RoutePreview) {
@@ -551,13 +592,112 @@ struct DashSceneBuilder {
         }
     }
 
-    private mutating func drawClock(_ fabs: [DashRect]) {
+    private struct ClockChip {
+        var rect: DashRect
+        var text: String
+        var font: DashFont
+    }
+
+    private func clockChip(_ fabs: [DashRect]) -> ClockChip {
         let font = c.font(15, .bold, digits: true)
         let s = DashFormat.clock(model.date, timeZone: model.timeZone)
-        let r = DashLayout.clockChip(c, text: s, font: font, fabs: fabs)
+        return ClockChip(rect: DashLayout.clockChip(c, text: s, font: font, fabs: fabs), text: s, font: font)
+    }
+
+    private mutating func drawClock(_ clock: ClockChip) {
+        let r = clock.rect
         roundRect(r, radius: r.height / 2, fill: DashPalette.cardFill)
-        text(s, r, font, DashPalette.primaryText, align: .center)
+        text(clock.text, r, clock.font, DashPalette.primaryText, align: .center)
         widget("clock", r, .blocker)
+    }
+
+    // MARK: Apple Music (iOS addition)
+
+    /// Artwork: placeholder (rounded fill + note icon at 40 %) → the registered raster (drawn by the
+    /// renderer; an unknown id draws nothing) → night dim (never inverted).
+    private mutating func drawArtwork(_ r: DashRect, radius: Double, artworkId: String?) {
+        roundRect(r, radius: radius, fill: DashPalette.musicPlaceholder)
+        let side = min(r.width, r.height) * 0.4
+        icon(.musicNote, in: DashRect(x: r.midX - side / 2, y: r.midY - side / 2, width: side, height: side),
+             tint: DashPalette.musicPlaceholderIcon)
+        if let id = artworkId, !id.isEmpty { scene.commands.append(.image(id: id, rect: r, cornerRadius: radius)) }
+        if model.isNight { roundRect(r, radius: radius, fill: DashPalette.musicNightDim) }
+    }
+
+    /// A round button with a white glyph at `glyph` × its diameter.
+    private mutating func roundButton(_ r: DashRect, _ ic: DashIcon, glyph: Double, fill: DashColor, stroke: DashColor?) {
+        circle(r, fill: fill, stroke: stroke, strokeWidth: stroke == nil ? 0 : c.dp(1))
+        let s = r.width * glyph
+        icon(ic, in: DashRect(x: r.midX - s / 2, y: r.midY - s / 2, width: s, height: s), tint: .white)
+    }
+
+    /// The now-playing tile (no text): artwork, outline, progress (known duration only; whole px),
+    /// paused → dimmed with a ❚❚ badge. Tap / ★ → the Music sheet.
+    private mutating func drawMusicTile(_ t: DashMusicTileLayout, _ music: DashNowPlaying) {
+        let f = t.frame
+        drawArtwork(f, radius: t.cornerRadius, artworkId: music.artworkId)
+        roundRect(f, radius: t.cornerRadius, fill: nil, stroke: DashPalette.musicTileStroke, strokeWidth: c.dp(1))
+        if let fraction = music.fraction(at: input.musicNow) {
+            let bar = t.progressRect
+            roundRect(bar, radius: bar.height / 2, fill: DashPalette.musicTileBarTrack)
+            let w = (fraction * bar.width).rounded(.down)
+            if w > 0 {
+                roundRect(DashRect(x: bar.minX, y: bar.minY, width: w, height: bar.height), radius: bar.height / 2,
+                          fill: DashPalette.musicFill)
+            }
+        }
+        if music.state == .paused {
+            roundRect(f, radius: t.cornerRadius, fill: DashPalette.musicPausedDim)
+            roundButton(t.badgeRect, .pause, glyph: 0.6, fill: DashPalette.musicBadge, stroke: nil)
+        }
+        widget(DashFocusEngine.musicTileId, f, .control(.openMusic))
+    }
+
+    private var musicFocus: [String] = []
+
+    /// The Music sheet is opaque: nothing of the map or its chrome is drawn under it. While
+    /// navigating the nav card is drawn again on top (guidance is never hidden) and the layout keeps
+    /// clear of it.
+    private mutating func buildMusicSheet(_ music: DashNowPlaying, navigating: Bool) {
+        let reserved = navigating ? DashLayout.navCard(c, cue: effectiveCue).frame : nil
+        drawMusicSheet(music, reserved: reserved)
+        let navFrame = navigating ? drawNavCard() : nil
+        scene.topChromeBottom = (navFrame?.maxY ?? c.safe.minY) + c.dp(8)
+        scene.musicTimeKey = Self.musicTimeKey(music, sheetOpen: true, tileBarWidth: nil, now: input.musicNow)
+        scene.focusOrder = focusOrder(navigating: navigating, pillVisible: false, tileVisible: false)
+    }
+
+    private mutating func drawMusicSheet(_ music: DashNowPlaying, reserved: DashRect?) {
+        let l = DashLayout.musicSheet(c, music: music, language: L, reserved: reserved)
+        fill(DashPath.rect(l.sheet), DashPalette.musicSheet)
+        widget("music.sheet", l.sheet, .blocker)
+        if l.arrangement != .textOnly { drawArtwork(l.artworkRect, radius: l.artworkRadius, artworkId: music.artworkId) }
+        text(DashLayout.musicTitle(music, L), l.titleRect, l.titleFont, DashPalette.primaryText, align: .center,
+             maxLines: l.titleMaxLines)
+        if let r = l.artistRect { text(DashLayout.musicText(music.artist), r, l.artistFont, DashPalette.musicArtist, align: .center) }
+        if let r = l.albumRect { text(DashLayout.musicText(music.album), r, l.albumFont, DashPalette.secondaryText, align: .center) }
+        // Progress and times move in whole seconds only (one re-render per second while playing).
+        let now = input.musicNow
+        let elapsed = music.elapsedSeconds(at: now)
+        if let bar = l.progressRect, let duration = music.knownDuration {
+            let radius = c.dp(3)
+            roundRect(bar, radius: radius, fill: DashPalette.musicTrack)
+            let w = (min(1, max(0, Double(elapsed) / duration)) * bar.width).rounded(.down)
+            if w > 0 { roundRect(DashRect(x: bar.minX, y: bar.minY, width: w, height: bar.height), radius: radius, fill: DashPalette.musicFill) }
+        }
+        if let er = l.elapsedRect, let rr = l.remainingRect {
+            text(DashMusicFormat.time(elapsed), er, l.timeFont, DashPalette.secondaryText)
+            text(DashMusicFormat.remaining(music, at: now) ?? "", rr, l.timeFont, DashPalette.secondaryText, align: .right)
+        }
+        roundButton(l.previousRect, .skipPrevious, glyph: 0.5, fill: DashPalette.fabFill, stroke: DashPalette.fabStroke)
+        roundButton(l.playPauseRect, music.state == .playing ? .pause : .play, glyph: 0.45, fill: DashPalette.blueAction, stroke: nil)
+        roundButton(l.nextRect, .skipNext, glyph: 0.5, fill: DashPalette.fabFill, stroke: DashPalette.fabStroke)
+        roundButton(l.closeRect, .close, glyph: 0.5, fill: DashPalette.musicClose, stroke: DashPalette.musicTileStroke)
+        widget("music.previous", l.previousRect, .control(.musicPrevious), circular: true)
+        widget(DashFocusEngine.musicPlayPauseId, l.playPauseRect, .control(.musicPlayPause), circular: true)
+        widget("music.next", l.nextRect, .control(.musicNext), circular: true)
+        widget("music.close", l.closeRect, .control(.closeSheets), circular: true)
+        musicFocus = ["music.previous", DashFocusEngine.musicPlayPauseId, "music.next", "music.close"]
     }
 
     // MARK: Menu sheet
@@ -571,6 +711,7 @@ struct DashSceneBuilder {
         case "menu.recalc": return .recalc
         case "menu.record": return .toggleRecording
         case "menu.circuit": return .startCircuit
+        case "menu.music": return .openMusic
         case "menu.follow": return .toggleFollow
         case "menu.heading": return .toggleHeadingUp
         case "menu.voice": return .toggleVoice
@@ -603,12 +744,15 @@ struct DashSceneBuilder {
     }
 
     /// Menu focus order (input-controls.md §6.6) — settings segments optionally appended (iOS).
+    /// "menu.music" (iOS addition) only exists while Apple Music shows on the dash: the order is
+    /// filtered by the buttons actually drawn.
     static let menuFocusBase = ["menu.end", "menu.park", "menu.goHome", "menu.setHome", "menu.recalc", "menu.record",
-                                "menu.circuit", "menu.follow", "menu.heading", "menu.voice", "menu.zoomOut", "menu.zoomIn"]
+                                "menu.circuit", "menu.music", "menu.follow", "menu.heading", "menu.voice", "menu.zoomOut",
+                                "menu.zoomIn"]
 
     private func menuContent() -> DashMenuContent {
         DashMenuContent(language: L, follow: input.camera.follow, headingUp: input.camera.headingUp,
-                        recording: model.recording, preferences: model.preferences)
+                        recording: model.recording, preferences: model.preferences, showsMusic: model.music != nil)
     }
 
     private mutating func drawMenu() {
@@ -760,19 +904,19 @@ struct DashSceneBuilder {
 
     // MARK: Focus order (top-most interactive layer first)
 
-    private func focusOrder(navigating: Bool, pillVisible: Bool) -> [String] {
+    private func focusOrder(navigating: Bool, pillVisible: Bool, tileVisible: Bool) -> [String] {
         switch input.sheet {
         case .menu:
+            let base = Self.menuFocusBase.filter { menuFocus.contains($0) }
             if input.handlebarReachesSettings {
-                let base = Self.menuFocusBase.filter { menuFocus.contains($0) }
                 let settings = menuFocus.filter { !Self.menuFocusBase.contains($0) && $0 != "menu.close" }
                 return base + settings + ["menu.close"]
             }
-            return Self.menuFocusBase + ["menu.close"]
+            return base + ["menu.close"]
         case .search:
             return searchFocus
         case .music:
-            return [] // core-dash: previous, playPause, next, close
+            return musicFocus
         case .none:
             break
         }
@@ -794,6 +938,8 @@ struct DashSceneBuilder {
             if input.lapReachableByHandlebar { ids.append("pill.lap") }
         }
         ids += ["fab.recenter", "fab.zoomIn", "fab.zoomOut", "fab.compass", "fab.menu"]
+        // The now-playing tile closes the map list: one knob step back from the first item.
+        if tileVisible { ids.append(DashFocusEngine.musicTileId) }
         return ids
     }
 }

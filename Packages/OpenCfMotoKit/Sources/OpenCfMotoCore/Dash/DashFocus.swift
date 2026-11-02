@@ -16,30 +16,38 @@ public enum DashFocusPreference: String, Sendable, Equatable {
     case end
     /// Keep the current focus when still listed, else the first item.
     case `default`
+    /// Focus the Music sheet's ⏯ when listed (the sheet just opened; iOS addition).
+    case musicPlayPause
+    /// Focus the now-playing tile when listed (the Music sheet just closed; iOS addition).
+    case musicTile
 }
 
 public struct DashFocusEngine: Sendable, Equatable {
     public static let goId = "preview.go"
     public static let endId = "metrics.end"
+    public static let musicPlayPauseId = "music.playPause"
+    public static let musicTileId = "music.tile"
 
     public private(set) var focusedId: String?
 
     public init(focusedId: String? = nil) { self.focusedId = focusedId }
 
-    /// `ensureFocus(prefer)`: empty list → clear; `.go` / `.end` → that control when listed
-    /// (otherwise behaves like `.default`); `.default` → keep the focused control when still
-    /// listed, else the first item.
+    /// `ensureFocus(prefer)`: empty list → clear; `.go` / `.end` / `.musicPlayPause` / `.musicTile`
+    /// → that control when listed (otherwise behaves like `.default`); `.default` → keep the
+    /// focused control when still listed, else the first item.
     public mutating func ensure(_ list: [String], prefer: DashFocusPreference = .default) {
         guard let first = list.first else { focusedId = nil; return }
+        let preferred: String?
         switch prefer {
-        case .go where list.contains(Self.goId):
-            focusedId = Self.goId
+        case .go: preferred = Self.goId
+        case .end: preferred = Self.endId
+        case .musicPlayPause: preferred = Self.musicPlayPauseId
+        case .musicTile: preferred = Self.musicTileId
+        case .default: preferred = nil
+        }
+        if let preferred, list.contains(preferred) {
+            focusedId = preferred
             return
-        case .end where list.contains(Self.endId):
-            focusedId = Self.endId
-            return
-        default:
-            break
         }
         if let f = focusedId, list.contains(f) { return }
         focusedId = first

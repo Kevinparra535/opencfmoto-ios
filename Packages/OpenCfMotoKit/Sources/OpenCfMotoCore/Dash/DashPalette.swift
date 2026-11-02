@@ -171,6 +171,29 @@ public enum DashPalette {
     public static let puckBlue = DashColor(argb: 0xFF1A_73E8)
     public static let puckWhite = DashColor(argb: 0xFFFF_FFFF)
 
+    // MARK: Apple Music (iOS addition): now-playing tile and Music sheet
+
+    /// Opaque sheet background.
+    public static let musicSheet = DashColor(argb: 0xFF12_171E)
+    /// Artwork placeholder (no image yet / none) and its note icon.
+    public static let musicPlaceholder = DashColor(argb: 0xFF26_3040)
+    public static let musicPlaceholderIcon = DashColor(argb: 0xFF8A_96A8)
+    public static let musicArtist = DashColor(argb: 0xFFE8_EEF5)
+    /// Sheet progress bar: track / fill.
+    public static let musicTrack = DashColor(argb: 0x40FF_FFFF)
+    public static let musicFill = DashColor(argb: 0xFFFF_FFFF)
+    /// Tile progress track (the fill is white).
+    public static let musicTileBarTrack = DashColor(argb: 0x5900_0000)
+    /// 1-dp outline of the tile and the ✕ button.
+    public static let musicTileStroke = DashColor(argb: 0x33FF_FFFF)
+    /// Paused tile: dim overlay + ❚❚ badge.
+    public static let musicPausedDim = DashColor(argb: 0x7300_0000)
+    public static let musicBadge = DashColor(argb: 0xCC00_0000)
+    /// ✕ close button on the artwork.
+    public static let musicClose = DashColor(argb: 0x9900_0000)
+    /// Night: artwork dimmed (never inverted).
+    public static let musicNightDim = DashColor(argb: 0x2600_0000)
+
     // MARK: iOS additions (toast, link banner, clock, hold card)
 
     public static let toastFill = DashColor(argb: 0xF020_2124)

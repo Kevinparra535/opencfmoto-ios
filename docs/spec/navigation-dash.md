@@ -1344,6 +1344,64 @@ Tests: arm (45,7); fixes (45,7,0 ms) false; (45.00072,7,5 000) false [~80 m away
 11. **Handlebar.** Map AVRCP remote commands to the same abstract actions (ENTER/BACK/HOME/ASSISTANT/DPAD/knob) and reproduce the focus lists and ring of §11.9; the dash UI must be fully operable without touch (many dashes are non-touch).
 12. **Video coupling.** On (re)attach of the map stream: flush, force an IDR, and force another ~200 ms after the first map paint; prefix keyframes with SPS/PPS; apply the 1.35× bitrate / halved GOP "map boost" when fps ≥ 30.
 
+### Apple Music (iOS addition)
+
+No Android counterpart. When the app fills `DashModel.music` (`DashNowPlaying`: title, artist, album,
+artwork id, playing / paused, duration, and the position as a sample `position` at `positionAt` on the
+controller's `now` clock), the dash shows what the system Music app plays. Only Apple Music: iOS gives
+apps no access to other players. `music == nil` (feature off, no permission, nothing loaded, or a paused
+song while another app plays) → no tile, no menu entry, and an open sheet closes.
+
+**Now-playing tile** (`music.tile`, map screen, no sheet; free ride, navigating, preview, arrival). A
+square under the FAB column, right-aligned with it, 8 dp under the last FAB: min(64 dp, room), at least
+the 46-dp FAB size (`DashLayout.musicTile`). Landscape: down to 8 dp above the clock chip; if that leaves
+< 46 dp the clock gives way (`hidesClock`, room measured to 8 dp above the safe bottom). Portrait: under
+the clock, down to 12 dp above the safe bottom. A card that would intersect it (metrics, speed chip,
+preview, arrive, lap) shrinks it to end 8 dp above that card; < 46 dp → no tile (the menu entry stays).
+800×384: 730–794 × 270–334 (clock 733–794 × 348–376). No text: placeholder (#263040, radius 10 dp,
+music note 40 %) → artwork (`DashDrawCommand.image`, aspect fill, rounded clip; an unknown id draws
+nothing) → night: 15 % black (never inverted) → 1-dp outline → progress track 3 dp inset 6 dp at the
+bottom (known duration only; fill = whole px) → paused: 45 % black dim + 20-dp ❚❚ badge top-right. Tap /
+★ → `.openMusic`. Focusable last in the map lists (free ride `pill … fab.menu, music.tile`, navigating
+`metrics.end, fab.* , music.tile`): one ◀ from the default item reaches it. Drawn but not focusable in
+preview / arrival.
+
+**Music sheet** (`DashSheet.music`, `DashLayout.musicSheet`). Opaque #12171E over the whole canvas;
+nothing of the map or its chrome is drawn under it. While navigating the nav card is drawn again ON TOP
+(same rect) and reserved by the layout: guidance is never hidden. Margin 16 dp, gap 12 dp. Two
+candidates, the larger artwork wins (tie: side-by-side in landscape, stacked in portrait):
+side-by-side (artwork square on the right, side = min(safe.h − 32, safe.w − 48 − 300) dp, moved below
+the nav card when that reaches its column; text column ≥ 300 dp on the left, block vertically centred)
+or stacked (artwork centred at the top, block below at the least compressed step that fits 60 % … 30 %
+of the height left). Artwork < 96 dp → candidate rejected; none → text only. Block, centred: title
+22 sp bold (24 sp stacked on portrait) ≤ 2 lines ("" → "Unknown song") · +4 artist 17 sp · +2 album
+15 sp · +14 progress bar 6 dp · +4 times 14 sp tabular ("2:13" left, "-3:51" right) · +14 transport
+⏮ 64 dp · 20 · ⏯ 80 dp (blue) · 20 · ⏭ 64 dp. Empty artist / album and an unknown duration (radio,
+live) drop their lines and spacing. Compression ladder: full → no album → title 1 line → compact
+transport (52 / 64 dp) → no artist → no times. ✕ (48 dp, `.closeSheets`) on the artwork's top-right
+corner, inset 8 dp. No seek, queue, volume, marquee or animation; targets ≥ 48 dp. 800×384: artwork
+432–784 × 16–368, ⏮ ⏯ ⏭ x 92–156 / 176–256 / 276–340.
+
+**Ids and intents.** `music.tile` (`.openMusic`), `music.sheet` (full-canvas blocker), `music.previous`
+(`.musicPrevious`), `music.playPause` (`.musicPlayPause`), `music.next` (`.musicNext`), `music.close`
+(`.closeSheets`), menu `menu.music` "Music" / "Música" after `menu.circuit` (`.openMusic`, only with
+music). `.openMusic` is UI-only (without music: toast "Nothing playing in Apple Music"); the app performs
+the transport intents. Sheet focus order: ⏮ ⏯ ⏭ ✕, initial focus ⏯; BACK / ✕ / auto-close → focus on the
+tile; HOME opens the menu.
+
+**Safety rules** (`DashUIController`): the sheet never opens by itself and closes on ✕ / BACK; after
+10 s without dash input while the bike moves or has no fix (`Options.musicSheetIdleTimeout`; it stays
+open while stopped); while navigating when the next turn comes within 200 m
+(`musicSheetTurnDistanceM`; once per turn, never within 3 s of an input — `musicSheetInputGrace`; a
+turn already near when the sheet opens does not close it); on preview start, navigation start, arrival
+start and `music == nil`. `tick(now:)` returns `[.closeSheets]` for the timed closes. Every dash input
+and every music intent counts as activity.
+
+**Re-render cadence.** The scene extrapolates the position to the frame time; the display list changes
+only when what is drawn changes: on the sheet once per elapsed second (labels and bar move together:
+remaining = rounded length − elapsed seconds), on the tile when the bar gains a whole pixel, never while
+paused. The app updates `DashModel.music` only on meaningful changes (song, state, seek / drift).
+
 ---
 
 ## 16. Open questions / risks

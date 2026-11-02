@@ -120,4 +120,80 @@ final class DashSVGExporterTests: XCTestCase {
         XCTAssertFalse(svg.contains("nan"))
         XCTAssertFalse(svg.contains("inf"))
     }
+
+    // MARK: Raster images (Apple Music artwork)
+
+    private func imageList(_ id: String = "music.art.p1f") -> DashDisplayList {
+        var list = DashDisplayList(size: DashSize(width: 400, height: 200), background: .black)
+        list.commands = [
+            .save, .clip(DashPath.rect(DashRect(x: 0, y: 0, width: 400, height: 200))),
+            .image(id: id, rect: DashRect(x: 10, y: 20, width: 120, height: 120), cornerRadius: 10),
+            .restore,
+            .image(id: "other", rect: DashRect(x: 140, y: 20, width: 140, height: 100), cornerRadius: 0),
+            .image(id: "tile", rect: DashRect(x: 300, y: 20, width: 64, height: 64), cornerRadius: 10), // no label
+            .image(id: "empty", rect: DashRect(x: 0, y: 0, width: 0, height: 10), cornerRadius: 4), // skipped
+        ]
+        return list
+    }
+
+    func testImagePlaceholderIsDeterministicAndClipped() {
+        let svg = DashSVGExporter().svg(imageList())
+        XCTAssertEqual(svg, DashSVGExporter().svg(imageList()), "same SVG twice")
+        XCTAssertEqual(count(svg, "<g"), count(svg, "</g>"))
+        // clip ids continue the c<n> counter: c1 = the explicit clip, c2…c4 = the three images
+        XCTAssertTrue(svg.contains("<clipPath id=\"c2\" clipPathUnits=\"userSpaceOnUse\">"))
+        XCTAssertTrue(svg.contains("<g clip-path=\"url(#c2)\">"))
+        XCTAssertTrue(svg.contains("<clipPath id=\"c3\""))
+        XCTAssertTrue(svg.contains("<clipPath id=\"c4\""))
+        XCTAssertFalse(svg.contains("id=\"c5\""), "empty rects draw nothing")
+        XCTAssertTrue(svg.contains("<linearGradient id=\"g2\""))
+        XCTAssertTrue(svg.contains("fill=\"url(#g2)\""))
+        XCTAssertEqual(count(svg, "<linearGradient"), 3)
+        XCTAssertTrue(svg.contains(">music.art.p1f</text>"), "the id is printed on the placeholder")
+        XCTAssertTrue(svg.contains(">other</text>"))
+        XCTAssertFalse(svg.contains(">tile</text>"), "no label on small rects (the tile's progress bar sits there)")
+        XCTAssertFalse(svg.contains("<image"))
+        // the rounded clip: arcs (radius 10) in the clip path of the first image, none for radius 0
+        let clip2 = svg.components(separatedBy: "<clipPath id=\"c2\"")[1].components(separatedBy: "</clipPath>")[0]
+        XCTAssertTrue(clip2.contains("C") || clip2.contains("Q"), clip2)
+        // two hues from the id
+        let h = DashSVGExporter.fnv1a32("music.art.p1f")
+        XCTAssertTrue(svg.contains("stop-color=\"\(DashSVGExporter.hslHex(hue: Double(h % 360), saturation: 0.45, lightness: 0.38))\""))
+        XCTAssertTrue(svg.contains("stop-color=\"\(DashSVGExporter.hslHex(hue: Double((h >> 9) % 360), saturation: 0.45, lightness: 0.22))\""))
+        XCTAssertNotEqual(DashSVGExporter().svg(imageList("music.art.s100000002")), svg, "another id, other colours")
+    }
+
+    func testImagesMapEmbedsTheRaster() {
+        var e = DashSVGExporter()
+        e.images = ["music.art.p1f": "data:image/png;base64,iVBORw0KGgo="]
+        let svg = e.svg(imageList())
+        XCTAssertEqual(count(svg, "<image "), 1)
+        XCTAssertTrue(svg.contains("<image href=\"data:image/png;base64,iVBORw0KGgo=\" x=\"10\" y=\"20\" width=\"120\" height=\"120\" preserveAspectRatio=\"xMidYMid slice\"/>"))
+        XCTAssertTrue(svg.contains("<g clip-path=\"url(#c2)\">"))
+        XCTAssertFalse(svg.contains(">music.art.p1f</text>"))
+        XCTAssertTrue(svg.contains(">other</text>"), "ids not in the map keep the placeholder")
+        XCTAssertEqual(count(svg, "<g"), count(svg, "</g>"))
+    }
+
+    func testHashAndHsl() {
+        XCTAssertEqual(DashSVGExporter.fnv1a32(""), 2_166_136_261)
+        XCTAssertEqual(DashSVGExporter.fnv1a32("a"), 0xE40C_292C) // FNV-1a 32 reference vector
+        XCTAssertEqual(DashSVGExporter.hslHex(hue: 0, saturation: 1, lightness: 0.5), "#FF0000")
+        XCTAssertEqual(DashSVGExporter.hslHex(hue: 120, saturation: 1, lightness: 0.5), "#00FF00")
+        XCTAssertEqual(DashSVGExporter.hslHex(hue: 240, saturation: 1, lightness: 0.25), "#000080")
+        XCTAssertEqual(DashSVGExporter.hslHex(hue: 480, saturation: 0, lightness: 1), "#FFFFFF")
+    }
+
+    func testMusicFramesExportWellFormed() {
+        for open in [false, true] {
+            let ui = DashUIController()
+            ui.update(DashFixtures.withMusic(DashFixtures.navigating()))
+            if open { _ = ui.perform(.openMusic, now: DashFixtures.musicNow) }
+            let svg = DashSVGExporter().svg(ui.displayList(now: DashFixtures.musicNow))
+            XCTAssertEqual(count(svg, "<g"), count(svg, "</g>"))
+            XCTAssertEqual(count(svg, "<text "), count(svg, "</text>"))
+            XCTAssertEqual(count(svg, "<linearGradient"), 1)
+            XCTAssertFalse(svg.contains("nan"))
+        }
+    }
 }

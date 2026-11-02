@@ -213,4 +213,125 @@ final class DashSnapshotTests: XCTestCase {
         XCTAssertTrue(svg.contains(">RESTANTE<"))
         XCTAssertTrue(svg.contains(">Fin<"))
     }
+
+    // MARK: Apple Music (iOS addition) — artwork is the exporter's placeholder (gradient + id)
+
+    private let musicNow = DashFixtures.musicNow
+
+    private func music(_ m: DashModel, _ song: DashNowPlaying = DashFixtures.song()) -> DashModel { DashFixtures.withMusic(m, song) }
+
+    /// The Music sheet open (as after ★ on the tile: focus ring on ⏯ unless `handlebarFocus` is off).
+    private func sheet(_ model: DashModel, then: (DashUIController) -> Void = { _ in }) -> DashDisplayList {
+        frame(model, now: musicNow) { ui in
+            _ = ui.perform(.openMusic, now: self.musicNow)
+            then(ui)
+        }
+    }
+
+    private func touchDash(_ m: DashModel) -> DashModel {
+        var t = m
+        t.handlebarFocus = false
+        return t
+    }
+
+    func testLandscapeMusicTile() {
+        let list = frame(music(DashFixtures.freeRide()), now: musicNow)
+        assertHas(list, ["music.tile", "clock", "fab.menu"])
+        let svg = snapshot("land-music-tile", list)
+        XCTAssertEqual(svg.components(separatedBy: "<linearGradient").count - 1, 1, "the artwork placeholder")
+        XCTAssertFalse(svg.contains(">Ruta del Sol (Remastered 2012)<"), "no text on the tile")
+    }
+
+    func testLandscapeMusicTileNavigating() {
+        snapshot("land-music-tile-nav", frame(music(DashFixtures.navigating()), now: musicNow))
+    }
+
+    func testLandscapeMusicPaused() {
+        // focus on the tile (one ◀ from the first item): ring around the dimmed cover + ❚❚ badge
+        let list = frame(music(DashFixtures.navigating(), DashFixtures.song(.paused)), now: musicNow) { ui in
+            _ = ui.handle(.knob(-1), now: self.musicNow)
+        }
+        snapshot("land-music-paused", list)
+    }
+
+    func testLandscapeMusicSheet() {
+        let list = sheet(touchDash(music(DashFixtures.freeRide())))
+        assertHas(list, ["music.sheet", "music.previous", "music.playPause", "music.next", "music.close"])
+        let svg = snapshot("land-music-sheet", list)
+        for s in ["Ruta del Sol (Remastered 2012)", "Los Pistones", "Ruta Sessions", "2:13", "-3:51"] {
+            XCTAssertTrue(svg.contains(">\(s)<"), s)
+        }
+    }
+
+    func testLandscapeMusicSheetNavigating() {
+        let list = sheet(touchDash(music(DashFixtures.navigating())))
+        assertHas(list, ["nav.card", "music.playPause"])
+        let svg = snapshot("land-music-sheet-nav", list)
+        XCTAssertTrue(svg.contains(">350 m<"))
+    }
+
+    func testLandscapeMusicSheetFocus() {
+        snapshot("land-music-sheet-focus", sheet(music(DashFixtures.navigating())))
+    }
+
+    func testLandscapeMusicSheetSpanish() {
+        var m = music(DashFixtures.navigating(), DashFixtures.song(title: ""))
+        m.language = .es
+        let svg = snapshot("land-music-sheet-es", sheet(m))
+        XCTAssertTrue(svg.contains(">Canción desconocida<"))
+    }
+
+    func testLandscapeMusicSheetWithoutArtwork() {
+        let svg = snapshot("land-music-sheet-noart", sheet(touchDash(music(DashFixtures.freeRide(), DashFixtures.song(artworkId: nil)))))
+        XCTAssertFalse(svg.contains("<linearGradient"), "placeholder drawn by the scene only")
+    }
+
+    func testLandscapeMusicSheetRadio() {
+        let radio = DashFixtures.song(title: "Radio Ruta 101.5", artist: "En directo", album: "", artworkId: "music.art.h0f3a9c1d22b7e406",
+                                      duration: 0)
+        let svg = snapshot("land-music-sheet-radio", sheet(touchDash(music(DashFixtures.navigating(), radio))))
+        XCTAssertFalse(svg.contains(">-"), "no remaining time")
+        XCTAssertFalse(svg.contains(">2:13<"))
+    }
+
+    func testLandscapeMusicMenu() {
+        // "Music" closes the Ride section (focused: scrolled into view)
+        let list = frame(music(DashFixtures.navigating()), now: musicNow) { ui in
+            _ = ui.handle(.key(.home), now: self.musicNow)
+            _ = ui.handle(.knob(7), now: self.musicNow)
+        }
+        assertHas(list, ["menu.music"])
+        let svg = snapshot("land-music-menu", list)
+        XCTAssertTrue(svg.contains(">Music<"))
+    }
+
+    func testPortraitMusicTileNavigating() {
+        snapshot("port-music-tile-nav", frame(music(DashFixtures.navigating(DashFixtures.port)), now: musicNow))
+    }
+
+    func testPortraitMusicSheetNavigating() {
+        snapshot("port-music-sheet-nav", sheet(touchDash(music(DashFixtures.navigating(DashFixtures.port)))))
+    }
+
+    func testWide1280MusicSheet() {
+        snapshot("wide-1280-music-sheet", sheet(touchDash(music(DashFixtures.freeRide(DashFixtures.wide)))))
+    }
+
+    func testWide1280MusicTileNavigating() {
+        snapshot("wide-1280-music-tile-nav", frame(music(DashFixtures.navigating(DashFixtures.wide)), now: musicNow))
+    }
+
+    func testNarrow720MusicSheetNavigating() {
+        var m = music(DashFixtures.navigating(DashSize(width: 720, height: 704)))
+        m.margins = ScreenMargins(customised: false, top: 22)
+        snapshot("nkadv-720-music-sheet-nav", sheet(touchDash(m)))
+    }
+
+    func testClc450MusicSheet() {
+        snapshot("clc450-544-music-sheet", sheet(touchDash(music(DashFixtures.freeRide(DashSize(width: 544, height: 512))))))
+    }
+
+    func testMorini1024MusicSheet() {
+        snapshot("morini-1024-music-sheet", sheet(touchDash(music(DashFixtures.freeRide(DashSize(width: 1024, height: 464))))))
+    }
 }

@@ -446,9 +446,26 @@ final class DashLayoutInvariantTests: XCTestCase {
         lap.lapTimer = DashLapTimer(title: "LAP 2  0:31.20", meta: "LAST 0:30.00   BEST 0:30.00")
         var margins = DashFixtures.preview(c)
         margins.margins = ScreenMargins(top: 22, bottom: 10, left: 12, right: 14)
-        return [("free", DashFixtures.freeRide(c)), ("preview", DashFixtures.preview(c)), ("nav", DashFixtures.navigating(c)),
-                ("navLong", longMetrics), ("offRoute", DashFixtures.navigating(c, offRoute: true)), ("arrive", DashFixtures.arrival(c)),
-                ("lap", lap), ("margins", margins)]
+        var musicMargins = DashFixtures.withMusic(DashFixtures.freeRide(c))
+        musicMargins.margins = margins.margins
+        let base: [(String, DashModel)] = [
+            ("free", DashFixtures.freeRide(c)), ("preview", DashFixtures.preview(c)), ("nav", DashFixtures.navigating(c)),
+            ("navLong", longMetrics), ("offRoute", DashFixtures.navigating(c, offRoute: true)), ("arrive", DashFixtures.arrival(c)),
+            ("lap", lap), ("margins", margins),
+        ]
+        // Apple Music (iOS addition): the now-playing tile in every map state.
+        let music: [(String, DashModel)] = [
+            ("musicFree", DashFixtures.withMusic(DashFixtures.freeRide(c))),
+            ("musicNav", DashFixtures.withMusic(DashFixtures.navigating(c))),
+            ("musicNavLong", DashFixtures.withMusic(longMetrics)),
+            ("musicOffRoute", DashFixtures.withMusic(DashFixtures.navigating(c, offRoute: true))),
+            ("musicPreview", DashFixtures.withMusic(DashFixtures.preview(c))),
+            ("musicArrive", DashFixtures.withMusic(DashFixtures.arrival(c))),
+            ("musicLap", DashFixtures.withMusic(lap)),
+            ("musicMargins", musicMargins),
+            ("musicPaused", DashFixtures.withMusic(DashFixtures.navigating(c), DashFixtures.song(.paused))),
+        ]
+        return base + music
     }
 
     func testChromeNeverOverlapsAndStaysOnCanvas() {
@@ -486,6 +503,17 @@ final class DashLayoutInvariantTests: XCTestCase {
                 noOverlap("lap.card", "preview.card")
                 noOverlap("clock", "speed.chip")
                 noOverlap("clock", "metrics.card")
+                // Apple Music: the tile clears every card, FAB, pill label and the clock.
+                for other in ["pill", "pill.circuit", "pill.lap", "nav.card", "metrics.card", "metrics.end", "preview.card",
+                              "arrive.card", "speed.chip", "lap.card", "clock", "fab.recenter", "fab.zoomIn", "fab.zoomOut",
+                              "fab.compass", "fab.menu"] {
+                    noOverlap("music.tile", other)
+                }
+                if model.music == nil {
+                    XCTAssertNil(regions["music.tile"], tag)
+                } else if name != "musicLap" { // a lap card may legitimately drop it on narrow canvases
+                    XCTAssertNotNil(regions["music.tile"], "\(tag): no tile")
+                }
             }
         }
     }
@@ -504,6 +532,31 @@ final class DashLayoutInvariantTests: XCTestCase {
             list = ui.displayList(now: 1)
             XCTAssertEqual(list.hitTest(DashPoint(c.width - 2, c.height - 2))?.id.hasPrefix("search"), true)
             XCTAssertFalse(list.hitRegions.contains { $0.id.hasPrefix("fab.") })
+            // Apple Music sheet (iOS addition): opaque, the nav card stays on top while navigating
+            for navigating in [true, false] {
+                let tag = "\(Int(c.width))×\(Int(c.height)) music \(navigating ? "nav" : "free")"
+                let mui = DashUIController()
+                mui.update(DashFixtures.withMusic(navigating ? DashFixtures.navigating(c) : DashFixtures.freeRide(c)))
+                XCTAssertEqual(mui.perform(.openMusic, now: 2), [.openMusic], tag)
+                list = mui.displayList(now: 2)
+                XCTAssertEqual(list.hitTest(DashPoint(c.width - 2, c.height - 2))?.id, "music.sheet", tag)
+                XCTAssertEqual(list.hitTest(DashPoint(1, 1))?.id, navigating && c.height > c.width ? "nav.card" : "music.sheet", tag)
+                XCTAssertFalse(list.hitRegions.contains { $0.id.hasPrefix("fab.") || $0.id == "music.tile" || $0.id == "clock" }, tag)
+                let nav = list.hitRegions.first { $0.id == "nav.card" }
+                if navigating {
+                    let card = try! XCTUnwrap(nav, tag).rect
+                    XCTAssertEqual(list.hitTest(card.center)?.id, "nav.card", tag)
+                    XCTAssertTrue(list.hitRegions.last?.id == "nav.card", "\(tag): the nav card is the top-most layer")
+                } else {
+                    XCTAssertNil(nav, tag)
+                }
+                for id in ["music.previous", "music.playPause", "music.next", "music.close"] {
+                    let r = try! XCTUnwrap(list.hitRegions.first { $0.id == id }, "\(tag) \(id)").rect
+                    XCTAssertEqual(list.hitTest(r.center)?.id, id, "\(tag) \(id) reachable")
+                    XCTAssertTrue(r.minX >= -0.01 && r.maxX <= c.width + 0.01 && r.minY >= -0.01 && r.maxY <= c.height + 0.01, tag)
+                    XCTAssertTrue(list.hitRegions.first { $0.id == id }!.focusable, tag)
+                }
+            }
         }
     }
 }

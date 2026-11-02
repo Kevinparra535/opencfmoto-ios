@@ -49,6 +49,8 @@ public enum DashText: String, Sendable, CaseIterable {
     case centeredOnGps, noGpsYet, routeOverview, overview
     // Hold screen default
     case holdDefault
+    // Apple Music (iOS addition): menu entry, empty title, `.openMusic` with nothing loaded
+    case music, unknownSong, nothingPlaying
 
     public func localized(_ lang: DashLanguage) -> String {
         switch lang {
@@ -131,6 +133,9 @@ public enum DashText: String, Sendable, CaseIterable {
         case .routeOverview: return "Route overview · north up"
         case .overview: return "Overview · north up"
         case .holdDefault: return "Open OpenCfMoto on your phone to resume the map"
+        case .music: return "Music"
+        case .unknownSong: return "Unknown song"
+        case .nothingPlaying: return "Nothing playing in Apple Music"
         }
     }
 
@@ -208,6 +213,9 @@ public enum DashText: String, Sendable, CaseIterable {
         case .routeOverview: return "Vista de la ruta · norte arriba"
         case .overview: return "Vista general · norte arriba"
         case .holdDefault: return "Abre OpenCfMoto en el teléfono para reanudar el mapa"
+        case .music: return "Música"
+        case .unknownSong: return "Canción desconocida"
+        case .nothingPlaying: return "Apple Music no está reproduciendo nada"
         }
     }
 }
