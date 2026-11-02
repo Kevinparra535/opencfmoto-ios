@@ -307,7 +307,8 @@ final class POSIXPollReactor: @unchecked Sendable {
         }
         let thread = Thread { [unowned self] in self.run() }
         thread.name = "ocm.posix.poll"
-        thread.qualityOfService = .userInitiated
+        // It only wakes parked operations: top QoS keeps socket latency low when the CPU is busy.
+        thread.qualityOfService = .userInteractive
         thread.start()
     }
 
@@ -1117,7 +1118,9 @@ public final class POSIXNetworkProvider: NetworkProvider, @unchecked Sendable {
             case let .subnet(a) where index != nil:
                 Log.i("NET", "route to \(ip): \(choice) — socket bound to \(a.name) (index \(index ?? 0), IP_BOUND_IF)")
             case let .subnet(a):
-                Log.i("NET", "route to \(ip): \(choice) — not bound (\(POSIXInterfaceBinding.isSupported ? "no index for \(a.name)" : "no IP_BOUND_IF here"), routing table)")
+                let why = !POSIXInterfaceBinding.isSupported ? "no IP_BOUND_IF here"
+                    : !options.bindToInterface ? "binding off" : "no index for \(a.name)"
+                Log.i("NET", "route to \(ip): \(choice) — not bound (\(why), routing table)")
             default:
                 Log.i("NET", "route to \(ip): \(choice)")
             }
