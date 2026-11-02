@@ -5,7 +5,9 @@
 // back the negotiated canvas / encoder settings / fit (CONFIG), keyframe requests and STOP.
 // docs/spec/ios-platform-facts.md (f), design recommendation 14; media-video.md §10.3, §15.7.
 //
-// - Orientation: `RPVideoSampleOrientationKey` (CGImagePropertyOrientation) is honoured.
+// - Orientation: `RPVideoSampleOrientationKey` is honoured. Its quarter turns are the opposite of
+//   EXIF (field test 2: landscape upside down), so it goes through
+//   `MirrorFitMath.displayOrientation(replayKitValue:)` before MirrorFrameSource.
 // - Logs are forwarded to the host's log (the extension has no UI); the ring buffer is kept small.
 // - If the host app is not reachable for `hostGracePeriod` (not running / not in mirror mode) the
 //   broadcast ends with a clear localized explanation; the same happens when the host stops.
@@ -31,6 +33,8 @@ final class SampleHandler: RPBroadcastSampleHandler {
         var connected = false
         var finished = false
         var graceGeneration = 0
+        /// Last `RPVideoSampleOrientationKey` value (logged when it changes).
+        var orientationTag: UInt32?
     }
 
     private let state = Locked(State())
@@ -80,7 +84,16 @@ final class SampleHandler: RPBroadcastSampleHandler {
 
     override func processSampleBuffer(_ sampleBuffer: CMSampleBuffer, with sampleBufferType: RPSampleBufferType) {
         guard sampleBufferType == .video, let source = state.withLock({ $0.source }) else { return }
-        source.append(sampleBuffer: sampleBuffer, orientation: Self.orientation(of: sampleBuffer))
+        let tag = Self.replayKitOrientation(of: sampleBuffer)
+        let display = MirrorFitMath.displayOrientation(replayKitValue: tag)
+        let changed = state.withLock { s -> Bool in
+            defer { s.orientationTag = tag }
+            return s.orientationTag != tag
+        }
+        if changed {
+            Log.i("MIRROR", "extension: ReplayKit orientation \(tag) \u{2192} display correction \(display)")
+        }
+        source.append(sampleBuffer: sampleBuffer, orientation: CGImagePropertyOrientation(rawValue: display) ?? .up)
     }
 
     // MARK: - Host connection
@@ -151,12 +164,11 @@ final class SampleHandler: RPBroadcastSampleHandler {
 
     // MARK: - Helpers
 
-    /// `RPVideoSampleOrientationKey` → CGImagePropertyOrientation (`.up` when absent).
-    private static func orientation(of sampleBuffer: CMSampleBuffer) -> CGImagePropertyOrientation {
-        guard let value = CMGetAttachment(sampleBuffer, key: RPVideoSampleOrientationKey as CFString,
-                                          attachmentModeOut: nil) as? NSNumber,
-              let orientation = CGImagePropertyOrientation(rawValue: value.uint32Value) else { return .up }
-        return orientation
+    /// The raw `RPVideoSampleOrientationKey` value (1 when absent). Not an EXIF correction: see
+    /// `MirrorFitMath.displayOrientation(replayKitValue:)`.
+    private static func replayKitOrientation(of sampleBuffer: CMSampleBuffer) -> UInt32 {
+        (CMGetAttachment(sampleBuffer, key: RPVideoSampleOrientationKey as CFString,
+                         attachmentModeOut: nil) as? NSNumber)?.uint32Value ?? 1
     }
 }
 

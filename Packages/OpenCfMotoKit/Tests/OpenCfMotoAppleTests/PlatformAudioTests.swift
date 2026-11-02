@@ -82,6 +82,21 @@ final class PlatformAudioTests: XCTestCase {
         XCTAssertEqual(HandlebarVolumeMath.stepSize, 1.0 / 16.0)
     }
 
+    // MARK: Now Playing metadata
+
+    /// The dash draws title and artist in its own font: ◀ ▶ ★ · came out as empty boxes on the
+    /// 450MT (field test 2). Printable ASCII only; the pill shows just the start of the artist.
+    func testNowPlayingMetadataIsPrintableASCII() {
+        let m = HandlebarNowPlayingMetadata()
+        for text in [m.title, m.artist, m.album] {
+            XCTAssertFalse(text.isEmpty)
+            XCTAssertTrue(text.unicodeScalars.allSatisfy { (0x20 ... 0x7E).contains($0.value) }, "not printable ASCII: \(text)")
+        }
+        XCTAssertEqual(m.title, "OpenCfMoto")
+        XCTAssertTrue(m.artist.hasPrefix("< > move"), m.artist)
+        XCTAssertEqual(m.durationSeconds, 3600)
+    }
+
     // MARK: Emitter
 
     func testEmitterStampsMonotonicTimeAndFansOut() async {

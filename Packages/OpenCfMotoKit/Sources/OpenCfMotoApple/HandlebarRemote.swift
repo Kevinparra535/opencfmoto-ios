@@ -113,6 +113,24 @@ final class HandlebarEventEmitter: @unchecked Sendable {
         return e
     }
 }
+
+/// What the dash's AVRCP "now playing" widget shows (Android: title/artist/album, 1 h duration).
+/// ASCII only: the dash draws the text in its own font, which showed ◀ ▶ ★ · as empty boxes (field
+/// test 2, 450MT). Its pill shows the title and only the start of the artist: most-used keys first.
+public struct HandlebarNowPlayingMetadata: Sendable, Equatable {
+    public var title: String
+    public var artist: String
+    public var album: String
+    public var durationSeconds: Double
+
+    public init(title: String = "OpenCfMoto", artist: String = "< > move  * OK  ** Back  >> Menu  << Group",
+                album: String = "OpenCfMoto", durationSeconds: Double = 3600) {
+        self.title = title
+        self.artist = artist
+        self.album = album
+        self.durationSeconds = durationSeconds
+    }
+}
 #endif
 
 #if canImport(MediaPlayer) && canImport(AVFoundation) && os(iOS)
@@ -129,21 +147,8 @@ import MediaPlayer
 /// optional `outputVolume` KVO → `.volumeUp` / `.volumeDown` (experimental, off by default).
 @MainActor
 public final class HandlebarRemote {
-    /// What the dash's AVRCP "now playing" widget shows (Android: title/artist/album, 1 h duration).
-    public struct NowPlayingMetadata: Sendable, Equatable {
-        public var title: String
-        public var artist: String
-        public var album: String
-        public var durationSeconds: Double
-
-        public init(title: String = "OpenCfMoto", artist: String = "◀ ▶ move · ★ OK · ★★ Back · ▶▶ Menu · ◀◀ Group",
-                    album: String = "OpenCfMoto", durationSeconds: Double = 3600) {
-            self.title = title
-            self.artist = artist
-            self.album = album
-            self.durationSeconds = durationSeconds
-        }
-    }
+    /// What the dash's AVRCP "now playing" widget shows (ASCII only, see the type).
+    public typealias NowPlayingMetadata = HandlebarNowPlayingMetadata
 
     /// Capture mode is on (the user opted in).
     public private(set) var isEnabled = false {

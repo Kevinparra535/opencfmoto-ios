@@ -91,6 +91,21 @@ public enum MirrorFitMath {
 
     static func normalizedOrientation(_ raw: UInt32) -> UInt32 { (1 ... 8).contains(raw) ? raw : 1 }
 
+    /// ReplayKit's `RPVideoSampleOrientationKey` value → the EXIF display correction used here.
+    /// Its quarter turns are the opposite of EXIF: 6 needs a 90° counter-clockwise turn to be
+    /// upright, 8 a clockwise one (field test 2: read as EXIF, landscape came out upside down;
+    /// WebDriverAgent PR #39 and react-native-webrtc ScreenCapturer.m map them the same way).
+    /// 1–4 are unchanged; 5 and 7 (a screen never sends them) swap like 6 and 8; others → 1.
+    public static func displayOrientation(replayKitValue raw: UInt32) -> UInt32 {
+        switch raw {
+        case 5: return 7
+        case 6: return 8
+        case 7: return 5
+        case 8: return 6
+        default: return normalizedOrientation(raw)
+        }
+    }
+
     /// The stored picture is displayed rotated by 90° (width and height swap).
     public static func isQuarterTurn(orientation raw: UInt32) -> Bool { normalizedOrientation(raw) >= 5 }
 
@@ -265,8 +280,9 @@ public final class MirrorFrameSource: VideoFrameSource, @unchecked Sendable {
         }
     }
 
-    /// One screen frame (ReplayKit `processSampleBuffer(_:with: .video)`). Honour
-    /// `RPVideoSampleOrientationKey` by passing it as `orientation`.
+    /// One screen frame (ReplayKit `processSampleBuffer(_:with: .video)`). `orientation` is the EXIF
+    /// display correction: convert `RPVideoSampleOrientationKey` with
+    /// `MirrorFitMath.displayOrientation(replayKitValue:)` first (its quarter turns are inverted).
     public func append(sampleBuffer: CMSampleBuffer, orientation: CGImagePropertyOrientation) {
         guard let buffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         append(pixelBuffer: buffer, orientation: orientation)

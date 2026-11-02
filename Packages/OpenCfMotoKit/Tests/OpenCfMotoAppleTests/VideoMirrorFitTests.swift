@@ -161,6 +161,50 @@ final class VideoMirrorFitTests: XCTestCase {
         XCTAssertEqual(apply(8, topRow.0, topRow.1), [-1, 0]); XCTAssertEqual(apply(8, leftColumn.0, leftColumn.1), [0, 1])
     }
 
+    // ReplayKit `RPVideoSampleOrientationKey` → EXIF display correction (quarter turns inverted;
+    // field test 2: read as EXIF, landscape came out upside down).
+
+    func testReplayKitOrientationMapping() {
+        func f(_ v: UInt32) -> UInt32 { MirrorFitMath.displayOrientation(replayKitValue: v) }
+        XCTAssertEqual((0 ... 10).map(f), [1, 1, 2, 3, 4, 7, 8, 5, 6, 1, 1])
+        XCTAssertEqual(f(.max), 1)
+        for v: UInt32 in 1 ... 8 {
+            XCTAssertEqual(f(f(v)), v, "an involution")
+            XCTAssertEqual(MirrorFitMath.isQuarterTurn(orientation: f(v)), MirrorFitMath.isQuarterTurn(orientation: v),
+                           "the oriented size does not change")
+        }
+    }
+
+    /// ReplayKit hands a portrait buffer; in landscape the picture lies in it on its side. Tag 6:
+    /// stored rotated 90° clockwise (picture top-left at the buffer's top-right, top-right at its
+    /// bottom-right); tag 8: rotated 90° counter-clockwise (top-left at the bottom-left, top-right at
+    /// the top-left). Both must come out upright, unmirrored.
+    func testReplayKitLandscapeTagsComeOutUpright() {
+        // Centre-relative corners (y down) of a 2 × 4 portrait buffer → a 4 × 2 landscape display.
+        func shown(_ tag: UInt32, _ corner: (Double, Double)) -> [Double] {
+            apply(MirrorFitMath.displayOrientation(replayKitValue: tag), corner.0, corner.1)
+        }
+        XCTAssertEqual(shown(6, (1, -2)), [-2, -1], "tag 6: picture top-left at the top-left")
+        XCTAssertEqual(shown(6, (1, 2)), [2, -1], "tag 6: picture top-right at the top-right")
+        XCTAssertEqual(shown(8, (-1, 2)), [-2, -1], "tag 8: picture top-left at the top-left")
+        XCTAssertEqual(shown(8, (-1, -2)), [2, -1], "tag 8: picture top-right at the top-right")
+        // Read as EXIF (the field bug), the picture's top-left lands at the bottom-right.
+        XCTAssertEqual(apply(6, 1, -2), [2, 1])
+        XCTAssertEqual(apply(8, -1, 2), [2, 1])
+    }
+
+    /// The field setup: a 1290 × 2796 screen buffer in landscape, FIT into the 800 × 384 dash.
+    func testLandscapeScreenFitsAWideDashWithoutStretching() throws {
+        for tag: UInt32 in [6, 8] {
+            let o = MirrorFitMath.orientedSize(width: 1290, height: 2796,
+                                               orientation: MirrorFitMath.displayOrientation(replayKitValue: tag))
+            XCTAssertEqual([o.width, o.height], [2796, 1290])
+            let v = try XCTUnwrap(vp(800, 384, o.width, o.height, .fit))
+            XCTAssertEqual(v, V(x: 0, y: 7, width: 800, height: 369))
+            XCTAssertEqual(Double(v.width) / Double(o.width), Double(v.height) / Double(o.height), accuracy: 0.001)
+        }
+    }
+
     func testDisplayMatricesAreOrthonormal() {
         for raw: UInt32 in 0 ... 9 {
             let m = MirrorFitMath.displayMatrix(orientation: raw)

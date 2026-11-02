@@ -34,17 +34,19 @@ final class VideoMirrorSourceTests: XCTestCase {
     }
 
     private func isRed(_ c: [Int]) -> Bool { c.count == 3 && c[0] > 200 && c[1] < 60 && c[2] < 60 }
+    private func isGreen(_ c: [Int]) -> Bool { c.count == 3 && c[0] < 60 && c[1] > 200 && c[2] < 60 }
     private func isBlue(_ c: [Int]) -> Bool { c.count == 3 && c[0] < 60 && c[1] < 60 && c[2] > 200 }
     private func isBlack(_ c: [Int]) -> Bool { c.count == 3 && c.allSatisfy { $0 < 20 } }
 
-    private func makeSource(fit: ScreenFit = .fit, margins: ScreenMargins = .zero) throws -> (MirrorFrameSource, Locked<[EncodedFrame]>) {
+    private func makeSource(width: Int = 320, height: Int = 160, fit: ScreenFit = .fit,
+                            margins: ScreenMargins = .zero) throws -> (MirrorFrameSource, Locked<[EncodedFrame]>) {
         let probe = H264Encoder(label: "probe")
-        do { try probe.configure(width: 320, height: 160, parameters: .default) } catch {
+        do { try probe.configure(width: width, height: height, parameters: .default) } catch {
             throw XCTSkip("No usable VideoToolbox H.264 encoder: \(error)")
         }
         probe.invalidate()
-        let cfg = MirrorRelayConfig(canvas: VideoCanvas(width: 320, height: 160), parameters: EncoderParameters(bitrate: 800_000, frameRate: 30),
-                                    fit: fit, margins: margins)
+        let cfg = MirrorRelayConfig(canvas: VideoCanvas(width: width, height: height),
+                                    parameters: EncoderParameters(bitrate: 800_000, frameRate: 30), fit: fit, margins: margins)
         let source = MirrorFrameSource(configuration: cfg)
         let frames = Locked<[EncodedFrame]>([])
         source.onFrame = { f in frames.withLock { $0.append(f) } }
@@ -98,6 +100,86 @@ final class VideoMirrorSourceTests: XCTestCase {
         XCTAssertTrue(isBlack(rgb(canvas, 160, 10)), "top margin")
         XCTAssertTrue(isBlue(rgb(canvas, 160, 40)), "rotated 180°: blue on top")
         XCTAssertTrue(isRed(rgb(canvas, 160, 150)))
+    }
+
+    // MARK: ReplayKit landscape (field test 2: upside down while the tag was read as EXIF)
+
+    /// Where ReplayKit's portrait buffer holds rectangle `r` of an upright `w` × `h` landscape
+    /// picture: tag 6 = picture rotated 90° clockwise, tag 8 = 90° counter-clockwise.
+    private func stored(_ r: DashRect, w: Double, h: Double, tag: UInt32) -> DashRect {
+        tag == 6 ? DashRect(x: h - r.y - r.height, y: r.x, width: r.height, height: r.width)
+            : DashRect(x: r.y, y: w - r.x - r.width, width: r.height, height: r.width)
+    }
+
+    /// The `h` × `w` portrait buffer ReplayKit delivers with `tag` for that landscape picture.
+    private func replayKitBuffer(w: Int, h: Int, background: UInt32, rects: [(DashRect, UInt32)], tag: UInt32) throws -> CVPixelBuffer {
+        let pb = try XCTUnwrap(PixelBufferFactory.makeStandaloneBuffer(width: h, height: w))
+        let commands: [DashDrawCommand] = rects.map { item in
+            .fill(.rect(stored(item.0, w: Double(w), h: Double(h), tag: tag)), DashColor(rgb: item.1), .nonZero)
+        }
+        DashRenderer().render(DashDisplayList(size: DashSize(width: Double(h), height: Double(w)),
+                                              background: DashColor(rgb: background), commands: commands), into: pb)
+        return pb
+    }
+
+    /// What SampleHandler passes for a ReplayKit tag.
+    private func extensionOrientation(_ tag: UInt32) -> CGImagePropertyOrientation {
+        CGImagePropertyOrientation(rawValue: MirrorFitMath.displayOrientation(replayKitValue: tag)) ?? .up
+    }
+
+    func testReplayKitLandscapeTagsRenderUpright() throws {
+        // Upright 160 × 80 picture: blue, red marker top-left, green marker top-right.
+        let rects: [(DashRect, UInt32)] = [(DashRect(x: 0, y: 0, width: 40, height: 20), 0xFF0000),
+                                           (DashRect(x: 120, y: 0, width: 40, height: 20), 0x00FF00)]
+        for tag: UInt32 in [6, 8] {
+            let (source, frames) = try makeSource()
+            defer { source.stop() }
+            source.append(pixelBuffer: try replayKitBuffer(w: 160, h: 80, background: 0x0000FF, rects: rects, tag: tag),
+                          orientation: extensionOrientation(tag))
+            XCTAssertTrue(pollUntil { !frames.current.isEmpty }, "tag \(tag)")
+            // 2:1 picture, 2:1 canvas: the whole canvas at scale 2.
+            XCTAssertEqual(source.stats.viewport, MirrorFitMath.Viewport(x: 0, y: 0, width: 320, height: 160), "tag \(tag)")
+            let canvas = try XCTUnwrap(source.lastCanvasBufferForTesting)
+            XCTAssertTrue(isRed(rgb(canvas, 20, 10)), "tag \(tag): top-left \(rgb(canvas, 20, 10))")
+            XCTAssertTrue(isGreen(rgb(canvas, 300, 10)), "tag \(tag): top-right \(rgb(canvas, 300, 10))")
+            for (x, y) in [(160, 80), (20, 150), (300, 150)] {
+                XCTAssertTrue(isBlue(rgb(canvas, x, y)), "tag \(tag) at \(x),\(y): \(rgb(canvas, x, y))")
+            }
+        }
+    }
+
+    /// The field setup: a 1290 × 2796 screen buffer in landscape playing a 16:9 video full screen
+    /// (the player's own black bars left and right), on an 800 × 384 dash with FIT. Upright, the
+    /// whole screen fitted (7 px bars top and bottom) and the video still 16:9.
+    func testLandscapeVideoOnAWideDashIsUprightAndNotStretched() throws {
+        let w = 2796, h = 1290, videoW = 2293, videoX = (w - videoW) / 2
+        let rects: [(DashRect, UInt32)] = [
+            (DashRect(x: Double(videoX), y: 0, width: Double(videoW), height: Double(h)), 0x0000FF),
+            (DashRect(x: Double(videoX), y: 0, width: 200, height: 100), 0xFF0000),
+            (DashRect(x: Double(videoX + videoW - 200), y: 0, width: 200, height: 100), 0x00FF00),
+        ]
+        for tag: UInt32 in [6, 8] {
+            let (source, frames) = try makeSource(width: 800, height: 384)
+            defer { source.stop() }
+            source.append(pixelBuffer: try replayKitBuffer(w: w, h: h, background: 0x000000, rects: rects, tag: tag),
+                          orientation: extensionOrientation(tag))
+            XCTAssertTrue(pollUntil { !frames.current.isEmpty }, "tag \(tag)")
+            XCTAssertEqual(source.stats.viewport, MirrorFitMath.Viewport(x: 0, y: 7, width: 800, height: 369), "tag \(tag)")
+            let canvas = try XCTUnwrap(source.lastCanvasBufferForTesting)
+            XCTAssertTrue(isRed(rgb(canvas, 100, 20)), "tag \(tag): video top-left \(rgb(canvas, 100, 20))")
+            XCTAssertTrue(isGreen(rgb(canvas, 700, 20)), "tag \(tag): video top-right \(rgb(canvas, 700, 20))")
+            for (x, y) in [(400, 3), (400, 380), (30, 200), (770, 200)] {
+                XCTAssertTrue(isBlack(rgb(canvas, x, y)), "tag \(tag): bar at \(x),\(y): \(rgb(canvas, x, y))")
+            }
+            // The video's extent through its middle: 656 × 369 expected, i.e. 16:9.
+            let columns = (0 ..< 800).filter { isBlue(rgb(canvas, $0, 200)) }
+            let rows = (0 ..< 384).filter { isBlue(rgb(canvas, 400, $0)) }
+            let videoWidth = Double((columns.last ?? 0) - (columns.first ?? 0) + 1)
+            let videoHeight = Double((rows.last ?? 0) - (rows.first ?? 0) + 1)
+            XCTAssertEqual(videoWidth, 656, accuracy: 3, "tag \(tag)")
+            XCTAssertEqual(videoHeight, 369, accuracy: 3, "tag \(tag)")
+            XCTAssertEqual(videoWidth / videoHeight, 16.0 / 9.0, accuracy: 0.03, "tag \(tag): not stretched")
+        }
     }
 
     func testStaticScreenIsRepeatedAndKeyframeRequestsAreHonoured() throws {
