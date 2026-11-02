@@ -224,7 +224,8 @@ final class MusicAdapter: MusicPlaying {
                              otherAudioPlaying: otherAudioPlaying)
     }
 
-    static func track(of item: MPMediaItem) -> MusicTrack {
+    /// (`OpenCfMotoAppModel.` because AudioToolbox, through AVFoundation, has a `MusicTrack` too.)
+    static func track(of item: MPMediaItem) -> OpenCfMotoAppModel.MusicTrack {
         let title = item.title ?? ""
         let artist = item.artist ?? item.albumArtist ?? ""
         let album = item.albumTitle ?? ""
@@ -232,8 +233,9 @@ final class MusicAdapter: MusicPlaying {
         let storeID = MusicTrackID.normalizedStoreID(item.playbackStoreID)
         let id = MusicTrackID.make(persistentID: item.persistentID, storeID: storeID, title: title, artist: artist,
                                    album: album, duration: duration)
-        return MusicTrack(id: id, title: title, artist: artist, album: album,
-                          duration: duration.isFinite && duration > 0 ? duration : 0, storeID: storeID)
+        return OpenCfMotoAppModel.MusicTrack(id: id, title: title, artist: artist, album: album,
+                                             duration: duration.isFinite && duration > 0 ? duration : 0,
+                                             storeID: storeID)
     }
 
     static func trackID(of item: MPMediaItem) -> String { track(of: item).id }
