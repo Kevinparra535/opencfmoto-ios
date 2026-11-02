@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Transport abstraction used by the PXC link. The production implementation is
-// `NWNetworkProvider` (Network.framework, OpenCfMotoApple). Tests use in-memory pipes or POSIX
-// sockets. The protocol code never touches sockets directly.
+// `POSIXNetworkProvider` (BSD sockets, Link/POSIXTransport.swift); `NWNetworkProvider`
+// (Network.framework, OpenCfMotoApple) is kept for reference. Tests use in-memory pipes or the
+// POSIX provider on loopback. The protocol code never touches sockets directly.
 
 import Foundation
 
@@ -56,4 +57,41 @@ public protocol NetworkProvider: Sendable {
     func listen(port: UInt16) async throws -> any StreamListener
     /// Opens an outbound TCP connection. Throws `TransportError.timeout` after `timeout` seconds.
     func connect(host: String, port: UInt16, timeout: TimeInterval) async throws -> any ByteStream
+}
+
+/// Text conventions of the `TransportError.failed` messages of the platform transports
+/// (`POSIXNetworkProvider`, `NWNetworkProvider`), so callers classify failures by text.
+public enum PlatformTransportErrors {
+    /// Prefix of the listen failure when another process holds the port (EADDRINUSE: typically the
+    /// official CFMoto / Carbit app, or our own ReplayKit extension). The link maps it to
+    /// `LinkFailure.portInUse(port)`.
+    public static let addressInUsePrefix = "EADDRINUSE"
+    /// Exact message thrown when iOS Local Network privacy blocks a connection.
+    public static let localNetworkDenied = "localNetworkDenied"
+    /// Prefix of the message thrown when the peer refused the TCP connection.
+    public static let connectionRefusedPrefix = "ECONNREFUSED"
+
+    public static func addressInUse(port: UInt16) -> TransportError {
+        .failed("\(addressInUsePrefix): address already in use (port \(port))")
+    }
+
+    public static var localNetworkDeniedError: TransportError { .failed(localNetworkDenied) }
+
+    /// True for the EADDRINUSE listen failure.
+    public static func isAddressInUse(_ error: Error) -> Bool {
+        guard case let .failed(m)? = error as? TransportError else { return false }
+        return m.hasPrefix(addressInUsePrefix)
+    }
+
+    /// True for a Local Network privacy denial.
+    public static func isLocalNetworkDenied(_ error: Error) -> Bool {
+        guard case let .failed(m)? = error as? TransportError else { return false }
+        return m == localNetworkDenied
+    }
+
+    /// True for a refused connection.
+    public static func isConnectionRefused(_ error: Error) -> Bool {
+        guard case let .failed(m)? = error as? TransportError else { return false }
+        return m.hasPrefix(connectionRefusedPrefix)
+    }
 }

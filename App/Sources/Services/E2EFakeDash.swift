@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // `-e2eFakeDash` launch mode (CI simulator job, tools/ci/e2e/run-fakedash.sh): the REAL link stack
 // against tools/fakedash/fakedash.py listening on 127.0.0.1 (the Simulator shares the Mac's network
-// stack). Real: NWNetworkProvider (no Wi-Fi interface requirement), EasyConnLink, the RSA identity
-// (SecKey, pure-Swift fallback), DashProjectionEngine + VideoToolbox + DashRenderer + TileImageCache,
-// the internet client for tiles. Simulated: the bike Wi-Fi (a port that is "already joined" with the
-// fake dash as gateway), GPS (DemoRoutePlayer), speech, handlebar, mirror. The garage holds one bike
-// whose pairing QR matches the fakedash model (`-e2eDash`), the onboarding is done and auto-connect
-// starts the session right after launch.
+// stack). Real: POSIXNetworkProvider (the bike-link transport; loopback destinations connect
+// unbound), EasyConnLink, the RSA identity (SecKey, pure-Swift fallback), DashProjectionEngine +
+// VideoToolbox + DashRenderer + TileImageCache, the internet client for tiles. Simulated: the bike
+// Wi-Fi (a port that is "already joined" with the fake dash as gateway), GPS (DemoRoutePlayer),
+// speech, handlebar, mirror. The garage holds one bike whose pairing QR matches the fakedash model
+// (`-e2eDash`), the onboarding is done and auto-connect starts the session right after launch.
 //
 // Evidence for the CI job, in the app's Documents folder (`xcrun simctl get_app_container booted
 // <bundle id> data`): `e2e-log.txt` (every Log line, appended every 2 s), `e2e-status.json`
@@ -153,7 +153,7 @@ final class E2EFakeDashHarness {
             http: http,
             // No real bike Wi-Fi: keep the internet (tiles) on the Mac's default route.
             setPreferCellular: { on in Log.d("E2E", "setPreferCellular(\(on)) ignored (loopback)") },
-            network: NWNetworkProvider(options: .anyInterface),
+            network: POSIXNetworkProvider(),
             discovery: nil,
             makeSigner: {
                 do {

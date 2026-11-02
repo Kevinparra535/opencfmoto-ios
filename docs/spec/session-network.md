@@ -1377,16 +1377,22 @@ platform knowledge, not from the Android repo. Verify each platform claim on a d
   signal; otherwise "unknown".
 
 ### 11.2 Sockets, interface pinning, permissions
-- Use Network.framework. Listeners on 10922/10921/10920 with `allowLocalEndpointReuse = true` (SO_REUSEADDR),
-  `requiredInterfaceType = .wifi` (or the hotspot bridge for §7) and, if possible,
-  `requiredLocalEndpoint = .hostPort(phoneIPv4, port)`. Expect two concurrent connections on 10922.
-- Probe/scan connections: `requiredInterfaceType = .wifi`, force IPv4
-  (`(params.defaultProtocolStack.internetProtocol as? NWProtocolIP.Options)?.version = .v4`) so the source address is
-  the Wi-Fi IPv4 the dash will call back (§4.5). TCP connect timeout 3 s (`NWProtocolTCP.Options.connectionTimeout`),
-  own 5 s read timer. Accept rule: `cmd == 0x70000011 && body.contains("true")`. Send exactly the bytes of §5.3.
+- **Use BSD sockets for the link** (`POSIXNetworkProvider`, OpenCfMotoCore `Link/POSIXTransport.swift`). First field
+  test (iOS 27): on the dash AP, which has no internet, `NWPathMonitor(requiredInterfaceType: .wifi)` stays
+  unsatisfied (`notAvailable`) although `en0` holds its DHCP address, and every `NWConnection` pinned to Wi-Fi
+  (probe, port scan) times out, while Bonjour still resolves the dash. The kernel's connected route works: a BSD socket
+  bound with `IP_BOUND_IF` to the interface whose subnet contains the dash reaches it.
+- Listeners on 10922/10921/10920: `0.0.0.0:<port>`, `SO_REUSEADDR`, backlog 16 (accepting needs no Local Network
+  access). Expect two concurrent connections on 10922.
+- Probe/scan connections: IPv4, `IP_BOUND_IF` = the interface whose IPv4/netmask contains the destination (longest
+  prefix, `getifaddrs`; never by name), so the source address is the Wi-Fi IPv4 the dash will call back (§4.5).
+  Loopback destinations and destinations outside every local subnet connect unbound. TCP connect timeout 3 s, own 5 s
+  read timer. Accept rule: `cmd == 0x70000011 && body.contains("true")`. Send exactly the bytes of §5.3.
 - Local Network privacy: `NSLocalNetworkUsageDescription` + `NSBonjourServices = [_EasyConn._tcp]` (both already in
   `project.yml`). Denial blocks the probe **and** inbound call-backs; trigger the prompt early (e.g. right after a
-  QR scan) and detect `.localNetworkDenied` path reasons. Bonjour via `NWBrowser` needs no multicast entitlement.
+  QR scan) and detect `.localNetworkDenied` path reasons. A BSD-sockets connect denied by it fails at once with
+  `EHOSTUNREACH` (XNU drops the SYN inside `connect(2)`; no dedicated errno exists): retry until the connect timeout
+  (the alert may still be open), then report the denial. Bonjour via `NWBrowser` needs no multicast entitlement.
 - Bonjour: `NWBrowser(.bonjourWithTXTRecord(type: "_EasyConn._tcp", domain: nil))`; connect the probe directly to the
   result endpoint (resolution happens in `NWConnection`, IPv4 forced), or use TXT `ip`/`port` as a fallback. Never
   wait on Bonjour alone: race it with `gateway:10930` (`control-plane.md` §18.5). Keep the 10915–10935 scan as the

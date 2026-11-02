@@ -40,7 +40,6 @@ struct RunnerArguments {
     var eventsJSONL: String?
     var summaryJSON: String?
     var exitOnFatal = true
-    var selfTest = false
 
     /// A Carbit format-A pairing QR (session-network.md §2.3). modelid 37416 = CFDL16 → the early
     /// profile guess is Legacy, exactly like an Android run without a QR.
@@ -89,11 +88,10 @@ struct RunnerArguments {
 
     Output:
       --events                print LinkEvents only (no engine log lines)
-      --net-trace             also print transport connect/accept/close lines
+      --net-trace             also print stream close lines (connect/accept lines are D/NET log lines)
       --events-jsonl FILE     LinkEvents as JSON lines
       --summary-json FILE     final summary as JSON
       --keep-going            do not exit early on a fatal state (port in use, no address)
-      --selftest              run the POSIX transport self-test (ephemeral ports) and exit
 
     Exit codes: 0 frames were streamed, 3 no frame streamed, 2 fatal link state, 64 usage error.
     """
@@ -182,7 +180,6 @@ struct RunnerArguments {
             case "--events-jsonl": a.eventsJSONL = try value(arg)
             case "--summary-json": a.summaryJSON = try value(arg)
             case "--keep-going": a.exitOnFatal = false
-            case "--selftest": a.selfTest = true
             default:
                 throw UsageError(description: "unknown argument '\(arg)' (see --help)")
             }

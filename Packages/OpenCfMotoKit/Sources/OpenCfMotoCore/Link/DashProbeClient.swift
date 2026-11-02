@@ -111,10 +111,11 @@ struct DashProbeClient: Sendable {
     }
 
     /// Local Network privacy denial as reported by a transport: `LinkFailure.localNetworkDenied`, or
-    /// `TransportError.failed("localNetworkDenied")` (the OpenCfMotoApple `NWNetworkProvider` form).
+    /// `PlatformTransportErrors.localNetworkDeniedError` (the POSIX and NW providers' form).
     static func isLocalNetworkDenied(_ error: Error) -> Bool {
         if let f = error as? LinkFailure, f == .localNetworkDenied { return true }
-        if case let .failed(message)? = error as? TransportError, message.hasPrefix("localNetworkDenied") { return true }
+        if case let .failed(message)? = error as? TransportError,
+           message.hasPrefix(PlatformTransportErrors.localNetworkDenied) { return true }
         return false
     }
 

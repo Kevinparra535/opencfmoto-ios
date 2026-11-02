@@ -71,7 +71,7 @@ structure) is **identical** in all six scenarios, apart from:
 
 - Real dashes were not available: the fake dash encodes the specs' description of real dash
   behaviour; where both phones agree with it, a remaining risk is a spec gap shared by both.
-- The Swift run used POSIX sockets; on iOS the app uses `NWNetworkProvider` (Network.framework),
-  which is exercised separately by the macOS package tests and the Simulator end-to-end run.
+- The Swift run used POSIX sockets. The app now uses the same transport (`POSIXNetworkProvider`,
+  OpenCfMotoCore) on iOS; the Simulator end-to-end run exercises it there.
 - Video content came from pre-encoded clips; the app's own VideoToolbox encoder output is checked by
   the Simulator end-to-end run and the macOS encoder tests.

@@ -20,7 +20,7 @@ import Foundation
 /// let link = EasyConnLink(configuration: LinkConfiguration(qr: qr, profileOverride: settings.profileOverride,
 ///                                                          learnedCanvas: memory.canvas(for: qr.ssid),
 ///                                                          forceTouchscreen: settings.forceTouch),
-///                         network: NWNetworkProvider(), frameSource: projectionEngine, signer: signer,
+///                         network: POSIXNetworkProvider(), frameSource: projectionEngine, signer: signer,
 ///                         discovery: BonjourDashDiscovery(), gateway: path.gateways.first,
 ///                         options: { var o = LinkOptions(); o.forceNonTouch = settings.forceNonTouch; return o }())
 /// Task { for await event in link.events { … } }   // single consumer
@@ -57,7 +57,7 @@ public final class EasyConnLink: @unchecked Sendable {
     private var session: LinkSession?
 
     /// - Parameters:
-    ///   - network: sockets (Network.framework in the app, in-memory in tests).
+    ///   - network: sockets (`POSIXNetworkProvider` in the app, in-memory in tests).
     ///   - frameSource: the encoder side (dash projection engine or mirror).
     ///   - signer: RSA identity for CLIENT_INFO (`SecKeyHuidSigner` or `PureSwiftHuidSigner`).
     ///   - discovery: Bonjour `_EasyConn._tcp` browser, raced with the gateway probe (optional).

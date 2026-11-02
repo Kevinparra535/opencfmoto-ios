@@ -6,7 +6,8 @@
 // ios-platform-facts.md (j)): NWPath.gateways is Apple-only, so the core takes an optional injected
 // gateway and falls back to `(ip & mask) | 1`, then 192.168.0.1 and 192.168.49.1.
 // Interface names (en0…) are NOT API on iOS: the Apple layer should pass the Wi-Fi interface name
-// from NWPathMonitor when it has one.
+// from NWPathMonitor when it has one. `outboundInterface(for:among:)` picks the interface an
+// outbound socket is pinned to (POSIXNetworkProvider) by subnet, never by name.
 
 import Foundation
 #if canImport(Darwin)
@@ -155,5 +156,53 @@ public enum InterfaceAddresses {
         add(local.flatMap(subnetGateway(of:)), guessed: true)
         for g in knownDashGateways { add(g, guessed: true) }
         return out
+    }
+}
+
+/// The local interface an outbound IPv4 connection leaves from (`InterfaceAddresses.outboundInterface`).
+public enum OutboundInterfaceChoice: Sendable, Equatable, CustomStringConvertible {
+    /// The interface whose subnet contains the destination (longest prefix wins).
+    case subnet(InterfaceAddress)
+    /// 127.0.0.0/8: never pinned.
+    case loopbackDestination
+    /// One of our own addresses (`name` = its interface): the kernel routes it through loopback.
+    case ownAddress(String)
+    /// No up, non-loopback interface subnet contains the destination: system routing decides.
+    case noMatch
+    /// Not an IPv4 literal.
+    case notIPv4
+
+    /// The interface to pin to, nil = connect unbound.
+    public var interface: InterfaceAddress? {
+        if case let .subnet(a) = self { return a }
+        return nil
+    }
+
+    public var description: String {
+        switch self {
+        case let .subnet(a): return "\(a.name) \(a.ipv4)/\(a.prefixLength.map(String.init) ?? a.netmask)"
+        case .loopbackDestination: return "unbound (loopback destination)"
+        case let .ownAddress(name): return "unbound (our own address on \(name))"
+        case .noMatch: return "unbound (no local interface subnet contains it)"
+        case .notIPv4: return "unbound (not an IPv4 address)"
+        }
+    }
+}
+
+public extension InterfaceAddresses {
+    /// The interface an outbound connection to `destination` should be pinned to: the up,
+    /// non-loopback interface whose IPv4 subnet contains it, longest prefix first, then list order
+    /// (the kernel's connected-route choice). Loopback destinations, our own addresses and
+    /// destinations outside every local subnet are left to the system (connect unbound).
+    static func outboundInterface(for destination: String, among addresses: [InterfaceAddress]) -> OutboundInterfaceChoice {
+        guard let dest = parseIPv4(destination) else { return .notIPv4 }
+        if dest >> 24 == 127 { return .loopbackDestination }
+        if let own = addresses.first(where: { $0.ipv4 == destination }) { return .ownAddress(own.name) }
+        var best: (address: InterfaceAddress, prefix: Int)?
+        for a in addresses where a.isUp && !a.isLoopback && isValidIPv4(a.ipv4) {
+            guard let prefix = a.prefixLength, prefix > 0, contains(a, destination) else { continue }
+            if best == nil || prefix > best!.prefix { best = (a, prefix) }
+        }
+        return best.map { .subnet($0.address) } ?? .noMatch
     }
 }
