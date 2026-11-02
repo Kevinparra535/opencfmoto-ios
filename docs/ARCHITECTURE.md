@@ -81,7 +81,7 @@ CLLocation ─▶ LocationService ─▶ LocationFix ─┬─▶ NavigationSess
             │                                                      ▼                        │
             │                         DashProjectionEngine : VideoFrameSource ─▶ FrameQueue │
             │                                                      │                        │
-            │   EasyConnLink (Core) ◀── NetworkProvider (NWListener/NWConnection) ──────────┤
+            │   EasyConnLink (Core) ◀── POSIXNetworkProvider (BSD sockets) ─────────────────┤
             └─────────────────────────────────────────────────────┼────────────────────────┘
                      Wi-Fi (NEHotspotConfiguration)               ▼
                      dash :10930 probe ◀── phone listens :10922/:10921/:10920 ◀── dash connects back

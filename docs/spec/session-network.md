@@ -1367,6 +1367,12 @@ platform knowledge, not from the Android repo. Verify each platform claim on a d
 - Treat `.alreadyAssociated` as success; `.userDenied` → "approve the join prompt" (Android picker ERROR analogue).
   The completion handler can report success without association — always confirm with `fetchCurrent` and wait for
   an IPv4 on `en0` (poll 500 ms up to 10 s, like `BikeWifiP2p.kt:50-51`; ignore 169.254/16).
+- **Wi-Fi up does not need a satisfied path.** First field test (iOS 27): on the dash AP, which has no internet,
+  `NWPathMonitor(requiredInterfaceType: .wifi)` stays unsatisfied (`notAvailable`, no interface listed) while `en0`
+  holds its DHCP address. A usable IPv4 on the Wi-Fi interface (the path's, else the `SIOCGIFFUNCTIONALTYPE` Wi-Fi
+  one, else `en0`) counts as up, "local-only", gateway = subnet `.1`: the SSID is read, the join confirmed, the
+  session supervised and the Local Network check browses `_EasyConn._tcp` there. Logs:
+  `wifi=up(local-only, path=unsatisfied:notAvailable)`. The link itself needs BSD sockets there (§11.2).
 - `DIRECT-…` SSIDs: join like any SSID (worked on the 1000 MT-X via Android's specifier, §3.3). P2P-only QRs: still
   try the SSID/PSK join; if it fails, explain that this dash may need Wi-Fi Direct, which iOS lacks.
 - Hidden SSIDs are not used by any known dash (Android cannot join them either); expose `hidden = true` only as a
