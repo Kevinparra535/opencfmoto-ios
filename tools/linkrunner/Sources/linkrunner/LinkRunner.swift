@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// linkrunner: drives the real OpenCfMotoCore `EasyConnLink` over POSIX sockets against a PXC dash
-// (tools/fakedash/fakedash.py, or a real dash from a computer on its Wi-Fi), with a synthetic H.264
-// source, and prints every LinkEvent (and the engine log) with timestamps, then a run summary.
+// linkrunner: drives the real OpenCfMotoCore `EasyConnLink` over `POSIXNetworkProvider` (the app's
+// transport) against a PXC dash (tools/fakedash/fakedash.py, or a real dash from a computer on its
+// Wi-Fi), with a synthetic H.264 source, and prints every LinkEvent (and the engine log) with
+// timestamps, then a run summary.
 
 import Foundation
 import OpenCfMotoCore
@@ -25,7 +26,6 @@ struct LinkRunnerMain {
             FileHandle.standardError.write(Data("linkrunner: \(error)\n".utf8))
             exit(64)
         }
-        if args.selfTest { exit(await TransportSelfTest.run()) }
         let code = await LinkRunner(args).run()
         exit(code)
     }
@@ -244,9 +244,9 @@ final class LinkRunner: @unchecked Sendable {
             sourceFPS: args.sourceFPS,
             log: { [out, args] text in if !args.eventsOnly { out.line("SRC  ", text) } })
         let o = out
-        var trace: PosixNetworkProvider.Trace?
+        var trace: POSIXNetworkProvider.Trace?
         if args.netTrace { trace = { text in o.line("NET  ", text) } }
-        let network = PosixNetworkProvider(options: .init(bindHost: args.bindHost), trace: trace)
+        let network = POSIXNetworkProvider(options: .init(bindHost: args.bindHost), trace: trace)
         let discovery: DashDiscovery? = args.bonjour.map { StaticDashDiscovery(endpoint: $0, delay: args.bonjourDelay) }
         let link = EasyConnLink(configuration: config, network: network, frameSource: source, signer: signer,
                                 discovery: discovery, gateway: args.gateway, options: options)
@@ -380,7 +380,7 @@ final class LinkRunner: @unchecked Sendable {
     // MARK: Summary
 
     private func buildSummary(link: EasyConnLink, finalState: LinkState, stats: LinkStats, source: SyntheticFrameSource,
-                              network: PosixNetworkProvider, reason: String, signer: PureSwiftHuidSigner,
+                              network: POSIXNetworkProvider, reason: String, signer: PureSwiftHuidSigner,
                               phone: PhoneIdentity) -> [String: Any] {
         let src = source.stats
         let net = network.snapshot

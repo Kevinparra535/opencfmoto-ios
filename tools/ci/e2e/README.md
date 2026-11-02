@@ -22,7 +22,7 @@ the tail of the app log.
 |---|---|
 | `-demo` | simulated bike side (always on in the Simulator unless `-e2eFakeDash`) |
 | `-demoSeed` | demo bike, three saved trips on the demo route, home + favourites, onboarding done, auto-connect off |
-| `-e2eFakeDash [-e2eDash cfdl16\|cfdl26\|mt800] [-e2eHost 127.0.0.1]` | real `NWNetworkProvider` (any interface), `EasyConnLink`, SecKey RSA identity, `DashProjectionEngine` + VideoToolbox + `DashRenderer` + tiles; fake Wi-Fi "already joined" (gateway = the fake dash, phone = 127.0.0.2 on `lo0` via `ConnectionTestingOverrides.loopback()`), demo GPS, a seeded bike matching the fakedash model, auto-connect. Writes `Documents/e2e-log.txt`, `e2e-status.json` (every 2 s) and `e2e-app.h264` |
+| `-e2eFakeDash [-e2eDash cfdl16\|cfdl26\|mt800] [-e2eHost 127.0.0.1]` | real `POSIXNetworkProvider` (the bike-link transport; loopback connects unbound), `EasyConnLink`, SecKey RSA identity, `DashProjectionEngine` + VideoToolbox + `DashRenderer` + tiles; fake Wi-Fi "already joined" (gateway = the fake dash, phone = 127.0.0.2 on `lo0` via `ConnectionTestingOverrides.loopback()`), demo GPS, a seeded bike matching the fakedash model, auto-connect. Writes `Documents/e2e-log.txt`, `e2e-status.json` (every 2 s) and `e2e-app.h264` |
 | `-uiScreen home\|dash\|navigate\|trips\|settings\|controls\|logs\|garage\|about\|mirror\|onboarding\|scan\|ride` | RootView opens that screen after launch |
 | `-uiOrientation landscape` | rotates the interface (the screenshot is rotated back by the job) |
 

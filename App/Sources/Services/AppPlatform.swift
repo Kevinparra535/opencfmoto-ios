@@ -5,7 +5,8 @@
 //
 // Builds `AppServices` from the OpenCfMotoApple adapters (one adapter per port, in this folder):
 //   keyValueStore = UserDefaultsKeyValueStore.appGroup(), secretStore = KeychainSecretStore(),
-//   http = SmartHTTPClient (+ setPreferCellular), network = NWNetworkProvider(.bikeWiFi),
+//   http = SmartHTTPClient (+ setPreferCellular), network = POSIXNetworkProvider (OpenCfMotoCore; BSD
+//   sockets, because the Wi-Fi NWPath of a dash AP without internet stays unsatisfied),
 //   discovery = BonjourDashDiscovery(), makeSigner = SecKeyHuidSigner.generate (fallback
 //   PureSwiftHuidSigner.generate), wifi = WifiJoiner (+ WiFiInfo; free flavor → hotspotEnabled:false,
 //   `#if OCM_NO_HOTSPOT`), location = LocationService, speech = SpeechAnnouncer,
@@ -126,7 +127,7 @@ final class AppPlatform {
             secretStore: KeychainSecretStore(thisDeviceOnly: true),
             http: http,
             setPreferCellular: { [http] on in http.preferCellular = on },
-            network: NWNetworkProvider(options: .bikeWiFi),
+            network: POSIXNetworkProvider(),
             discovery: BonjourDashDiscovery(),
             makeSigner: {
                 do {

@@ -2,7 +2,11 @@
 // Ported from OpenCfMoto (Android) EasyConnProber.kt (listeners on 10922/10921/10920, the :10930
 // probe socket, TCP_NODELAY on accepted sockets).
 //
-// Network.framework implementation of the transport contract (OpenCfMotoCore Link/Transport.swift):
+// Network.framework implementation of the transport contract (OpenCfMotoCore Link/Transport.swift).
+// NOT the bike-link transport any more: on a dash AP without internet the Wi-Fi path stays
+// unsatisfied (first field test, iOS 27) and these connections wait until they time out, so the app
+// uses `POSIXNetworkProvider` (OpenCfMotoCore). Kept for its tests and as the reference error
+// mapping; `NWByteStream` also carries the cellular HTTP client.
 // - `listen(port:)`: an NWListener on a FIXED port, `allowLocalEndpointReuse` (SO_REUSEADDR), TCP
 //   noDelay, optionally restricted to the Wi-Fi interface (DTS: bind listeners to the interface, not
 //   to an IP). No Bonjour advertising (that would itself be a Local Network operation).
@@ -21,48 +25,12 @@
 // | connect: refused / host unreachable         | TransportError.failed("ECONNREFUSED: …") etc.   | probe attempt failed             |
 // | peer EOF / local close()                    | TransportError.closed                           | connection closed                |
 // | awaiting task cancelled                     | TransportError.cancelled                        | —                                |
-// `PlatformTransportErrors` exposes the strings and classifiers.
+// `PlatformTransportErrors` (OpenCfMotoCore, shared with the POSIX provider) exposes the strings
+// and classifiers.
 
 #if canImport(Foundation)
 import Foundation
 import OpenCfMotoCore
-
-/// Text conventions of the `TransportError.failed` messages produced by the Apple transports, so
-/// callers can classify failures without importing Network.framework.
-public enum PlatformTransportErrors {
-    /// Prefix of the message thrown by `NWNetworkProvider.listen(port:)` when the port is already
-    /// bound by another process (EADDRINUSE — typically the official CFMoto / Carbit app, or our own
-    /// ReplayKit extension). The link maps it to `LinkFailure.portInUse(port)`.
-    public static let addressInUsePrefix = "EADDRINUSE"
-    /// Exact message thrown when iOS Local Network privacy blocks a connection.
-    public static let localNetworkDenied = "localNetworkDenied"
-    /// Prefix of the message thrown when the peer refused the TCP connection.
-    public static let connectionRefusedPrefix = "ECONNREFUSED"
-
-    public static func addressInUse(port: UInt16) -> TransportError {
-        .failed("\(addressInUsePrefix): address already in use (port \(port))")
-    }
-
-    public static var localNetworkDeniedError: TransportError { .failed(localNetworkDenied) }
-
-    /// True for the EADDRINUSE listen failure.
-    public static func isAddressInUse(_ error: Error) -> Bool {
-        guard case let .failed(m)? = error as? TransportError else { return false }
-        return m.hasPrefix(addressInUsePrefix)
-    }
-
-    /// True for a Local Network privacy denial.
-    public static func isLocalNetworkDenied(_ error: Error) -> Bool {
-        guard case let .failed(m)? = error as? TransportError else { return false }
-        return m == localNetworkDenied
-    }
-
-    /// True for a refused connection.
-    public static func isConnectionRefused(_ error: Error) -> Bool {
-        guard case let .failed(m)? = error as? TransportError else { return false }
-        return m.hasPrefix(connectionRefusedPrefix)
-    }
-}
 
 /// A thread-safe "first caller wins" flag (resume-exactly-once guards in callback code).
 final class OCMOnceFlag: @unchecked Sendable {
