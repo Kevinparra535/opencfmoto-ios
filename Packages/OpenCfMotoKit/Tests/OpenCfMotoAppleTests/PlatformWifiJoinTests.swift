@@ -76,6 +76,43 @@ final class PlatformWifiJoinTests: XCTestCase {
         XCTAssertFalse(WifiJoinPolicy.isConfirmed(.unavailable, currentSSID: "x", targetSSID: "x", expectedSubnets: subnets))
     }
 
+    /// Field log 1: after the join the dash's Wi-Fi (no internet) keeps an unsatisfied path; the
+    /// address on the Wi-Fi interface confirms it (the old rule waited 15 s for a satisfied path).
+    func testAssociationConfirmationOnALocalOnlyWifi() {
+        let subnets = WiFiSubnet.knownDashSubnets
+        let bike = WiFiSnapshot(isSatisfied: false, interfaceName: "en0", phoneIPv4: "192.168.0.50", prefixLength: 24,
+                                unsatisfiedReason: "notAvailable")
+        XCTAssertTrue(bike.isLocalOnly)
+        XCTAssertTrue(WifiJoinPolicy.isConfirmed(bike, currentSSID: "CFMOTO-f46457", targetSSID: "CFMOTO-f46457",
+                                                 expectedSubnets: subnets, baseline: .unavailable))
+        XCTAssertFalse(WifiJoinPolicy.isConfirmed(bike, currentSSID: "HomeWiFi", targetSSID: "CFMOTO-f46457",
+                                                  expectedSubnets: subnets, baseline: .unavailable))
+        // SSID hidden: a NEW address on a dash subnet (ConnectionModel.matchesManualJoin's rule).
+        XCTAssertTrue(WifiJoinPolicy.isConfirmed(bike, currentSSID: nil, targetSSID: "x", expectedSubnets: subnets,
+                                                 baseline: .unavailable))
+        let home = WiFiSnapshot(isSatisfied: true, interfaceName: "en0", phoneIPv4: "10.0.0.23", prefixLength: 24,
+                                gateways: ["10.0.0.1"])
+        XCTAssertTrue(WifiJoinPolicy.isConfirmed(bike, currentSSID: nil, targetSSID: "x", expectedSubnets: subnets,
+                                                 baseline: home))
+        XCTAssertFalse(WifiJoinPolicy.isConfirmed(bike, currentSSID: nil, targetSSID: "x", expectedSubnets: subnets,
+                                                  baseline: bike), "nothing changed since apply()")
+        XCTAssertTrue(WifiJoinPolicy.isConfirmed(bike, currentSSID: nil, targetSSID: "x", expectedSubnets: subnets,
+                                                 baseline: nil), "iOS answered alreadyAssociated")
+        // A home network on the dash's address plan that was already there is not the bike.
+        let homeOnDashPlan = WiFiSnapshot(isSatisfied: true, interfaceName: "en0", phoneIPv4: "192.168.0.50",
+                                          prefixLength: 24, gateways: ["192.168.0.1"])
+        XCTAssertFalse(WifiJoinPolicy.isConfirmed(homeOnDashPlan, currentSSID: nil, targetSSID: "x",
+                                                  expectedSubnets: subnets, baseline: homeOnDashPlan))
+        // Local-only, but not on a dash subnet; or no usable address yet.
+        let other = WiFiSnapshot(isSatisfied: false, interfaceName: "en0", phoneIPv4: "10.9.0.2", prefixLength: 24,
+                                 unsatisfiedReason: "notAvailable")
+        XCTAssertFalse(WifiJoinPolicy.isConfirmed(other, currentSSID: nil, targetSSID: "x", expectedSubnets: subnets,
+                                                  baseline: .unavailable))
+        let leasePending = WiFiSnapshot(isSatisfied: false, interfaceName: "en0", phoneIPv4: "169.254.1.2", prefixLength: 16,
+                                        unsatisfiedReason: "notAvailable")
+        XCTAssertFalse(WifiJoinPolicy.isConfirmed(leasePending, currentSSID: "x", targetSSID: "x", expectedSubnets: subnets))
+    }
+
     func testOptionsDefaults() {
         let o = WifiJoinOptions()
         XCTAssertFalse(o.joinOnce, "persistent configuration survives lock / background")

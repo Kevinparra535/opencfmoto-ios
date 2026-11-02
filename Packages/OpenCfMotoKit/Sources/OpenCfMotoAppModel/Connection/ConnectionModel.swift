@@ -57,6 +57,8 @@
 //   on the next foreground after a background).
 // - Stop must stay reachable: `isSessionActive` is true for every session, including an .error phase
 //   whose link keeps re-arming (the Local Network issue is raised once per such episode).
+// - `isWifiAvailable` includes a local-only Wi-Fi (no internet: path unsatisfied, address on the
+//   interface; field log 1). The rules treat it like any Wi-Fi; the log says so once per network.
 
 import Foundation
 import Observation
@@ -173,6 +175,8 @@ public final class ConnectionModel {
     /// time: raising the issue again would bring the dialog back after every Dismiss (CON:CL-1).
     @ObservationIgnored private var localNetworkIssueRaised = false
     @ObservationIgnored private var loggedAutoConnectIdle = false
+    /// The local-only Wi-Fi (SSID, else subnet + gateway) whose "no internet" note was logged last.
+    @ObservationIgnored private var loggedLocalOnlyNetwork: String?
     /// Bike Wi-Fi configuration kept after a failed session (Android keeps the network until Stop);
     /// forgotten by Stop, by a session to another bike, or when the app leaves the foreground idle.
     @ObservationIgnored private(set) var lingeringWifiSSID: String?
@@ -305,6 +309,7 @@ public final class ConnectionModel {
             let current = await wifi.currentNetwork()
             guard !Task.isCancelled, let self else { return }
             self.autoConnectTask = nil
+            self.noteWifi(current)
             guard !self.phase.isBusy, !self.phase.isLive, self.session == nil else { return }
             guard let bike = self.core.garage.selected, let qr = self.core.garage.qr(for: bike.id) else { return }
             guard Self.isAlreadyOnBikeNetwork(current, ssid: qr.ssid) else {
@@ -490,7 +495,10 @@ public final class ConnectionModel {
         guard let s = session, gen == generation else { return }
         if phase != .joiningWifi { setPhase(.joiningWifi, detail: s.bike.name) }
         guard let info = await joinBikeWifi(gen), gen == generation else { return }
-        sessionNetwork = info
+        noteWifi(info)
+        // Without an address (a manual join confirmed before the Wi-Fi was up) it fingerprints nothing:
+        // the SSID / dash-subnet rules recognise the bike network instead.
+        sessionNetwork = info.phoneIPv4 != nil ? info : nil
         core.services.setPreferCellular(true)
         if info.isLocalNetworkDenied {
             Log.w("WIFI", "[wifi] Local Network access denied for this app \u{2014} the dash cannot be reached")
@@ -664,6 +672,19 @@ public final class ConnectionModel {
         manualJoinSignal = nil
     }
 
+    /// A local-only Wi-Fi is used like any other: say so plainly, once per network.
+    private func noteWifi(_ info: WifiNetworkInfo) {
+        guard info.isWifiAvailable else { return }
+        guard info.isLocalOnly else {
+            loggedLocalOnlyNetwork = nil
+            return
+        }
+        let key = info.ssid ?? "\(info.phoneIPv4.flatMap(Self.subnet24) ?? "?")|\(info.gateway ?? "?")"
+        guard key != loggedLocalOnlyNetwork else { return }
+        loggedLocalOnlyNetwork = key
+        Log.i("WIFI", "Wi-Fi up without internet (iOS reports the path unsatisfied: \(info.pathUnsatisfiedReason ?? "unknown")) \u{2014} using the interface directly (\(Self.describe(info)))")
+    }
+
     /// Supervises the bike Wi-Fi for the whole session (BikeWifi onLost / onAvailable).
     private func watchWifi(_ gen: UInt64) {
         wifiWatchTask?.cancel()
@@ -679,6 +700,7 @@ public final class ConnectionModel {
     private func wifiChanged(_ info: WifiNetworkInfo, gen: UInt64) {
         guard let s = session else { return }
         let l = core.language
+        noteWifi(info)
         if let d = dashlessNetwork, d != info { dashlessNetwork = nil }
         if Self.isOnBikeNetwork(info, ssid: s.qr.ssid, joined: sessionNetwork) {
             guard wifiLostAt != nil else { return }
@@ -1080,8 +1102,15 @@ public final class ConnectionModel {
         return changed && isOnDashSubnet(info)
     }
 
+    /// "wifi=up", "wifi=down" or "wifi=up(local-only, path=unsatisfied:notAvailable)".
+    nonisolated static func wifiState(_ info: WifiNetworkInfo) -> String {
+        guard info.isWifiAvailable else { return "wifi=down" }
+        guard info.isLocalOnly else { return "wifi=up" }
+        return "wifi=up(local-only, path=unsatisfied:\(info.pathUnsatisfiedReason ?? "unknown"))"
+    }
+
     nonisolated static func describe(_ info: WifiNetworkInfo) -> String {
-        var parts = ["wifi=\(info.isWifiAvailable ? "up" : "down")"]
+        var parts = [wifiState(info)]
         if let s = info.ssid { parts.append("ssid=\(s)") }
         if let i = info.interfaceName { parts.append("iface=\(i)") }
         if let ip = info.phoneIPv4 { parts.append("ip=\(ip)") }
