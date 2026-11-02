@@ -106,6 +106,16 @@ if command -v ffmpeg > /dev/null && [ -s "$D/dash.h264" ]; then
   fi
   frames=$(ls "$D"/frames/dash_* 2>/dev/null | wc -l | tr -d ' ')
   echo "decoded: $total frames in the stream, $frames pictures written (every ${step}th)"
+  # Pictures the app's own E2E script asked for (`E2E: frame mark <name> = <index>` in its log, e.g.
+  # the Music sheet ~2 s after it opened): frame <index> of the stream, as frames/<name>.png.
+  if [ -s "$D/app-log.txt" ] && [ "$total" -gt 0 ]; then
+    grep -o 'E2E: frame mark [A-Za-z0-9_.-]* = [0-9]*' "$D/app-log.txt" | while read -r _ _ _ name _ idx; do
+      [ "$idx" -ge "$total" ] && idx=$(( total - 1 ))
+      ffmpeg -hide_banner -loglevel error -f h264 -i "$D/dash.h264" -vf "select=eq(n\,$idx)" -fps_mode vfr \
+        -frames:v 1 "$D/frames/$name.png" >> "$D/frames/ffmpeg.log" 2>&1
+      echo "frame mark $name: frame $idx of $total"
+    done
+  fi
 fi
 if command -v ffmpeg > /dev/null && [ -s "$D/app.h264" ]; then
   ffmpeg -hide_banner -loglevel error -f h264 -i "$D/app.h264" -frames:v 1 "$D/frames/app_first.png" > /dev/null 2>&1

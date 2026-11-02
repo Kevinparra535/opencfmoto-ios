@@ -25,6 +25,8 @@ the tail of the app log.
 | `-e2eFakeDash [-e2eDash cfdl16\|cfdl26\|mt800] [-e2eHost 127.0.0.1]` | real `POSIXNetworkProvider` (the bike-link transport; loopback connects unbound), `EasyConnLink`, SecKey RSA identity, `DashProjectionEngine` + VideoToolbox + `DashRenderer` + tiles; fake Wi-Fi "already joined" and local-only like the dash's access point (gateway = the fake dash, phone = 127.0.0.2 on `lo0` via `ConnectionTestingOverrides.loopback()`), demo GPS, a seeded bike matching the fakedash model, auto-connect. Writes `Documents/e2e-log.txt`, `e2e-status.json` (every 2 s) and `e2e-app.h264` |
 | `-uiScreen home\|dash\|navigate\|trips\|settings\|controls\|logs\|garage\|about\|mirror\|onboarding\|scan\|ride` | RootView opens that screen after launch |
 | `-uiOrientation landscape` | rotates the interface (the screenshot is rotated back by the job) |
+| `-e2eMusic` | with `-e2eFakeDash`: a fake Apple Music (three songs with drawn covers) and a script on the dash — Music sheet at +9 s, next song +15 s, pause +21 s, close +27 s after the first frame |
+| `-uiDashSheet music` | with `-uiScreen dash`: opens the dash's Music sheet once the demo music shows on the dash |
 
 ## Scripts
 
@@ -32,7 +34,7 @@ the tail of the app log.
 |---|---|
 | `simctl_pick.py` | picks the newest-runtime iPhone simulator (`udid=… name=… runtime=…`) |
 | `screenshots.sh <udid> <bundle> <out>` | `simctl launch -demo -demoSeed -uiScreen <name>` + `simctl io screenshot` for every screen, landscape dash view, Spanish home / settings / dash |
-| `run-fakedash.sh <udid> <bundle> <scenario> <dash> <seconds> <out> [app args]` | fakedash on 127.0.0.1 ↔ the app with `-e2eFakeDash`; screenshots while streaming, the app's Documents dumps, decoded frames (`ffmpeg`, every 60th frame) |
+| `run-fakedash.sh <udid> <bundle> <scenario> <dash> <seconds> <out> [app args]` | fakedash on 127.0.0.1 ↔ the app with `-e2eFakeDash`; screenshots while streaming, the app's Documents dumps, decoded frames (`ffmpeg`, every 60th frame) plus the pictures the app's E2E script marks (`E2E: frame mark <name> = <index>` → `frames/<name>.png`; `-e2eMusic`: `music_1_map_playing` … `music_5_map_paused`) |
 | `transcript_digest.py` | readable digest of a fakedash `--transcript` (per-frame traffic folded) |
 | `assemble.py <out> <artifacts>` | artifacts tree + `RUN.md` + GitHub annotations (`E2E <scenario> PASS/FAIL`) |
 | `publish.sh <dir>` | force-pushes the tree as the single commit of `ci-artifacts` (`GITHUB_TOKEN`, `contents: write`) |

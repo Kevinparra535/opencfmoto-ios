@@ -10,7 +10,8 @@
 //
 // `-e2eMusic` adds a fake Apple Music (DemoSeed.music: three songs with drawn covers, playing) and a
 // script that drives the dash's Music sheet from the first own-UI frame on: +9 s open, +15 s next
-// song, +21 s pause, +27 s close (`E2E music: …` log lines; `music` block in e2e-status.json).
+// song, +21 s pause, +27 s close (`E2E music: …` log lines; `music` block in e2e-status.json; one
+// `E2E frame mark` per state, decoded by the CI job as frames/music_*.png).
 //
 // Evidence for the CI job, in the app's Documents folder (`xcrun simctl get_app_container booted
 // <bundle id> data`): `e2e-log.txt` (every Log line, appended every 2 s), `e2e-status.json`
@@ -218,11 +219,14 @@ final class E2EFakeDashHarness {
     }
 
     /// `-e2eMusic`: the rider's taps on the dash's Music sheet, timed from the first own-UI frame.
+    /// Each step also marks the dash picture that shows its result (`frames/music_<n>_<state>.png`
+    /// in the CI artifacts), plus the map with the playing tile just before the sheet opens.
     private func startMusicScript(_ model: AppModel) {
-        let steps: [(at: TimeInterval, name: String, intent: DashIntent)] = [
-            (9, "open", .openMusic), (15, "next", .musicNext), (21, "pause", .musicPlayPause), (27, "close", .closeSheets),
+        let steps: [(at: TimeInterval, name: String, intent: DashIntent, shows: String)] = [
+            (9, "open", .openMusic, "music_2_sheet"), (15, "next", .musicNext, "music_3_sheet_next"),
+            (21, "pause", .musicPlayPause, "music_4_sheet_paused"), (27, "close", .closeSheets, "music_5_map_paused"),
         ]
-        musicScript = Task { @MainActor [weak model] in
+        musicScript = Task { @MainActor [weak self, weak model] in
             while !Task.isCancelled {
                 guard let model else { return }
                 if model.ride.isProjecting { break }
@@ -234,10 +238,21 @@ final class E2EFakeDashHarness {
                 try? await Task.sleep(nanoseconds: UInt64((step.at - elapsed) * 1_000_000_000))
                 elapsed = step.at
                 guard !Task.isCancelled, let model else { return }
+                if step.name == "open" { self?.markFrame("music_1_map_playing", offset: -10) }
                 Log.i("E2E", "music: \(step.name)")
                 model.ride.performDashIntent(step.intent)
+                self?.markFrame(step.shows, offset: 20)
             }
         }
+    }
+
+    /// Asks the CI job for one decoded dash picture (tools/ci/e2e/run-fakedash.sh reads the
+    /// `frame mark` log lines): frame `served + offset` of what the fake dash received (0-based; every
+    /// served pull is one frame in its stream, one session), saved as `frames/<name>.png`. +20 frames
+    /// is 1–2 s at the dash's 10–20 pulls/s: past the render / encode latency, before the next step.
+    private func markFrame(_ name: String, offset: Int) {
+        let served = projection.engine.stats.pullsServed
+        Log.i("E2E", "frame mark \(name) = \(max(0, served + offset))")
     }
 
     private func writeStatus(_ model: AppModel, elapsed: TimeInterval) {
