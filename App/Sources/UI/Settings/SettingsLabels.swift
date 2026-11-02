@@ -176,6 +176,17 @@ enum SettingsLabels {
         }
     }
 
+    /// "Media & Apple Music" (Apple Music on the dash, iOS addition).
+    static func appleMusic(_ value: MusicAuthorizationState) -> LocalizedStringKey {
+        switch value {
+        case .authorized: return "Allowed"
+        case .denied: return "Denied"
+        case .notDetermined: return "Not asked yet"
+        case .restricted: return "Restricted"
+        case .unavailable: return "Not available"
+        }
+    }
+
     // MARK: Margins (margins_summary_*)
 
     static func marginsSummary(_ margins: ScreenMargins, profileDefault: Bool) -> Text {

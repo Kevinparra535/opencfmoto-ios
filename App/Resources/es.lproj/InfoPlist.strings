@@ -10,3 +10,6 @@
 
 /* Local Network alert: the dash link over the bike's Wi-Fi. */
 "NSLocalNetworkUsageDescription" = "OpenCfMoto se comunica con el tablero de tu moto a través de su Wi-Fi para mostrar el mapa en el tablero.";
+
+/* Media & Apple Music alert: the Music app's song, cover and controls on the dash (Settings toggle). */
+"NSAppleMusicUsageDescription" = "OpenCfMoto muestra en el tablero de tu moto la canción que suena en la app Música (título, artista y portada) y te deja reproducirla, pausarla y saltarla desde allí. No recopila ni comparte tus datos de música.";

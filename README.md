@@ -25,6 +25,10 @@ usando el protocolo **PXC** obtenido por ingeniería inversa. Es un port a Swift
 - **Táctil del tablero** (en los tableros táctiles) y **botones del manillar** (opcional y
   experimental, a través de los controles multimedia del iPhone), con asignación de gestos,
   preajustes por piña de mandos y lugares guardados para navegar con un botón.
+- **Apple Music en el tablero** (opcional, Ajustes): la portada de la canción que suena en la app
+  **Música** sobre el mapa y, al tocarla, una hoja con título, artista, progreso y ⏮ ⏯ ⏭, sin tapar
+  nunca la indicación de giro. También con los botones del manillar. Solo Apple Music: iOS no deja
+  que una app vea lo que suena en Spotify, YouTube Music u otras.
 - **Viajes**: ordenador de viaje, registro automático de cada ruta mientras el tablero muestra el
   mapa, lista por días con miniaturas y exportación **GPX**.
 - **Garaje** con varias motos (cada una con sus propios ajustes), **conexión automática** y
@@ -144,6 +148,9 @@ Sigue la guía paso a paso [docs/PRUEBA-EN-LA-MOTO.md](docs/PRUEBA-EN-LA-MOTO.md
   opción es experimental y voluntaria: reproduce audio silencioso y **pausa la música de otras
   apps** mientras está activa; no todos los tableros envían esos botones; la pulsación larga de ★
   no es detectable en iOS; los ▲/▼ de volumen solo funcionan con la opción experimental.
+- **Apple Music**: solo la app Música de Apple (ni Spotify ni YouTube Music: iOS no da acceso).
+  Mientras suena, los botones ◀ ▶ ★ de la moto controlan la música; con el control multimedia del
+  teléfono activado, pausa la canción con ★ para devolvérselos al tablero.
 - **App Store**: el audio silencioso para los botones y la lectura del volumen podrían no ser
   aceptados en la revisión de Apple. Además, la licencia **AGPL** es difícil de compatibilizar con
   las condiciones de la App Store: distribuir esta app (o un derivado) a otras personas, ya sea en
@@ -195,7 +202,10 @@ traducciones se reúnen con `python3 tools/l10n/build_strings.py`.
 
 Sin cuentas, sin anuncios y sin telemetría. Las motos, los viajes y los registros se quedan en el
 iPhone hasta que tú los compartes; las contraseñas Wi-Fi se guardan en el llavero y se ocultan en
-los registros. Las búsquedas, rutas y teselas consultan servicios de OpenStreetMap.
+los registros. Las búsquedas, rutas y teselas consultan servicios de OpenStreetMap. Con **Apple
+Music en el tablero**, la canción se lee en el iPhone y OpenCfMoto no la envía a ningún sitio (ni
+títulos ni artistas en los registros); la portada de las canciones en streaming la carga MusicKit
+de Apple desde los servidores de Apple.
 
 ## Créditos y licencia
 
@@ -246,6 +256,10 @@ the reverse-engineered **PXC** protocol. It is a Swift port of the Android app
 - **Dash touch** (on touch dashes) and **handlebar buttons** (opt-in and experimental, through the
   iPhone's media remote) with gesture mapping, switch-cluster presets and saved places for
   one-button navigation.
+- **Apple Music on the dash** (opt-in, Settings): the cover of the song the **Music** app plays on
+  the map and, on a tap, a sheet with title, artist, progress and ⏮ ⏯ ⏭ that never hides the turn
+  guidance — handlebar buttons work too. Apple Music only: iOS does not let an app see what Spotify,
+  YouTube Music or other players play.
 - **Trips**: trip computer, automatic logging of every ride while the dash shows the map, a
   by-day list with route thumbnails and **GPX** export.
 - **Garage** with several bikes (each with its own settings), **auto-connect** and **link
@@ -360,6 +374,9 @@ no Wi-Fi or dash, and a demo GPS route so you can watch the dash UI on the phone
   experimental and opt-in: it plays silent audio and **pauses other apps' music** while on; not
   every dash sends those buttons; a ★ long press cannot be detected on iOS; the ▲/▼ volume keys only
   work with the experimental option.
+- **Apple Music**: the Apple Music app only (not Spotify or YouTube Music: iOS gives no access).
+  While it plays, the bike's ◀ ▶ ★ buttons control the music; with the phone media remote on, pause
+  the song with ★ to give them back to the dash.
 - **App Store**: the silent audio for the buttons and the volume observation may not pass Apple's
   review. The **AGPL** is also hard to reconcile with the App Store terms: distributing this app (or
   a derivative) to other people — on the App Store, or through TestFlight external testing or a
@@ -409,7 +426,9 @@ with `python3 tools/l10n/build_strings.py`.
 
 No accounts, no ads, no telemetry. Bikes, trips and logs stay on the iPhone until you share them;
 Wi-Fi passwords live in the Keychain and are redacted in logs. Search, routing and map tiles query
-OpenStreetMap services.
+OpenStreetMap services. With **Apple Music on the dash** the song is read on the iPhone and
+OpenCfMoto sends it nowhere (no titles or artists in logs); the cover of streamed songs is loaded by
+Apple's MusicKit from Apple's servers.
 
 ## Credits and license
 

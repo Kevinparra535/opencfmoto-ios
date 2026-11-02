@@ -62,6 +62,9 @@ targets:
         NSLocationWhenInUseUsageDescription: "OpenCfMoto uses your location, also while your iPhone is locked during a ride, to show the map and turn-by-turn guidance on your bike's dash and to log your rides on this iPhone. To find places, routes and speed limits, it sends your searches and positions to OpenStreetMap-based online services."
         UIRequiresPersistentWiFi: true
         NSLocalNetworkUsageDescription: "OpenCfMoto talks to your motorcycle's dashboard over its Wi-Fi to show the map on the dash."
+        # Apple Music on the dash (MediaPlayer's system player + MusicKit artwork; app target only — never
+        # in MirrorExtension/Info.plist: the extension must not reference the media library).
+        NSAppleMusicUsageDescription: "OpenCfMoto shows the song playing in the Music app (title, artist and cover) on your bike's dash and lets you play, pause and skip it from there. It doesn't collect or share your music data."
         NSBonjourServices: [_EasyConn._tcp]
         OCMAppGroupIdentifier: $(APP_GROUP_ID)
         # Files opened with the app (AppModel.handleOpenURL): GPX tracks, and settings / map-data packs

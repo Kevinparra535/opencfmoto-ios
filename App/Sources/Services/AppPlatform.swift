@@ -13,7 +13,8 @@
 //   handlebar = HandlebarRemote, projection = DashProjectionEngine + DashRenderer(tileCache:) +
 //   TileImageCache + ThermalMonitor, mirror = MirrorRelayServer(socketPath: AppGroup.socketPath()),
 //   system = UIKit (idle timer, thermal/low power notifications, open settings, haptics,
-//   LocalNetworkPermission), files = Application Support/Caches folders.
+//   LocalNetworkPermission), files = Application Support/Caches folders, music = MusicAdapter (the
+//   system Music app; Apple Music on the dash, app target only).
 // Demo mode (launch argument `-demo`, or the simulator when no real services make sense): use
 // `AppServices.preview()` plus a demo GPS route player so the dash preview moves.
 //
@@ -104,6 +105,9 @@ final class AppPlatform {
             services.projection = projection
             services.http = http
             services.setPreferCellular = { [http] on in http.preferCellular = on }
+            // The Simulator has no music library: a fake Music app (seeded: three songs with covers).
+            services.music = options.demoSeed ? DemoSeed.music(clock: clock, store: services.keyValueStore)
+                : DemoSeed.emptyMusic(clock: clock)
             if options.demoSeed { DemoSeed.apply(to: services) }
             model = AppModel(services: services)
             let player = DemoRoutePlayer(location: location, now: services.now)
@@ -145,7 +149,8 @@ final class AppPlatform {
             mirror: MirrorAdapter(),
             system: IOSSystem(flavor: flavor, store: store),
             files: fileLocations(),
-            clock: clock)
+            clock: clock,
+            music: MusicAdapter(clock: clock))
     }
 
     /// Trips and bike photos in Application Support (backed up), share-sheet exports in Caches.

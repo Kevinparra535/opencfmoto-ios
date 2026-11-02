@@ -1331,6 +1331,9 @@ SCENARIOS = {
     "reconnect": ("cfdl16", 5.0),
     "stall": ("cfdl16", 4.0),
     "touch": ("mt800", 6.0),
+    # Apple Music on the dash (iOS app run with -e2eMusic): a plain cfdl16 stream long enough for the
+    # app's music script (sheet open +9 s, next song +15 s, pause +21 s, close +27 s after the first frame).
+    "music": ("cfdl16", 30.0),
 }
 
 

@@ -485,6 +485,15 @@ jobs:
           t0=$(date +%s)
           bash tools/ci/e2e/run-fakedash.sh "${{ steps.sim.outputs.udid }}" "$BUNDLE_ID" touch mt800 15 "$OUT" -uiScreen dash
           printf "e2e touch\t%s\tdone\n" $(( $(date +%s) - t0 )) >> "$OUT/timings.tsv"
+      # Apple Music on the dash: a fake Music app (-e2eMusic) and the app's own script on the dash —
+      # Music sheet at +9 s, next song +15 s, pause +21 s, close +27 s after the first frame. Not in
+      # --require yet (it becomes required once it has passed twice).
+      - name: "E2E music (800x384 CFDL16, Apple Music fake: tile, sheet, next song, pause)"
+        if: steps.install.outcome == 'success'
+        run: |
+          t0=$(date +%s)
+          bash tools/ci/e2e/run-fakedash.sh "${{ steps.sim.outputs.udid }}" "$BUNDLE_ID" music cfdl16 36 "$OUT" -e2eMusic
+          printf "e2e music\t%s\tdone\n" $(( $(date +%s) - t0 )) >> "$OUT/timings.tsv"
       - name: Report (RUN.md + annotations; fails when a required scenario failed)
         if: always()
         run: |

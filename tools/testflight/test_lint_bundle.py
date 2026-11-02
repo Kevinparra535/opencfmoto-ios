@@ -318,6 +318,47 @@ class LintBundleTests(unittest.TestCase):
         self.fx.write()
         self.assertError("NSLocationWhenInUseUsageDescription", "--archive", self.fx.archive, "--unsigned")
 
+    # ---- Apple Music on the dash: the media-library purpose string, per bundle
+    MUSICKIT = ["_$s8MusicKit17SystemMusicPlayerC6sharedACvgZ", "_$s8MusicKit18MusicAuthorizationV13currentStatusAC0D0OvgZ",
+                "_$s8MusicKit7ArtworkV3url5width6height10Foundation3URLVSgSi_SitF", "_$s8MusicKit11MusicPlayerC5queueAC5QueueCvg"]
+
+    def test_musickit_in_the_extension_needs_the_media_library_key(self):
+        self.fx.appex_symbols += self.MUSICKIT
+        self.fx.write()
+        status, errors, _warnings, text = self.lint("--archive", self.fx.archive, "--unsigned")
+        self.assertEqual(status, 1, text)
+        error = next((e for e in errors if "NSAppleMusicUsageDescription" in e), "")
+        self.assertIn("OpenCfMotoMirror.appex", error)
+        self.assertIn("media library APIs", error)
+        self.assertEqual(sum(sym in error for sym in self.MUSICKIT), 3, f"the first three MusicKit symbols: {error}")
+        self.fx.xinfo["NSAppleMusicUsageDescription"] = "music"
+        self.fx.write()
+        self.assertClean("--archive", self.fx.archive, "--unsigned")
+
+    def test_system_music_player_in_the_extension_needs_the_media_library_key(self):
+        self.fx.appex_symbols.append("_OBJC_CLASS_$_MPMusicPlayerController")
+        self.fx.write()
+        self.assertError("OpenCfMotoMirror.appex: the binary references media library APIs "
+                         "(_OBJC_CLASS_$_MPMusicPlayerController)", "--archive", self.fx.archive, "--unsigned")
+        self.fx.appex_symbols.remove("_OBJC_CLASS_$_MPMusicPlayerController")
+        self.fx.appex_selectors.append("systemMusicPlayer")
+        self.fx.write()
+        self.assertError("media library APIs (systemMusicPlayer)", "--archive", self.fx.archive, "--unsigned")
+
+    def test_the_app_with_apple_music_and_the_key_is_clean(self):
+        self.fx.app_symbols += ["_OBJC_CLASS_$_MPMusicPlayerController", "_OBJC_CLASS_$_MPMediaLibrary"] + self.MUSICKIT
+        self.fx.app_selectors.append("systemMusicPlayer")
+        self.fx.write()
+        self.assertError("OpenCfMoto.app: the binary references media library APIs", "--archive", self.fx.archive,
+                         "--unsigned")
+        self.fx.info["NSAppleMusicUsageDescription"] = "OpenCfMoto shows the song playing in the Music app…"
+        self.fx.write()
+        self.assertClean("--archive", self.fx.archive, "--unsigned")
+        # MPRemoteCommandCenter / MPNowPlayingInfoCenter (the handlebar remote) need no key.
+        self.fx.appex_symbols += ["_OBJC_CLASS_$_MPRemoteCommandCenter", "_OBJC_CLASS_$_MPNowPlayingInfoCenter"]
+        self.fx.write()
+        self.assertClean("--archive", self.fx.archive, "--unsigned")
+
     def test_invalid_reason_code_and_category(self):
         self.fx.app_manifest["NSPrivacyAccessedAPITypes"].append(
             {"NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryBogus", "NSPrivacyAccessedAPITypeReasons": ["X"]})

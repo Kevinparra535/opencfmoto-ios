@@ -2,6 +2,9 @@
 // `HandlebarRemoteProviding` on iOS: OpenCfMotoApple.HandlebarRemote (MPRemoteCommandCenter + Now
 // Playing claim, optional outputVolume observation). Opt-in only (ControlsModel decides when to
 // claim); the claim is refreshed when the app becomes active again (never while other audio plays).
+// Apple Music (contract R4): `reclaimIfPossible()` takes the buttons back right after the rider
+// paused the Music app — foreground only (a non-mixable activation from the background fails with
+// cannotInterruptOthers), never while other audio plays (HandlebarRemote.reclaim refuses then).
 
 import Foundation
 import UIKit
@@ -47,6 +50,13 @@ final class HandlebarAdapter: HandlebarRemoteProviding {
     }
 
     func disable() { remote.disable() }
+
+    func reclaimIfPossible() -> HandlebarReclaimResult {
+        guard remote.isEnabled else { return .refused }
+        if remote.isClaimed { return .alreadyClaimed }
+        guard UIApplication.shared.applicationState == .active else { return .refused }
+        return remote.reclaim() ? .reclaimed : .refused
+    }
 
     private func reclaimIfNeeded() {
         guard remote.isEnabled, !remote.isClaimed else { return }

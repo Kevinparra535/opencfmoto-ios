@@ -2,7 +2,8 @@
 // `DashProjecting` on iOS: DashDisplayList → DashRenderer (CoreGraphics, CoreText, raster tiles from
 // TileImageCache over the smart HTTP client) → DashProjectionEngine (VideoToolbox H.264, pull-paced,
 // hold IDR / software encoder in the background) with ThermalMonitor caps. The same DashRenderer
-// draws the phone preview of the dash (AppPlatform.dashRenderer).
+// draws the phone preview of the dash (AppPlatform.dashRenderer). Album artwork for the Apple Music
+// tile / sheet (`DashDrawCommand.image`) comes from `images`, filled by `setDashImage(id:data:)`.
 
 import Foundation
 import OpenCfMotoCore
@@ -13,6 +14,8 @@ final class ProjectionAdapter: DashProjecting, @unchecked Sendable {
     let engine: DashProjectionEngine
     let renderer: DashRenderer
     let tiles: TileImageCache
+    /// Raster images of the dash UI (Apple Music artwork), shared with the phone preview.
+    let images = DashImageStore()
     let textMeasurer: DashTextMeasurer = CoreTextMeasurer()
     private let thermal: ThermalMonitor
     private let lock = NSLock()
@@ -25,7 +28,7 @@ final class ProjectionAdapter: DashProjecting, @unchecked Sendable {
 
     init(http: HTTPClient, tileURLTemplate: String, clock: MonotonicClock) {
         tiles = TileImageCache(httpClient: http, configuration: TileImageCache.Configuration(urlTemplate: tileURLTemplate))
-        renderer = DashRenderer(tileCache: tiles)
+        renderer = DashRenderer(tileCache: tiles, imageStore: images)
         engine = DashProjectionEngine(renderer: renderer, clock: clock)
         thermal = ThermalMonitor()
         thermal.start()
@@ -91,6 +94,17 @@ final class ProjectionAdapter: DashProjecting, @unchecked Sendable {
 
     func clearTileCache() {
         tiles.clearDisk()
+    }
+
+    func setDashImage(id: String, data: Data?) {
+        if let data {
+            if !images.set(id: id, data: data) {
+                Log.w("MUSIC", "artwork bytes rejected id=\(id)")
+            }
+        } else {
+            images.remove(id: id)
+        }
+        engine.invalidate()
     }
 
     private static func summary(_ s: DashProjectionStats) -> ProjectionStatsSummary {

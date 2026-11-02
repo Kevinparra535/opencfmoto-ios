@@ -1436,6 +1436,21 @@ In both options, rely on the on-phone pad, Lock Screen controls and a Live Activ
 14. **CLIENT_INFO.** Append `"supportScreenTouch": true` for touch-capable profiles, or when "Force
     touchscreen" is on (§2.6). Log the bike's own `supportScreenTouch`, `supportHID` and
     `supportMirrorOverlayTouch`.
+15. **Apple Music on the dash (iOS addition) — who gets the buttons.** iOS sends the bike's AVRCP keys
+    (◀ ▶ ★) only to the Now Playing app, a mixable session never becomes Now Playing and no public API
+    observes another app's remote commands. So: with capture off (the default; touch dashes) the
+    Music app is Now Playing and the bars control it natively, while the dash only mirrors it and its
+    ⏮ ⏯ ⏭ call `MPMusicPlayerController.systemMusicPlayer` (R1). With capture on, starting Apple Music
+    (dash ⏯, phone, Siri) interrupts our silent session and the bars drive the music: the dash says
+    "Handlebar buttons now control Apple Music" and closes its Music sheet, which the bars could no
+    longer close (R2). Pausing it (★ on the bars, dash ⏯, phone) makes the app claim the buttons back
+    in the foreground at +1 s and, if refused, at +3 s (`reclaimIfPossible()`: refused in the
+    background — a non-mixable activation fails there — and while other audio plays); only a real
+    re-claim shows "Handlebar buttons control the dash again" (R3, R4). The app never starts music
+    without a rider action and never resumes it after releasing capture (R5); voice prompts keep
+    ducking the music (R6); mirror sessions follow no music (R7); a touch dash with capture on works
+    like R2 / R3 and keeps its touch (R8). There is no new `ButtonAction`: the Android-compatible
+    action set and settings JSON are unchanged.
 
 ---
 

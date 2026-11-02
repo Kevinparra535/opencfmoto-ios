@@ -201,6 +201,16 @@
         }
       }
     },
+    "Access to Media & Apple Music is off": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El acceso a Multimedia y Apple Music está desactivado"
+          }
+        }
+      }
+    },
     "Acquiring GPS…": {
       "localizations": {
         "es": {
@@ -377,6 +387,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Otra app de CFMoto/EasyConnect está usando los puertos de enlace de la moto (10920-10922), así que el tablero se queda en blanco. Ciérrala desde el selector de apps y vuelve a conectar."
+          }
+        }
+      }
+    },
+    "Apple Music": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Music"
+          }
+        }
+      }
+    },
+    "Apple Music on the dash": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Music en el tablero"
           }
         }
       }
@@ -1217,6 +1247,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "No se pudo compartir el informe"
+          }
+        }
+      }
+    },
+    "Cover, song and controls on the dash map. Only Apple Music: iOS doesn't let apps see what other music apps play.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Portada, canción y controles en el mapa del tablero. Solo Apple Music: iOS no deja que las apps vean lo que reproducen otras apps de música."
           }
         }
       }
@@ -3171,6 +3211,16 @@
         }
       }
     },
+    "Not available": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No disponible"
+          }
+        }
+      }
+    },
     "Not available on this device.": {
       "localizations": {
         "es": {
@@ -4671,6 +4721,16 @@
         }
       }
     },
+    "Show Apple Music on the dash": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar Apple Music en el tablero"
+          }
+        }
+      }
+    },
     "Show dash": {
       "localizations": {
         "es": {
@@ -4877,6 +4937,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Iniciar la transmisión de pantalla"
+          }
+        }
+      }
+    },
+    "Starting Apple Music from the dash gives these buttons to the music until you pause it.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Si pones Apple Music desde el tablero, estos botones pasan a la música hasta que la pauses."
           }
         }
       }
@@ -5657,6 +5727,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "¿Qué botones envía realmente esta moto? Marca como Ausente lo que nunca llegue al teléfono, o déjalo en Desconocido y OpenCfMoto lo averigua solo."
+          }
+        }
+      }
+    },
+    "While Apple Music plays, the bike's ◀ ▶ ★ buttons control the music. With the phone media remote on, pause the song with ★ to give them back to the dash.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mientras suena Apple Music, los botones ◀ ▶ ★ de la moto controlan la música. Con el control multimedia del teléfono activado, pausa la canción con ★ para devolvérselos al tablero."
           }
         }
       }
