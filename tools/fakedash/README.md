@@ -77,6 +77,7 @@ listar el servicio; comprueba que el iPhone y el Mac están en la misma subred.
 | `reconnect` | `cfdl16` | transmite `--seconds`, **cierra todos los sockets**, espera un probe nuevo y repite (`--cycles`, 2) | 5 por ciclo |
 | `stall` | `cfdl16` | transmite, **deja de pedir fotogramas 12 s** (`--stall-seconds`) con los sockets abiertos y luego reanuda; informa si el *watchdog* del teléfono (> 8 s sin fotograma, tic de 5 s) cortó y re‑sondeó | 4 antes y después |
 | `touch` | `mt800` | inyecta `cmd 32` (input‑controls §2/§4.5): toques en esquinas y centro, arrastre con recontacto, **contacto fantasma** y pellizco con dos dedos (`--touch-fuzz` añade cuerpos inválidos) | 6 |
+| `music` | `cfdl16` | como `cfdl16`, más largo: la app con `-e2eMusic` abre la hoja Música, pasa de canción, pausa y la cierra mientras se transmite | 30 |
 
 Cualquier escenario acepta `--dash cfdl16|cfdl26|mt800`.
 
@@ -261,6 +262,7 @@ the service; check that the iPhone and the Mac are on the same subnet.
 | `reconnect` | `cfdl16` | streams `--seconds`, **closes ALL sockets**, waits for a new probe and redoes the sequence (`--cycles`, 2) | 5 per cycle |
 | `stall` | `cfdl16` | streams, **stops pulling for 12 s** (`--stall-seconds`) with every socket open, then resumes; reports whether the phone watchdog (> 8 s without a frame, 5 s tick) dropped and re-probed | 4 before and after |
 | `touch` | `mt800` | injects `cmd 32` (input-controls §2/§4.5): corner/centre taps, drag with a re-acquired contact, a **ghost second contact** and a two-finger pinch (`--touch-fuzz` adds invalid bodies) | 6 |
+| `music` | `cfdl16` | like `cfdl16`, longer: the app run with `-e2eMusic` opens the Music sheet, skips a song, pauses and closes it while streaming | 30 |
 
 Every scenario accepts `--dash cfdl16|cfdl26|mt800`.
 

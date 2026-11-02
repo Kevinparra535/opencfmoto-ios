@@ -178,6 +178,18 @@ enum SessionText {
         pick(l, "Waiting for bike Wi-Fi\u{2026}", "Esperando el Wi-Fi de la moto\u{2026}")
     }
 
+    // MARK: - Apple Music on the dash (iOS addition) — who gets the handlebar buttons
+
+    /// Contract R2: the rider started Apple Music while the phone media remote drives the dash.
+    static func musicTakesHandlebar(_ l: NavLanguage) -> String {
+        pick(l, "Handlebar buttons now control Apple Music", "Los botones del manillar controlan ahora Apple Music")
+    }
+
+    /// Contract R3: the song was paused and OpenCfMoto took the buttons back.
+    static func handlebarBackToDash(_ l: NavLanguage) -> String {
+        pick(l, "Handlebar buttons control the dash again", "Los botones del manillar vuelven a controlar el tablero")
+    }
+
     // MARK: - Dash menu: Record ride (GpxDashUi.kt:1893-1905)
 
     static func recordingRide(_ l: NavLanguage) -> String {

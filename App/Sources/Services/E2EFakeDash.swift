@@ -8,6 +8,10 @@
 // access point in the field), GPS (DemoRoutePlayer), speech, handlebar, mirror. The garage holds one bike whose pairing QR matches the fakedash model
 // (`-e2eDash`), the onboarding is done and auto-connect starts the session right after launch.
 //
+// `-e2eMusic` adds a fake Apple Music (DemoSeed.music: three songs with drawn covers, playing) and a
+// script that drives the dash's Music sheet from the first own-UI frame on: +9 s open, +15 s next
+// song, +21 s pause, +27 s close (`E2E music: …` log lines; `music` block in e2e-status.json).
+//
 // Evidence for the CI job, in the app's Documents folder (`xcrun simctl get_app_container booted
 // <bundle id> data`): `e2e-log.txt` (every Log line, appended every 2 s), `e2e-status.json`
 // (connection / link / projection counters every 2 s) and `e2e-app.h264` (the first served access
@@ -99,6 +103,7 @@ final class E2EFakeDashHarness {
     private let logFile: E2ELogFile?
     private var player: DemoRoutePlayer?
     private var statusTask: Task<Void, Never>?
+    private var musicScript: Task<Void, Never>?
     private var everStreaming = false
     private var maxFramesSent = 0
 
@@ -174,7 +179,9 @@ final class E2EFakeDashHarness {
             mirror: PreviewMirror(),
             system: IOSSystem(flavor: flavor, store: store),
             files: files,
-            clock: clock)
+            clock: clock,
+            music: options.e2eMusic ? DemoSeed.music(clock: clock, store: store) : nil)
+        if options.e2eMusic { Log.i("E2E", "fake Apple Music: \(DemoSeed.songs.count) songs, playing") }
     }
 
     /// Wires the model (call right after creating it, before `AppModel.start()`).
@@ -190,6 +197,7 @@ final class E2EFakeDashHarness {
             Log.w("E2E", "wire dump unavailable: \(error)")
         }
         Log.i("E2E", "fake dash mode: \(options.e2eDash) at \(options.e2eHost):10930, phone \(ConnectionTestingOverrides.loopbackPhoneIPv4) (lo0)")
+        if options.e2eMusic { startMusicScript(model) }
         statusTask = Task { @MainActor [weak self, weak model] in
             var fallbackChecked = false
             while !Task.isCancelled {
@@ -205,6 +213,29 @@ final class E2EFakeDashHarness {
                 self.writeStatus(model, elapsed: elapsed)
                 self.logFile?.flush()
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
+            }
+        }
+    }
+
+    /// `-e2eMusic`: the rider's taps on the dash's Music sheet, timed from the first own-UI frame.
+    private func startMusicScript(_ model: AppModel) {
+        let steps: [(at: TimeInterval, name: String, intent: DashIntent)] = [
+            (9, "open", .openMusic), (15, "next", .musicNext), (21, "pause", .musicPlayPause), (27, "close", .closeSheets),
+        ]
+        musicScript = Task { @MainActor [weak model] in
+            while !Task.isCancelled {
+                guard let model else { return }
+                if model.ride.isProjecting { break }
+                try? await Task.sleep(nanoseconds: 250_000_000)
+            }
+            Log.i("E2E", "music: script starts (the dash UI is live)")
+            var elapsed: TimeInterval = 0
+            for step in steps {
+                try? await Task.sleep(nanoseconds: UInt64((step.at - elapsed) * 1_000_000_000))
+                elapsed = step.at
+                guard !Task.isCancelled, let model else { return }
+                Log.i("E2E", "music: \(step.name)")
+                model.ride.performDashIntent(step.intent)
             }
         }
     }
@@ -267,6 +298,16 @@ final class E2EFakeDashHarness {
             "hold_frames_served": e.holdFramesServed,
             "pull_rate": (e.pullRate * 10).rounded() / 10,
             "output_fps": (e.outputFPS * 10).rounded() / 10,
+        ] as [String: Any]
+        let music = model.music
+        status["music"] = [
+            "enabled": music.isEnabled,
+            "authorization": music.authorization.rawValue,
+            "state": music.snapshot.state.rawValue,
+            "track_id": music.snapshot.track?.id ?? NSNull(),
+            "artwork_source": music.lastArtworkSource ?? NSNull(),
+            "on_dash": music.isShownOnDash,
+            "sheet": model.ride.dashUIState.sheet.rawValue,
         ] as [String: Any]
         guard let data = try? JSONSerialization.data(withJSONObject: status, options: [.prettyPrinted, .sortedKeys]) else { return }
         try? data.write(to: Self.documentsDirectory.appendingPathComponent("e2e-status.json"), options: .atomic)

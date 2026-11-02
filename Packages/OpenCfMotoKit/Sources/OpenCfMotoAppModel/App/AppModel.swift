@@ -37,6 +37,8 @@ public final class AppModel {
     public let trips: TripsModel
     public let navigation: NavigationModel
     public let controls: ControlsModel
+    /// Apple Music on the dash (iOS addition).
+    public let music: MusicModel
     public let ride: RideModel
     public let connection: ConnectionModel
 
@@ -72,6 +74,7 @@ public final class AppModel {
         trips = TripsModel(core: core)
         navigation = NavigationModel(core: core)
         controls = ControlsModel(core: core, settings: settings)
+        music = MusicModel(core: core)
         ride = RideModel(core: core, settings: settings, navigation: navigation, trips: trips)
         connection = ConnectionModel(core: core, garage: garage, settings: settings, ride: ride,
                                      controls: controls)
@@ -108,6 +111,7 @@ public final class AppModel {
     public func scenePhaseChanged(_ phase: AppScenePhase) {
         ride.scenePhaseChanged(phase)
         connection.scenePhaseChanged(phase)
+        music.scenePhaseChanged(phase)
         if phase == .background {
             // A jetsam kill or a force-quit from here on must not lose the ride log (review SPEC:CL-6).
             logs.persistSession()
@@ -184,6 +188,25 @@ public final class AppModel {
         }
         permissions.onOnboardingCompleted = { [weak connection] in connection?.maybeAutoConnect() }
         logs.diagnostics = { [weak self] in self?.problemDiagnostics() ?? [:] }
+        wireMusic()
+    }
+
+    /// Apple Music on the dash (contract §8.3): the dash model / intents ↔ MusicModel, and who holds
+    /// the handlebar buttons while the Music app plays (§7 R2 / R3).
+    private func wireMusic() {
+        let music = self.music
+        let handlebar = core.services.handlebar
+        ride.nowPlayingProvider = { [weak music] in music?.dashNowPlaying }
+        ride.musicCommandSink = { [weak music] command, fromDash in music?.perform(command, fromDash: fromDash) }
+        ride.onDashActivityChange = { [weak music] active in music?.setDashActive(active) }
+        music.onDashChange = { [weak ride] in ride?.setNeedsModelUpdate() }
+        music.onPlaybackStarted = { [weak ride, weak controls] in
+            if handlebar.isEnabled { ride?.handlebarHandedToMusic() }
+            controls?.musicPlaybackStarted()
+        }
+        music.onPlaybackPaused = { [weak controls] in controls?.musicPlaybackPaused() }
+        controls.onHandlebarReclaimed = { [weak ride] in ride?.handlebarBackToDash() }
+        music.setDashActive(ride.isDashUIActive)
     }
 
     // MARK: - Opened files
@@ -319,6 +342,7 @@ public final class AppModel {
             d["dash"] = "\(info.huName) sdk=\(info.sdkVersion) ver=\(info.versionName) touch=\(info.supportsScreenTouch)"
         }
         if let c = diag.canvas { d["canvas"] = c.description }
+        d["music"] = music.diagnostics
         return d
     }
 }

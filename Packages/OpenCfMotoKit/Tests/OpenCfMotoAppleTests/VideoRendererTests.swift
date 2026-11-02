@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // DashRenderer / CoreTextMeasurer / PixelBufferFactory on Apple platforms (CPU CoreGraphics).
-#if canImport(CoreGraphics) && canImport(CoreVideo) && canImport(CoreText)
+#if canImport(CoreGraphics) && canImport(CoreVideo) && canImport(CoreText) && canImport(ImageIO)
 import CoreGraphics
 import CoreText
 import CoreVideo
+import ImageIO
 import XCTest
 import OpenCfMotoCore
 @testable import OpenCfMotoApple
@@ -207,6 +208,127 @@ final class VideoRendererTests: XCTestCase {
         DashRenderer().render(list(20, 10, [.fill(.rect(DashRect(x: 10, y: 0, width: 10, height: 10)), .white, .nonZero)]), into: pb)
         XCTAssertEqual(rgba(pb, 30, 15), [255, 255, 255, 255])
         XCTAssertEqual(rgba(pb, 10, 15), [0, 0, 0, 255])
+    }
+
+    // MARK: Images (Apple Music artwork)
+
+    /// A `width` × `height` PNG: left half `left`, right half `right` (0xRRGGBB).
+    private func png(_ width: Int, _ height: Int, left: UInt32, right: UInt32? = nil) -> Data {
+        let space = CGColorSpace(name: CGColorSpace.sRGB)!
+        let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+                            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        func color(_ rgb: UInt32) -> CGColor {
+            CGColor(colorSpace: space, components: [CGFloat((rgb >> 16) & 0xFF) / 255, CGFloat((rgb >> 8) & 0xFF) / 255,
+                                                    CGFloat(rgb & 0xFF) / 255, 1])!
+        }
+        ctx.setFillColor(color(left))
+        ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        if let right {
+            ctx.setFillColor(color(right))
+            ctx.fill(CGRect(x: width / 2, y: 0, width: width - width / 2, height: height))
+        }
+        return encodePNG(ctx.makeImage()!)
+    }
+
+    private func encodePNG(_ image: CGImage) -> Data {
+        let data = NSMutableData()
+        let dest = CGImageDestinationCreateWithData(data as CFMutableData, "public.png" as CFString, 1, nil)!
+        CGImageDestinationAddImage(dest, image, nil)
+        XCTAssertTrue(CGImageDestinationFinalize(dest))
+        return data as Data
+    }
+
+    private func near(_ a: [Int], _ b: [Int], _ tolerance: Int = 3) -> Bool {
+        a.count == b.count && zip(a, b).allSatisfy { abs($0 - $1) <= tolerance }
+    }
+
+    func testImageFillsItsRoundedRectAndKeepsTheBackgroundInTheCorners() throws {
+        let store = DashImageStore()
+        XCTAssertTrue(store.set(id: "music.art.p1", data: png(64, 64, left: 0x20C040)))
+        let r = DashRenderer(imageStore: store)
+        let pb = try buffer(100, 100)
+        XCTAssertTrue(r.render(list(100, 100, [
+            .image(id: "music.art.p1", rect: DashRect(x: 10, y: 10, width: 80, height: 80), cornerRadius: 20),
+        ], background: DashColor(rgb: 0x101010)), into: pb))
+        XCTAssertTrue(near(rgba(pb, 50, 50), [0x20, 0xC0, 0x40, 255]), "\(rgba(pb, 50, 50)): the centre is the artwork")
+        XCTAssertTrue(near(rgba(pb, 88, 50), [0x20, 0xC0, 0x40, 255]), "edge to edge (aspect fill)")
+        XCTAssertEqual(rgba(pb, 11, 11), [0x10, 0x10, 0x10, 255], "the rounded corner keeps the background")
+        XCTAssertEqual(rgba(pb, 88, 88), [0x10, 0x10, 0x10, 255])
+        XCTAssertEqual(rgba(pb, 5, 50), [0x10, 0x10, 0x10, 255], "nothing outside the rect")
+        XCTAssertEqual(r.stats.imagesDrawn, 1)
+        XCTAssertEqual(r.stats.imagesMissing, 0)
+        XCTAssertNotNil(r.imageStore)
+    }
+
+    func testImageIsAspectFilledWithACentredCropAndDrawnUpright() throws {
+        let store = DashImageStore()
+        // 200 × 100, red left / blue right → in a square: the centred crop, red left of the middle.
+        XCTAssertTrue(store.set(id: "wide", data: png(200, 100, left: 0xFF0000, right: 0x0000FF)))
+        let r = DashRenderer(imageStore: store)
+        let pb = try buffer(60, 60)
+        r.render(list(60, 60, [.image(id: "wide", rect: DashRect(x: 0, y: 0, width: 60, height: 60), cornerRadius: 0)]), into: pb)
+        XCTAssertTrue(near(rgba(pb, 10, 30), [255, 0, 0, 255]), "\(rgba(pb, 10, 30))")
+        XCTAssertTrue(near(rgba(pb, 50, 30), [0, 0, 255, 255]), "\(rgba(pb, 50, 30))")
+        // Upright: a red-top / green-bottom image keeps red at the top of the dash picture.
+        let space = CGColorSpace(name: CGColorSpace.sRGB)!
+        let ctx = CGContext(data: nil, width: 20, height: 20, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+                            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        ctx.setFillColor(CGColor(colorSpace: space, components: [0, 1, 0, 1])!)
+        ctx.fill(CGRect(x: 0, y: 0, width: 20, height: 10)) // CG y-up: the bottom half
+        ctx.setFillColor(CGColor(colorSpace: space, components: [1, 0, 0, 1])!)
+        ctx.fill(CGRect(x: 0, y: 10, width: 20, height: 10))
+        XCTAssertTrue(store.set(id: "split", data: encodePNG(ctx.makeImage()!)))
+        r.render(list(60, 60, [.image(id: "split", rect: DashRect(x: 0, y: 0, width: 60, height: 60), cornerRadius: 0)]), into: pb)
+        XCTAssertTrue(near(rgba(pb, 30, 5), [255, 0, 0, 255]), "\(rgba(pb, 30, 5)): red on top")
+        XCTAssertTrue(near(rgba(pb, 30, 55), [0, 255, 0, 255]), "\(rgba(pb, 30, 55)): green at the bottom")
+    }
+
+    func testAnUnknownImageDrawsNothingSoThePlaceholderShows() throws {
+        let commands: [DashDrawCommand] = [
+            .fill(.rect(DashRect(x: 0, y: 0, width: 40, height: 40)), DashColor(rgb: 0x263040), .nonZero),
+            .image(id: "music.art.missing", rect: DashRect(x: 0, y: 0, width: 40, height: 40), cornerRadius: 8),
+        ]
+        let pb = try buffer(40, 40)
+        let r = DashRenderer(imageStore: DashImageStore())
+        r.render(list(40, 40, commands), into: pb)
+        XCTAssertEqual(rgba(pb, 20, 20), [0x26, 0x30, 0x40, 255])
+        XCTAssertEqual(r.stats.imagesMissing, 1)
+        XCTAssertEqual(r.stats.imagesDrawn, 0)
+        let bare = DashRenderer() // no store at all
+        bare.render(list(40, 40, commands), into: pb)
+        XCTAssertEqual(rgba(pb, 20, 20), [0x26, 0x30, 0x40, 255])
+        XCTAssertEqual(bare.stats.imagesMissing, 1)
+        // Degenerate rects are skipped without a lookup.
+        r.render(list(40, 40, [.image(id: "x", rect: DashRect(x: .nan, y: 0, width: 10, height: 10), cornerRadius: 0),
+                                .image(id: "x", rect: DashRect(x: 0, y: 0, width: 0, height: 10), cornerRadius: 0)]), into: pb)
+        XCTAssertEqual(r.stats.imagesMissing + r.stats.imagesDrawn, 0)
+    }
+
+    func testThePhonePreviewAtTwiceTheSizeGetsATwiceAsLargeVariant() throws {
+        let store = DashImageStore()
+        XCTAssertTrue(store.set(id: "a", data: png(256, 256, left: 0x3366CC)))
+        let r = DashRenderer(imageStore: store)
+        let l = list(100, 100, [.image(id: "a", rect: DashRect(x: 0, y: 0, width: 50, height: 50), cornerRadius: 6)])
+        let image = try XCTUnwrap(r.makeImage(l, scale: 2))
+        XCTAssertEqual(image.width, 200)
+        XCTAssertEqual(r.stats.imagesDrawn, 1)
+        let made = store.variantCount
+        XCTAssertNotNil(store.image(id: "a", pixelWidth: 100, pixelHeight: 100))
+        XCTAssertEqual(store.variantCount, made, "the 100 × 100 variant already existed: 50 canvas px × 2")
+        XCTAssertNotNil(store.image(id: "a", pixelWidth: 50, pixelHeight: 50))
+        XCTAssertEqual(store.variantCount, made + 1, "the 1× size was never made")
+    }
+
+    func testDevicePixelSizeFollowsTheScaleNotTheRotation() {
+        let r = CGRect(x: 5, y: 5, width: 80, height: 40)
+        func size(_ rect: CGRect, _ t: CGAffineTransform) -> [Int] {
+            let s = DashRenderer.devicePixelSize(of: rect, transform: t)
+            return [s.width, s.height]
+        }
+        XCTAssertEqual(size(r, .identity), [80, 40])
+        XCTAssertEqual(size(r, CGAffineTransform(scaleX: 2, y: -2)), [160, 80], "the y-flip of the dash context")
+        XCTAssertEqual(size(r, CGAffineTransform(rotationAngle: .pi / 2)), [80, 40])
+        XCTAssertEqual(size(CGRect(x: 0, y: 0, width: 0.2, height: 1e9), .identity), [1, DashImageStore.maxVariantPixels])
     }
 
     // MARK: CoreTextMeasurer

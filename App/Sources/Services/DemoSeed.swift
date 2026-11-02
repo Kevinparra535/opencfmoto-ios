@@ -4,7 +4,8 @@
 // replays), a home place, favourites and search history, and the onboarding marked done.
 // Auto-connect is turned off so the Home screen is not caught in a demo "Linking…" attempt.
 // Everything goes to the in-memory stores / temp folders of `AppServices.preview`, so nothing
-// survives the process.
+// survives the process. Apple Music on the dash: `music(clock:store:)` is the fake Music app of the
+// demo and of the E2E run (`-e2eMusic`): three fictional songs with drawn covers, playing at 2:13.
 
 import Foundation
 import OpenCfMotoCore
@@ -56,6 +57,38 @@ enum DemoSeed {
             }
         }
         Log.i("APP", "demo seed: bike, \(plans.count) trips, home + \(favorites.count) favourites")
+    }
+
+    // MARK: - Apple Music (fake)
+
+    /// MusicModel's opt-in key ("Show Apple Music on the dash").
+    static let dashMusicKey = "ios.dash_music"
+
+    /// Fictional songs (no real titles, artists or artwork).
+    static let songs = [
+        MusicTrack(id: "p1a", title: "Ruta del Sol (Remastered 2012)", artist: "Los Pistones", album: "Ruta Sessions",
+                   duration: 364),
+        MusicTrack(id: "s100000002", title: "Mountain Pass", artist: "Gearshift", album: "Twisties", duration: 245,
+                   storeID: "100000002"),
+        MusicTrack(id: "p3c", title: "Night Ride Home", artist: "Asphalt Echo", album: "Open Throttle", duration: 318),
+    ]
+
+    /// The demo Music app: nothing allowed or loaded (the rider turns the feature on in Settings).
+    @MainActor
+    static func emptyMusic(clock: MonotonicClock) -> PreviewMusic {
+        PreviewMusic(clock: clock, queue: [], authorization: .notDetermined)
+    }
+
+    /// The seeded Music app: allowed, three songs with covers, the first one playing at 2:13; the
+    /// dash feature switched on in `store`.
+    @MainActor
+    static func music(clock: MonotonicClock, store: KeyValueStore) -> PreviewMusic {
+        let music = PreviewMusic(clock: clock, queue: songs, playing: true, position: 133, authorization: .authorized)
+        for (index, song) in songs.enumerated() {
+            music.artworks[song.id] = MusicArtwork(data: DemoArtwork.cover(index), source: .mediaItem)
+        }
+        store.set(true, forKey: dashMusicKey)
+        return music
     }
 
     /// A ride of `laps` loops of the demo route, one fix every 2 s at a gently varying speed (m/s).

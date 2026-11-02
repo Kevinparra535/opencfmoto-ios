@@ -48,6 +48,38 @@ permiso de red local, el codificador de video del teléfono y el comportamiento 
 6. Para rodar: pulsa **Modo ruta**. La pantalla queda negra, el teléfono no se bloquea y el tablero
    sigue recibiendo el mapa. Para salir, mantén pulsado 1,5 s.
 
+## Apple Music en el tablero
+
+Antes: Ajustes de OpenCfMoto ▸ **Apple Music en el tablero** ▸ activa **«Mostrar Apple Music en el
+tablero»** y permite **Multimedia y Apple Music** (con la moto parada). Solo funciona con la app
+**Música** de Apple: iOS no deja ver lo que suena en Spotify, YouTube Music y otras apps.
+
+Comprueba y comparte los registros (las líneas `MUSIC` y `BTN`):
+
+1. **Permiso**: el texto del aviso de iOS. Con **No permitir** no aparece nada de música en el tablero;
+   actívalo luego en Ajustes de iOS ▸ OpenCfMoto ▸ **Multimedia y Apple Music** y, al volver a la app,
+   aparece la portada sin reiniciarla.
+2. **Una canción descargada** en tu biblioteca: la portada en el recuadro del mapa (abajo a la
+   derecha), la barra de progreso, la hoja **Música** al tocarlo y sus botones ⏮ ⏯ ⏭. ⏮ con más de
+   3 s de canción vuelve al principio; con menos, va a la anterior.
+3. **Una canción en streaming** que no está en tu biblioteca: si sale la portada y de dónde (registros:
+   `artwork source=mp`, `musickit` o `none`, y los `ms=`). Repítelo con los **datos móviles
+   desactivados para OpenCfMoto** (Ajustes de iOS ▸ Datos móviles).
+4. **Una radio o emisora en directo**: sin barra ni tiempos, con el título.
+5. **Música en primer plano y OpenCfMoto en segundo plano**: al pasar de canción en Música, el tablero
+   cambia en unos 2 s; el ⏯ del tablero funciona.
+6. **Tablero sin táctil** (Ajustes ▸ «Desactivar pantalla táctil») **con el control multimedia del
+   teléfono activado** (Controles): ◀ lleva al recuadro, ★ abre la hoja, ★ pone la música → aviso
+   «Los botones del manillar controlan ahora Apple Music» y la hoja se cierra; los botones pasan de
+   canción. ★ en el manillar pausa la música → aviso «Los botones del manillar vuelven a controlar el
+   tablero» (registros: `handlebar buttons back on the dash`). Un aviso de voz con música baja la
+   música sin pararla.
+7. **Spotify sonando con Música en pausa**: no aparece el recuadro.
+8. **Navegando**: la hoja Música se cierra sola unos 200 m antes de un giro y tras 10 s sin tocarla en
+   marcha; con la moto parada sigue abierta.
+9. **Bloquear y desbloquear el iPhone**: la imagen fija de «Teléfono bloqueado» y, al desbloquear, el
+   recuadro correcto.
+
 ## Si algo falla
 
 - **Comparte los registros**: Registros ▸ **Compartir**. Los datos sensibles van ocultos por defecto.

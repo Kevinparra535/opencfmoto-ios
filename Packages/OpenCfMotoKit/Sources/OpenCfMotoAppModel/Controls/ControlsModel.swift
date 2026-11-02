@@ -66,6 +66,8 @@ public final class ControlsModel {
     /// dropped by turning the opt-in off and by mirroring.
     @ObservationIgnored private var claimedByRider = false
     @ObservationIgnored private var tickTask: Task<Void, Never>?
+    /// Apple Music (contract R3): the pending re-claim of the buttons after the song was paused.
+    @ObservationIgnored private var musicReclaimTask: Task<Void, Never>?
 
     public init(core: AppCore, settings: SettingsModel) {
         self.core = core
@@ -131,6 +133,59 @@ public final class ControlsModel {
 
     /// Where decoded handlebar commands go (RideModel.handleDashInput).
     @ObservationIgnored var inputSink: (@MainActor (DashInput) -> Void)?
+
+    /// Apple Music (contract R3): the re-claim attempts after a pause, in seconds after it (the second
+    /// only when the first was refused). Tests shorten them.
+    @ObservationIgnored var musicReclaimDelays: [TimeInterval] = [1, 3]
+    /// The buttons are back on the dash after a re-claim (RideModel shows the toast).
+    @ObservationIgnored var onHandlebarReclaimed: (() -> Void)?
+
+    /// MusicModel (contract R3): Apple Music went from playing to paused / stopped. While the phone
+    /// media remote should drive the dash, claim the buttons back — the Music app took Now Playing
+    /// when it started, and iOS may never tell HandlebarRemote the interruption ended. One attempt
+    /// at +1 s and, if refused (app in the background, other audio still playing), one at +3 s.
+    func musicPlaybackPaused() {
+        musicReclaimTask?.cancel()
+        musicReclaimTask = nil
+        guard remoteClaimWanted, core.services.handlebar.isEnabled else { return }
+        let delays = musicReclaimDelays
+        guard !delays.isEmpty else { return }
+        let start = core.services.clock.now()
+        musicReclaimTask = Task { [weak self] in
+            for (index, delay) in delays.enumerated() {
+                guard let wait = self.map({ start + delay - $0.core.services.clock.now() }) else { return }
+                if wait > 0 { await sleepSeconds(wait) }
+                guard !Task.isCancelled, let self else { return }
+                let handlebar = self.core.services.handlebar
+                guard self.remoteClaimWanted, handlebar.isEnabled else {
+                    self.musicReclaimTask = nil
+                    return
+                }
+                Log.i("BTN", "[BTN] music paused \u{2014} reclaiming the handlebar buttons (attempt \(index + 1))")
+                switch handlebar.reclaimIfPossible() {
+                case .reclaimed:
+                    self.musicReclaimTask = nil
+                    Log.i("BTN", "[BTN] handlebar buttons back on the dash")
+                    self.onHandlebarReclaimed?()
+                    return
+                case .alreadyClaimed:
+                    self.musicReclaimTask = nil
+                    return
+                case .refused:
+                    continue
+                }
+            }
+            guard !Task.isCancelled, let self else { return }
+            self.musicReclaimTask = nil
+            Log.i("BTN", "[BTN] reclaim refused (background or other audio)")
+        }
+    }
+
+    /// MusicModel: Apple Music plays again — a pending re-claim would pause it.
+    func musicPlaybackStarted() {
+        musicReclaimTask?.cancel()
+        musicReclaimTask = nil
+    }
 
     /// ConnectionModel: streaming started/stopped (presence probes, mirror mode disables).
     func linkStreamingChanged(_ streaming: Bool, mirror: Bool) {
@@ -224,7 +279,7 @@ public final class ControlsModel {
         let handlebar = core.services.handlebar
         guard handlebar.isAvailable else { return }
         let capture = core.currentSettings.handlebarControl
-        let wanted = isRemoteEnabled && capture && !mirrorMode && (sessionActive || claimedByRider)
+        let wanted = remoteClaimWanted
         if wanted, !handlebar.isEnabled {
             handlebar.enable()
             Log.i("BTN", "[BTN] handlebar capture on\(sessionActive ? " for this ride" : "")")
@@ -234,6 +289,13 @@ public final class ControlsModel {
                 : "ride ended"
             Log.i("BTN", "[BTN] handlebar capture released (\(reason))")
         }
+    }
+
+    /// The phone media remote should hold the buttons now: opted in, capture on for this bike
+    /// ("Handlebar buttons drive the dash"), not mirroring, and a dash session running or the rider's
+    /// explicit claim.
+    private var remoteClaimWanted: Bool {
+        isRemoteEnabled && core.currentSettings.handlebarControl && !mirrorMode && (sessionActive || claimedByRider)
     }
 
     private func reloadConfiguration() {

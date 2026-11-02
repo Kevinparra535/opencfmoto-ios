@@ -11,8 +11,10 @@
 // | `-e2eFakeDash`                   | REAL link stack against tools/fakedash/fakedash.py on 127.0.0.1     |
 // | `-e2eDash cfdl16\|cfdl26\|mt800`  | which fake dash model the seeded bike matches (default cfdl16)      |
 // | `-e2eHost <ipv4>`                | fake dash address (default 127.0.0.1)                               |
+// | `-e2eMusic`                      | e2e: a fake Apple Music (3 songs with covers) + the dash music script |
 // | `-uiScreen <name>`               | open that screen after launch (RootLaunchScreen names)              |
 // | `-uiOrientation landscape`       | rotate the interface to landscape after launch                      |
+// | `-uiDashSheet music`             | with `-uiScreen dash`: open the dash's Music sheet once it shows music |
 
 import Foundation
 
@@ -31,6 +33,10 @@ struct AppLaunchOptions: Equatable {
     var uiScreen: String?
     /// `-uiOrientation landscape`.
     var landscape = false
+    /// `-e2eMusic`: the e2e run gets a seeded fake Music app and drives the dash's Music sheet.
+    var e2eMusic = false
+    /// `-uiDashSheet <name>`: a dash sheet to open on the phone's Dash view ("music").
+    var uiDashSheet: String?
 
     init() {}
 
@@ -47,6 +53,7 @@ struct AppLaunchOptions: Equatable {
             case "-demo": demo = true
             case "-demoSeed": demoSeed = true
             case "-e2eFakeDash": e2eFakeDash = true
+            case "-e2eMusic": e2eMusic = true
             case "-e2eDash":
                 if let v = value(after: i) { e2eDash = v.lowercased(); i += 1 }
             case "-e2eHost":
@@ -55,6 +62,8 @@ struct AppLaunchOptions: Equatable {
                 if let v = value(after: i) { uiScreen = v.lowercased(); i += 1 }
             case "-uiOrientation":
                 if let v = value(after: i) { landscape = v.lowercased().hasPrefix("land"); i += 1 }
+            case "-uiDashSheet":
+                if let v = value(after: i) { uiDashSheet = v.lowercased(); i += 1 }
             default:
                 break
             }
@@ -71,8 +80,10 @@ struct AppLaunchOptions: Equatable {
         if demo { parts.append("-demo") }
         if demoSeed { parts.append("-demoSeed") }
         if e2eFakeDash { parts.append("-e2eFakeDash (\(e2eDash) @ \(e2eHost))") }
+        if e2eMusic { parts.append("-e2eMusic") }
         if let uiScreen { parts.append("-uiScreen \(uiScreen)") }
         if landscape { parts.append("-uiOrientation landscape") }
+        if let uiDashSheet { parts.append("-uiDashSheet \(uiDashSheet)") }
         return parts.joined(separator: " ")
     }
 }

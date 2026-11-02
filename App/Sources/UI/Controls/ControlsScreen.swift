@@ -105,7 +105,10 @@ struct ControlsScreen: View {
         } header: {
             Text("Phone media remote")
         } footer: {
-            FeatureNote("iOS gives these buttons to one app at a time: while this is on, music from other apps pauses (press ★ in the music app, or turn this off, to get it back). Pair the phone with the bike over Bluetooth first. Off in mirror mode. May not be accepted in App Store builds.")
+            VStack(alignment: .leading, spacing: 6) {
+                FeatureNote("iOS gives these buttons to one app at a time: while this is on, music from other apps pauses (press ★ in the music app, or turn this off, to get it back). Pair the phone with the bike over Bluetooth first. Off in mirror mode. May not be accepted in App Store builds.")
+                FeatureNote("Starting Apple Music from the dash gives these buttons to the music until you pause it.")
+            }
         }
         .featureRowBackground()
     }

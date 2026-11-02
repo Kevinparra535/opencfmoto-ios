@@ -340,6 +340,24 @@ non-blank; picker label `Navigate to saved place N (not set yet)` / `Navigate: <
 | Include secrets | yes |
 | BT trigger, seamless resume, AA setup steps | no |
 
+### 2.10 Apple Music on the dash (iOS addition, no Android counterpart)
+
+Settings ▸ **Apple Music on the dash** (after Map & navigation): one global toggle **Show Apple Music
+on the dash** (KeyValueStore `ios.dash_music`, default **off**; not per bike and not part of the
+`opencfmoto.settings` pack). Turning it on is the only place the "Media & Apple Music" permission is
+asked (an explicit phone action — never from the dash or during a ride); when access is denied or
+restricted the section says "Access to Media & Apple Music is off" with an **Open Settings** button,
+and an access granted later in iOS Settings is picked up when the app becomes active (no relaunch).
+The toggle is disabled where there is no system music player. Only the system Music app (Apple Music
+and the music library) can be shown: iOS gives apps no access to what other players play. The
+Permissions section lists **Apple Music** (Allowed / Denied / Not asked yet / Restricted / Not
+available) and the Controls ▸ Phone media remote footer says that starting Apple Music from the dash
+gives the handlebar buttons to the music until it is paused. What the dash shows and the handlebar
+hand-over: `navigation-dash.md` §15 and `input-controls.md` §10 item 15. Nothing is sent anywhere:
+titles, artists and albums stay on the phone and never reach logs or problem reports (the report
+carries `music=on/authorized/playing/art=mp`); the artwork of streamed songs is loaded by Apple's
+MusicKit from Apple.
+
 ---
 
 ## 3. Portable settings pack — `opencfmoto.settings` v1 (`SettingsBackup.kt`)

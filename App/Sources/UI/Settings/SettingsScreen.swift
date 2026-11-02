@@ -5,10 +5,10 @@
 // Setup & settings (docs/spec/app-features.md §2, §3.5, §8.1 adapted to iOS — no Android Auto,
 // Bluetooth trigger, clock lab, update checker or telemetry). Sections in Android order:
 // Screen & display (video quality, screen fit, mirror orientation, screen margins, touch
-// overrides) · Battery & power · Bike profile · Map & navigation (+ dash tiles, routing key) ·
-// Startup & recovery · Privacy & logs · Permissions · Share settings / map data (ShareLink of a
-// freshly exported pack; Import… via the Files picker with a confirmation, then the model's result
-// message) · links to Garage, Controls, About and "Show onboarding again".
+// overrides) · Battery & power · Bike profile · Map & navigation (+ Apple Music on the dash, dash
+// tiles, routing key) · Startup & recovery · Privacy & logs · Permissions · Share settings / map
+// data (ShareLink of a freshly exported pack; Import… via the Files picker with a confirmation, then
+// the model's result message) · links to Garage, Controls, About and "Show onboarding again".
 // Every control writes through SettingsModel (scoped per bike where Android scopes it).
 
 import SwiftUI
@@ -35,6 +35,7 @@ struct SettingsScreen: View {
                 powerSection
                 profileSection
                 mapSection
+                SettingsMusicSection()
                 tilesSection
             }
             Group {
@@ -380,6 +381,12 @@ struct SettingsScreen: View {
                     .foregroundStyle(permissions.localNetwork == .granted ? Theme.live : Theme.busy)
             } label: {
                 Label("Local Network", systemImage: "network")
+            }
+            LabeledContent {
+                Text(SettingsLabels.appleMusic(model.music.authorization))
+                    .foregroundStyle(model.music.authorization == .authorized ? Theme.live : Theme.busy)
+            } label: {
+                Label("Apple Music", systemImage: "music.note")
             }
             Button {
                 permissions.openAppSettings()

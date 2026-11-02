@@ -24,11 +24,14 @@ struct RootView: View {
     /// `-uiScreen` / `-uiOrientation` launch arguments (CI screenshots); nil / false in normal use.
     private let launchScreen: RootLaunchScreen?
     private let launchLandscape: Bool
+    /// `-uiDashSheet` (with `-uiScreen dash`): a dash sheet to open on the Dash view ("music").
+    private let launchDashSheet: String?
     @State private var launchApplied = false
 
-    init(launchScreen: RootLaunchScreen? = nil, launchLandscape: Bool = false) {
+    init(launchScreen: RootLaunchScreen? = nil, launchLandscape: Bool = false, launchDashSheet: String? = nil) {
         self.launchScreen = launchScreen
         self.launchLandscape = launchLandscape
+        self.launchDashSheet = launchDashSheet
     }
 
     var body: some View {
@@ -113,6 +116,7 @@ struct RootView: View {
         case let .route(route):
             Log.i("UI", "-uiScreen \(route)")
             router.path = [route]
+            if route == .dashPreview, let sheet = launchDashSheet { await openDashSheet(sheet) }
         case .onboarding:
             Log.i("UI", "-uiScreen onboarding")
             model.permissions.resetOnboarding()
@@ -123,6 +127,24 @@ struct RootView: View {
             Log.i("UI", "-uiScreen ride")
             MainRideMode.enter(model.ride)
         }
+    }
+
+    /// `-uiDashSheet music`: once the Dash view shows music on the dash (≤ 5 s), open the dash's
+    /// Music sheet as if the rider tapped the now-playing tile (CI screenshots).
+    private func openDashSheet(_ name: String) async {
+        guard name == "music" else {
+            Log.w("UI", "-uiDashSheet \(name): unknown sheet (music)")
+            return
+        }
+        for _ in 0 ..< 50 where !model.music.isShownOnDash {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        guard model.music.isShownOnDash else {
+            Log.w("UI", "-uiDashSheet music: no music on the dash after 5 s")
+            return
+        }
+        model.ride.performDashIntent(.openMusic)
+        Log.i("UI", "-uiDashSheet music (dash sheet: \(model.ride.dashUIState.sheet.rawValue))")
     }
 
     // MARK: - Destinations

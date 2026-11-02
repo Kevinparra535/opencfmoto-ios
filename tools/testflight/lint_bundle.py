@@ -32,8 +32,8 @@ checks:
   privacy  each bundle has a PrivacyInfo.xcprivacy that declares, with valid reasons, every
            "required reason" API category its binary uses (ITMS-91053). Evidence: undefined symbols
            (`xcrun nm -u`) and Objective-C selectors (`xcrun otool -v -s __TEXT __objc_methname`).
-           Also the NS...UsageDescription purpose strings the referenced privacy-sensitive classes
-           need, per bundle (ITMS-90683).
+           Also the NS...UsageDescription purpose strings the referenced privacy-sensitive classes,
+           selectors and Swift frameworks (symbol prefixes, e.g. MusicKit) need, per bundle (ITMS-90683).
   signed   (not with --unsigned) entitlements of app and extension: application-groups contains the
            group, get-task-allow false, the app has HotspotConfiguration + wifi-info; App Store
            profiles embedded; `codesign --verify --deep --strict` passes. The IPA (what is uploaded)
@@ -118,10 +118,23 @@ PURPOSE_STRINGS = [
      ("NSCalendarsUsageDescription", "NSCalendarsFullAccessUsageDescription",
       "NSCalendarsWriteOnlyAccessUsageDescription")),
     ("tracking", {"_OBJC_CLASS_$_ATTrackingManager"}, set(), ("NSUserTrackingUsageDescription",)),
-    ("media library", {"_OBJC_CLASS_$_MPMediaLibrary"}, set(), ("NSAppleMusicUsageDescription",)),
+    # Apple Music on the dash (App/Sources/Services/MusicAdapter.swift — app target only): the system music
+    # player, media queries / pickers and StoreKit's cloud service read the rider's library or Apple Music.
+    ("media library",
+     {"_OBJC_CLASS_$_MPMediaLibrary", "_OBJC_CLASS_$_MPMediaQuery", "_OBJC_CLASS_$_MPMusicPlayerController",
+      "_OBJC_CLASS_$_MPMusicPlayerApplicationController", "_OBJC_CLASS_$_MPMediaPickerController",
+      "_OBJC_CLASS_$_SKCloudServiceController"},
+     {"systemMusicPlayer", "applicationMusicPlayer", "applicationQueuePlayer",
+      "requestCapabilitiesWithCompletionHandler:", "requestStorefrontIdentifierWithCompletionHandler:"},
+     ("NSAppleMusicUsageDescription",)),
     ("NFC", {"_OBJC_CLASS_$_NFCNDEFReaderSession", "_OBJC_CLASS_$_NFCTagReaderSession"}, set(),
      ("NFCReaderUsageDescription",)),
 ]
+
+# Purpose strings evidenced by any undefined symbol with one of these prefixes (Swift-only frameworks
+# have no Objective-C classes to look for): MusicKit's mangled Swift symbols. The error names the first
+# three matching symbols.
+PURPOSE_STRING_PREFIXES = {"media library": ("_$s8MusicKit",)}
 
 # An app that runs on iPad must support every orientation there, or App Store Connect rejects the
 # upload: "ITMS-90474: Invalid Bundle. iPad Multitasking support requires these orientations".
@@ -402,6 +415,9 @@ def check_privacy(rep: Report, bundle: str, info: dict, label: str, fallback_dec
                  f"(declare only what the binary uses)")
     for what, cls_symbols, cls_selectors, keys in PURPOSE_STRINGS:
         evidence = sorted(symbols & cls_symbols) + sorted(selectors & cls_selectors)
+        prefixes = PURPOSE_STRING_PREFIXES.get(what, ())
+        if prefixes:
+            evidence += sorted(s for s in symbols if s.startswith(prefixes))[:3]
         if evidence and not any(isinstance(info.get(k), str) and info.get(k).strip() for k in keys):
             rep.error(f"{label}: the binary references {what} APIs ({', '.join(evidence)}) but its "
                       f"Info.plist has no {' / '.join(keys)} purpose string (ITMS-90683)")
