@@ -309,7 +309,7 @@ public struct WiFiPathFacts: Sendable, Equatable {
     }
 
     /// Before the first path update.
-    public static let none = WiFiPathFacts(isSatisfied: false)
+    public static let initial = WiFiPathFacts(isSatisfied: false)
 }
 
 // MARK: - Snapshot
@@ -522,7 +522,7 @@ public final class WiFiInfo: @unchecked Sendable {
     private let lock = NSLock()
     private var monitor: NWPathMonitor?
     private var _current: WiFiSnapshot = .unavailable
-    private var pathFacts = WiFiPathFacts.none
+    private var pathFacts = WiFiPathFacts.initial
     /// Bumped by every path update: a refresh built from older facts never overwrites a newer path.
     private var factsGeneration: UInt64 = 0
     /// The Wi-Fi interface the last path named (an unsatisfied path names none; the name stays).
@@ -621,10 +621,12 @@ public final class WiFiInfo: @unchecked Sendable {
         return s
     }
 
-    /// One-shot snapshot with a temporary monitor.
+    /// One-shot snapshot with a temporary monitor (the interface is read even if no path update
+    /// came within `timeout`).
     public static func currentSnapshot(timeout: TimeInterval = 1.0) async -> WiFiSnapshot {
         let info = WiFiInfo()
-        let s = await info.firstSnapshot(timeout: timeout)
+        _ = await info.firstSnapshot(timeout: timeout)
+        let s = info.refreshedSnapshot()
         info.stop()
         return s
     }

@@ -22,8 +22,9 @@ final class WifiAdapter: WifiJoining, @unchecked Sendable {
     /// Interface re-read while a `networkUpdates()` stream is open: a local-only network's address
     /// comes and goes without any path change (the path stays unsatisfied).
     private static let addressPollInterval: TimeInterval = 2
-    /// Faster while associated without a DHCP lease yet.
+    /// Faster while associated without a DHCP lease yet (at most 20 times in a row, 10 s).
     private static let leasePollInterval: TimeInterval = 0.5
+    private static let leasePollTicks = 20
 
     init(flavor: BuildFlavor) {
         supportsAutomaticJoin = flavor == .full
@@ -80,10 +81,13 @@ final class WifiAdapter: WifiJoining, @unchecked Sendable {
             }
             // A change found by the re-read is published on `updates()` like a path update.
             let poll = Task {
+                var leaseTicks = 0
                 while !Task.isCancelled {
                     let now = info.current
                     let leasePending = now.isSatisfied && now.usablePhoneIPv4 == nil
-                    await sleepSeconds(leasePending ? Self.leasePollInterval : Self.addressPollInterval)
+                    leaseTicks = leasePending ? leaseTicks + 1 : 0
+                    let fast = leasePending && leaseTicks <= Self.leasePollTicks
+                    await sleepSeconds(fast ? Self.leasePollInterval : Self.addressPollInterval)
                     if Task.isCancelled { return }
                     _ = info.refreshedSnapshot()
                 }

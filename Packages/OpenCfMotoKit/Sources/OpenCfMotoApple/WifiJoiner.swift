@@ -278,7 +278,8 @@ public final class WifiJoiner: @unchecked Sendable {
         // unsatisfied while the phone holds an address there.
         let info = WiFiInfo()
         defer { info.stop() }
-        var before = await info.firstSnapshot(timeout: 1.0)
+        _ = await info.firstSnapshot(timeout: 1.0)
+        var before = info.refreshedSnapshot() // the interface, even without a path update yet
         if before.isUp { before.ssid = await WiFiInfo.fetchSSID() }
         if before.ssid == ssid, before.usablePhoneIPv4 != nil {
             Log.i("WIFI", "Wi-Fi already joined: \(ssid) — skipping re-join (\(before))")

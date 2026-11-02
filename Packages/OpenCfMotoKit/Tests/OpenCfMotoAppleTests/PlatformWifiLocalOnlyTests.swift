@@ -50,7 +50,7 @@ final class PlatformWifiLocalOnlyTests: XCTestCase {
         XCTAssertNil(s.phoneIPv4)
         XCTAssertNil(s.primaryGateway)
         XCTAssertEqual(s.description, "wifi=down reason=notAvailable")
-        XCTAssertEqual(WiFiSnapshot(path: .none, addresses: [], fallbackInterfaceName: nil), .unavailable)
+        XCTAssertEqual(WiFiSnapshot(path: .initial, addresses: [], fallbackInterfaceName: nil), .unavailable)
     }
 
     func testSelfAssignedAddressIsNotUp() {
