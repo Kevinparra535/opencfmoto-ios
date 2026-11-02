@@ -139,7 +139,12 @@ final class NavSessionActionTests: XCTestCase {
                 .split(separator: ";").count > 2 { return .navOK(fixture: "osrm_route_alts.json") }
             throw NavFakeNetworkError()
         }
-        let env = NavSessionEnv(http: NavFakeHTTPClient(handler))
+        // The circuit's request waits at a gate while its in-flight state is checked: the fake answers
+        // at once, so under CPU load the circuit could be built before the test read `loading` (a flaky
+        // test). The guards and the previews before it go straight through.
+        let gate = NavGatedHTTPClient(handler)
+        gate.openGate()
+        let env = NavSessionEnv(http: gate)
         let s = env.session
         s.startCircuit()
         XCTAssertEqual(env.rec.toasts.last, "Need GPS for a circuit")
@@ -156,13 +161,17 @@ final class NavSessionActionTests: XCTestCase {
         XCTAssertEqual(s.snapshot.preview?.routes.map(\.label), ["Direct"])
         XCTAssertEqual(s.snapshot.preview?.meta, "Straight line (no road route) · 1.6 km · 22:15 · Bucharest")
         env.rec.clear()
+        gate.closeGate()
+        let sent = gate.requestCount
         s.startCircuit()
+        await gate.waitForRequests(sent + 1) // the circuit's request is out, held at the gate
         var snap = s.snapshot
         XCTAssertEqual(snap.preview?.isCircuit, true)
         XCTAssertEqual(snap.preview?.loading, true)
         XCTAssertEqual(snap.preview?.meta, "There & back · returning home")
         XCTAssertEqual(env.rec.toasts, ["Building there & back to Destino…"])
         XCTAssertEqual(env.rec.spoken, ["Building there and back circuit"])
+        gate.openGate()
         await s.waitUntilIdle()
         snap = s.snapshot
         XCTAssertEqual(snap.preview?.routes.map(\.label), ["Circuit"])

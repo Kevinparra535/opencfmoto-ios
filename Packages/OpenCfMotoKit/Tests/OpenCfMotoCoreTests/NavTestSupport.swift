@@ -186,7 +186,12 @@ final class NavGatedHTTPClient: HTTPClient, @unchecked Sendable {
         for c in w { c.resume() }
     }
 
-    /// Waits (polling) until `n` requests are parked at the gate.
+    /// Parks the requests sent from now on again (a test that lets the earlier ones straight through).
+    func closeGate() {
+        lock.lock(); open = false; lock.unlock()
+    }
+
+    /// Waits (polling) until `n` requests in all have reached the gate (parked while it is closed).
     func waitForRequests(_ n: Int, timeout: TimeInterval = 5) async {
         let deadline = Date().addingTimeInterval(timeout)
         while requestCount < n && Date() < deadline { try? await Task.sleep(nanoseconds: 2_000_000) }
