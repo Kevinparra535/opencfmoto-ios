@@ -1387,7 +1387,21 @@ corner, inset 8 dp. No seek, queue, volume, marquee or animation; targets ≥ 48
 (`.closeSheets`), menu `menu.music` "Music" / "Música" after `menu.circuit` (`.openMusic`, only with
 music). `.openMusic` is UI-only (without music: toast "Nothing playing in Apple Music"); the app performs
 the transport intents. Sheet focus order: ⏮ ⏯ ⏭ ✕, initial focus ⏯; BACK / ✕ / auto-close → focus on the
-tile; HOME opens the menu.
+tile (not listed: see below); HOME opens the menu.
+
+**Focus when a Music control vanishes** (fix F2). The song can go away for a moment (a paused song while
+another app plays, a stale "other audio" reading right after a pause, no item between songs) and with it
+the tile, the menu's "Music" or the open sheet. The handlebar focus then never falls back to the default
+item — End while navigating, where the rider's next ★, meant for the tile, ⏯ or "Music", would end
+navigation without confirmation. `DashFocusPreference.musicGone` → the first listed of `fab.menu` (map)
+and `menu.circuit` (menu; ★ without a previewed place only shows a hint), else the usual keep / first
+item. It applies when the focused `music.*` / `menu.music` id is no longer listed, when the sheet closes
+because `music == nil` (arrival keeps its own rule), and when the closing sheet's `.musicTile` finds no
+tile (no room for it, or the song went away in the same frame; preview / arrival keep their first item
+as before). The focus stays there when the song comes back (one ▶ from `fab.menu` reaches the tile).
+Nothing else hands the focus to End this way: while navigating the map list is End, the FABs and the
+tile, and the menu's ids are fixed except `menu.music`; a search row that vanishes falls back to the
+sheet's first item, and a route chip of a preview to Go.
 
 **Safety rules** (`DashUIController`): the sheet never opens by itself and closes on ✕ / BACK; after
 10 s without dash input while the bike moves or has no fix (`Options.musicSheetIdleTimeout`; it stays

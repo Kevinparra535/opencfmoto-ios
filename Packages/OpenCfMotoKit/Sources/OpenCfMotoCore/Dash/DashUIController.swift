@@ -603,10 +603,13 @@ public final class DashUIController: @unchecked Sendable {
             pendingPreference = .default
         }
         // Apple Music: the sheet closes when the song is gone (feature off, another app plays…) and
-        // when arrival starts (a preview / navigation start already closed every sheet above).
+        // when arrival starts (a preview / navigation start already closed every sheet above). A song
+        // that went away may be back in a moment, and the rider's next ★ was meant for ⏯: never the
+        // default item, End while navigating (F2). Arrival keeps its own rule below.
         if sheet == .music && (new.music == nil || (new.showsArrival && !prev.showsArrival)) {
             sheet = .none
-            pendingPreference = DashFocusEngine.defaultPreference(inPreview: new.inPreview, navigating: new.navigating)
+            pendingPreference = new.music == nil ? .musicGone
+                : DashFocusEngine.defaultPreference(inPreview: new.inPreview, navigating: new.navigating)
         }
         if new.showsArrival && !prev.showsArrival {
             focus.clear()
@@ -707,7 +710,11 @@ public final class DashUIController: @unchecked Sendable {
             focus.ensure(s.focusOrder, prefer: pref)
             pendingPreference = nil
         } else if focus.focusedId.map({ !s.focusOrder.contains($0) }) ?? true {
-            focus.ensure(s.focusOrder, prefer: defaultPref)
+            // F2: a Music control that vanished under the focus (the tile or the menu's "Music" while
+            // the song is gone for a moment) never hands it to the default item: while navigating that
+            // is End, and the rider's next ★ would end navigation without confirmation.
+            let musicGone = focus.focusedId.map(DashFocusEngine.isMusicControl) ?? false
+            focus.ensure(s.focusOrder, prefer: musicGone ? .musicGone : defaultPref)
         }
         // Scroll the focused control into view only when the focus moved (never fight a drag).
         if focus.focusedId != before || revealFocus {
