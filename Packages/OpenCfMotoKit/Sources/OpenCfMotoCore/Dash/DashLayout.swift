@@ -52,6 +52,10 @@ public enum DashDimens {
     public static let goMinWidth = 110.0
     public static let previewActionsHeight = 40.0
     public static let searchHeaderHeight = 64.0
+    // Apple Music (iOS addition): now-playing tile and Music sheet.
+    public static let musicTile = 64.0, musicTileGap = 8.0, musicTileRadius = 10.0
+    public static let musicSheetMargin = 16.0, musicSheetGap = 12.0, musicSheetTextMin = 300.0
+    public static let musicArtMin = 96.0, musicArtRadius = 12.0, musicClose = 48.0
 }
 
 /// Text measurement + scale + safe area for one frame's layout.
@@ -231,10 +235,69 @@ public struct DashMenuContent: Sendable, Equatable {
     public var headingUp: Bool
     public var recording: Bool
     public var preferences: MapPreferences
-    public init(language: DashLanguage, follow: Bool, headingUp: Bool, recording: Bool, preferences: MapPreferences) {
+    /// The Ride section ends with "Music" (Apple Music now playing; iOS addition).
+    public var showsMusic: Bool
+    public init(language: DashLanguage, follow: Bool, headingUp: Bool, recording: Bool, preferences: MapPreferences,
+                showsMusic: Bool = false) {
         self.language = language; self.follow = follow; self.headingUp = headingUp; self.recording = recording
-        self.preferences = preferences
+        self.preferences = preferences; self.showsMusic = showsMusic
     }
+}
+
+/// The now-playing tile at the bottom of the FAB lane (Apple Music; iOS addition). No text.
+public struct DashMusicTileLayout: Sendable, Equatable {
+    public var frame: DashRect
+    /// 10 dp.
+    public var cornerRadius: Double
+    /// The whole progress track: inset 6 dp left / right / bottom, 3 dp tall.
+    public var progressRect: DashRect
+    /// The paused badge: 20 dp, top-right corner inset 4 dp.
+    public var badgeRect: DashRect
+    /// Landscape: the clock chip gives way to the tile (no room for both under the FABs).
+    public var hidesClock: Bool
+}
+
+/// How the Music sheet places the artwork and the text / controls block.
+public enum DashMusicSheetArrangement: String, Sendable, Equatable {
+    /// Artwork square on the right, text column on the left.
+    case sideBySide
+    /// Artwork centred at the top, block below.
+    case stacked
+    /// No room for a ≥ 96-dp artwork: block only (unreachable on the supported canvases).
+    case textOnly
+}
+
+/// The Music sheet (Apple Music; iOS addition): artwork + title / artist / album / progress /
+/// times / ⏮ ⏯ ⏭, ✕ on the artwork's corner. Rects in canvas px.
+public struct DashMusicSheetLayout: Sendable, Equatable {
+    public var arrangement: DashMusicSheetArrangement
+    /// The whole canvas.
+    public var sheet: DashRect
+    /// `.zero` for `.textOnly`.
+    public var artworkRect: DashRect
+    /// 12 dp.
+    public var artworkRadius: Double
+    public var closeRect: DashRect
+    public var titleRect: DashRect
+    public var titleFont: DashFont
+    public var titleMaxLines: Int
+    /// nil: no artist line (empty artist or compressed away).
+    public var artistRect: DashRect?
+    public var artistFont: DashFont
+    /// nil: no album line (empty album or compressed away).
+    public var albumRect: DashRect?
+    public var albumFont: DashFont
+    /// nil: unknown duration (radio, live).
+    public var progressRect: DashRect?
+    /// Left / right halves of the times row (nil: unknown duration or compressed away).
+    public var elapsedRect: DashRect?
+    public var remainingRect: DashRect?
+    public var timeFont: DashFont
+    public var previousRect: DashRect
+    public var playPauseRect: DashRect
+    public var nextRect: DashRect
+    /// 0 full · 1 no album · 2 title 1 line · 3 compact transport · 4 no artist · 5 no times.
+    public var compressionStep: Int
 }
 
 public struct DashSearchRowLayout: Sendable, Equatable {
@@ -854,6 +917,7 @@ public enum DashLayout {
         button("menu.recalc", DashText.recenterRecalc.localized(L))
         button("menu.record", (m.recording ? DashText.stopRecording : DashText.recordRide).localized(L))
         button("menu.circuit", DashText.circuit.localized(L))
+        if m.showsMusic { button("menu.music", DashText.music.localized(L)) }
         title(.map, first: false)
         firstInSection = true
         button("menu.follow", (m.follow ? DashText.followOn : DashText.freePan).localized(L))
@@ -1030,5 +1094,276 @@ public enum DashLayout {
             return DashRect(x: x, y: c.safe.maxY - c.dp(DashDimens.edge) - h, width: w, height: h)
         }
         return DashRect(x: c.safe.maxX - c.dp(8) - w, y: last.maxY + c.dp(10), width: w, height: h)
+    }
+
+    // MARK: Apple Music (iOS addition)
+
+    /// The now-playing tile: a square of min(64 dp, room) (at least the 46-dp FAB size), right-aligned
+    /// with the FAB column, 8 dp under the last FAB.
+    /// - Landscape: down to 8 dp above the clock chip; when that leaves < 46 dp the clock gives way
+    ///   (`hidesClock`) and the room is measured to 8 dp above the safe bottom; still < 46 dp → nil
+    ///   (the menu entry remains).
+    /// - Portrait (the clock sits under the FAB column): 8 dp under the clock (or the last FAB), down
+    ///   to 12 dp above the safe bottom.
+    /// - `avoiding`: every rect that intersects the tile shrinks it to end 8 dp above that rect;
+    ///   < 46 dp → nil.
+    public static func musicTile(_ c: DashLayoutContext, fabs: [DashRect], clock: DashRect?,
+                                 avoiding: [DashRect] = []) -> DashMusicTileLayout? {
+        guard let last = fabs.last else { return nil }
+        let gap = c.dp(DashDimens.musicTileGap)
+        let preferred = c.dp(DashDimens.musicTile), minimum = c.dp(DashDimens.fabSize)
+        let right = last.maxX
+        let top: Double
+        var side: Double
+        var hidesClock = false
+        if c.isLandscape {
+            top = last.maxY + gap
+            let toSafeBottom = c.safe.maxY - c.dp(DashDimens.edge) - top
+            if let clock, clock.minY - gap - top >= minimum {
+                side = min(preferred, clock.minY - gap - top)
+            } else {
+                side = min(preferred, toSafeBottom)
+                hidesClock = clock != nil
+            }
+        } else {
+            top = (clock?.maxY ?? last.maxY) + gap
+            side = min(preferred, c.safe.maxY - c.dp(12) - top)
+        }
+        guard side >= minimum else { return nil }
+        func frame(_ s: Double) -> DashRect { DashRect(x: right - s, y: top, width: s, height: s) }
+        for r in avoiding where frame(side).intersects(r) {
+            side = r.minY - gap - top
+            guard side >= minimum else { return nil }
+        }
+        let f = frame(side)
+        let inset = c.dp(6), barH = c.dp(3), badge = c.dp(20)
+        return DashMusicTileLayout(
+            frame: f, cornerRadius: c.dp(DashDimens.musicTileRadius),
+            progressRect: DashRect(x: f.minX + inset, y: f.maxY - inset - barH, width: f.width - 2 * inset, height: barH),
+            badgeRect: DashRect(x: f.maxX - c.dp(4) - badge, y: f.minY + c.dp(4), width: badge, height: badge),
+            hidesClock: hidesClock)
+    }
+
+    /// Metadata as drawn on one line: line breaks / tabs become spaces, surrounding blanks trimmed.
+    static func musicText(_ s: String) -> String {
+        String(s.map { $0.isNewline || $0 == "\t" ? " " : $0 }).trimmingCharacters(in: .whitespaces)
+    }
+
+    /// The title as drawn: "" (or blanks) → "Unknown song".
+    static func musicTitle(_ m: DashNowPlaying, _ L: DashLanguage) -> String {
+        let t = musicText(m.title)
+        return t.isEmpty ? DashText.unknownSong.localized(L) : t
+    }
+
+    /// Title 22 sp bold (24 sp stacked on a portrait canvas), artist 17 sp medium, album 15 sp,
+    /// times 14 sp tabular digits.
+    static func musicTitleFont(_ c: DashLayoutContext, stacked: Bool) -> DashFont {
+        c.font(stacked && !c.isLandscape ? 24 : 22, .bold)
+    }
+
+    /// What the block shows; the compression ladder drops lines from it.
+    private struct MusicContent {
+        var title: String
+        var hasArtist: Bool
+        var hasAlbum: Bool
+        var hasDuration: Bool
+    }
+
+    /// One step of the compression ladder: the block's height and its transport row.
+    private struct MusicBlock {
+        var step: Int
+        var height: Double
+        var titleLines: Int
+        var artist: Bool
+        var album: Bool
+        var bar: Bool
+        var times: Bool
+        /// ⏯ diameter / ⏮ ⏭ diameter.
+        var play: Double
+        var side: Double
+        var rowWidth: Double
+    }
+
+    /// Lines of the full title (≤ 2) at `width`: steps 0 and 1 of the ladder.
+    private static func musicTitleLines(_ c: DashLayoutContext, _ m: MusicContent, width: Double, stacked: Bool) -> Int {
+        DashTextLayout.lineCount(m.title, maxWidth: width, font: musicTitleFont(c, stacked: stacked), maxLines: 2,
+                                 measurer: c.measurer)
+    }
+
+    private static func musicBlock(_ c: DashLayoutContext, _ m: MusicContent, step: Int, width: Double,
+                                   stacked: Bool, titleLines: Int) -> MusicBlock {
+        let titleFont = musicTitleFont(c, stacked: stacked)
+        let lines = step >= 2 ? 1 : titleLines
+        let artist = m.hasArtist && step < 4, album = m.hasAlbum && step < 1
+        let bar = m.hasDuration, times = m.hasDuration && step < 5
+        let play = c.dp(step >= 3 ? 64 : 80), side = c.dp(step >= 3 ? 52 : 64)
+        var h = Double(lines) * c.lineHeight(titleFont)
+        if artist { h += c.dp(4) + c.lineHeight(c.font(17, .medium)) }
+        if album { h += c.dp(2) + c.lineHeight(c.font(15)) }
+        if bar { h += c.dp(14) + c.dp(6) }
+        if times { h += c.dp(4) + c.lineHeight(c.font(14, digits: true)) }
+        h += c.dp(14) + play
+        return MusicBlock(step: step, height: h, titleLines: lines, artist: artist, album: album, bar: bar, times: times,
+                          play: play, side: side, rowWidth: side + c.dp(20) + play + c.dp(20) + side)
+    }
+
+    /// The least compressed step whose block fits `width` × `maxHeight` (nil: none does).
+    private static func musicBlock(_ c: DashLayoutContext, _ m: MusicContent, width: Double, maxHeight: Double,
+                                   stacked: Bool, titleLines: Int) -> MusicBlock? {
+        for step in 0 ... 5 {
+            let b = musicBlock(c, m, step: step, width: width, stacked: stacked, titleLines: titleLines)
+            if b.height <= maxHeight && b.rowWidth <= width { return b }
+        }
+        return nil
+    }
+
+    /// The Music sheet over the whole canvas; `reserved` = the nav card kept on top while
+    /// navigating (the artwork never goes under it). Margin 16 dp, gap 12 dp, text column ≥ 300 dp,
+    /// artwork ≥ 96 dp. Two candidates, the larger artwork wins (tie within 0.5 px: side-by-side in
+    /// landscape, stacked in portrait):
+    /// - side-by-side: artwork square on the right (side = min(safe.h − 2m, safe.w − 3m − 300 dp)),
+    ///   moved below `reserved` when that reaches into its column; text column on the left, the
+    ///   block vertically centred in it;
+    /// - stacked: artwork centred at the top, block under it at the least compressed step that fits
+    ///   60 % (then 55 % … 30 %) of the height left.
+    /// Neither fits → `.textOnly` (block at step 5, no artwork).
+    /// Block (centred text): title ≤ 2 lines · +4 artist · +2 album · +14 bar (6 dp) · +4 times ·
+    /// +14 transport ⏮ 64 · 20 · ⏯ 80 · 20 · ⏭ 64 dp; empty artist / album and an unknown duration
+    /// drop their lines and spacing. ✕ (48 dp) on the artwork's top-right corner, inset 8 dp.
+    public static func musicSheet(_ c: DashLayoutContext, music: DashNowPlaying, language: DashLanguage,
+                                  reserved: DashRect?) -> DashMusicSheetLayout {
+        let s = c.safe
+        let m = c.dp(DashDimens.musicSheetMargin), gap = c.dp(DashDimens.musicSheetGap)
+        let textMin = c.dp(DashDimens.musicSheetTextMin), artMin = c.dp(DashDimens.musicArtMin)
+        let closeSide = c.dp(DashDimens.musicClose), closeInset = c.dp(8)
+        let content = MusicContent(title: musicTitle(music, language), hasArtist: !musicText(music.artist).isEmpty,
+                                   hasAlbum: !musicText(music.album).isEmpty, hasDuration: music.knownDuration != nil)
+
+        struct Candidate {
+            var arrangement: DashMusicSheetArrangement
+            var art: DashRect
+            var column: DashRect
+            var block: MusicBlock
+        }
+        var candidates: [Candidate] = []
+        // Side by side: text column left, artwork right.
+        do {
+            var colTop = s.minY + m
+            if let r = reserved { colTop = max(colTop, r.maxY + gap) }
+            var artTop = s.minY + m
+            var side = min(s.height - 2 * m, s.width - 3 * m - textMin)
+            var artX = s.maxX - m - side
+            if let r = reserved, r.maxX > artX - 0.5 { // never under the nav card
+                artTop = r.maxY + gap
+                side = min(side, s.maxY - m - artTop)
+                artX = s.maxX - m - side
+            }
+            if side >= artMin {
+                let artY = max(artTop, min(s.midY - side / 2, s.maxY - m - side))
+                let art = DashRect(x: artX, y: artY, width: side, height: side)
+                let colX = s.minX + m
+                let col = DashRect(x: colX, y: colTop, width: art.minX - m - colX, height: s.maxY - m - colTop)
+                let lines = musicTitleLines(c, content, width: col.width, stacked: false)
+                if let b = musicBlock(c, content, width: col.width, maxHeight: col.height, stacked: false, titleLines: lines) {
+                    candidates.append(Candidate(arrangement: .sideBySide, art: art, column: col, block: b))
+                }
+            }
+        }
+        // Stacked: artwork centred at the top, block below.
+        do {
+            let top = reserved.map { $0.maxY + gap } ?? s.minY + m
+            let w = s.width - 2 * m
+            let avail = s.maxY - m - top
+            let lines = musicTitleLines(c, content, width: w, stacked: true)
+            for share in [0.60, 0.55, 0.50, 0.45, 0.40, 0.35, 0.30] {
+                guard let b = musicBlock(c, content, width: w, maxHeight: avail * share, stacked: true, titleLines: lines) else { continue }
+                let side = min(w, avail - gap - b.height)
+                guard side >= artMin else { continue }
+                let art = DashRect(x: s.midX - side / 2, y: top, width: side, height: side)
+                candidates.append(Candidate(arrangement: .stacked, art: art,
+                                            column: DashRect(x: s.minX + m, y: art.maxY + gap, width: w, height: b.height), block: b))
+                break
+            }
+        }
+        var best: Candidate?
+        for cand in candidates {
+            guard let b = best else { best = cand; continue }
+            if abs(cand.art.width - b.art.width) < 0.5 {
+                if cand.arrangement == (c.isLandscape ? .sideBySide : .stacked) { best = cand }
+            } else if cand.art.width > b.art.width {
+                best = cand
+            }
+        }
+
+        let arrangement: DashMusicSheetArrangement
+        let art: DashRect, column: DashRect, block: MusicBlock, close: DashRect
+        if let best {
+            arrangement = best.arrangement
+            art = best.art
+            column = best.column
+            block = best.block
+            close = DashRect(x: art.maxX - closeInset - closeSide, y: art.minY + closeInset, width: closeSide, height: closeSide)
+        } else {
+            // Text only: ✕ at the top-right of the free area; the block (step 5) centred under it when
+            // there is room, else in the whole free area.
+            arrangement = .textOnly
+            art = .zero
+            let top = reserved.map { max(s.minY + m, $0.maxY + gap) } ?? s.minY + m
+            let free = DashRect(x: s.minX + m, y: top, width: max(0, s.width - 2 * m), height: max(0, s.maxY - m - top))
+            block = musicBlock(c, content, step: 5, width: free.width, stacked: false, titleLines: 1)
+            close = DashRect(x: free.maxX - closeSide, y: free.minY, width: closeSide, height: closeSide)
+            let below = close.maxY + gap
+            column = free.maxY - below >= block.height
+                ? DashRect(x: free.minX, y: below, width: free.width, height: free.maxY - below) : free
+        }
+
+        // Block internals, top → bottom, vertically centred in the column.
+        let titleFont = musicTitleFont(c, stacked: arrangement == .stacked)
+        let artistFont = c.font(17, .medium), albumFont = c.font(15), timeFont = c.font(14, digits: true)
+        let x = column.minX, w = column.width
+        var y = column.minY + (column.height - block.height) / 2
+        var titleRect = DashRect(x: x, y: y, width: w, height: Double(block.titleLines) * c.lineHeight(titleFont))
+        if arrangement == .textOnly, titleRect.intersects(close) {
+            // Keep the (centred) title clear of the ✕: the same inset on both sides.
+            let inset = min(w / 2, titleRect.maxX - close.minX + gap)
+            titleRect = DashRect(x: x + inset, y: titleRect.minY, width: w - 2 * inset, height: titleRect.height)
+        }
+        y = titleRect.maxY
+        var artistRect: DashRect?, albumRect: DashRect?
+        if block.artist {
+            y += c.dp(4)
+            artistRect = DashRect(x: x, y: y, width: w, height: c.lineHeight(artistFont))
+            y += c.lineHeight(artistFont)
+        }
+        if block.album {
+            y += c.dp(2)
+            albumRect = DashRect(x: x, y: y, width: w, height: c.lineHeight(albumFont))
+            y += c.lineHeight(albumFont)
+        }
+        var progressRect: DashRect?, elapsedRect: DashRect?, remainingRect: DashRect?
+        if block.bar {
+            y += c.dp(14)
+            progressRect = DashRect(x: x, y: y, width: w, height: c.dp(6))
+            y += c.dp(6)
+            if block.times {
+                y += c.dp(4)
+                let h = c.lineHeight(timeFont)
+                elapsedRect = DashRect(x: x, y: y, width: w / 2, height: h)
+                remainingRect = DashRect(x: x + w / 2, y: y, width: w / 2, height: h)
+                y += h
+            }
+        }
+        y += c.dp(14)
+        let rowX = x + (w - block.rowWidth) / 2
+        let previous = DashRect(x: rowX, y: y + (block.play - block.side) / 2, width: block.side, height: block.side)
+        let playPause = DashRect(x: previous.maxX + c.dp(20), y: y, width: block.play, height: block.play)
+        let next = DashRect(x: playPause.maxX + c.dp(20), y: previous.minY, width: block.side, height: block.side)
+        return DashMusicSheetLayout(
+            arrangement: arrangement, sheet: DashRect(x: 0, y: 0, width: c.canvas.width, height: c.canvas.height),
+            artworkRect: art, artworkRadius: c.dp(DashDimens.musicArtRadius), closeRect: close,
+            titleRect: titleRect, titleFont: titleFont, titleMaxLines: block.titleLines,
+            artistRect: artistRect, artistFont: artistFont, albumRect: albumRect, albumFont: albumFont,
+            progressRect: progressRect, elapsedRect: elapsedRect, remainingRect: remainingRect, timeFont: timeFont,
+            previousRect: previous, playPauseRect: playPause, nextRect: next, compressionStep: block.step)
     }
 }

@@ -947,6 +947,10 @@ public final class RideModel {
             showDashToast(SessionText.placeDeleted(l))
         case let .navigateSavedPlace(slot):
             Task { await nav.navigateToSavedPlace(slot) }
+        case .openMusic:
+            break // UI-only (the controller opened the Music sheet)
+        case .musicPlayPause, .musicNext, .musicPrevious:
+            break // logic-session (music): forward to MusicModel
         }
     }
 

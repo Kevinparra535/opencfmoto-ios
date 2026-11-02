@@ -124,6 +124,9 @@ public struct DashModel: Sendable, Equatable {
     public var handlebarFocus: Bool
     /// Highest zoom of the raster tile source (OSM: 19); higher zooms over-zoom.
     public var maxTileZoom: Int
+    /// Apple Music now playing (iOS addition): the map's now-playing tile, the menu's "Music" entry
+    /// and the Music sheet. nil = none of them (feature off, no access, nothing loaded).
+    public var music: DashNowPlaying?
 
     public init(canvas: DashSize = DashSize(width: 800, height: 384), margins: ScreenMargins = .zero,
                 densityDpiOverride: Int? = nil, nav: NavSnapshot = NavSnapshot(), fix: LocationFix? = nil,
@@ -132,7 +135,7 @@ public struct DashModel: Sendable, Equatable {
                 language: DashLanguage = .en, places: DashPlaces = .empty, search: DashSearchState = DashSearchState(),
                 recording: Bool = false, lapTimer: DashLapTimer? = nil, toastText: String? = nil, linkBanner: String? = nil,
                 holdMessage: String? = nil, showClock: Bool = true, handlebarFocus: Bool = true,
-                maxTileZoom: Int = MapProjection.defaultMaxTileZoom) {
+                maxTileZoom: Int = MapProjection.defaultMaxTileZoom, music: DashNowPlaying? = nil) {
         self.canvas = canvas
         self.margins = margins
         self.densityDpiOverride = densityDpiOverride
@@ -154,6 +157,7 @@ public struct DashModel: Sendable, Equatable {
         self.showClock = showClock
         self.handlebarFocus = handlebarFocus
         self.maxTileZoom = maxTileZoom
+        self.music = music
     }
 
     /// Canvas size for a negotiated `VideoCanvas`.

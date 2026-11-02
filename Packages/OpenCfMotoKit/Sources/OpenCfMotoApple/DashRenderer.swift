@@ -268,6 +268,8 @@ public final class DashRenderer: @unchecked Sendable {
                 drawText(text, rect: rect, style: style, in: ctx)
             case let .tile(z, x, y, rect, invert):
                 drawTile(z: z, x: x, y: y, rect: rect, night: invert, cache: tiles, in: ctx, stats: &stats)
+            case .image:
+                break // apple (music): DashImageStore lookup, aspect fill, rounded clip
             case .save:
                 ctx.saveGState()
                 depth += 1

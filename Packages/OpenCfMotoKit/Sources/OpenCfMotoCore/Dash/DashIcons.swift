@@ -32,6 +32,14 @@ public enum DashIcon: String, CaseIterable, Sendable {
     case navArrow = "ic_nav_arrow"
     /// Destination / saved-place teardrop (40×48 viewport), anchor = bottom centre (20,48).
     case destPin = "ic_dest_pin"
+    // Apple Music (iOS addition; original simple geometry, 24×24, filled).
+    /// Two beamed notes: artwork placeholder.
+    case musicNote = "ic_music_note"
+    case play = "ic_play"
+    case pause = "ic_pause"
+    case skipNext = "ic_skip_next"
+    case skipPrevious = "ic_skip_previous"
+    case close = "ic_close"
 }
 
 /// One painted layer of an icon, in viewport coordinates.
@@ -58,6 +66,13 @@ public enum DashIcons {
     public static let baseArrowPathData = "M12,3 L19,12 L14,12 L14,21 L10,21 L10,12 L5,12 Z"
 
     static let pathData: [DashIcon: [String]] = [
+        // Apple Music (iOS addition): original geometry, no third-party path data.
+        .musicNote: ["M9,3.5 L20,1.5 L20,16 A3,3 0 1 1 18,13.2 L18,5.2 L11,6.5 L11,18 A3,3 0 1 1 9,15.2 Z"],
+        .play: ["M8,5 L19,12 L8,19 Z"],
+        .pause: ["M6,5 L10,5 L10,19 L6,19 Z M14,5 L18,5 L18,19 L14,19 Z"],
+        .skipNext: ["M5,6 L14,12 L5,18 Z M16,6 L19,6 L19,18 L16,18 Z"],
+        .skipPrevious: ["M19,6 L10,12 L19,18 Z M5,6 L8,6 L8,18 L5,18 Z"],
+        .close: ["M6.4,5 L12,10.6 L17.6,5 L19,6.4 L13.4,12 L19,17.6 L17.6,19 L12,13.4 L6.4,19 L5,17.6 L10.6,12 L5,6.4 Z"],
         .manUturn: ["M8,20 L8,11 A4,4 0 0 1 16,11 L16,15", "M12.5,14 L19.5,14 L16,19 Z"],
         .manRoundabout: ["M12,21 L12,15 M12,15 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0", "M16,11 L16,4", "M13,6 L16,2 L19,6 Z"],
         .manMerge: ["M7,21 L7,14 Q7,11 10,10 L13,8.5 M13,8.5 L13,21", "M9.5,10.5 L13,5 L16.5,10.5 Z"],
@@ -151,7 +166,8 @@ public enum DashIcons {
             return DashIconDrawing(viewport: vp24, layers: [DashIconLayer(path: p(0), paint: .fill(white, .evenOdd))])
         case .fabCompass:
             return DashIconDrawing(viewport: vp24, layers: [DashIconLayer(path: p(0), paint: .fill(white, .evenOdd))])
-        case .fabGps, .fabPlus, .fabMinus, .fabMenu, .fabFit, .fabVoice, .search:
+        case .fabGps, .fabPlus, .fabMinus, .fabMenu, .fabFit, .fabVoice, .search,
+             .musicNote, .play, .pause, .skipNext, .skipPrevious, .close:
             return DashIconDrawing(viewport: vp24, layers: [DashIconLayer(path: p(0), paint: .fill(white, .nonZero))])
         case .navArrow:
             return DashIconDrawing(viewport: DashSize(width: 48, height: 48), layers: [

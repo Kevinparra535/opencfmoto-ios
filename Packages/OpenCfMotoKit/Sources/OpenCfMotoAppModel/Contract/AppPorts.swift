@@ -244,6 +244,188 @@ public protocol HandlebarRemoteProviding: AnyObject {
     /// Claims Now Playing + remote commands (silent audio loop). Only after an explicit opt-in.
     func enable()
     func disable()
+    /// ADDITION (music): capture is enabled but another app took Now Playing (the rider started Apple
+    /// Music, then paused it with ★): claim it back NOW. Only in the foreground, never while other
+    /// audio plays (that would pause the rider's music again). Default: `.refused`.
+    func reclaimIfPossible() -> HandlebarReclaimResult
+}
+
+/// ADDITION (music): what `HandlebarRemoteProviding.reclaimIfPossible()` did.
+public enum HandlebarReclaimResult: String, Sendable, Equatable {
+    /// Capture was enabled but not holding Now Playing; the handlebar buttons are ours again now.
+    case reclaimed
+    /// Nothing to do: capture already holds Now Playing.
+    case alreadyClaimed
+    /// Not now: capture is off, the app is not in the foreground, or another app's audio plays.
+    case refused
+}
+
+public extension HandlebarRemoteProviding {
+    func reclaimIfPossible() -> HandlebarReclaimResult { .refused }
+}
+
+// MARK: - Apple Music (the system Music app) — ADDITION (music)
+//
+// iOS gives third-party apps the now-playing data and the transport controls of the system Music
+// app only (MediaPlayer `MPMusicPlayerController.systemMusicPlayer`, MusicKit `SystemMusicPlayer`);
+// nothing of Spotify, YouTube Music… The iOS adapter lives in the APP TARGET
+// (App/Sources/Services/MusicAdapter.swift), never in OpenCfMotoApple: the ReplayKit extension links
+// OpenCfMotoApple, and App Store Connect checks NSAppleMusicUsageDescription bundle by bundle
+// (ITMS-90683, tools/testflight/lint_bundle.py).
+// Privacy: song titles, artists, albums, store ids and artwork URLs never go to logs, problem
+// reports or any server of ours; log track ids, states and artwork sources only.
+
+/// The media-library permission (Settings ▸ "Media & Apple Music"; MPMediaLibrary and MusicKit share
+/// it and the NSAppleMusicUsageDescription purpose string).
+public enum MusicAuthorizationState: String, Sendable, Equatable {
+    case notDetermined
+    case denied
+    case restricted
+    case authorized
+    /// No system music player here (Linux / macOS, the null port, the Simulator without a fake).
+    case unavailable
+}
+
+/// `MPMusicPlaybackState` without MediaPlayer.
+public enum MusicPlaybackState: String, Sendable, Equatable {
+    case stopped
+    case playing
+    case paused
+    case interrupted
+    case seekingForward
+    case seekingBackward
+}
+
+/// The song the Music app has loaded.
+public struct MusicTrack: Sendable, Equatable {
+    /// Stable per song; only letters, digits, "-" and "_" (it becomes part of the dash image id
+    /// "music.art.<id>"). The adapter uses "p" + MPMediaItem.persistentID in lower-case hex, else
+    /// "s" + playbackStoreID, else "h" + a hash of title / artist / album / duration.
+    public var id: String
+    public var title: String
+    public var artist: String
+    public var album: String
+    /// Seconds; ≤ 0 or non-finite = unknown (radio, live streams).
+    public var duration: TimeInterval
+    /// Apple Music catalog id (`playbackStoreID`, digits only); nil for library-only items ("0" / "").
+    public var storeID: String?
+
+    public init(id: String, title: String, artist: String = "", album: String = "", duration: TimeInterval = 0,
+                storeID: String? = nil) {
+        self.id = id
+        self.title = title
+        self.artist = artist
+        self.album = album
+        self.duration = duration
+        self.storeID = storeID
+    }
+}
+
+/// One reading of the Music app.
+public struct MusicSnapshot: Sendable, Equatable {
+    /// nil = nothing loaded, a Home Sharing item (iOS hides it) or not observing.
+    public var track: MusicTrack?
+    public var state: MusicPlaybackState
+    /// Seconds into the song when sampled (finite, ≥ 0; the player's NaN reads as 0).
+    public var position: TimeInterval
+    /// Monotonic time of the sample, on `AppServices.clock` (the dash UI's `now`).
+    public var sampledAt: TimeInterval
+    /// Playback rate when sampled (1 while playing, 0 otherwise).
+    public var rate: Double
+    /// Another app's audio is playing (`AVAudioSession.isOtherAudioPlaying`; the Music app itself counts
+    /// as "other" for us). Only meaningful while `state` is not `.playing`: a paused Music song is stale
+    /// while Spotify plays, so the dash hides it.
+    public var otherAudioPlaying: Bool
+
+    public init(track: MusicTrack?, state: MusicPlaybackState, position: TimeInterval, sampledAt: TimeInterval,
+                rate: Double, otherAudioPlaying: Bool = false) {
+        self.track = track
+        self.state = state
+        self.position = position
+        self.sampledAt = sampledAt
+        self.rate = rate
+        self.otherAudioPlaying = otherAudioPlaying
+    }
+
+    public static let empty = MusicSnapshot(track: nil, state: .stopped, position: 0, sampledAt: 0, rate: 0)
+}
+
+/// Where a song's artwork came from (logs and diagnostics only; never log the URL).
+public enum MusicArtworkSource: String, Sendable, Equatable {
+    /// `MPMediaItem.artwork.image(at:)`: local, no network.
+    case mediaItem = "mp"
+    /// MusicKit `SystemMusicPlayer.shared.queue.currentEntry.artwork`, loaded through `URLSession.shared`.
+    case musicKit = "musickit"
+}
+
+/// Encoded artwork of the current song.
+public struct MusicArtwork: Sendable, Equatable {
+    /// JPEG or PNG bytes, longest side ≤ the requested `maxPixelSize`.
+    public var data: Data
+    public var source: MusicArtworkSource
+
+    public init(data: Data, source: MusicArtworkSource) {
+        self.data = data
+        self.source = source
+    }
+}
+
+/// The system Music app (Apple Music and the music library). Main-actor bound: MediaPlayer's music
+/// players must only be used on the main thread, and MusicKit's `SystemMusicPlayer` on the main actor.
+/// Implementations never touch the system player before `authorization == .authorized` (no prompt
+/// can appear during a ride; a missing purpose string would even terminate the app).
+@MainActor
+public protocol MusicPlaying: AnyObject {
+    /// false where there is no system music player (`authorization` is then `.unavailable`).
+    var isAvailable: Bool { get }
+    var authorization: MusicAuthorizationState { get }
+    /// Shows the system prompt when undetermined and returns the answer. Only from an explicit rider
+    /// action on the phone (the Settings toggle), never from the dash or during a ride.
+    func requestAuthorization() async -> MusicAuthorizationState
+    /// Latest reading (`.empty` while not observing).
+    var snapshot: MusicSnapshot { get }
+    /// Main actor: the song, the playback state, `otherAudioPlaying` or the position (a seek, or a
+    /// drift ≥ 1.5 s from the extrapolation) changed — NOT the steady advance of the position.
+    var onChange: ((MusicSnapshot) -> Void)? { get set }
+    /// Starts following the Music app (playback notifications + a light re-sync poll). Needs
+    /// `.authorized`; otherwise does nothing. Idempotent.
+    func startObserving()
+    /// Stops following; `snapshot` becomes `.empty` (without an `onChange`).
+    func stopObserving()
+    /// Re-reads the player now (after a command, when the app becomes active); fires `onChange` only
+    /// when the reading differs meaningfully. No-op while not observing.
+    func refresh()
+    /// Artwork of the CURRENT song: one attempt (≤ 10 s), nil when `trackID` is not the current song
+    /// any more or no artwork is available right now (the caller retries later).
+    func artwork(trackID: String, maxPixelSize: Int) async -> MusicArtwork?
+    func play()
+    func pause()
+    func skipToNext()
+    func skipToPrevious()
+    /// Restarts the current song.
+    func skipToBeginning()
+}
+
+/// The null music port (platforms without a system music player, services that do not set one).
+public final class UnavailableMusic: MusicPlaying {
+    nonisolated public init() {}
+    public var isAvailable: Bool { false }
+    public var authorization: MusicAuthorizationState { .unavailable }
+    public func requestAuthorization() async -> MusicAuthorizationState { .unavailable }
+    public var snapshot: MusicSnapshot { .empty }
+    public var onChange: ((MusicSnapshot) -> Void)? {
+        get { nil }
+        set {}
+    }
+    public func startObserving() {}
+    public func stopObserving() {}
+    public func refresh() {}
+    public func artwork(trackID: String, maxPixelSize: Int) async -> MusicArtwork? { nil }
+    public func play() {}
+    public func pause() {}
+    public func skipToNext() {}
+    public func skipToPrevious() {}
+    public func skipToBeginning() {}
 }
 
 // MARK: - Own dash UI projection (render → encode)
@@ -316,9 +498,16 @@ public protocol DashProjecting: AnyObject, Sendable {
     func startWireDump(to url: URL, maxFrames: Int) throws
     /// Closes the recording (the file keeps what was written).
     func stopWireDump()
+    /// ADDITION (music): registers (`data` non-nil) or removes (nil) the raster image that display
+    /// lists draw with `DashDrawCommand.image(id:…)` — encoded JPEG / PNG / HEIC bytes, decoded and
+    /// downsampled once by the renderer side, then the picture is re-rendered (`invalidate`).
+    /// Unknown ids draw nothing (the scene's placeholder shows). Any thread. Default: ignored.
+    func setDashImage(id: String, data: Data?)
 }
 
 public extension DashProjecting {
+    func setDashImage(id: String, data: Data?) {}
+
     var onCanvasPrepared: (@Sendable (VideoCanvas) -> Void)? {
         get { nil }
         set {}
@@ -375,6 +564,8 @@ public struct AppServices: @unchecked Sendable {
     public var projection: DashProjecting
     public var mirror: MirrorHosting
     public var system: SystemControlling
+    /// ADDITION (music): the system music player (Apple Music); `UnavailableMusic` by default.
+    public var music: MusicPlaying
     public var files: AppFileLocations
     public var clock: MonotonicClock
     public var now: @Sendable () -> Date
@@ -386,7 +577,7 @@ public struct AppServices: @unchecked Sendable {
                 handlebar: HandlebarRemoteProviding, projection: DashProjecting, mirror: MirrorHosting,
                 system: SystemControlling, files: AppFileLocations,
                 clock: MonotonicClock = SystemMonotonicClock(),
-                now: @escaping @Sendable () -> Date = { Date() }) {
+                now: @escaping @Sendable () -> Date = { Date() }, music: MusicPlaying? = nil) {
         self.keyValueStore = keyValueStore
         self.secretStore = secretStore
         self.http = http
@@ -401,6 +592,7 @@ public struct AppServices: @unchecked Sendable {
         self.projection = projection
         self.mirror = mirror
         self.system = system
+        self.music = music ?? UnavailableMusic()
         self.files = files
         self.clock = clock
         self.now = now

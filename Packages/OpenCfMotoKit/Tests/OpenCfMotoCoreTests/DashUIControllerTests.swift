@@ -315,7 +315,9 @@ final class DashUIControllerTests: XCTestCase {
         let ui = controller(DashFixtures.freeRide())
         _ = ui.handle(.key(.home), now: 1)
         let order = ui.state.focusOrder
-        XCTAssertEqual(Array(order.prefix(12)), DashSceneBuilder.menuFocusBase)
+        // "menu.music" (Apple Music, iOS addition) is only listed while music shows on the dash
+        let base = DashSceneBuilder.menuFocusBase.filter { $0 != "menu.music" }
+        XCTAssertEqual(Array(order.prefix(12)), base)
         XCTAssertTrue(order.contains("menu.units.imperial"))
         XCTAssertEqual(order.last, "menu.close")
         let steps = order.firstIndex(of: "menu.units.imperial")!
@@ -327,7 +329,7 @@ final class DashUIControllerTests: XCTestCase {
         parity.handlebarReachesSettings = false
         let p = controller(DashFixtures.freeRide(), options: parity)
         _ = p.handle(.key(.home), now: 1)
-        XCTAssertEqual(p.state.focusOrder, DashSceneBuilder.menuFocusBase + ["menu.close"])
+        XCTAssertEqual(p.state.focusOrder, base + ["menu.close"])
     }
 
     func testMenuDragScrollsAndDimmerCloses() {

@@ -114,6 +114,40 @@ enum DashFixtures {
         ], status: "3 fuel nearby")
         return m
     }
+
+    // MARK: Apple Music (iOS addition)
+
+    /// The time the music fixtures are sampled at (and drawn for): "2:13" played, "-3:51" left.
+    static let musicNow: TimeInterval = 1_000
+
+    /// A fictional song: 6:04 long, 2:13 in at `musicNow`.
+    static func song(_ state: DashNowPlaying.State = .playing, title: String = "Ruta del Sol (Remastered 2012)",
+                     artist: String = "Los Pistones", album: String = "Ruta Sessions", artworkId: String? = "music.art.p1f",
+                     duration: TimeInterval = 364) -> DashNowPlaying {
+        DashNowPlaying(title: title, artist: artist, album: album, artworkId: artworkId, state: state, duration: duration,
+                       position: 133, positionAt: musicNow, rate: 1)
+    }
+
+    static func withMusic(_ m0: DashModel, _ song: DashNowPlaying = song()) -> DashModel {
+        var m = m0
+        m.music = song
+        return m
+    }
+
+    /// The nav cue of `navigating()`, for layouts that reserve the nav card.
+    static let navCue = HudCue(dir: .right, distanceText: "350 m", text: "Strada Republicii", lanes: "↑ ↑ →")
+    /// A tall nav card (2-line road + lanes): 601 px wide on 800-wide canvases.
+    static let longNavCue = HudCue(dir: .sharpLeft, distanceText: "1.2 km",
+                                   text: "Autopista Norte con Calle 170, salida hacia La Calera y Sopó", lanes: "↖ ↑ ↑ ↑")
+    static let longSongTitle = "Concierto para Moto y Orquesta en Re Menor, Op. 73: II. Adagio molto espressivo"
+
+    /// `navigating()` with the next turn (index `index`) `distance` m ahead.
+    static func navigating(turn index: Int, at distance: Double, _ canvas: DashSize = land) -> DashModel {
+        var m = navigating(canvas)
+        m.nav.progress?.upcomingTurn = TurnCue(index: index, distanceAlongM: 1_000 + Double(index) * 500,
+                                               distanceFromRiderM: distance, dir: .right, speak: "", shortLabel: "")
+        return m
+    }
 }
 
 final class DashFixturesTests: XCTestCase {
@@ -124,5 +158,10 @@ final class DashFixturesTests: XCTestCase {
         XCTAssertTrue(DashFixtures.arrival().showsArrival)
         XCTAssertEqual(DashFixtures.road().count, 60)
         XCTAssertEqual(DashFixtures.preview().nav.preview?.routes.count, 2)
+        XCTAssertEqual(DashFixtures.navigating().nav.cue, DashFixtures.navCue)
+        let song = DashFixtures.song()
+        XCTAssertEqual(DashMusicFormat.time(song.elapsedSeconds(at: DashFixtures.musicNow)), "2:13")
+        XCTAssertEqual(DashMusicFormat.remaining(song, at: DashFixtures.musicNow), "-3:51")
+        XCTAssertEqual(DashFixtures.navigating(turn: 4, at: 350).nav.progress?.upcomingTurn?.index, 4)
     }
 }

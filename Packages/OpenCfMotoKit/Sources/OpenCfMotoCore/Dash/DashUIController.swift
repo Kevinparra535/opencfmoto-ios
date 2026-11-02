@@ -76,6 +76,14 @@ public final class DashUIController: @unchecked Sendable {
         /// 280 ms; 0 = jump on every fix (osmdroid bike parity). Explicit camera actions (recenter,
         /// overview / preview fits, zoom buttons, pan / pinch / double tap, free-pan recenter) jump.
         public var followEaseDuration: TimeInterval = 0.35
+        /// iOS addition (music): close the Music sheet after this long without dash input while the bike
+        /// moves (`model.fix?.isMoving ?? true`: no fix counts as moving); nil = never.
+        public var musicSheetIdleTimeout: TimeInterval? = 10
+        /// iOS addition (music): while navigating, close the Music sheet when the next turn
+        /// (`model.nav.progress?.upcomingTurn.distanceFromRiderM`) is within this distance — once per turn
+        /// index, and only ≥ `musicSheetInputGrace` after the last dash input; nil = never.
+        public var musicSheetTurnDistanceM: Double? = 200
+        public var musicSheetInputGrace: TimeInterval = 3
         public init() {}
     }
 
@@ -106,6 +114,13 @@ public final class DashUIController: @unchecked Sendable {
     private var ease: DashFollowEase?
     /// An explicit camera move happened inside the current `update` (fits, restore, navigation start…): no ease.
     private var cameraJumped = false
+    /// Latest `now` seen (monotonic): the time Apple Music progress is drawn for.
+    private var lastNow: TimeInterval?
+    /// Last dash input while the Music sheet is open (or its opening): the idle / near-turn rules.
+    private var musicActivityAt: TimeInterval = 0
+    /// The upcoming turn (index) the Music sheet already closed for — or that was already near when it
+    /// opened: closed once per turn.
+    private var musicTurnHandled: Int?
 
     public init(measurer: any DashTextMeasurer = ApproximateTextMeasurer(), options: Options = Options()) {
         self.measurer = measurer
@@ -142,6 +157,7 @@ public final class DashUIController: @unchecked Sendable {
     public func handle(_ input: DashInput, now: TimeInterval) -> [DashIntent] {
         lock.lock(); defer { lock.unlock() }
         advance(now)
+        if sheet == .music { musicActivityAt = max(musicActivityAt, now) } // any dash input keeps it open
         switch input {
         case let .touch(t):
             if model.holdMessage != nil { return [] }
@@ -163,13 +179,42 @@ public final class DashUIController: @unchecked Sendable {
         }
     }
 
-    /// Timers: long-press (450 ms), free-pan auto-recenter (12 s), toast expiry. Call ~10×/s
-    /// (e.g. from the render loop); returns intents fired by timers (a long-press `dropPin`).
+    /// Timers: long-press (450 ms), free-pan auto-recenter (12 s), toast expiry, the Music sheet's
+    /// auto-close (idle while moving, near the next turn). Call ~10×/s (e.g. from the render loop);
+    /// returns intents fired by timers (a long-press `dropPin`, `closeSheets` for the Music sheet).
     public func tick(now: TimeInterval) -> [DashIntent] {
         lock.lock(); defer { lock.unlock() }
         advance(now)
         let events = gestures.tick(now: now)
-        return events.isEmpty ? [] : apply(events, now: now)
+        var out = events.isEmpty ? [] : apply(events, now: now)
+        if musicSheetShouldClose(now: now) {
+            sheet = .none
+            pendingPreference = .musicTile
+            scene = nil
+            out.append(.closeSheets)
+        }
+        return out
+    }
+
+    /// The Music sheet's safety rules (navigation stays primary): 10 s without dash input while the
+    /// bike moves (or has no fix) — it stays open while stopped; while navigating, the next turn
+    /// within 200 m (once per turn, never within 3 s of an input).
+    private func musicSheetShouldClose(now: TimeInterval) -> Bool {
+        guard sheet == .music else { return false }
+        let idle = now - musicActivityAt
+        if let timeout = options.musicSheetIdleTimeout, model.fix?.isMoving ?? true, idle >= timeout { return true }
+        if let turn = nearMusicTurn(), turn != musicTurnHandled, idle >= options.musicSheetInputGrace {
+            musicTurnHandled = turn
+            return true
+        }
+        return false
+    }
+
+    /// Index of the upcoming turn while navigating when it is within `musicSheetTurnDistanceM`.
+    private func nearMusicTurn() -> Int? {
+        guard let limit = options.musicSheetTurnDistanceM, model.navigating, let turn = model.nav.progress?.upcomingTurn,
+              turn.distanceFromRiderM <= limit else { return nil }
+        return turn.index
     }
 
     /// Performs an intent as if its control had been activated (e.g. from the phone UI): applies
@@ -557,6 +602,12 @@ public final class DashUIController: @unchecked Sendable {
         } else if prev.navigating && !new.nav.mode.isNavigating && new.nav.preview == nil {
             pendingPreference = .default
         }
+        // Apple Music: the sheet closes when the song is gone (feature off, another app plays…) and
+        // when arrival starts (a preview / navigation start already closed every sheet above).
+        if sheet == .music && (new.music == nil || (new.showsArrival && !prev.showsArrival)) {
+            sheet = .none
+            pendingPreference = DashFocusEngine.defaultPreference(inPreview: new.inPreview, navigating: new.navigating)
+        }
         if new.showsArrival && !prev.showsArrival {
             focus.clear()
             pendingPreference = .default
@@ -612,6 +663,15 @@ public final class DashUIController: @unchecked Sendable {
             toast = nil
             scene = nil
         }
+        // Apple Music: rebuild only when the time-dependent drawing changes (a whole second on the
+        // sheet, a whole px of the tile's bar), never for the steady advance in between.
+        let musicNow = max(lastNow ?? now, now)
+        lastNow = musicNow
+        if let sc = scene, let key = sc.musicTimeKey,
+           DashSceneBuilder.musicTimeKey(model.music, sheetOpen: sheet == .music, tileBarWidth: sc.musicTileBarWidth,
+                                         now: musicNow) != key {
+            scene = nil
+        }
     }
 
     // MARK: - Scene
@@ -632,7 +692,8 @@ public final class DashUIController: @unchecked Sendable {
                                    menuScroll: menuScroll, searchListScroll: searchListScroll,
                                    searchChipScroll: searchChipScroll, previewChipScroll: previewChipScroll,
                                    lapReachableByHandlebar: options.lapReachableByHandlebar,
-                                   handlebarReachesSettings: options.handlebarReachesSettings)
+                                   handlebarReachesSettings: options.handlebarReachesSettings,
+                                   musicNow: lastNow ?? model.music?.positionAt ?? 0)
         var b = DashSceneBuilder(input: input, measurer: measurer)
         return b.build()
     }
@@ -791,6 +852,7 @@ public final class DashUIController: @unchecked Sendable {
             return activate(intent, now: now)
         case .back:
             var out: [DashIntent] = []
+            let closesMusic = sheet == .music
             if sheet != .none {
                 out = activate(.closeSheets, now: now)
             } else if model.showsArrival {
@@ -800,7 +862,9 @@ public final class DashUIController: @unchecked Sendable {
             } else {
                 Log.d("GPX", "[GPX] Back — idle")
             }
-            pendingPreference = DashFocusEngine.defaultPreference(inPreview: model.inPreview, navigating: model.navigating)
+            // Leaving the Music sheet returns the focus to the now-playing tile.
+            pendingPreference = closesMusic ? .musicTile
+                : DashFocusEngine.defaultPreference(inPreview: model.inPreview, navigating: model.navigating)
             scene = nil
             return out
         case .home:
@@ -914,8 +978,20 @@ public final class DashUIController: @unchecked Sendable {
             searchChipScroll = 0
             pendingPreference = .default
         case .closeSheets:
+            pendingPreference = sheet == .music ? .musicTile : navPref
             sheet = .none
-            pendingPreference = navPref
+        case .openMusic:
+            guard model.music != nil else {
+                feedback(.nothingPlaying, now: now)
+                break
+            }
+            sheet = .music
+            musicActivityAt = now
+            // A turn already near when the rider opens the sheet does not close it again.
+            musicTurnHandled = nearMusicTurn()
+            pendingPreference = .musicPlayPause
+        case .musicPlayPause, .musicNext, .musicPrevious:
+            musicActivityAt = max(musicActivityAt, now) // the app performs it; it counts as dash activity
         case .findParking:
             sheet = .search
             searchListScroll = 0

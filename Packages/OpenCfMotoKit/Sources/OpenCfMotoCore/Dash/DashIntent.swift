@@ -117,11 +117,22 @@ public enum DashIntent: Sendable, Equatable {
     /// start our own navigation).
     case navigateSavedPlace(Int)
 
+    // MARK: Apple Music (iOS addition) — close = `closeSheets`
+
+    /// Now-playing tile / menu "Music": open the Music sheet (UI-only, applied by the controller).
+    case openMusic
+    /// Music sheet ⏯ (app: toggle the system music player).
+    case musicPlayPause
+    /// Music sheet ⏭.
+    case musicNext
+    /// Music sheet ⏮ (app: restart the song when more than 3 s in, else the previous song).
+    case musicPrevious
+
     /// Intents whose whole effect is inside the dash UI (camera / sheets).
     public var isUIOnly: Bool {
         switch self {
         case .recenter, .zoomIn, .zoomOut, .toggleCompass, .toggleHeadingUp, .toggleFollow, .overview,
-             .openMenu, .openSearch, .closeSheets:
+             .openMenu, .openSearch, .closeSheets, .openMusic:
             return true
         default:
             return false

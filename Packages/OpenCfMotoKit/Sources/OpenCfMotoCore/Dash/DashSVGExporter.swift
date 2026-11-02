@@ -30,6 +30,10 @@ public struct DashSVGExporter: Sendable {
     public var showHitRegions: Bool
     /// Per-character font fallbacks emitted as `<tspan font-family>` runs.
     public var symbolFallbacks: [DashSVGFontFallback] = DashSVGExporter.defaultSymbolFallbacks
+    /// Rasters for `DashDrawCommand.image` ids (id → `data:` URI), drawn aspect-fill and clipped like
+    /// the renderer does. Ids missing here get a deterministic placeholder (gradient derived from
+    /// the id + a music note + the id), so snapshots stay reproducible without image files.
+    public var images: [String: String] = [:]
 
     public init(measurer: any DashTextMeasurer = ApproximateTextMeasurer(),
                 fontFamily: String = "Inter, Roboto, 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif",
@@ -98,6 +102,10 @@ public struct DashSVGExporter: Sendable {
                 out.append(contentsOf: text(s, rect, style))
             case let .tile(z, x, y, rect, invert):
                 out.append(tile(z: z, x: x, y: y, rect: rect, invert: invert))
+            case let .image(id, rect, radius):
+                guard !rect.isEmpty, rect.x.isFinite, rect.y.isFinite, rect.width.isFinite, rect.height.isFinite else { continue }
+                clipId += 1
+                out.append(contentsOf: image(id: id, rect: rect, cornerRadius: radius, n: clipId))
             case .save:
                 stack.append(0)
             case .restore:
@@ -166,6 +174,62 @@ public struct DashSVGExporter: Sendable {
             buffer.append(ch)
         }
         flush()
+        return out
+    }
+
+    /// FNV-1a (32 bit) over the UTF-8 bytes.
+    static func fnv1a32(_ s: String) -> UInt32 {
+        var h: UInt32 = 2_166_136_261
+        for b in s.utf8 { h = (h ^ UInt32(b)) &* 16_777_619 }
+        return h
+    }
+
+    /// "#RRGGBB" of an HSL colour (hue in degrees, saturation / lightness 0…1).
+    static func hslHex(hue: Double, saturation s: Double, lightness l: Double) -> String {
+        let c = (1 - abs(2 * l - 1)) * s
+        let hp = ((hue.truncatingRemainder(dividingBy: 360)) + 360).truncatingRemainder(dividingBy: 360) / 60
+        let x = c * (1 - abs(hp.truncatingRemainder(dividingBy: 2) - 1))
+        let rgb: (Double, Double, Double)
+        switch hp {
+        case ..<1: rgb = (c, x, 0)
+        case ..<2: rgb = (x, c, 0)
+        case ..<3: rgb = (0, c, x)
+        case ..<4: rgb = (0, x, c)
+        case ..<5: rgb = (x, 0, c)
+        default: rgb = (c, 0, x)
+        }
+        let m = l - c / 2
+        func byte(_ v: Double) -> Int { min(255, max(0, Int(((v + m) * 255).rounded()))) }
+        return String(format: "#%02X%02X%02X", byte(rgb.0), byte(rgb.1), byte(rgb.2))
+    }
+
+    /// `DashDrawCommand.image`: clipped to the rounded rect (`c<n>`), `images[id]` drawn aspect-fill,
+    /// else the placeholder: a gradient between two hues of the id's FNV-1a hash, a music note
+    /// (40 %, centred) and the id in 10-px text at the bottom — only on rects of 96 px and more (on
+    /// the 64-px tile it would sit under the progress bar the scene draws there).
+    private func image(id: String, rect r: DashRect, cornerRadius: Double, n: Int) -> [String] {
+        let radius = max(0, min(cornerRadius.isFinite ? cornerRadius : 0, min(r.width, r.height) / 2))
+        let clipPath = "<clipPath id=\"c\(n)\" clipPathUnits=\"userSpaceOnUse\"><path d=\"\(DashPath.roundedRect(r, radius: radius).svgPathData)\"/></clipPath>"
+        let box = "x=\"\(Self.n(r.x))\" y=\"\(Self.n(r.y))\" width=\"\(Self.n(r.width))\" height=\"\(Self.n(r.height))\""
+        if let href = images[id] {
+            return ["<defs>\(clipPath)</defs>", "<g clip-path=\"url(#c\(n))\">",
+                    "<image href=\"\(Self.escape(href))\" \(box) preserveAspectRatio=\"xMidYMid slice\"/>", "</g>"]
+        }
+        let h = Self.fnv1a32(id)
+        let from = Self.hslHex(hue: Double(h % 360), saturation: 0.45, lightness: 0.38)
+        let to = Self.hslHex(hue: Double((h >> 9) % 360), saturation: 0.45, lightness: 0.22)
+        let gradient = "<linearGradient id=\"g\(n)\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"\(from)\"/>"
+            + "<stop offset=\"1\" stop-color=\"\(to)\"/></linearGradient>"
+        let side = 0.4 * min(r.width, r.height)
+        let note = DashIcons.path(.musicNote, in: DashRect(x: r.midX - side / 2, y: r.midY - side / 2, width: side, height: side))
+        var out = ["<defs>\(clipPath)\(gradient)</defs>", "<g clip-path=\"url(#c\(n))\">",
+                   "<rect \(box) fill=\"url(#g\(n))\"/>",
+                   "<path d=\"\(note.svgPathData)\" fill=\"#FFFFFF\" fill-opacity=\"0.85\"/>"]
+        if min(r.width, r.height) >= 96 {
+            out.append("<text x=\"\(Self.n(r.midX))\" y=\"\(Self.n(r.maxY - 4))\" font-family=\"\(fontFamily)\" font-size=\"10\" "
+                       + "fill=\"#FFFFFF\" fill-opacity=\"0.7\" text-anchor=\"middle\">\(Self.escape(id))</text>")
+        }
+        out.append("</g>")
         return out
     }
 
