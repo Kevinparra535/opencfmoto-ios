@@ -601,6 +601,13 @@ final class POSIXWriteLock: @unchecked Sendable {
             next.resume()
         }
     }
+
+    /// Held, and how many writers wait (tests).
+    var state: (held: Bool, waiting: Int) {
+        lock.lock()
+        defer { lock.unlock() }
+        return (held, queue.count)
+    }
 }
 
 /// TransportError for a recv/send failure on an established connection (NWNetworkProvider parity).
@@ -643,9 +650,13 @@ public final class POSIXByteStream: ByteStream, @unchecked Sendable {
     /// True once `close()` was called.
     public var isClosed: Bool { socket.isClosed }
 
+    /// The write lock's state (tests).
+    var writeQueue: (held: Bool, waiting: Int) { writeLock.state }
+
     public func read(exactly count: Int) async throws -> Data {
         guard count > 0 else { return Data() }
         var out = takeCarry(max: count)
+        out.reserveCapacity(min(count, 1 << 20))
         do {
             while out.count < count {
                 out.append(try await receive(maxCount: count - out.count))
@@ -991,13 +1002,16 @@ public final class POSIXNetworkProvider: NetworkProvider, @unchecked Sendable {
                 let error = Self.connectError(code, synchronous: synchronous, towardsLocalSubnet: route.choice.interface != nil,
                                               detectLocalNetworkDenial: options.detectLocalNetworkDenial, target: target)
                 guard PlatformTransportErrors.isLocalNetworkDenied(error) else {
-                    if code == ECONNREFUSED { counters.withLock { $0.connectRefused += 1 } }
+                    counters.withLock {
+                        if code == ECONNREFUSED { $0.connectRefused += 1 }
+                        if error == .timeout { $0.connectTimeouts += 1 }
+                    }
                     Log.d("NET", "connect \(target)\(route.label) failed: \(POSIXErrno.describe(code))\(synchronous ? "" : " (SO_ERROR)") after \(millis(since: started)) ms")
                     throw error
                 }
                 denials += 1
                 if denials == 1 {
-                    Log.w("NET", "connect \(target)\(route.label): EHOSTUNREACH straight from connect() — how iOS reports a Local Network privacy denial; retrying until the \(String(format: "%.1f", timeout)) s deadline")
+                    Log.w("NET", "connect \(target)\(route.label): EHOSTUNREACH straight from connect() = dropped by a system policy, normally Local Network privacy (else a VPN or per-app data rule); retrying until the \(String(format: "%.1f", timeout)) s deadline")
                 }
                 let pause = nanos(options.localNetworkRetryInterval)
                 if monotonicNanos() + pause < deadline {

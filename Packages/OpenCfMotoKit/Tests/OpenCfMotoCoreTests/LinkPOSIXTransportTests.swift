@@ -28,8 +28,47 @@ private func openDescriptorCount() -> Int? {
     return nil
 }
 
+/// Polls `condition` every millisecond for up to `timeout` seconds.
+private func waitFor(timeout: Double = 5, _ condition: () -> Bool) async -> Bool {
+    let end = now() + timeout
+    while now() < end {
+        if condition() { return true }
+        try? await Task.sleep(nanoseconds: 1_000_000)
+    }
+    return condition()
+}
+
+/// Every 4096th byte (and the last) equals `value`.
+private func isWhole(_ frame: Data, _ value: UInt8) -> Bool {
+    stride(from: frame.startIndex, to: frame.endIndex, by: 4096).allSatisfy { frame[$0] == value }
+        && frame[frame.endIndex - 1] == value
+}
+
+/// connect(2) replacement that never completes, the same on every platform: the socket's descriptor
+/// is swapped for the write end of a full pipe (never writable), so the provider stays parked until
+/// its deadline or cancellation.
+private final class StalledConnect: @unchecked Sendable {
+    private let readEnds = Locked([Int32]())
+
+    func call(_ fd: Int32, _ address: sockaddr_in) -> (rc: Int32, errno: Int32) {
+        var fds: [Int32] = [-1, -1]
+        guard pipe(&fds) == 0 else { return (-1, errno) }
+        _ = fcntl(fds[1], F_SETFL, fcntl(fds[1], F_GETFL, 0) | O_NONBLOCK)
+        var chunk = [UInt8](repeating: 0, count: 4096)
+        while chunk.withUnsafeMutableBytes({ write(fds[1], $0.baseAddress, $0.count) }) > 0 {}
+        _ = dup2(fds[1], fd)
+        close(fds[1])
+        readEnds.withLock { $0.append(fds[0]) } // an open read end keeps the write end error-free
+        return (-1, EINPROGRESS)
+    }
+
+    deinit { readEnds.current.forEach { close($0) } }
+}
+
+#if os(Linux)
 /// A raw listening socket that never accepts (backlog 0) on a kernel-chosen loopback port: once its
-/// queue is full, further SYNs are dropped and connects time out.
+/// queue is full, Linux drops further SYNs and connects time out. (macOS answers them anyway: XNU
+/// drops embryonic entries or sends SYN cookies.)
 private final class NeverAcceptingListener {
     let fd: Int32
     let port: UInt16
@@ -62,6 +101,7 @@ private final class NeverAcceptingListener {
         return fillers
     }
 }
+#endif
 
 final class LinkPOSIXTransportTests: XCTestCase {
     private let net = POSIXNetworkProvider()
@@ -127,27 +167,29 @@ final class LinkPOSIXTransportTests: XCTestCase {
     func testConcurrentWritersKeepFramesWholeAndInCallOrder() async throws {
         let (l, c, s) = try await pair()
         defer { c.close(); s.close(); l.close() }
-        let frameSize = 2 << 20
-        // Writer k calls write() 30 ms after writer k-1: the first frames fill the socket buffers and
-        // the writer parks holding the write lock, the later ones queue behind it in call order.
-        let writers = (0 ..< 8).map { k in
-            Task {
-                try await Task.sleep(nanoseconds: UInt64(k) * 30_000_000)
-                try await c.write(Data(repeating: UInt8(k), count: frameSize))
-            }
+        // Nobody reads yet: writer 0's 16 MiB frame cannot fit in the socket buffers, so it holds the
+        // write lock, parked. Writers 1…7 call write() one after the other, each once the previous
+        // one is queued.
+        let big = 16 << 20
+        let small = 64 << 10
+        var writers = [Task { try await c.write(Data(repeating: 0, count: big)) }]
+        guard await waitFor({ c.writeQueue.held }) else { return XCTFail("writer 0 never took the lock") }
+        for k in 1 ..< 8 {
+            writers.append(Task { try await c.write(Data(repeating: UInt8(k), count: small)) })
+            guard await waitFor({ c.writeQueue.waiting == k }) else { return XCTFail("writer \(k) never queued") }
         }
-        try await Task.sleep(nanoseconds: 300_000_000)
+        let first = try await s.read(exactly: big)
+        XCTAssertTrue(isWhole(first, 0), "torn frame 0")
         var order: [UInt8] = []
-        for _ in 0 ..< 8 {
-            let frame = try await s.read(exactly: frameSize)
+        for _ in 1 ..< 8 {
+            let frame = try await s.read(exactly: small)
             let k = frame[frame.startIndex]
-            let whole = stride(from: frame.startIndex, to: frame.endIndex, by: 4096).allSatisfy { frame[$0] == k }
-                && frame[frame.endIndex - 1] == k
-            XCTAssertTrue(whole, "torn frame")
+            XCTAssertTrue(isWhole(frame, k), "torn frame \(k)")
             order.append(k)
         }
         for w in writers { try await w.value }
-        XCTAssertEqual(order, Array(0 ..< 8))
+        XCTAssertEqual(order, Array(1 ..< 8), "frames leave in call order")
+        XCTAssertEqual(c.writeQueue.held, false)
     }
 
     func testCloseWakesAParkedRead() async throws {
@@ -345,7 +387,46 @@ final class LinkPOSIXTransportTests: XCTestCase {
         XCTAssertLessThan(now() - t0, 1.0)
     }
 
-    func testConnectTimesOutOnTime() async throws {
+    func testConnectWithoutAnAnswerTimesOutOnTime() async throws {
+        let stall = StalledConnect()
+        let net = POSIXNetworkProvider(options: .init(), trace: nil, connectCall: { stall.call($0, $1) })
+        let t0 = now()
+        do {
+            let s = try await net.connect(host: "127.0.0.1", port: 10930, timeout: 0.5)
+            s.close()
+            XCTFail("connected")
+        } catch {
+            let dt = now() - t0
+            XCTAssertEqual(error as? TransportError, .timeout)
+            XCTAssertGreaterThanOrEqual(dt, 0.45)
+            XCTAssertLessThan(dt, 1.5)
+        }
+        XCTAssertEqual(net.snapshot.connectTimeouts, 1)
+    }
+
+    func testCancelledConnectThrowsCancelled() async throws {
+        let stall = StalledConnect()
+        let net = POSIXNetworkProvider(options: .init(), trace: nil, connectCall: { stall.call($0, $1) })
+        let task = Task { () -> Error? in
+            do {
+                let s = try await net.connect(host: "127.0.0.1", port: 10930, timeout: 5)
+                s.close()
+                return nil
+            } catch {
+                return error
+            }
+        }
+        try await Task.sleep(nanoseconds: 100_000_000)
+        let t0 = now()
+        task.cancel()
+        let error = await task.value
+        XCTAssertEqual(error as? TransportError, .cancelled)
+        XCTAssertLessThan(now() - t0, 1.0)
+    }
+
+    #if os(Linux)
+    /// The same timeout with real SYNs dropped by the kernel (Linux only, see NeverAcceptingListener).
+    func testConnectToAFullBacklogTimesOutOnTime() async throws {
         let blackhole = NeverAcceptingListener()
         let fillers = await blackhole.fill(with: net)
         defer { fillers.forEach { $0.close() } }
@@ -360,31 +441,8 @@ final class LinkPOSIXTransportTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(dt, 0.45)
             XCTAssertLessThan(dt, 1.5)
         }
-        XCTAssertGreaterThanOrEqual(net.snapshot.connectTimeouts, 1)
     }
-
-    func testCancelledConnectThrowsCancelled() async throws {
-        let blackhole = NeverAcceptingListener()
-        let fillers = await blackhole.fill(with: net)
-        defer { fillers.forEach { $0.close() } }
-        let port = blackhole.port
-        let net = self.net
-        let task = Task { () -> Error? in
-            do {
-                let s = try await net.connect(host: "127.0.0.1", port: port, timeout: 5)
-                s.close()
-                return nil
-            } catch {
-                return error
-            }
-        }
-        try await Task.sleep(nanoseconds: 100_000_000)
-        let t0 = now()
-        task.cancel()
-        let error = await task.value
-        XCTAssertEqual(error as? TransportError, .cancelled)
-        XCTAssertLessThan(now() - t0, 1.0)
-    }
+    #endif
 
     func testPortInUseIsReportedAsAddressInUse() async throws {
         let l = try net.openListener(port: 0)
