@@ -130,7 +130,10 @@ struct RootView: View {
     }
 
     /// `-uiDashSheet music`: once the Dash view shows music on the dash (≤ 5 s), open the dash's
-    /// Music sheet as if the rider tapped the now-playing tile (CI screenshots).
+    /// Music sheet as if the rider tapped the now-playing tile (CI screenshots). The sheet closes
+    /// itself after 10 s without dash input while the bike moves (contract §3.7; the demo GPS rides)
+    /// and the screenshot comes an unknown time after launch (`simctl launch` itself takes 2–9 s on
+    /// CI), so the hook taps it open again every 3 s for 45 s — like a rider who keeps using it.
     private func openDashSheet(_ name: String) async {
         guard name == "music" else {
             Log.w("UI", "-uiDashSheet \(name): unknown sheet (music)")
@@ -145,6 +148,11 @@ struct RootView: View {
         }
         model.ride.performDashIntent(.openMusic)
         Log.i("UI", "-uiDashSheet music (dash sheet: \(model.ride.dashUIState.sheet.rawValue))")
+        for _ in 0 ..< 15 {
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            if model.music.isShownOnDash { model.ride.performDashIntent(.openMusic) }
+        }
     }
 
     // MARK: - Destinations

@@ -45,8 +45,8 @@ rm -f "$DIR/_warmup.png"
 shoot home 5 "${DEMO[@]}"
 shoot dash 9 "${DEMO[@]}" -uiScreen dash
 # Apple Music on the dash: the Dash view with the Music sheet open (fake Music app of -demoSeed).
-# 7 s, not more: the sheet opens ~1–3 s after launch and closes itself after 10 s without dash input
-# while the bike moves (contract §3.7; the demo GPS rides at 45 km/h). No map tiles show under it.
+# The sheet closes itself after 10 s without dash input while the bike moves (contract §3.7; the
+# demo GPS rides), so -uiDashSheet taps it open again every 3 s; no map tiles show under it.
 shoot dash_music 7 "${DEMO[@]}" -uiScreen dash -uiDashSheet music
 shoot navigate 9 "${DEMO[@]}" -uiScreen navigate
 for s in trips settings controls logs garage about mirror onboarding scan ride; do
