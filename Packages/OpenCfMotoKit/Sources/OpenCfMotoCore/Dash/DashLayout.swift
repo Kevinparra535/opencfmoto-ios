@@ -1184,11 +1184,16 @@ public enum DashLayout {
         var rowWidth: Double
     }
 
+    /// Lines of the full title (≤ 2) at `width`: steps 0 and 1 of the ladder.
+    private static func musicTitleLines(_ c: DashLayoutContext, _ m: MusicContent, width: Double, stacked: Bool) -> Int {
+        DashTextLayout.lineCount(m.title, maxWidth: width, font: musicTitleFont(c, stacked: stacked), maxLines: 2,
+                                 measurer: c.measurer)
+    }
+
     private static func musicBlock(_ c: DashLayoutContext, _ m: MusicContent, step: Int, width: Double,
-                                   stacked: Bool) -> MusicBlock {
+                                   stacked: Bool, titleLines: Int) -> MusicBlock {
         let titleFont = musicTitleFont(c, stacked: stacked)
-        let lines = step >= 2 ? 1 : DashTextLayout.lineCount(m.title, maxWidth: width, font: titleFont, maxLines: 2,
-                                                               measurer: c.measurer)
+        let lines = step >= 2 ? 1 : titleLines
         let artist = m.hasArtist && step < 4, album = m.hasAlbum && step < 1
         let bar = m.hasDuration, times = m.hasDuration && step < 5
         let play = c.dp(step >= 3 ? 64 : 80), side = c.dp(step >= 3 ? 52 : 64)
@@ -1204,9 +1209,9 @@ public enum DashLayout {
 
     /// The least compressed step whose block fits `width` × `maxHeight` (nil: none does).
     private static func musicBlock(_ c: DashLayoutContext, _ m: MusicContent, width: Double, maxHeight: Double,
-                                   stacked: Bool) -> MusicBlock? {
+                                   stacked: Bool, titleLines: Int) -> MusicBlock? {
         for step in 0 ... 5 {
-            let b = musicBlock(c, m, step: step, width: width, stacked: stacked)
+            let b = musicBlock(c, m, step: step, width: width, stacked: stacked, titleLines: titleLines)
             if b.height <= maxHeight && b.rowWidth <= width { return b }
         }
         return nil
@@ -1258,7 +1263,8 @@ public enum DashLayout {
                 let art = DashRect(x: artX, y: artY, width: side, height: side)
                 let colX = s.minX + m
                 let col = DashRect(x: colX, y: colTop, width: art.minX - m - colX, height: s.maxY - m - colTop)
-                if let b = musicBlock(c, content, width: col.width, maxHeight: col.height, stacked: false) {
+                let lines = musicTitleLines(c, content, width: col.width, stacked: false)
+                if let b = musicBlock(c, content, width: col.width, maxHeight: col.height, stacked: false, titleLines: lines) {
                     candidates.append(Candidate(arrangement: .sideBySide, art: art, column: col, block: b))
                 }
             }
@@ -1268,8 +1274,9 @@ public enum DashLayout {
             let top = reserved.map { $0.maxY + gap } ?? s.minY + m
             let w = s.width - 2 * m
             let avail = s.maxY - m - top
+            let lines = musicTitleLines(c, content, width: w, stacked: true)
             for share in [0.60, 0.55, 0.50, 0.45, 0.40, 0.35, 0.30] {
-                guard let b = musicBlock(c, content, width: w, maxHeight: avail * share, stacked: true) else { continue }
+                guard let b = musicBlock(c, content, width: w, maxHeight: avail * share, stacked: true, titleLines: lines) else { continue }
                 let side = min(w, avail - gap - b.height)
                 guard side >= artMin else { continue }
                 let art = DashRect(x: s.midX - side / 2, y: top, width: side, height: side)
@@ -1303,7 +1310,7 @@ public enum DashLayout {
             art = .zero
             let top = reserved.map { max(s.minY + m, $0.maxY + gap) } ?? s.minY + m
             let free = DashRect(x: s.minX + m, y: top, width: max(0, s.width - 2 * m), height: max(0, s.maxY - m - top))
-            block = musicBlock(c, content, step: 5, width: free.width, stacked: false)
+            block = musicBlock(c, content, step: 5, width: free.width, stacked: false, titleLines: 1)
             close = DashRect(x: free.maxX - closeSide, y: free.minY, width: closeSide, height: closeSide)
             let below = close.maxY + gap
             column = free.maxY - below >= block.height
