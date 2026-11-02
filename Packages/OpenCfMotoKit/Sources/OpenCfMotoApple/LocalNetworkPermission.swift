@@ -9,11 +9,9 @@
 // retries automatically once the user allows it). Do this in the FOREGROUND: in the background an
 // undetermined state is silently denied without showing the alert.
 //
-// On a Wi-Fi without internet (the dash's) iOS keeps the Wi-Fi path unsatisfied, so that connection
-// never becomes ready (field log 1). There the check browses for the dash's `_EasyConn._tcp` instead
-// (TN3179 "Check for local network access"): browsing is a local network operation (it triggers the
-// alert), a result proves access, and a denial shows as kDNSServiceErr_PolicyDenied (−65570). A
-// Bonjour browse worked on that network in the field.
+// On a Wi-Fi without internet (the dash's) the Wi-Fi path stays unsatisfied and that connection never
+// becomes ready (field log 1); Bonjour worked there. So the check browses for `_EasyConn._tcp` (TN3179
+// "Check for local network access"): a result proves access, kDNSServiceErr_PolicyDenied (−65570) a denial.
 
 #if canImport(Foundation)
 import Foundation
@@ -122,9 +120,8 @@ public enum LocalNetworkPermission {
     /// `request`: no denial and no advertisement for this long → nothing more to learn.
     static let requestQuietLimit: TimeInterval = 15
 
-    /// Local-only Wi-Fi: browse for `_EasyConn._tcp`. A result → granted; a policy denial → denied
-    /// (`request` keeps browsing: the rider may still allow); neither → undetermined (no dash
-    /// advertisement to prove access).
+    /// Local-only Wi-Fi: a result → granted; a policy denial → denied (`request` keeps browsing: the
+    /// rider may still allow); neither → undetermined.
     static func browseProbe(timeout: TimeInterval, waitForDecision: Bool) async -> LocalNetworkAccess {
         let start = Date()
         let deadline = start.addingTimeInterval(waitForDecision ? timeout : max(timeout, minimumCheckBrowse))

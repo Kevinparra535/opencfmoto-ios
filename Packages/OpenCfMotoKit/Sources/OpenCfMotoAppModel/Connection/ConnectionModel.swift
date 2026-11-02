@@ -57,9 +57,8 @@
 //   on the next foreground after a background).
 // - Stop must stay reachable: `isSessionActive` is true for every session, including an .error phase
 //   whose link keeps re-arming (the Local Network issue is raised once per such episode).
-// - "Wi-Fi up" is `WifiNetworkInfo.isWifiAvailable`, which includes a local-only Wi-Fi: the dash's
-//   network has no internet, so iOS reports its path unsatisfied while the interface holds its address
-//   (field log 1). Every rule below treats it like any other Wi-Fi; the logs say it once per network.
+// - `isWifiAvailable` includes a local-only Wi-Fi (no internet: path unsatisfied, address on the
+//   interface; field log 1). The rules treat it like any Wi-Fi; the log says so once per network.
 
 import Foundation
 import Observation
@@ -673,8 +672,7 @@ public final class ConnectionModel {
         manualJoinSignal = nil
     }
 
-    /// A Wi-Fi without internet (iOS reports its path unsatisfied, the interface has its address) is
-    /// used like any other; say so plainly, once per network.
+    /// A local-only Wi-Fi is used like any other: say so plainly, once per network.
     private func noteWifi(_ info: WifiNetworkInfo) {
         guard info.isWifiAvailable else { return }
         guard info.isLocalOnly else {

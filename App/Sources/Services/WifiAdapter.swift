@@ -4,10 +4,8 @@
 // Free flavor (`OCM_NO_HOTSPOT`, no Hotspot Configuration entitlement): joins are manual — the
 // package does not see the app's compilation flags, so the joiner gets `hotspotEnabled: false`.
 //
-// "Wi-Fi up" = the Wi-Fi path is satisfied OR the Wi-Fi interface holds a usable IPv4: on the dash's
-// access point (no internet) iOS keeps the path unsatisfied although the phone has its address
-// (field log 1). Such a network is reported up and `isLocalOnly`, with its SSID and the subnet `.1`
-// as the gateway when the path lists none.
+// Wi-Fi up = path satisfied OR a usable IPv4 on the Wi-Fi interface: the dash's Wi-Fi has no internet
+// and iOS keeps its path unsatisfied (field log 1). Such a network is `isLocalOnly`, gateway = subnet .1.
 
 import Foundation
 import OpenCfMotoCore
@@ -19,8 +17,8 @@ final class WifiAdapter: WifiJoining, @unchecked Sendable {
     private let joiner: WifiJoiner
     private let info = WiFiInfo()
 
-    /// Interface re-read while a `networkUpdates()` stream is open: a local-only network's address
-    /// comes and goes without any path change (the path stays unsatisfied).
+    /// Interface re-read while a `networkUpdates()` stream is open: a local-only Wi-Fi's address comes
+    /// and goes without any path change.
     private static let addressPollInterval: TimeInterval = 2
     /// Faster while associated without a DHCP lease yet (at most 20 times in a row, 10 s).
     private static let leasePollInterval: TimeInterval = 0.5

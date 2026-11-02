@@ -5,10 +5,9 @@
 // Current Wi-Fi addressing for the bike link: interface name, phone IPv4 + prefix, gateways and
 // (full flavor) SSID. docs/spec/ios-platform-facts.md (j), session-network.md §4.
 //
-// "Wi-Fi up" does not need a satisfied path. On the dash's access point (no internet) iOS keeps
-// NWPathMonitor(requiredInterfaceType: .wifi) unsatisfied (`notAvailable`, no interface listed)
-// although the Wi-Fi interface holds its DHCP address (field log 1). A Wi-Fi interface with a usable
-// IPv4 therefore counts as up ("local-only"), and the bike link uses that interface directly.
+// Wi-Fi up does not need a satisfied path: on the dash's Wi-Fi (no internet) the .wifi path stays
+// unsatisfied (`notAvailable`, no interface) while the interface has its DHCP address (field log 1).
+// A usable IPv4 on the Wi-Fi interface counts as up ("local-only").
 //
 // Layout of this file:
 // - Foundation-only part (compiled on every platform, unit-tested on Linux): `WiFiIPv4`,
