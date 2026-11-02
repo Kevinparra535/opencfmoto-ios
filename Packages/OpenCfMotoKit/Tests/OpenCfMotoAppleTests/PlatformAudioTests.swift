@@ -84,8 +84,8 @@ final class PlatformAudioTests: XCTestCase {
 
     // MARK: Now Playing metadata
 
-    /// The dash draws title and artist in its own font: ◀ ▶ ★ · came out as empty boxes on the
-    /// 450MT (field test 2). Printable ASCII only; the pill shows just the start of the artist.
+    /// The dash draws title and artist in its own font: ◀ ▶ came out as empty boxes on the 450MT
+    /// (field test 2). Printable ASCII only.
     func testNowPlayingMetadataIsPrintableASCII() {
         let m = HandlebarNowPlayingMetadata()
         for text in [m.title, m.artist, m.album] {

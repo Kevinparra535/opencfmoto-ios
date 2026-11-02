@@ -115,8 +115,9 @@ final class HandlebarEventEmitter: @unchecked Sendable {
 }
 
 /// What the dash's AVRCP "now playing" widget shows (Android: title/artist/album, 1 h duration).
-/// ASCII only: the dash draws the text in its own font, which showed ◀ ▶ ★ · as empty boxes (field
-/// test 2, 450MT). Its pill shows the title and only the start of the artist: most-used keys first.
+/// ASCII only: the dash draws the text in its own font, which showed ◀ ▶ as empty boxes (field test 2,
+/// 450MT: "OpenCfMoto ▯ ▯ mov"; ★ and · never caught on camera). The pill scrolls title + artist (another
+/// photo shows "oup" of "Group"): most-used keys first.
 public struct HandlebarNowPlayingMetadata: Sendable, Equatable {
     public var title: String
     public var artist: String
