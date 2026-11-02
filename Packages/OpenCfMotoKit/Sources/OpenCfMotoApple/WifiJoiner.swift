@@ -13,6 +13,8 @@
 //   `.manualJoinRequired` (the rider joins in Settings; the app detects it with `WiFiInfo`).
 //   NOTE: Swift package targets do not inherit the app target's SWIFT_ACTIVE_COMPILATION_CONDITIONS,
 //   so the app must ALSO pass `WifiJoinOptions(hotspotEnabled: false)` in its free flavor.
+// - The dash's network has no internet: iOS may keep its Wi-Fi path unsatisfied after the join. The
+//   confirmation therefore looks at the Wi-Fi interface's address (`WiFiSnapshot.isUp`), not the path.
 
 #if canImport(Foundation)
 import Foundation
@@ -22,8 +24,8 @@ import OpenCfMotoCore
 
 /// Result of `WifiJoiner.join`.
 public enum WifiJoinOutcome: Sendable, Equatable {
-    /// Configuration applied and the association confirmed (Wi-Fi path up with a usable IPv4 on
-    /// the bike network, SSID matched when iOS reveals it).
+    /// Configuration applied and the association confirmed (Wi-Fi up with a usable IPv4 on the bike
+    /// network, its path satisfied or not; SSID matched when iOS reveals it).
     case joined(WiFiSnapshot)
     /// The phone was already on the bike network: nothing was applied (no system prompt).
     case alreadyJoined(WiFiSnapshot)
@@ -225,13 +227,17 @@ public enum WifiJoinPolicy {
         }
     }
 
-    /// Association confirmed? Requires a satisfied Wi-Fi path with a usable IPv4 (169.254/16
-    /// ignored). When iOS reveals the SSID it must equal `targetSSID`; otherwise the phone address or
-    /// a gateway must be in `expectedSubnets` (empty list = any usable address is accepted).
+    /// Association confirmed? Requires Wi-Fi up with a usable IPv4 on the Wi-Fi interface (169.254/16
+    /// ignored); the path may stay unsatisfied on the dash's network (no internet). When iOS reveals
+    /// the SSID it must equal `targetSSID`. Otherwise the address must be new since `baseline` (the
+    /// network before apply(); nil = no such check, e.g. iOS answered alreadyAssociated) — the rule of
+    /// a manual join (`ConnectionModel.matchesManualJoin`) — and the phone address or a gateway must be
+    /// in `expectedSubnets` (empty list = any usable address is accepted).
     public static func isConfirmed(_ snapshot: WiFiSnapshot, currentSSID: String?, targetSSID: String,
-                                   expectedSubnets: [WiFiSubnet]) -> Bool {
-        guard snapshot.isSatisfied, snapshot.usablePhoneIPv4 != nil else { return false }
+                                   expectedSubnets: [WiFiSubnet], baseline: WiFiSnapshot? = nil) -> Bool {
+        guard snapshot.isUp, snapshot.usablePhoneIPv4 != nil else { return false }
         if let s = currentSSID { return s == targetSSID }
+        if let baseline, !snapshot.hasNewAddress(since: baseline) { return false }
         if expectedSubnets.isEmpty { return true }
         return snapshot.isOn(expectedSubnets)
     }
@@ -268,16 +274,15 @@ public final class WifiJoiner: @unchecked Sendable {
         }
 
         // Already on the bike network? Then don't apply (every new/updated configuration prompts).
+        // Up includes a local-only Wi-Fi: the dash's network has no internet, so iOS may keep its path
+        // unsatisfied while the phone holds an address there.
         let info = WiFiInfo()
         defer { info.stop() }
-        let before = await info.firstSnapshot(timeout: 1.0)
-        var ssidBefore: String?
-        if before.isSatisfied { ssidBefore = await WiFiInfo.fetchSSID() }
-        if ssidBefore == ssid, before.usablePhoneIPv4 != nil {
-            var s = before
-            s.ssid = ssidBefore
-            Log.i("WIFI", "Wi-Fi already joined: \(ssid) — skipping re-join (\(s))")
-            return .alreadyJoined(s)
+        var before = await info.firstSnapshot(timeout: 1.0)
+        if before.isUp { before.ssid = await WiFiInfo.fetchSSID() }
+        if before.ssid == ssid, before.usablePhoneIPv4 != nil {
+            Log.i("WIFI", "Wi-Fi already joined: \(ssid) — skipping re-join (\(before))")
+            return .alreadyJoined(before)
         }
 
         let cfg = NEHotspotConfiguration(ssid: ssid, passphrase: passphrase, isWEP: false)
@@ -285,6 +290,7 @@ public final class WifiJoiner: @unchecked Sendable {
         if let days = options.lifeTimeInDays { cfg.lifeTimeInDays = NSNumber(value: max(1, min(365, days))) }
 
         var attempt = 1
+        var alreadyAssociated = false
         applyLoop: while true {
             Log.i("WIFI", "[wifi] applying hotspot configuration for \(ssid) (attempt \(attempt), joinOnce=\(options.joinOnce))")
             let error = await Self.apply(cfg)
@@ -293,6 +299,7 @@ public final class WifiJoiner: @unchecked Sendable {
             Log.w("WIFI", "[wifi] apply error \(error.domain) \(error.code): \(error.localizedDescription) → \(decision)")
             switch decision {
             case .success:
+                alreadyAssociated = true
                 break applyLoop
             case let .retry(removeFirst):
                 if removeFirst { NEHotspotConfigurationManager.shared.removeConfiguration(forSSID: ssid) }
@@ -303,24 +310,31 @@ public final class WifiJoiner: @unchecked Sendable {
             }
         }
 
-        // "Applied" ≠ "joined": wait for the Wi-Fi path with a usable IPv4 on the bike network.
+        // "Applied" ≠ "joined": wait for a usable IPv4 on the Wi-Fi interface (its path may stay
+        // unsatisfied: no internet) and the bike SSID — or, SSID hidden, a new address on a dash subnet.
+        let baseline: WiFiSnapshot? = alreadyAssociated ? nil : before
         let deadline = Date().addingTimeInterval(options.confirmTimeout)
+        var lastSeen = before
+        var loggedOtherSSID: String?
         repeat {
-            let s0 = info.refreshedSnapshot()
-            if s0.isSatisfied {
-                let current = await WiFiInfo.fetchSSID()
-                if WifiJoinPolicy.isConfirmed(s0, currentSSID: current, targetSSID: ssid,
-                                              expectedSubnets: options.expectedSubnets) {
-                    var s = s0
-                    s.ssid = current
-                    Log.i("WIFI", "Wi-Fi joined: \(ssid) (\(s))")
-                    return .joined(s)
-                }
+            var s = info.refreshedSnapshot()
+            if s.isUp { s.ssid = await WiFiInfo.fetchSSID() }
+            lastSeen = s
+            if WifiJoinPolicy.isConfirmed(s, currentSSID: s.ssid, targetSSID: ssid,
+                                          expectedSubnets: options.expectedSubnets, baseline: baseline) {
+                let how = s.ssid != nil ? "SSID matches"
+                    : alreadyAssociated ? "iOS: already associated, SSID hidden" : "new address on a dash subnet, SSID hidden"
+                Log.i("WIFI", "Wi-Fi joined: \(ssid) (\(s); \(how))")
+                return .joined(s)
+            }
+            if let other = s.ssid, other != ssid, other != loggedOtherSSID {
+                loggedOtherSSID = other
+                Log.i("WIFI", "[wifi] still on \(other), waiting for \(ssid) (\(s))")
             }
             if Task.isCancelled { throw CancellationError() }
             await sleepSeconds(options.pollInterval)
         } while Date() < deadline
-        Log.w("WIFI", "[wifi] \(ssid) not associated after \(options.confirmTimeout)s (\(info.current))")
+        Log.w("WIFI", "[wifi] \(ssid) not associated after \(options.confirmTimeout)s (last seen: \(lastSeen))")
         throw WifiJoinError.notAssociated(ssid: ssid)
     }
 

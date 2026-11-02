@@ -92,23 +92,29 @@ public struct AppFileLocations: Sendable, Equatable {
 
 /// Snapshot of the phone's Wi-Fi path (NWPath + getifaddrs + NEHotspotNetwork on iOS).
 public struct WifiNetworkInfo: Sendable, Equatable {
-    /// A Wi-Fi path is satisfied.
+    /// Wi-Fi is up: the Wi-Fi path is satisfied, or the Wi-Fi interface holds a usable IPv4 (a
+    /// network without internet, like the dash's, that iOS reports unsatisfied: `isLocalOnly`).
     public var isWifiAvailable: Bool
     /// Current SSID; nil when unknown (free flavor / no entitlement / no Wi-Fi).
     public var ssid: String?
     /// The Wi-Fi interface name from NWPath (never assume "en0").
     public var interfaceName: String?
     public var phoneIPv4: String?
-    /// First IPv4 gateway of the Wi-Fi path.
+    /// First IPv4 gateway of the Wi-Fi path; the subnet .1 when the path lists none (local-only).
     public var gateway: String?
     /// Ordered dash host guesses: gateways → subnet .1 → 192.168.0.1 → 192.168.49.1.
     public var dashHostCandidates: [String]
     /// NWPath reported `.localNetworkDenied`.
     public var isLocalNetworkDenied: Bool
+    /// Up through the interface address only: iOS reports the Wi-Fi path unsatisfied (no internet).
+    /// The bike link then uses the interface directly.
+    public var isLocalOnly: Bool
+    /// `NWPath.unsatisfiedReason` of the Wi-Fi path when it is not satisfied, e.g. "notAvailable".
+    public var pathUnsatisfiedReason: String?
 
     public init(isWifiAvailable: Bool = false, ssid: String? = nil, interfaceName: String? = nil,
                 phoneIPv4: String? = nil, gateway: String? = nil, dashHostCandidates: [String] = [],
-                isLocalNetworkDenied: Bool = false) {
+                isLocalNetworkDenied: Bool = false, isLocalOnly: Bool = false, pathUnsatisfiedReason: String? = nil) {
         self.isWifiAvailable = isWifiAvailable
         self.ssid = ssid
         self.interfaceName = interfaceName
@@ -116,6 +122,8 @@ public struct WifiNetworkInfo: Sendable, Equatable {
         self.gateway = gateway
         self.dashHostCandidates = dashHostCandidates
         self.isLocalNetworkDenied = isLocalNetworkDenied
+        self.isLocalOnly = isLocalOnly
+        self.pathUnsatisfiedReason = pathUnsatisfiedReason
     }
 
     public static let unavailable = WifiNetworkInfo()

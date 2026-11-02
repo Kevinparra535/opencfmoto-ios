@@ -3,6 +3,11 @@
 // + WiFiInfo (NWPathMonitor on .wifi, getifaddrs on that interface, NEHotspotNetwork SSID).
 // Free flavor (`OCM_NO_HOTSPOT`, no Hotspot Configuration entitlement): joins are manual — the
 // package does not see the app's compilation flags, so the joiner gets `hotspotEnabled: false`.
+//
+// "Wi-Fi up" = the Wi-Fi path is satisfied OR the Wi-Fi interface holds a usable IPv4: on the dash's
+// access point (no internet) iOS keeps the path unsatisfied although the phone has its address
+// (field log 1). Such a network is reported up and `isLocalOnly`, with its SSID and the subnet `.1`
+// as the gateway when the path lists none.
 
 import Foundation
 import OpenCfMotoCore
@@ -13,6 +18,12 @@ final class WifiAdapter: WifiJoining, @unchecked Sendable {
     let supportsAutomaticJoin: Bool
     private let joiner: WifiJoiner
     private let info = WiFiInfo()
+
+    /// Interface re-read while a `networkUpdates()` stream is open: a local-only network's address
+    /// comes and goes without any path change (the path stays unsatisfied).
+    private static let addressPollInterval: TimeInterval = 2
+    /// Faster while associated without a DHCP lease yet.
+    private static let leasePollInterval: TimeInterval = 0.5
 
     init(flavor: BuildFlavor) {
         supportsAutomaticJoin = flavor == .full
@@ -49,50 +60,50 @@ final class WifiAdapter: WifiJoining, @unchecked Sendable {
 
     func currentNetwork() async -> WifiNetworkInfo {
         _ = await info.firstSnapshot(timeout: 1.0)
-        var snapshot = info.refreshedSnapshot() // DHCP may have completed without a path change
-        if snapshot.isSatisfied { snapshot.ssid = await WiFiInfo.fetchSSID() }
+        var snapshot = info.refreshedSnapshot() // the address may change without a path change
+        if snapshot.isUp { snapshot.ssid = await WiFiInfo.fetchSSID() }
         return Self.map(snapshot)
     }
 
     func networkUpdates() -> AsyncStream<WifiNetworkInfo> {
-        let source = info.updates()
         let info = self.info
+        _ = info.refreshedSnapshot() // the first value must be the interface as it is now
+        let source = info.updates()
         return AsyncStream(bufferingPolicy: .bufferingNewest(8)) { continuation in
             let task = Task {
-                var leasePoll: Task<Void, Never>?
                 for await update in source {
                     var snapshot = update
-                    if snapshot.isSatisfied { snapshot.ssid = await WiFiInfo.fetchSSID() }
+                    if snapshot.isUp { snapshot.ssid = await WiFiInfo.fetchSSID() }
                     continuation.yield(Self.map(snapshot))
-                    leasePoll?.cancel()
-                    leasePoll = nil
-                    if snapshot.isSatisfied, snapshot.usablePhoneIPv4 == nil {
-                        // Associated but no DHCP lease yet: NWPath may not change when it arrives,
-                        // so re-read the address (a change is published on `updates()`).
-                        leasePoll = Task {
-                            for _ in 0 ..< 20 {
-                                try? await Task.sleep(nanoseconds: 500_000_000)
-                                if Task.isCancelled { return }
-                                let s = info.refreshedSnapshot()
-                                if !s.isSatisfied || s.usablePhoneIPv4 != nil { return }
-                            }
-                        }
-                    }
                 }
-                leasePoll?.cancel()
                 continuation.finish()
             }
-            continuation.onTermination = { _ in task.cancel() }
+            // A change found by the re-read is published on `updates()` like a path update.
+            let poll = Task {
+                while !Task.isCancelled {
+                    let now = info.current
+                    let leasePending = now.isSatisfied && now.usablePhoneIPv4 == nil
+                    await sleepSeconds(leasePending ? Self.leasePollInterval : Self.addressPollInterval)
+                    if Task.isCancelled { return }
+                    _ = info.refreshedSnapshot()
+                }
+            }
+            continuation.onTermination = { _ in
+                task.cancel()
+                poll.cancel()
+            }
         }
     }
 
     private static func map(_ s: WiFiSnapshot) -> WifiNetworkInfo {
-        WifiNetworkInfo(isWifiAvailable: s.isSatisfied,
+        WifiNetworkInfo(isWifiAvailable: s.isUp,
                         ssid: s.ssid,
                         interfaceName: s.interfaceName,
                         phoneIPv4: s.usablePhoneIPv4,
-                        gateway: s.usableGateways.first,
+                        gateway: s.primaryGateway,
                         dashHostCandidates: s.dashHostCandidates,
-                        isLocalNetworkDenied: s.isLocalNetworkDenied)
+                        isLocalNetworkDenied: s.isLocalNetworkDenied,
+                        isLocalOnly: s.isLocalOnly,
+                        pathUnsatisfiedReason: s.isSatisfied ? nil : s.unsatisfiedReason)
     }
 }

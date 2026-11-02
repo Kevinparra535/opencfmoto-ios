@@ -5,14 +5,21 @@
 // Current Wi-Fi addressing for the bike link: interface name, phone IPv4 + prefix, gateways and
 // (full flavor) SSID. docs/spec/ios-platform-facts.md (j), session-network.md §4.
 //
+// "Wi-Fi up" does not need a satisfied path. On the dash's access point (no internet) iOS keeps
+// NWPathMonitor(requiredInterfaceType: .wifi) unsatisfied (`notAvailable`, no interface listed)
+// although the Wi-Fi interface holds its DHCP address (field log 1). A Wi-Fi interface with a usable
+// IPv4 therefore counts as up ("local-only"), and the bike link uses that interface directly.
+//
 // Layout of this file:
 // - Foundation-only part (compiled on every platform, unit-tested on Linux): `WiFiIPv4`,
-//   `WiFiSubnet`, `WiFiInterfaces` (getifaddrs), `WiFiSnapshot`, `OCMPlatformBroadcaster`.
+//   `WiFiSubnet`, `WiFiInterfaces` (getifaddrs), `WiFiPathFacts`, `WiFiSnapshot`,
+//   `OCMPlatformBroadcaster`.
 // - Network.framework part: `WiFiInfo` (NWPathMonitor(requiredInterfaceType: .wifi)).
 // - iOS + full flavor: SSID through `NEHotspotNetwork.fetchCurrent` (`#if !OCM_NO_HOTSPOT`).
 //
-// Never hard-code "en0": the Wi-Fi interface is identified by NWInterface.type == .wifi and its
-// BSD name is then used to filter getifaddrs (TN3179 "Identify the Wi-Fi interface correctly").
+// The Wi-Fi interface is the one the path reports (NWInterface.type == .wifi). An unsatisfied path
+// lists none: then the interface whose functional type is Wi-Fi (SIOCGIFFUNCTIONALTYPE, TN3179
+// "Identify the Wi-Fi interface correctly"), and "en0" only when the type says nothing else.
 
 #if canImport(Foundation)
 import Foundation
@@ -169,8 +176,68 @@ public struct WiFiInterfaceAddress: Sendable, Equatable {
 }
 
 /// IPv4 interface enumeration. Pick the Wi-Fi interface by the NAME the Wi-Fi `NWPath` reports
-/// (`NWInterface.name`), never by assuming "en0".
+/// (`NWInterface.name`); without one, by its functional type (`wifiInterfaceName(among:)`).
 public enum WiFiInterfaces {
+    /// iOS's Wi-Fi interface: the last resort when neither the path nor the functional type names one.
+    public static let defaultWifiInterfaceName = "en0"
+    /// `IFRTYPE_FUNCTIONAL_UNKNOWN` / `IFRTYPE_FUNCTIONAL_WIFI_INFRA` (<net/if.h>).
+    public static let functionalTypeUnknown: UInt32 = 0
+    public static let functionalTypeWifiInfra: UInt32 = 3
+
+    /// The Wi-Fi interface when the path names none (an unsatisfied path lists no interface): among
+    /// the interfaces carrying IPv4, the one whose functional type is Wi-Fi ("en0" first, else one with
+    /// a usable address). With none typed Wi-Fi: "en0", unless its type says it is something else
+    /// (wired, cellular…): then nil.
+    public static func wifiInterfaceName(among all: [WiFiInterfaceAddress],
+                                         typeOf: (String) -> UInt32? = WiFiInterfaces.functionalType(ofInterface:)) -> String? {
+        var names: [String] = []
+        for a in all where a.isUp && !a.isLoopback && !names.contains(a.interfaceName) {
+            names.append(a.interfaceName)
+        }
+        let wifi = names.filter { typeOf($0) == functionalTypeWifiInfra }
+        if wifi.contains(defaultWifiInterfaceName) { return defaultWifiInterfaceName }
+        if let usable = wifi.first(where: { name in
+            all.contains { $0.interfaceName == name && $0.address.isUsableLocalAddress }
+        }) { return usable }
+        if let first = wifi.first { return first }
+        if let type = typeOf(defaultWifiInterfaceName), type != functionalTypeUnknown { return nil }
+        return defaultWifiInterfaceName
+    }
+
+    private static let functionalTypes = Locked<[String: UInt32]>([:])
+
+    /// Functional type of a BSD interface (`SIOCGIFFUNCTIONALTYPE`, cached per name); nil where it
+    /// cannot be read (not Darwin, unknown interface).
+    public static func functionalType(ofInterface name: String) -> UInt32? {
+        if let known = functionalTypes.withLock({ $0[name] }) { return known }
+        guard let type = readFunctionalType(name) else { return nil }
+        functionalTypes.withLock { $0[name] = type }
+        return type
+    }
+
+    private static func readFunctionalType(_ name: String) -> UInt32? {
+        #if canImport(Darwin)
+        let fd = socket(AF_INET, SOCK_DGRAM, 0)
+        guard fd >= 0 else { return nil }
+        defer { close(fd) }
+        var request = ifreq()
+        let bytes = Array(name.utf8)
+        guard !bytes.isEmpty, bytes.count < MemoryLayout.size(ofValue: request.ifr_name) else { return nil }
+        withUnsafeMutableBytes(of: &request.ifr_name) { buffer in
+            for (i, b) in bytes.enumerated() { buffer[i] = b }
+        }
+        // _IOWR('i', 173, struct ifreq): Swift does not import the SIOCGIFFUNCTIONALTYPE macro.
+        let code = UInt(0xC000_0000) | (UInt(MemoryLayout<ifreq>.size & 0x1FFF) << 16)
+            | (UInt(UInt8(ascii: "i")) << 8) | 173
+        let rc = withUnsafeMutablePointer(to: &request) { ioctl(fd, code, UnsafeMutableRawPointer($0)) }
+        guard rc == 0 else { return nil }
+        // ifru_functional_type is the union's first (and only read) member.
+        return withUnsafeBytes(of: &request.ifr_ifru) { $0.load(as: UInt32.self) }
+        #else
+        return nil
+        #endif
+    }
+
     /// All IPv4 addresses of all interfaces (empty if `getifaddrs` fails).
     public static func ipv4Addresses() -> [WiFiInterfaceAddress] {
         var out: [WiFiInterfaceAddress] = []
@@ -218,13 +285,43 @@ public enum WiFiInterfaces {
     }
 }
 
+// MARK: - Path facts
+
+/// What the Wi-Fi `NWPath` reports, without Network.framework types: a snapshot is built from these
+/// plus getifaddrs (`WiFiSnapshot.init(path:addresses:fallbackInterfaceName:)`).
+public struct WiFiPathFacts: Sendable, Equatable {
+    public var isSatisfied: Bool
+    /// `NWPath.unsatisfiedReason` as text when not satisfied, e.g. "notAvailable".
+    public var unsatisfiedReason: String?
+    public var isLocalNetworkDenied: Bool
+    /// BSD name of the `.wifi` interface the path lists (an unsatisfied path lists none).
+    public var interfaceName: String?
+    /// Usable or not, the IPv4 gateways of the path (`NWPath.gateways`).
+    public var gateways: [String]
+
+    public init(isSatisfied: Bool, unsatisfiedReason: String? = nil, isLocalNetworkDenied: Bool = false,
+                interfaceName: String? = nil, gateways: [String] = []) {
+        self.isSatisfied = isSatisfied
+        self.unsatisfiedReason = unsatisfiedReason
+        self.isLocalNetworkDenied = isLocalNetworkDenied
+        self.interfaceName = interfaceName
+        self.gateways = gateways
+    }
+
+    /// Before the first path update.
+    public static let none = WiFiPathFacts(isSatisfied: false)
+}
+
 // MARK: - Snapshot
 
 /// What the app knows about the current Wi-Fi link (bike network or not).
 public struct WiFiSnapshot: Sendable, Equatable, CustomStringConvertible {
-    /// A Wi-Fi path exists and is satisfied (associated, link up). Does NOT imply internet.
+    /// The Wi-Fi path is satisfied (associated, link up, and iOS deems it usable). Does NOT imply
+    /// internet. A network without internet (the dash) may stay unsatisfied with a usable address:
+    /// see `isUp` / `isLocalOnly`.
     public var isSatisfied: Bool
-    /// BSD name of the Wi-Fi interface as reported by Network.framework (logs only).
+    /// BSD name of the Wi-Fi interface: the one the path reports, else the functional-type / "en0"
+    /// fallback when it carries an IPv4 (logs, address lookup).
     public var interfaceName: String?
     /// Phone IPv4 on the Wi-Fi interface (may be 169.254.x.x before DHCP completes).
     public var phoneIPv4: String?
@@ -254,10 +351,42 @@ public struct WiFiSnapshot: Sendable, Equatable, CustomStringConvertible {
     /// No Wi-Fi path.
     public static let unavailable = WiFiSnapshot(isSatisfied: false)
 
+    /// Builds a snapshot from the path facts and the interface addresses. Without a Wi-Fi interface
+    /// in the path, `fallbackInterfaceName` is used, and reported only when it carries an IPv4.
+    public init(path: WiFiPathFacts, addresses: [WiFiInterfaceAddress], fallbackInterfaceName: String?) {
+        var name = path.interfaceName
+        var address = name.flatMap { WiFiInterfaces.pickPrimary(addresses, interfaceName: $0) }
+        if name == nil, let fallback = fallbackInterfaceName,
+           let a = WiFiInterfaces.pickPrimary(addresses, interfaceName: fallback) {
+            name = fallback
+            address = a
+        }
+        self.init(isSatisfied: path.isSatisfied, interfaceName: name, phoneIPv4: address?.address.description,
+                  prefixLength: address?.prefixLength, gateways: path.gateways,
+                  isLocalNetworkDenied: path.isLocalNetworkDenied,
+                  unsatisfiedReason: path.isSatisfied ? nil : path.unsatisfiedReason)
+    }
+
+    /// Wi-Fi is up: the path is satisfied, or the Wi-Fi interface holds a usable IPv4 (a network
+    /// without internet, like the dash's, that iOS reports unsatisfied).
+    public var isUp: Bool { isSatisfied || usablePhoneIPv4 != nil }
+
+    /// Up through the interface address only: iOS reports the Wi-Fi path unsatisfied.
+    public var isLocalOnly: Bool { !isSatisfied && usablePhoneIPv4 != nil }
+
     /// Phone IPv4 if it can be used on a bike network (not 169.254/16, loopback or 0.0.0.0).
     public var usablePhoneIPv4: String? {
         guard let s = phoneIPv4, let a = WiFiIPv4(s), a.isUsableLocalAddress else { return nil }
         return s
+    }
+
+    /// The path's first usable gateway, else the subnet `.1` (a local-only path lists no gateway).
+    public var primaryGateway: String? { usableGateways.first ?? subnetGateway }
+
+    /// Another usable address or gateway than `baseline`, or Wi-Fi was down then: the phone changed
+    /// networks (the rule `ConnectionModel.matchesManualJoin` applies to a manual join).
+    public func hasNewAddress(since baseline: WiFiSnapshot) -> Bool {
+        !baseline.isUp || baseline.usablePhoneIPv4 != usablePhoneIPv4 || baseline.primaryGateway != primaryGateway
     }
 
     /// Android `gatewayForSubnet` of the phone address (192.168.0.50/24 → 192.168.0.1).
@@ -298,14 +427,25 @@ public struct WiFiSnapshot: Sendable, Equatable, CustomStringConvertible {
         return usableGateways.contains { g in subnets.contains { $0.contains(g) } }
     }
 
+    /// "wifi=up", "wifi=up(local-only, path=unsatisfied:notAvailable)" or "wifi=down".
+    public var stateDescription: String {
+        if isSatisfied { return "wifi=up" }
+        if isLocalOnly { return "wifi=up(local-only, path=unsatisfied:\(unsatisfiedReason ?? "unknown"))" }
+        return "wifi=down"
+    }
+
     public var description: String {
-        var parts = ["wifi=\(isSatisfied ? "up" : "down")"]
+        var parts = [stateDescription]
         if let interfaceName { parts.append("iface=\(interfaceName)") }
         if let phoneIPv4 { parts.append("ip=\(phoneIPv4)" + (prefixLength.map { "/\($0)" } ?? "")) }
-        if !gateways.isEmpty { parts.append("gw=\(gateways.joined(separator: ","))") }
+        if !gateways.isEmpty {
+            parts.append("gw=\(gateways.joined(separator: ","))")
+        } else if isLocalOnly, let guess = subnetGateway {
+            parts.append("gw=\(guess)(subnet)")
+        }
         if let ssid { parts.append("ssid=\(ssid)") }
         if isLocalNetworkDenied { parts.append("localNetworkDenied") }
-        if let unsatisfiedReason { parts.append("reason=\(unsatisfiedReason)") }
+        if !isLocalOnly, let unsatisfiedReason { parts.append("reason=\(unsatisfiedReason)") }
         return parts.joined(separator: " ")
     }
 }
@@ -373,6 +513,8 @@ import Network
 
 /// Observes the Wi-Fi path with `NWPathMonitor(requiredInterfaceType: .wifi)` and publishes
 /// `WiFiSnapshot`s (interface name, phone IPv4 from getifaddrs on THAT interface, IPv4 gateways).
+/// `refreshedSnapshot()` re-reads the interface: a local-only network's address comes and goes while
+/// the path stays unsatisfied, so nothing else would tell.
 ///
 /// Thread-safety: `final class` guarded by an NSLock; callbacks run on an internal serial queue.
 public final class WiFiInfo: @unchecked Sendable {
@@ -380,6 +522,11 @@ public final class WiFiInfo: @unchecked Sendable {
     private let lock = NSLock()
     private var monitor: NWPathMonitor?
     private var _current: WiFiSnapshot = .unavailable
+    private var pathFacts = WiFiPathFacts.none
+    /// Bumped by every path update: a refresh built from older facts never overwrites a newer path.
+    private var factsGeneration: UInt64 = 0
+    /// The Wi-Fi interface the last path named (an unsatisfied path names none; the name stays).
+    private var pathWifiName: String?
     private var _onChange: (@Sendable (WiFiSnapshot) -> Void)?
     private var firstUpdateWaiters: [UInt64: CheckedContinuation<Void, Never>] = [:]
     private var nextWaiterID: UInt64 = 1
@@ -445,22 +592,29 @@ public final class WiFiInfo: @unchecked Sendable {
         return current
     }
 
-    /// Re-reads the phone IPv4 of the current Wi-Fi interface (DHCP may complete without a path
-    /// change) and returns the refreshed snapshot.
+    /// Re-reads the Wi-Fi interface address and returns the refreshed snapshot; a change is published
+    /// like a path update. The path stays unsatisfied while a local-only network's address comes and
+    /// goes, and DHCP may complete without a path change.
     public func refreshedSnapshot() -> WiFiSnapshot {
         lock.lock()
-        var s = _current
+        let f = pathFacts
+        let generation = factsGeneration
+        let known = pathWifiName
         lock.unlock()
-        guard s.isSatisfied, let name = s.interfaceName else { return s }
-        let a = WiFiInterfaces.primaryIPv4(onInterface: name)
-        s.phoneIPv4 = a?.address.description
-        s.prefixLength = a?.prefixLength
+        let s = Self.snapshot(facts: f, knownWifiInterface: known)
         lock.lock()
+        guard generation == factsGeneration else {
+            // A path update landed meanwhile: it is newer.
+            let latest = _current
+            lock.unlock()
+            return latest
+        }
         let changed = s != _current
         if changed { _current = s }
         let cb = _onChange
         lock.unlock()
         if changed {
+            Log.i("WIFI", "[wifi] interface: \(s)")
             cb?(s)
             broadcaster.yield(s)
         }
@@ -475,33 +629,45 @@ public final class WiFiInfo: @unchecked Sendable {
         return s
     }
 
-    /// Builds a snapshot from a Wi-Fi path.
+    /// Builds a snapshot from a Wi-Fi path (and the interface addresses now).
     public static func snapshot(from path: Network.NWPath) -> WiFiSnapshot {
-        let wifi = path.availableInterfaces.first { $0.type == .wifi }
-        let name = wifi?.name
+        snapshot(facts: facts(from: path), knownWifiInterface: nil)
+    }
+
+    /// The path facts in Network.framework-free form.
+    static func facts(from path: Network.NWPath) -> WiFiPathFacts {
         let gateways: [String] = path.gateways.compactMap { ep in
             guard case let .hostPort(host, _) = ep, case let .ipv4(a) = host,
                   let v = WiFiIPv4(bytes: [UInt8](a.rawValue)) else { return nil }
             return v.description
         }
         let satisfied = path.status == .satisfied
-        let addr = name.flatMap { WiFiInterfaces.primaryIPv4(onInterface: $0) }
-        let denied = !satisfied && path.unsatisfiedReason == .localNetworkDenied
-        return WiFiSnapshot(
-            isSatisfied: satisfied,
-            interfaceName: name,
-            phoneIPv4: addr?.address.description,
-            prefixLength: addr?.prefixLength,
-            gateways: gateways,
-            ssid: nil,
-            isLocalNetworkDenied: denied,
-            unsatisfiedReason: satisfied ? nil : "\(path.unsatisfiedReason)"
-        )
+        return WiFiPathFacts(isSatisfied: satisfied,
+                             unsatisfiedReason: satisfied ? nil : "\(path.unsatisfiedReason)",
+                             isLocalNetworkDenied: !satisfied && path.unsatisfiedReason == .localNetworkDenied,
+                             interfaceName: path.availableInterfaces.first { $0.type == .wifi }?.name,
+                             gateways: gateways)
+    }
+
+    /// Path facts + getifaddrs. Without a Wi-Fi interface in the path: the one an earlier path named,
+    /// else the functional-type lookup ("en0" as the last resort).
+    static func snapshot(facts: WiFiPathFacts, knownWifiInterface: String?) -> WiFiSnapshot {
+        let addresses = WiFiInterfaces.ipv4Addresses()
+        let fallback = facts.interfaceName != nil ? nil
+            : knownWifiInterface ?? WiFiInterfaces.wifiInterfaceName(among: addresses)
+        return WiFiSnapshot(path: facts, addresses: addresses, fallbackInterfaceName: fallback)
     }
 
     private func handle(_ path: Network.NWPath) {
-        let s = Self.snapshot(from: path)
+        let f = Self.facts(from: path)
         lock.lock()
+        if let name = f.interfaceName { pathWifiName = name }
+        let known = pathWifiName
+        lock.unlock()
+        let s = Self.snapshot(facts: f, knownWifiInterface: known)
+        lock.lock()
+        pathFacts = f
+        factsGeneration &+= 1
         let changed = s != _current || !hasFirstUpdate
         _current = s
         hasFirstUpdate = true
@@ -540,10 +706,10 @@ extension WiFiInfo {
         }
     }
 
-    /// `firstSnapshot` plus the SSID (when iOS reveals it).
+    /// `firstSnapshot` plus the SSID (when iOS reveals it; also on a local-only Wi-Fi).
     public func snapshotWithSSID(timeout: TimeInterval = 1.0) async -> WiFiSnapshot {
         var s = await firstSnapshot(timeout: timeout)
-        if s.isSatisfied { s.ssid = await Self.fetchSSID() }
+        if s.isUp { s.ssid = await Self.fetchSSID() }
         return s
     }
 }
