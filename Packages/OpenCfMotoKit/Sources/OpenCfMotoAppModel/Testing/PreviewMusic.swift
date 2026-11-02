@@ -2,6 +2,9 @@
 // In-memory Music app for unit tests, SwiftUI previews, the demo mode (`-demoSeed`) and the E2E run
 // (`-e2eMusic`): a small queue the commands walk through, playback simulated on the injected clock.
 // ADDITION (music) — the port is `MusicPlaying` (Contract/AppPorts.swift).
+// `otherAudioLag` (opt-in, review fix F1) models what iOS reports: `isOtherAudioPlaying` counts the
+// Music app's own audio while it plays and for a moment after a pause. The default leaves the flag
+// to `simulate(otherAudioPlaying:)` alone, so the demo and the E2E run stay deterministic.
 
 import Foundation
 import OpenCfMotoCore
@@ -31,8 +34,15 @@ public final class PreviewMusic: MusicPlaying {
     public var queue: [MusicTrack]
     public private(set) var index = 0
     public private(set) var isPlaying: Bool
-    /// `AVAudioSession.isOtherAudioPlaying` as the snapshot reports it.
+    /// Another app's audio (`simulate(otherAudioPlaying:)`; Music starting stops it). The snapshot's
+    /// `otherAudioPlaying` is this, or, with `otherAudioLag`, the Music app's own audio too.
     public private(set) var otherAudioPlaying = false
+    /// The iOS model (F1, opt-in): `isOtherAudioPlaying` is also true while the Music app plays and
+    /// for this many seconds after it stopped (its fade-out iOS still counts). Re-evaluated on every
+    /// reading — commands, `simulate`, `refresh`. nil = only `otherAudioPlaying`.
+    public var otherAudioLag: TimeInterval?
+    /// When the Music app last stopped playing (nil: playing, or silent since the start).
+    private var stoppedPlayingAt: TimeInterval?
     private var position: TimeInterval
     private var positionAt: TimeInterval
     private let clock: MonotonicClock
@@ -79,8 +89,8 @@ public final class PreviewMusic: MusicPlaying {
         return artworks[trackID]
     }
 
-    public func play() { commands.append("play"); settle(); isPlaying = true; otherAudioPlaying = false; publish() }
-    public func pause() { commands.append("pause"); settle(); isPlaying = false; publish() }
+    public func play() { commands.append("play"); settle(); setPlaying(true); otherAudioPlaying = false; publish() }
+    public func pause() { commands.append("pause"); settle(); setPlaying(false); publish() }
     public func skipToNext() { commands.append("next"); move(1) }
     public func skipToPrevious() { commands.append("previous"); move(-1) }
     public func skipToBeginning() {
@@ -99,7 +109,7 @@ public final class PreviewMusic: MusicPlaying {
             self.index = index
             self.position = 0
         }
-        if let playing { isPlaying = playing }
+        if let playing { setPlaying(playing) }
         if let position { self.position = position }
         if let otherAudioPlaying { self.otherAudioPlaying = otherAudioPlaying }
         positionAt = clock.now()
@@ -110,6 +120,21 @@ public final class PreviewMusic: MusicPlaying {
         let now = clock.now()
         if isPlaying { position += max(0, now - positionAt) }
         positionAt = now
+    }
+
+    private func setPlaying(_ playing: Bool) {
+        if isPlaying, !playing { stoppedPlayingAt = clock.now() }
+        if playing { stoppedPlayingAt = nil }
+        isPlaying = playing
+    }
+
+    /// What `AVAudioSession.isOtherAudioPlaying` would say now.
+    private var reportedOtherAudio: Bool {
+        if otherAudioPlaying { return true }
+        guard let lag = otherAudioLag else { return false }
+        if isPlaying { return true }
+        guard let stopped = stoppedPlayingAt else { return false }
+        return clock.now() - stopped < lag
     }
 
     private func move(_ delta: Int) {
@@ -125,7 +150,7 @@ public final class PreviewMusic: MusicPlaying {
         let track = queue.indices.contains(index) ? queue[index] : nil
         let state: MusicPlaybackState = track == nil ? .stopped : (isPlaying ? .playing : .paused)
         let next = MusicSnapshot(track: track, state: state, position: position, sampledAt: positionAt,
-                                 rate: isPlaying ? 1 : 0, otherAudioPlaying: otherAudioPlaying)
+                                 rate: isPlaying ? 1 : 0, otherAudioPlaying: reportedOtherAudio)
         guard next != snapshot else { return } // like the adapter: no onChange for an identical reading
         snapshot = next
         onChange?(next)

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // MusicModel (Apple Music on the dash): opt-in + permission, when the Music app is followed, the
-// mapping to DashModel.music, the artwork pipeline (order, retries, stale results, memory cache,
-// cleanup), the dash commands, the hand-over callbacks, diagnostics and log privacy.
+// mapping to DashModel.music, the other-audio rule and its grace (review fix F1), the artwork
+// pipeline (order, retries, stale results, memory cache, cleanup), the dash commands, the hand-over
+// callbacks, diagnostics and log privacy (no titles, artists, albums or ids: F4).
 
 import Foundation
 import XCTest
@@ -32,6 +33,33 @@ final class MusicModelTests: XCTestCase {
         await rig.model.setEnabled(false)
         await rig.model.setEnabled(true)
         XCTAssertEqual(fake.authorizationRequests, 1, "never asked again once answered")
+    }
+
+    @MainActor
+    func testEnabledButNeverAskedWaitsForTheRiderThenAsksOnce() async {
+        // F6: the setting survived what the permission did not (Reset Location & Privacy, the app
+        // killed while the prompt was up): ON, never asked. Nothing asks by itself — Settings shows
+        // "Allow access", whose button is setEnabled(true).
+        let rig = MusicRig(enabled: true) {
+            PreviewMusic(clock: $0, queue: F.queue, playing: true, authorization: .notDetermined)
+        }
+        let fake = rig.preview
+        rig.model.setDashActive(true)
+        rig.model.refreshAuthorization()
+        rig.model.scenePhaseChanged(.active)
+        XCTAssertTrue(rig.model.isEnabled)
+        XCTAssertEqual(rig.model.authorization, .notDetermined)
+        XCTAssertFalse(rig.model.isObserving)
+        XCTAssertFalse(fake.isObserving)
+        XCTAssertNil(rig.model.dashNowPlaying)
+        XCTAssertEqual(fake.authorizationRequests, 0, "never asked at launch, by the dash or on app active")
+        await rig.model.setEnabled(true) // the "Allow access to Media & Apple Music" button
+        XCTAssertEqual(fake.authorizationRequests, 1)
+        XCTAssertEqual(rig.model.authorization, .authorized)
+        XCTAssertTrue(rig.model.isObserving)
+        XCTAssertTrue(rig.model.isShownOnDash)
+        await rig.model.setEnabled(true)
+        XCTAssertEqual(fake.authorizationRequests, 1, "asked once")
     }
 
     @MainActor
@@ -140,19 +168,204 @@ final class MusicModelTests: XCTestCase {
     }
 
     @MainActor
-    func testAPausedSongHidesWhileAnotherAppPlaysButAPlayingOneStays() async {
+    func testAPausedSongHidesOnceAnotherAppPlayedThroughTheGraceButAPlayingOneStays() async {
         let rig = MusicRig { PreviewMusic(clock: $0, queue: F.queue, playing: false, position: 40) }
         let fake = rig.preview
+        rig.model.artworkAttemptDelays = [0] // no retries moving the clock
         rig.model.setDashActive(true)
         XCTAssertEqual(rig.model.dashNowPlaying?.state, .paused, "a paused song stays: the dash's way to start music")
         fake.simulate(otherAudioPlaying: true)
-        XCTAssertNil(rig.model.dashNowPlaying, "Spotify plays: the paused Music song is stale")
+        XCTAssertEqual(rig.model.dashNowPlaying?.state, .paused, "F1: one reading is no reason yet")
+        let waiting = await eventually { rig.grace.requests == [3] }
+        XCTAssertTrue(waiting)
+        let reevaluated = await rig.endGrace(after: 3)
+        XCTAssertTrue(reevaluated)
+        XCTAssertNil(rig.model.dashNowPlaying, "Spotify played 3 s: the paused Music song is stale")
         XCTAssertFalse(rig.model.isShownOnDash)
         fake.simulate(playing: true)
         XCTAssertTrue(rig.model.snapshot.otherAudioPlaying)
         XCTAssertEqual(rig.model.dashNowPlaying?.state, .playing, "shown while it plays, whatever else plays")
         fake.simulate(playing: false, otherAudioPlaying: false)
         XCTAssertEqual(rig.model.dashNowPlaying?.state, .paused)
+    }
+
+    // MARK: Other audio grace (F1)
+
+    @MainActor
+    func testSpotifyAtDashStartHidesAPausedSongAtOnce() async {
+        // The first reading after observing starts: silence and other audio count as "long ago".
+        let rig = MusicRig { _ in ScriptedMusic() }
+        let port = rig.scripted
+        rig.model.artworkAttemptDelays = [0]
+        port.pending = F.reading(F.ruta, .paused, other: true)
+        rig.model.setDashActive(true)
+        XCTAssertNil(rig.model.dashNowPlaying, "no stale paused tile while Spotify plays")
+        await settle()
+        XCTAssertEqual(rig.grace.requests, [], "nothing to wait for")
+        XCTAssertFalse(rig.publications.contains { $0.shown })
+        port.emit(F.reading(F.ruta, .paused, at: 1_001)) // Spotify stopped
+        XCTAssertEqual(rig.model.dashNowPlaying?.state, .paused)
+
+        // The same through the fake Music app with the iOS model on.
+        let rig2 = MusicRig { PreviewMusic(clock: $0, queue: F.queue, playing: false) }
+        rig2.model.artworkAttemptDelays = [0]
+        rig2.preview.otherAudioLag = 1
+        rig2.preview.simulate(otherAudioPlaying: true) // before the dash goes live
+        rig2.model.setDashActive(true)
+        XCTAssertTrue(rig2.model.snapshot.otherAudioPlaying)
+        XCTAssertNil(rig2.model.dashNowPlaying)
+        await settle()
+        XCTAssertEqual(rig2.grace.requests, [])
+    }
+
+    @MainActor
+    func testPausingWhileIOSStillCountsTheMusicAppKeepsTheSong() async {
+        // iOS: while the Music app plays it is "other audio" for us, and for a moment after a pause.
+        let rig = MusicRig { PreviewMusic(clock: $0, queue: F.queue, playing: true, position: 10) }
+        let fake = rig.preview
+        fake.otherAudioLag = 0.5
+        rig.model.artworkAttemptDelays = [0]
+        rig.model.refreshDelaysAfterCommand = [] // the test reads the player itself
+        rig.model.setDashActive(true)
+        XCTAssertTrue(rig.model.snapshot.otherAudioPlaying, "the Music app's own audio")
+        XCTAssertEqual(rig.model.dashNowPlaying?.state, .playing)
+        rig.model.perform(.playPause, fromDash: true)
+        XCTAssertEqual(fake.commands, ["pause"])
+        XCTAssertEqual(rig.model.snapshot.state, .paused)
+        XCTAssertTrue(rig.model.snapshot.otherAudioPlaying, "the flag lags")
+        XCTAssertEqual(rig.model.dashNowPlaying?.state, .paused, "still shown: the Music sheet stays open")
+        let waiting = await eventually { rig.grace.requests == [3] }
+        XCTAssertTrue(waiting, "one re-evaluation at the end of the grace: \(rig.grace.requests)")
+        rig.clock.advance(0.6)
+        fake.refresh() // the adapter's settle read: the fade is over
+        XCTAssertFalse(rig.model.snapshot.otherAudioPlaying)
+        let cancelled = await eventually { rig.grace.pendingCount == 0 }
+        XCTAssertTrue(cancelled, "nothing left to re-evaluate")
+        rig.clock.advance(10)
+        XCTAssertEqual(rig.model.dashNowPlaying?.state, .paused)
+        XCTAssertTrue(rig.publications.allSatisfy { $0.shown }, "never hidden, not even for one model")
+        XCTAssertEqual(rig.grace.requests, [3])
+    }
+
+    @MainActor
+    func testOtherAudioThatOutlastsTheGraceHidesTheSongAtItsEnd() async {
+        let capture = LogCapture()
+        defer { capture.stop() }
+        let rig = MusicRig { PreviewMusic(clock: $0, queue: F.queue, playing: true, position: 10) }
+        let fake = rig.preview
+        fake.otherAudioLag = 0.5
+        rig.model.artworkAttemptDelays = [0]
+        rig.model.refreshDelaysAfterCommand = []
+        rig.model.setDashActive(true)
+        rig.model.perform(.playPause, fromDash: true)
+        fake.simulate(otherAudioPlaying: true) // Spotify starts right away
+        XCTAssertEqual(rig.model.dashNowPlaying?.state, .paused)
+        let waiting = await eventually { rig.grace.requests == [3] }
+        XCTAssertTrue(waiting, "Spotify started inside the pause's grace: still 3 s from the pause")
+        rig.clock.advance(2.9)
+        XCTAssertEqual(rig.model.dashNowPlaying?.state, .paused, "2.9 s")
+        let refreshes = fake.refreshes
+        let reevaluated = await rig.endGrace(after: 0.1)
+        XCTAssertTrue(reevaluated, "the port reports changes only: the model re-evaluates by itself")
+        XCTAssertEqual(fake.refreshes, refreshes + 1, "the player is read again first")
+        XCTAssertNil(rig.model.dashNowPlaying)
+        XCTAssertEqual(rig.publications.last?.shown, false, "the dash hears about it")
+        XCTAssertTrue(capture.messages(tag: "MUSIC").contains("other audio for 3 s: song hidden"),
+                      "\(capture.messages(tag: "MUSIC"))")
+        let done = await eventually { rig.grace.pendingCount == 0 }
+        XCTAssertTrue(done)
+        fake.simulate(otherAudioPlaying: false) // Spotify stopped
+        XCTAssertEqual(rig.model.dashNowPlaying?.state, .paused, "back at once")
+        XCTAssertEqual(rig.grace.requests, [3])
+    }
+
+    @MainActor
+    func testAShortBlipOfOtherAudioWhilePausedNeverHidesTheSong() async {
+        let rig = MusicRig { PreviewMusic(clock: $0, queue: F.queue, playing: false, position: 40) }
+        let fake = rig.preview
+        fake.otherAudioLag = 0.5
+        rig.model.artworkAttemptDelays = [0]
+        rig.model.setDashActive(true)
+        XCTAssertFalse(rig.model.snapshot.otherAudioPlaying, "paused since before: no fade")
+        fake.simulate(otherAudioPlaying: true) // another app's short sound (a prompt, a notification)
+        XCTAssertEqual(rig.model.dashNowPlaying?.state, .paused)
+        let waiting = await eventually { rig.grace.requests == [3] }
+        XCTAssertTrue(waiting)
+        rig.clock.advance(1.5)
+        fake.simulate(otherAudioPlaying: false)
+        let cancelled = await eventually { rig.grace.pendingCount == 0 }
+        XCTAssertTrue(cancelled)
+        rig.clock.advance(10)
+        XCTAssertEqual(rig.model.dashNowPlaying?.state, .paused)
+        XCTAssertTrue(rig.publications.allSatisfy { $0.shown })
+    }
+
+    @MainActor
+    func testTheGraceCountsFromTheLaterOfSilenceAndOtherAudio() async {
+        let rig = MusicRig { _ in ScriptedMusic() }
+        let port = rig.scripted
+        rig.model.artworkAttemptDelays = [0]
+        port.pending = F.reading(F.ruta, .playing, other: true) // the Music app's own audio
+        rig.model.setDashActive(true)
+        port.emit(F.reading(F.ruta, .paused, position: 5, at: 1_000, other: true)) // paused at 1000
+        let first = await eventually { rig.grace.requests == [3] }
+        XCTAssertTrue(first)
+        rig.clock.advance(2)
+        port.emit(F.reading(F.ruta, .paused, position: 5, at: 1_002)) // the fade is over
+        XCTAssertNotNil(rig.model.dashNowPlaying)
+        port.emit(F.reading(F.ruta, .paused, position: 5, at: 1_002, other: true)) // another app at 1002
+        let second = await eventually { rig.grace.requests == [3, 3] }
+        XCTAssertTrue(second, "3 s from 1002, not from the pause: \(rig.grace.requests)")
+        rig.clock.advance(2) // 1004: 4 s after the pause, 2 s of other audio
+        XCTAssertNotNil(rig.model.dashNowPlaying)
+        let reevaluated = await rig.endGrace(after: 1) // 1005
+        XCTAssertTrue(reevaluated)
+        XCTAssertEqual(port.refreshes, 1, "one re-read: the cancelled first wait did nothing")
+        XCTAssertNil(rig.model.dashNowPlaying)
+    }
+
+    @MainActor
+    func testScanningIsTheMusicAppsOwnSound() async {
+        let rig = MusicRig { _ in ScriptedMusic() }
+        let port = rig.scripted
+        rig.model.artworkAttemptDelays = [0]
+        port.pending = F.reading(F.ruta, .playing, other: true)
+        rig.model.setDashActive(true)
+        for state: MusicPlaybackState in [.seekingForward, .seekingBackward] {
+            port.emit(F.reading(F.ruta, state, position: 30, at: 1_001, other: true))
+            XCTAssertNotNil(rig.model.dashNowPlaying, "\(state)")
+        }
+        await settle()
+        XCTAssertEqual(rig.grace.requests, [], "audible while scanning: no grace needed")
+        port.emit(F.reading(F.ruta, .interrupted, position: 30, at: 1_002, other: true)) // a call
+        XCTAssertNotNil(rig.model.dashNowPlaying, "silent from now on: the grace starts")
+        let waiting = await eventually { rig.grace.requests == [3] }
+        XCTAssertTrue(waiting)
+        let reevaluated = await rig.endGrace(after: 3)
+        XCTAssertTrue(reevaluated)
+        XCTAssertNil(rig.model.dashNowPlaying, "the call went on: hidden (D7)")
+    }
+
+    @MainActor
+    func testObservingOffAndOnForgetsTheGrace() async {
+        let rig = MusicRig { PreviewMusic(clock: $0, queue: F.queue, playing: true) }
+        let fake = rig.preview
+        fake.otherAudioLag = 5
+        rig.model.artworkAttemptDelays = [0]
+        rig.model.setDashActive(true)
+        fake.pause() // paused in the Music app while the dash is live
+        XCTAssertNotNil(rig.model.dashNowPlaying)
+        let waiting = await eventually { rig.grace.pendingCount == 1 }
+        XCTAssertTrue(waiting)
+        rig.model.setDashActive(false)
+        let cancelled = await eventually { rig.grace.pendingCount == 0 }
+        XCTAssertTrue(cancelled, "no re-evaluation while not observing")
+        rig.clock.advance(1)
+        rig.model.setDashActive(true) // the flag still lags: a first reading, "long ago"
+        XCTAssertTrue(rig.model.snapshot.otherAudioPlaying)
+        XCTAssertNil(rig.model.dashNowPlaying)
+        await settle()
+        XCTAssertEqual(rig.grace.requests, [3])
     }
 
     // MARK: Artwork
@@ -309,6 +522,8 @@ final class MusicModelTests: XCTestCase {
         rig.model.setDashActive(true)
         _ = await eventually { rig.model.dashNowPlaying?.artworkId != nil }
         fake.simulate(otherAudioPlaying: true)
+        let reevaluated = await rig.endGrace(after: 3)
+        XCTAssertTrue(reevaluated)
         XCTAssertNil(rig.model.dashNowPlaying)
         await settle()
         XCTAssertNotNil(rig.projection.dashImages["music.art.p1a"], "kept for when the tile comes back")
@@ -398,7 +613,7 @@ final class MusicModelTests: XCTestCase {
     }
 
     @MainActor
-    func testNoLogLineCarriesATitleAnArtistOrAnAlbum() async {
+    func testNoLogLineCarriesATitleAnArtistAnAlbumOrAnID() async {
         let capture = LogCapture()
         defer { capture.stop() }
         let rig = MusicRig(enabled: false) {
@@ -419,18 +634,30 @@ final class MusicModelTests: XCTestCase {
         for word in F.privateWords {
             XCTAssertFalse(lines.contains { $0.contains(word) }, "a log line names \"\(word)\"")
         }
+        for id in F.privateIDs { // F4: as a whole word, so a token that starts with the same letters is fine
+            XCTAssertFalse(lines.contains { Self.containsWord($0, id) }, "a log line names the track id \(id)")
+        }
+        XCTAssertFalse(lines.contains { $0.contains("music.art.") }, "no image id either")
         let music = capture.messages(tag: "MUSIC")
+        let ruta = MusicTrackID.logToken("p1a"), pass = MusicTrackID.logToken("s100000002")
+        let night = MusicTrackID.logToken("p3c")
         XCTAssertTrue(music.contains("dash music on (authorization=authorized)"), "\(music)")
         XCTAssertTrue(music.contains("authorization notDetermined -> authorized"), "\(music)")
         XCTAssertTrue(music.contains("observing on (poll 2s/5s)"))
-        XCTAssertTrue(music.contains("state playing track=p1a other=0"), "\(music)")
-        XCTAssertTrue(music.contains { $0.hasPrefix("artwork source=mp kind=library attempt=1 ms=0 px=? bytes=5 track=p1a") },
+        XCTAssertTrue(music.contains("state playing track=\(ruta) other=0"), "\(music)")
+        XCTAssertTrue(music.contains { $0.hasPrefix("artwork source=mp kind=library attempt=1 ms=0 px=? bytes=5 track=\(ruta)") },
                       "\(music)")
         XCTAssertTrue(music.contains("command next (from dash)"))
+        XCTAssertTrue(music.contains("state playing track=\(pass) other=0"), "the catalog song: its token only")
         XCTAssertTrue(music.contains("command pause (from phone)"))
-        XCTAssertTrue(music.contains { $0.hasPrefix("artwork source=none kind=library attempt=1 ") && $0.hasSuffix("track=p3c") },
+        XCTAssertTrue(music.contains { $0.hasPrefix("artwork source=none kind=library attempt=1 ") && $0.hasSuffix("track=\(night)") },
                       "\(music)")
         XCTAssertTrue(music.contains("observing off"))
         XCTAssertTrue(music.contains("dash music off"))
+    }
+
+    /// `word` appears in `line` on its own (not as a part of a longer word).
+    private static func containsWord(_ line: String, _ word: String) -> Bool {
+        line.range(of: "\\b" + NSRegularExpression.escapedPattern(for: word) + "\\b", options: .regularExpression) != nil
     }
 }

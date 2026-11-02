@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Apple Music on the dash — test doubles shared by the music tests: a manual clock, the fixture
 // songs (fictional; the demo queue of the contract), a Music port that reports exactly the readings
-// a test scripts (any MPMusicPlaybackState, artwork that may suspend), and a rig around MusicModel.
+// a test scripts (any MPMusicPlaybackState, artwork that may suspend), a sleeper the test ends by
+// hand (the F1 grace) and a rig around MusicModel.
 // NOTE (Linux): main-actor tests must be `async` (swift-corelibs-xctest).
 
 import Foundation
@@ -28,9 +29,13 @@ enum MusicFixtures {
     static let night = MusicTrack(id: "p3c", title: "Night Ride Home", artist: "Asphalt Echo", album: "Open Throttle",
                                   duration: 318)
     static let queue = [ruta, pass, night]
-    /// Every title / artist / album above: none may ever reach a log line.
+    /// Every title / artist / album and store id above: none may ever reach a log line (F4: a catalog
+    /// id names the song on music.apple.com).
     static let privateWords = ["Ruta del Sol", "Los Pistones", "Ruta Sessions", "Mountain Pass", "Gearshift",
-                               "Twisties", "Night Ride Home", "Asphalt Echo", "Open Throttle"]
+                               "Twisties", "Night Ride Home", "Asphalt Echo", "Open Throttle", "100000002"]
+    /// The track ids above: a log line carries their salted tokens only (F4). Short, so they are
+    /// checked as whole words (a token "p1a…" is one word with more hex digits).
+    static let privateIDs = ["p1a", "s100000002", "p3c"]
 
     /// A minimal PNG-looking payload (MusicModel never decodes it; the renderer side would).
     static func art(_ tag: UInt8, _ source: MusicArtworkSource = .mediaItem) -> MusicArtwork {
@@ -102,6 +107,38 @@ final class ScriptedMusic: MusicPlaying {
     }
 }
 
+/// Waits that end when the test says so (`endWaits()`), never by wall time — the F1 grace. A
+/// cancelled wait returns at once (the waiting task then sees `Task.isCancelled`).
+@MainActor
+final class ManualSleeper {
+    /// Every wait asked for, in seconds.
+    private(set) var requests: [TimeInterval] = []
+    private var waiting: [Int: CheckedContinuation<Void, Never>] = [:]
+    private var nextID = 0
+    /// Waits not ended yet.
+    var pendingCount: Int { waiting.count }
+
+    func sleep(_ seconds: TimeInterval) async {
+        requests.append(seconds)
+        let id = nextID
+        nextID += 1
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { waiting[id] = $0 }
+        } onCancel: {
+            Task { @MainActor in self.end(id) }
+        }
+    }
+
+    /// Ends every pending wait (moving the clock is the test's business).
+    func endWaits() {
+        for id in waiting.keys.sorted() { end(id) }
+    }
+
+    private func end(_ id: Int) {
+        waiting.removeValue(forKey: id)?.resume()
+    }
+}
+
 /// A suspended `artwork` call the test resumes later (stale-result tests).
 @MainActor
 final class ArtworkGate {
@@ -129,10 +166,13 @@ final class MusicRig {
     let model: MusicModel
     /// Every wait the model asked for (artwork retries, re-reads after commands).
     var sleeps: [TimeInterval] = []
+    /// The F1 grace waits (ended by the test: `endGrace`).
+    let grace = ManualSleeper()
     var started = 0
     var paused = 0
-    /// At every `onDashChange`: the artwork id the dash would show and the images registered then.
-    var publications: [(artworkId: String?, registered: Set<String>, calls: Int)] = []
+    /// At every `onDashChange`: the artwork id the dash would show, the images registered then and
+    /// whether the dash shows the song at all.
+    var publications: [(artworkId: String?, registered: Set<String>, calls: Int, shown: Bool)] = []
 
     init(enabled: Bool = true, port makePort: (MonotonicClock) -> MusicPlaying) {
         var services = AppServices.preview(clock: clock)
@@ -148,10 +188,12 @@ final class MusicRig {
             self?.sleeps.append(seconds)
             clock.advance(seconds)
         }
+        let grace = self.grace
+        model.graceSleeper = { seconds in await grace.sleep(seconds) }
         model.onDashChange = { [weak self] in
             guard let self else { return }
             self.publications.append((self.model.dashNowPlaying?.artworkId, Set(self.projection.dashImages.keys),
-                                      self.projection.dashImageCalls.count))
+                                      self.projection.dashImageCalls.count, self.model.dashNowPlaying != nil))
         }
         model.onPlaybackStarted = { [weak self] in self?.started += 1 }
         model.onPlaybackPaused = { [weak self] in self?.paused += 1 }
@@ -169,6 +211,17 @@ final class MusicRig {
 
     /// The renderer-side calls as comparable pairs.
     var imageCalls: [String] { projection.dashImageCalls.map { "\($0.registered ? "+" : "-")\($0.id)" } }
+
+    /// F1: `seconds` pass and the grace wait ends; true once the model re-evaluated (published). The
+    /// waits are ended until then: the waiting task may not have reached its wait yet.
+    func endGrace(after seconds: TimeInterval) async -> Bool {
+        let before = publications.count
+        clock.advance(seconds)
+        return await eventually {
+            self.grace.endWaits()
+            return self.publications.count > before
+        }
+    }
 }
 
 /// Collects every log line written while it is alive (privacy checks).

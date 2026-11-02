@@ -66,6 +66,43 @@ final class MusicPortContractTests: XCTestCase {
     }
 
     @MainActor
+    func testTheFakesIOSModelCountsTheMusicAppsOwnAudio() async {
+        let clock = StepClock()
+        let plain = PreviewMusic(clock: clock, queue: Self.songs, playing: true)
+        plain.startObserving()
+        XCTAssertFalse(plain.snapshot.otherAudioPlaying, "default: only simulate(otherAudioPlaying:) sets it")
+        plain.pause()
+        XCTAssertFalse(plain.snapshot.otherAudioPlaying)
+
+        // F1: iOS counts the Music app's own audio while it plays and for a moment after a pause.
+        let fake = PreviewMusic(clock: clock, queue: Self.songs, playing: true)
+        fake.otherAudioLag = 1.5
+        fake.startObserving()
+        XCTAssertTrue(fake.snapshot.otherAudioPlaying, "while the Music app plays")
+        clock.t += 10
+        fake.pause()
+        XCTAssertTrue(fake.snapshot.otherAudioPlaying, "its fade right after the pause")
+        clock.t += 1
+        fake.refresh()
+        XCTAssertTrue(fake.snapshot.otherAudioPlaying)
+        clock.t += 0.5
+        fake.refresh()
+        XCTAssertFalse(fake.snapshot.otherAudioPlaying, "read again after the lag: the fade is over")
+        fake.simulate(otherAudioPlaying: true)
+        XCTAssertTrue(fake.snapshot.otherAudioPlaying, "another app")
+        fake.play()
+        XCTAssertFalse(fake.otherAudioPlaying, "the other app stopped when Music started")
+        XCTAssertTrue(fake.snapshot.otherAudioPlaying, "the Music app's own audio again")
+        fake.simulate(playing: false)
+        XCTAssertTrue(fake.snapshot.otherAudioPlaying, "a pause in the Music app fades the same way")
+
+        let paused = PreviewMusic(clock: clock, queue: Self.songs, playing: false)
+        paused.otherAudioLag = 1.5
+        paused.startObserving()
+        XCTAssertFalse(paused.snapshot.otherAudioPlaying, "silent since before: no fade")
+    }
+
+    @MainActor
     func testFakeArtworkOnlyForTheCurrentSongAfterTheConfiguredMisses() async {
         let fake = PreviewMusic(queue: Self.songs, playing: true)
         fake.artworks["p1f"] = MusicArtwork(data: Data([0x89, 0x50, 0x4E, 0x47]), source: .mediaItem)

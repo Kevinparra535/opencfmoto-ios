@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Apple Music on the dash: stable track ids, what counts as a meaningful change of the Music app's
-// reading (the adapter only reports those), and the artwork size read from PNG / JPEG headers.
+// Apple Music on the dash: stable track ids and their salted log tokens (F4), what counts as a
+// meaningful change of the Music app's reading (the adapter only reports those), when MusicKit's
+// playing entry is MediaPlayer's song (F5), and the artwork size read from PNG / JPEG headers.
 
 import Foundation
 import XCTest
@@ -61,6 +62,70 @@ final class MusicSnapshotRulesTests: XCTestCase {
             XCTAssertTrue(image.unicodeScalars.allSatisfy { allowed.contains($0) }, image)
             XCTAssertTrue(image.hasPrefix("music.art."))
         }
+    }
+
+    // MARK: Log tokens (F4)
+
+    func testALogTokenIsTheKindLetterAndEightHexDigitsOfASaltedHash() {
+        let hex = CharacterSet(charactersIn: "0123456789abcdef")
+        for id in ["p1a", "s100000002", "p3c", "h0123456789abcdef",
+                   MusicTrackID.make(persistentID: .max, storeID: nil, title: "", artist: "", album: "", duration: 0)] {
+            let token = MusicTrackID.logToken(id)
+            XCTAssertEqual(token.count, 9, token)
+            XCTAssertEqual(token.first, id.first, "the kind letter stays (p library, s catalog, h hash)")
+            XCTAssertTrue(token.dropFirst().unicodeScalars.allSatisfy { hex.contains($0) }, token)
+            XCTAssertNotEqual(token, id)
+            XCTAssertEqual(MusicTrackID.logToken(id), token, "the same song gives the same token for the whole run")
+        }
+        XCTAssertEqual(MusicTrackID.logToken("s100000002"), MusicTrackID.logToken("s100000002", salt: MusicTrackID.logSalt))
+        XCTAssertTrue(MusicTrackID.logToken("").hasPrefix("-"))
+        let fixtures = MusicFixtures.privateIDs.map { MusicTrackID.logToken($0) }
+        XCTAssertEqual(Set(fixtures).count, fixtures.count, "different songs, different tokens")
+        // FNV-1a 64 over the 8 salt bytes (little-endian), then the id; the first 8 hex digits.
+        let salt: UInt64 = 0x0123_4567_89ab_cdef
+        let bytes: [UInt8] = [0xef, 0xcd, 0xab, 0x89, 0x67, 0x45, 0x23, 0x01] + Array("s100000002".utf8)
+        XCTAssertEqual(MusicTrackID.logToken("s100000002", salt: salt),
+                       "s" + MusicTrackID.hex16(MusicTrackID.fnv1a64(bytes)).prefix(8))
+        // Another salt (another run of the app), another token: the tokens of two runs cannot be
+        // matched, and without the salt the catalog id cannot be brute-forced from its token.
+        let tokens = Set((0 ..< 16).map { MusicTrackID.logToken("s100000002", salt: salt &+ UInt64($0)) })
+        XCTAssertEqual(tokens.count, 16)
+    }
+
+    // MARK: MusicKit entry vs MediaPlayer item (F5)
+
+    func testTheEntryMustHaveTheItemsTitleAndArtist() {
+        func match(title: String = "Mountain Pass", subtitle: String? = "Gearshift", songArtist: String? = "Gearshift",
+                   itemTitle: String = "Mountain Pass", itemArtist: String = "Gearshift") -> Bool {
+            MusicEntryMatch.matches(entryTitle: title, entrySubtitle: subtitle, songArtist: songArtist, songID: nil,
+                                    itemTitle: itemTitle, itemArtist: itemArtist, itemStoreID: "100000002")
+        }
+        XCTAssertTrue(match())
+        XCTAssertTrue(match(title: "  MOUNTAIN pass ", songArtist: "gearshíft"), "case, diacritics and spaces")
+        XCTAssertFalse(match(title: "Mountain Pass (Live)"))
+        XCTAssertFalse(match(title: "", itemTitle: ""), "an item without a title matches nothing")
+        // The same title by another artist (a cover, or the previous song still in MusicKit's queue).
+        XCTAssertFalse(match(songArtist: "Los Pistones"))
+        XCTAssertFalse(match(songArtist: "Gearshift & Friends"), "the song's artist must be the item's")
+        // No song in the entry (a music video): its subtitle has to name the item's artist.
+        XCTAssertTrue(match(subtitle: "Gearshift — Twisties", songArtist: nil))
+        XCTAssertFalse(match(subtitle: "Los Pistones", songArtist: nil))
+        XCTAssertFalse(match(subtitle: nil, songArtist: nil))
+        // MediaPlayer names no artist: the title decides.
+        XCTAssertTrue(match(subtitle: nil, songArtist: "Anyone", itemArtist: " "))
+    }
+
+    func testCatalogIDsMustAgreeButALibraryIDIsNoReasonToReject() {
+        func match(songID: String?, store: String?) -> Bool {
+            MusicEntryMatch.matches(entryTitle: "Intro", entrySubtitle: "Gearshift", songArtist: "Gearshift",
+                                    songID: songID, itemTitle: "Intro", itemArtist: "Gearshift", itemStoreID: store)
+        }
+        XCTAssertTrue(match(songID: "100000002", store: "100000002"))
+        XCTAssertFalse(match(songID: "100000003", store: "100000002"), "same title and artist, another catalog song")
+        XCTAssertTrue(match(songID: "i.AbCdEf123", store: "100000002"), "added from Apple Music: a library id in MusicKit")
+        XCTAssertTrue(match(songID: "100000003", store: "0"), "a library-only item has no catalog id to compare")
+        XCTAssertTrue(match(songID: "100000003", store: nil))
+        XCTAssertTrue(match(songID: nil, store: "100000002"))
     }
 
     // MARK: Meaningful changes
