@@ -15,6 +15,9 @@
 //   so the app must ALSO pass `WifiJoinOptions(hotspotEnabled: false)` in its free flavor.
 // - The dash's network has no internet: iOS may keep its Wi-Fi path unsatisfied after the join. The
 //   confirmation therefore looks at the Wi-Fi interface's address (`WiFiSnapshot.isUp`), not the path.
+// - Already on the dash's access point with the SSID unreadable, and apply() answered without
+//   `.alreadyAssociated`: nothing changes, so nothing confirms the join. At the end of the window the
+//   unchanged no-internet network on a dash subnet is accepted instead of failing (review WIFI-1).
 
 #if canImport(Foundation)
 import Foundation
@@ -241,6 +244,22 @@ public enum WifiJoinPolicy {
         if expectedSubnets.isEmpty { return true }
         return snapshot.isOn(expectedSubnets)
     }
+
+    /// At the end of the confirmation window: the phone was already on the dash's access point before
+    /// apply() and stayed there, with the SSID unreadable all along (review WIFI-1). `isConfirmed`
+    /// rejects such an unchanged network (nothing proves the join), so without this the join failed
+    /// after 15 s although the phone sat on the bike Wi-Fi. Accepted only when it cannot be a home LAN on
+    /// the dash's address plan: no SSID before or now (a readable other SSID would be authoritative), the
+    /// same usable address and gateway, iOS keeping the path unsatisfied (no internet: a home LAN's path
+    /// is satisfied) and the phone or a gateway on one of `expectedSubnets` (an empty list accepts none).
+    public static func isUnchangedLocalOnlyDashNetwork(_ snapshot: WiFiSnapshot, currentSSID: String?,
+                                                       baseline: WiFiSnapshot, expectedSubnets: [WiFiSubnet]) -> Bool {
+        guard currentSSID == nil, baseline.ssid == nil, snapshot.isLocalOnly, snapshot.usablePhoneIPv4 != nil else {
+            return false
+        }
+        guard !snapshot.hasNewAddress(since: baseline), !expectedSubnets.isEmpty else { return false }
+        return snapshot.isOn(expectedSubnets)
+    }
 }
 #endif
 
@@ -335,6 +354,14 @@ public final class WifiJoiner: @unchecked Sendable {
             if Task.isCancelled { throw CancellationError() }
             await sleepSeconds(options.pollInterval)
         } while Date() < deadline
+        // Already on the dash's access point before apply() and still there, SSID unreadable throughout:
+        // the network the phone joined is the dash's by the dash-subnet / no-internet rules (WIFI-1).
+        if let baseline, loggedOtherSSID == nil,
+           WifiJoinPolicy.isUnchangedLocalOnlyDashNetwork(lastSeen, currentSSID: lastSeen.ssid, baseline: baseline,
+                                                          expectedSubnets: options.expectedSubnets) {
+            Log.i("WIFI", "Wi-Fi joined: \(ssid) (\(lastSeen); unchanged local-only Wi-Fi on a dash subnet, SSID hidden)")
+            return .joined(lastSeen)
+        }
         Log.w("WIFI", "[wifi] \(ssid) not associated after \(options.confirmTimeout)s (last seen: \(lastSeen))")
         throw WifiJoinError.notAssociated(ssid: ssid)
     }

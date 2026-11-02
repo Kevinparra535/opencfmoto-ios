@@ -123,6 +123,48 @@ final class PlatformWifiJoinTests: XCTestCase {
         XCTAssertEqual(o.expectedSubnets, WiFiSubnet.knownDashSubnets)
     }
 
+    /// Review WIFI-1: the phone already sits on the dash's access point (joined in Settings), iOS hides
+    /// the SSID and apply() answers without "already associated": nothing changes during the 15-s window.
+    /// That unchanged no-internet network on a dash subnet is accepted at the deadline; a home LAN on the
+    /// dash's address plan (internet: a satisfied path), another readable SSID or a network that changed
+    /// are not.
+    func testAnUnchangedLocalOnlyDashNetworkIsAcceptedAtTheDeadline() {
+        let subnets = WiFiSubnet.knownDashSubnets
+        let bike = WiFiSnapshot(isSatisfied: false, interfaceName: "en0", phoneIPv4: "192.168.0.50", prefixLength: 24,
+                                unsatisfiedReason: "notAvailable")
+        // The window itself still refuses it (nothing proves the join)…
+        XCTAssertFalse(WifiJoinPolicy.isConfirmed(bike, currentSSID: nil, targetSSID: "CFMOTO-f46457",
+                                                  expectedSubnets: subnets, baseline: bike))
+        // …the deadline accepts it.
+        XCTAssertTrue(WifiJoinPolicy.isUnchangedLocalOnlyDashNetwork(bike, currentSSID: nil, baseline: bike,
+                                                                    expectedSubnets: subnets))
+        // A home LAN on 192.168.0.x has internet: its path is satisfied.
+        let homeOnDashPlan = WiFiSnapshot(isSatisfied: true, interfaceName: "en0", phoneIPv4: "192.168.0.50",
+                                          prefixLength: 24, gateways: ["192.168.0.1"])
+        XCTAssertFalse(WifiJoinPolicy.isUnchangedLocalOnlyDashNetwork(homeOnDashPlan, currentSSID: nil, baseline: homeOnDashPlan,
+                                                                     expectedSubnets: subnets))
+        // A readable SSID (now or before apply()) decides by itself.
+        XCTAssertFalse(WifiJoinPolicy.isUnchangedLocalOnlyDashNetwork(bike, currentSSID: "OtherBike", baseline: bike,
+                                                                     expectedSubnets: subnets))
+        var namedBefore = bike
+        namedBefore.ssid = "OtherBike"
+        XCTAssertFalse(WifiJoinPolicy.isUnchangedLocalOnlyDashNetwork(bike, currentSSID: nil, baseline: namedBefore,
+                                                                     expectedSubnets: subnets))
+        // Another network than before apply(): the window's own rules apply, not this one.
+        var moved = bike
+        moved.phoneIPv4 = "192.168.0.77"
+        XCTAssertFalse(WifiJoinPolicy.isUnchangedLocalOnlyDashNetwork(moved, currentSSID: nil, baseline: bike,
+                                                                     expectedSubnets: subnets))
+        // Not a dash subnet, no expectation, or no usable address.
+        let otherAP = WiFiSnapshot(isSatisfied: false, interfaceName: "en0", phoneIPv4: "10.5.5.100", prefixLength: 24,
+                                   unsatisfiedReason: "notAvailable")
+        XCTAssertFalse(WifiJoinPolicy.isUnchangedLocalOnlyDashNetwork(otherAP, currentSSID: nil, baseline: otherAP,
+                                                                     expectedSubnets: subnets))
+        XCTAssertFalse(WifiJoinPolicy.isUnchangedLocalOnlyDashNetwork(bike, currentSSID: nil, baseline: bike, expectedSubnets: []))
+        XCTAssertFalse(WifiJoinPolicy.isUnchangedLocalOnlyDashNetwork(.unavailable, currentSSID: nil, baseline: .unavailable,
+                                                                     expectedSubnets: subnets))
+    }
+
     func testMessagesExistInBothLanguagesAndDiffer() {
         let all: [WifiJoinError] = [
             .invalidSSID, .invalidPassphrase, .userDenied, .systemDenied, .managedByProfile, .busy, .notInForeground,

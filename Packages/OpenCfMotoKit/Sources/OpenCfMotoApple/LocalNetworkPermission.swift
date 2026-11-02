@@ -11,7 +11,11 @@
 //
 // On a Wi-Fi without internet (the dash's) the Wi-Fi path stays unsatisfied and that connection never
 // becomes ready (field log 1); Bonjour worked there. So the check browses for `_EasyConn._tcp` (TN3179
-// "Check for local network access"): a result proves access, kDNSServiceErr_PolicyDenied (−65570) a denial.
+// "Check for local network access"): a result proves access, kDNSServiceErr_PolicyDenied (−65570) a denial,
+// and so does a browser that got ready and was never refused (review WIFI-2): nothing may advertise the
+// dash there (the bike before MotoPlay is open, any other access point), and Local Network privacy
+// refuses a browse at once. The decision rules (`LocalNetworkBrowseState`, `LocalNetworkBrowseProbe`)
+// are Foundation-only and unit-tested on Linux; `OCMLocalNetworkBrowse` feeds them NWBrowser states.
 
 #if canImport(Foundation)
 import Foundation
@@ -36,6 +40,100 @@ public enum LocalNetworkAccess: String, Sendable, Equatable, CustomStringConvert
     /// out of context. `.unavailable` / `.undetermined` prove nothing — off Wi-Fi the probe never
     /// touches the local network, so no alert was shown (review finding IOS-5).
     public var isDecisive: Bool { self == .granted || self == .denied }
+}
+
+/// What one `_EasyConn._tcp` browse showed about Local Network access.
+public enum LocalNetworkBrowseOutcome: String, Sendable, Equatable {
+    /// A service was listed: access is granted.
+    case found
+    /// Refused by Local Network privacy (DNS-SD PolicyDenied), and not ready again since.
+    case denied
+    /// The browser got ready and nothing refused it, but no service was listed: access is granted,
+    /// nothing advertises the dash here (review WIFI-2).
+    case readyQuiet
+    /// Neither ready nor refused (no Wi-Fi, a browser that failed for another reason).
+    case quiet
+}
+
+/// The NWBrowser states of one browse, without Network.framework types (fed by `OCMLocalNetworkBrowse`).
+public struct LocalNetworkBrowseState: Sendable, Equatable {
+    /// In `.ready`, with no PolicyDenied since.
+    public private(set) var isReady = false
+    /// PolicyDenied seen, and not ready since.
+    public private(set) var isDenied = false
+
+    public init() {}
+
+    /// `.ready` (first time, or again after a denial: iOS retries the browse once access is allowed).
+    public mutating func ready() {
+        isReady = true
+        isDenied = false
+    }
+
+    /// `.waiting` / `.failed`; `policyDenied`: the error is DNS-SD kDNSServiceErr_PolicyDenied.
+    public mutating func notReady(policyDenied: Bool) {
+        isReady = false
+        if policyDenied { isDenied = true }
+    }
+
+    /// The outcome of a browse that ends without a listed service (deadline or failure).
+    public var outcome: LocalNetworkBrowseOutcome { isReady ? .readyQuiet : isDenied ? .denied : .quiet }
+}
+
+/// The Local Network verdict from one or more browses (the browse itself is injected).
+public enum LocalNetworkBrowseProbe {
+    public struct Timing: Sendable, Equatable {
+        /// The quick check browses at least this long (the dash answered within ~1.2 s in the field).
+        public var minimumCheck: TimeInterval
+        /// `request`: one browser per slice, so a browse refused while the alert was up is retried.
+        public var requestSlice: TimeInterval
+        /// `request`: never ready, never refused for this long → nothing more to learn.
+        public var requestQuietLimit: TimeInterval
+
+        public init(minimumCheck: TimeInterval = 3, requestSlice: TimeInterval = 3, requestQuietLimit: TimeInterval = 15) {
+            self.minimumCheck = minimumCheck
+            self.requestSlice = requestSlice
+            self.requestQuietLimit = requestQuietLimit
+        }
+    }
+
+    /// - Parameters:
+    ///   - waitForDecision: `request` (keep browsing through denials: the rider may still allow) vs the
+    ///     quick `check` (one browse, a denial ends it).
+    ///   - browse: one browse of at most `slice` seconds; `stopOnDenial` = finish at the first PolicyDenied.
+    public static func run(timeout: TimeInterval, waitForDecision: Bool, timing: Timing = Timing(),
+                           browse: (_ slice: TimeInterval, _ stopOnDenial: Bool) async -> LocalNetworkBrowseOutcome,
+                           pause: (TimeInterval) async -> Void = { await sleepSeconds($0) }) async -> LocalNetworkAccess {
+        let start = Date()
+        let deadline = start.addingTimeInterval(waitForDecision ? timeout : max(timeout, timing.minimumCheck))
+        var denied = false
+        while true {
+            let remaining = deadline.timeIntervalSinceNow
+            guard remaining > 0 else { break }
+            let slice = waitForDecision ? min(remaining, timing.requestSlice) : remaining
+            let sliceStart = Date()
+            switch await browse(slice, !waitForDecision) {
+            case .found:
+                return .granted
+            case .readyQuiet:
+                Log.i("NET", "[LAN] browser ready and never refused, no \(EasyConnTXT.serviceType) service seen \u{2014} Local Network access works")
+                return .granted
+            case .denied:
+                denied = true
+                if !waitForDecision { return .denied }
+            case .quiet:
+                denied = false
+                if !waitForDecision || Date().timeIntervalSince(start) >= timing.requestQuietLimit {
+                    Log.i("NET", "[LAN] no \(EasyConnTXT.serviceType) service seen and the browser never got ready \u{2014} undetermined")
+                    return .undetermined
+                }
+            }
+            if Task.isCancelled { break }
+            let rest = slice - Date().timeIntervalSince(sliceStart)
+            if rest > 0 { await pause(rest) } // a browser that failed at once: no tight loop
+        }
+        return denied ? .denied : .undetermined
+    }
 }
 #endif
 
@@ -113,52 +211,18 @@ public enum LocalNetworkPermission {
         return access
     }
 
-    /// The quick check browses at least this long (the dash answered within ~1.2 s in the field).
-    static let minimumCheckBrowse: TimeInterval = 3
-    /// `request`: one browser per slice, so a browse denied while the alert was up is retried.
-    static let requestBrowseSlice: TimeInterval = 3
-    /// `request`: no denial and no advertisement for this long → nothing more to learn.
-    static let requestQuietLimit: TimeInterval = 15
-
-    /// Local-only Wi-Fi: a result → granted; a policy denial → denied (`request` keeps browsing: the
-    /// rider may still allow); neither → undetermined.
+    /// Local-only Wi-Fi: a result, or a browser that got ready and was never refused → granted; a policy
+    /// denial → denied (`request` keeps browsing: the rider may still allow); neither → undetermined.
     static func browseProbe(timeout: TimeInterval, waitForDecision: Bool) async -> LocalNetworkAccess {
-        let start = Date()
-        let deadline = start.addingTimeInterval(waitForDecision ? timeout : max(timeout, minimumCheckBrowse))
-        var denied = false
-        while true {
-            let remaining = deadline.timeIntervalSinceNow
-            guard remaining > 0 else { break }
-            let slice = waitForDecision ? min(remaining, requestBrowseSlice) : remaining
-            let sliceStart = Date()
-            switch await OCMLocalNetworkBrowse().run(timeout: slice, stopOnDenial: !waitForDecision) {
-            case .found:
-                return .granted
-            case .denied:
-                denied = true
-                if !waitForDecision { return .denied }
-            case .quiet:
-                denied = false
-                if !waitForDecision || Date().timeIntervalSince(start) >= requestQuietLimit { return .undetermined }
-            }
-            if Task.isCancelled { break }
-            let rest = slice - Date().timeIntervalSince(sliceStart)
-            if rest > 0 { await sleepSeconds(rest) } // a browser that failed at once: no tight loop
+        await LocalNetworkBrowseProbe.run(timeout: timeout, waitForDecision: waitForDecision) { slice, stopOnDenial in
+            await OCMLocalNetworkBrowse().run(timeout: slice, stopOnDenial: stopOnDenial)
         }
-        return denied ? .denied : .undetermined
     }
 }
 
 /// One `_EasyConn._tcp` browse for the Local Network check (internal). Resolves exactly once.
 final class OCMLocalNetworkBrowse: @unchecked Sendable {
-    enum Outcome: Equatable {
-        /// A service was listed: Local Network access is granted.
-        case found
-        /// The browse is refused by Local Network privacy (denied, or the alert is unanswered).
-        case denied
-        /// Neither within the time allowed.
-        case quiet
-    }
+    typealias Outcome = LocalNetworkBrowseOutcome
 
     /// DNS-SD kDNSServiceErr_PolicyDenied.
     static let policyDeniedCode: Int32 = -65570
@@ -168,7 +232,7 @@ final class OCMLocalNetworkBrowse: @unchecked Sendable {
     private var browser: NWBrowser?
     private var continuation: CheckedContinuation<Outcome, Never>?
     private var outcome: Outcome?
-    private var denied = false
+    private var browseState = LocalNetworkBrowseState()
 
     static func isPolicyDenied(_ error: NWError) -> Bool {
         if case let .dns(code) = error { return Int32(code) == policyDeniedCode }
@@ -216,17 +280,25 @@ final class OCMLocalNetworkBrowse: @unchecked Sendable {
 
     private func handle(_ state: NWBrowser.State, stopOnDenial: Bool) {
         switch state {
-        case let .waiting(error), let .failed(error):
+        case let .waiting(error):
             let isDenied = Self.isPolicyDenied(error)
-            lock.lock(); if isDenied { denied = true }; lock.unlock()
-            if case .failed = state {
-                finish(isDenied ? .denied : .quiet)
-            } else if isDenied, stopOnDenial {
-                finish(.denied)
-            }
+            lock.lock()
+            browseState.notReady(policyDenied: isDenied)
+            lock.unlock()
+            if isDenied, stopOnDenial { finish(.denied) }
+        case let .failed(error):
+            let isDenied = Self.isPolicyDenied(error)
+            lock.lock()
+            browseState.notReady(policyDenied: isDenied)
+            let result = browseState.outcome
+            lock.unlock()
+            finish(result)
         case .ready:
-            // Ready again after a denial: iOS retried the browse once access was allowed.
-            lock.lock(); denied = false; lock.unlock()
+            // Ready (again, after a denial: iOS retried the browse once access was allowed). Decided at
+            // the deadline: still ready and never refused since → access works (review WIFI-2).
+            lock.lock()
+            browseState.ready()
+            lock.unlock()
         default:
             break
         }
@@ -234,9 +306,9 @@ final class OCMLocalNetworkBrowse: @unchecked Sendable {
 
     private func finishAtDeadline() {
         lock.lock()
-        let wasDenied = denied
+        let result = browseState.outcome
         lock.unlock()
-        finish(wasDenied ? .denied : .quiet)
+        finish(result)
     }
 
     private func finish(_ result: Outcome) {

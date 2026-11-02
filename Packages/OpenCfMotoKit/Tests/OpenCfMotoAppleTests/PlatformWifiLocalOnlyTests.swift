@@ -131,6 +131,49 @@ final class PlatformWifiLocalOnlyTests: XCTestCase {
         XCTAssertEqual(WiFiInterfaces.wifiInterfaceName(among: all, typeOf: types(["en0": 0])), "en0")
     }
 
+    /// Review WIFI-3: a VPN tunnel running over Wi-Fi reads as Wi-Fi in SIOCGIFFUNCTIONALTYPE (it is
+    /// delegated to en0). On cellular only (en0 without IPv4) it must not become "the Wi-Fi interface":
+    /// that would report "Wi-Fi up (local-only)" over cellular, with the tunnel's address and subnet .1.
+    func testTunnelsNeverCountAsTheWifiInterface() {
+        func address(_ name: String, _ ip: String, _ mask: String, p2p: Bool = false, loopback: Bool = false) -> WiFiInterfaceAddress {
+            WiFiInterfaceAddress(interfaceName: name, address: WiFiIPv4(ip)!, netmask: WiFiIPv4(mask), isLoopback: loopback,
+                                 isPointToPoint: p2p)
+        }
+        // Cellular only: en0 holds no IPv4; an IMS ipsec tunnel and two VPN tunnels (one on 192.168.4.x).
+        let cellular = [
+            address("lo0", "127.0.0.1", "255.0.0.0", loopback: true),
+            address("pdp_ip0", "10.64.1.9", "255.255.255.255"),
+            address("ipsec4", "192.0.2.7", "255.0.0.0", p2p: true),
+            address("utun4", "10.8.0.2", "255.255.255.0", p2p: true),
+            address("utun5", "192.168.4.20", "255.255.255.0", p2p: true),
+        ]
+        // The tunnels read as Wi-Fi (delegated to en0, the type was taken during a handover).
+        let typeOf: (String) -> UInt32? = { ["ipsec4": 3, "utun4": 3, "utun5": 3, "en0": 3, "pdp_ip0": 5][$0] }
+        let name = WiFiInterfaces.wifiInterfaceName(among: cellular, typeOf: typeOf)
+        XCTAssertFalse(["ipsec4", "utun4", "utun5"].contains(name ?? ""), "\(String(describing: name))")
+        let s = WiFiSnapshot(path: Self.unsatisfied, addresses: cellular, fallbackInterfaceName: name)
+        XCTAssertFalse(s.isUp, "cellular only: Wi-Fi is down, whatever the VPN")
+        XCTAssertFalse(s.isLocalOnly)
+        XCTAssertNil(s.usablePhoneIPv4)
+        XCTAssertFalse(s.isOn(WiFiSubnet.knownDashSubnets), "a VPN on 192.168.4.x is no dash subnet")
+        XCTAssertEqual(s.description, "wifi=down reason=notAvailable")
+        // Wi-Fi up: en0 as before.
+        let withWifi = cellular + [address("en0", "192.168.0.50", "255.255.255.0")]
+        XCTAssertEqual(WiFiInterfaces.wifiInterfaceName(among: withWifi, typeOf: typeOf), "en0")
+        // en0 wired, the Wi-Fi interface is en2: en2, never a tunnel.
+        let wiredEn0 = cellular + [address("en0", "10.0.0.9", "255.255.255.0"), address("en2", "192.168.0.60", "255.255.255.0")]
+        XCTAssertEqual(WiFiInterfaces.wifiInterfaceName(among: wiredEn0, typeOf: { ["ipsec4": 3, "utun4": 3, "utun5": 3, "en0": 2, "en2": 3][$0] }),
+                       "en2")
+    }
+
+    func testGetifaddrsReportsPointToPoint() {
+        // The flag is read from getifaddrs (Linux: tunnels such as tun0 set it too; loopback does not).
+        let all = WiFiInterfaces.ipv4Addresses()
+        for a in all where a.isLoopback { XCTAssertFalse(a.isPointToPoint, a.interfaceName) }
+        XCTAssertFalse(WiFiInterfaceAddress(interfaceName: "en0", address: WiFiIPv4("192.168.0.50")!).isPointToPoint,
+                       "default: not point-to-point")
+    }
+
     func testFunctionalTypeOfLoopback() throws {
         #if canImport(Darwin)
         // SIOCGIFFUNCTIONALTYPE works (request code and ifreq layout): lo0 is IFRTYPE_FUNCTIONAL_LOOPBACK.

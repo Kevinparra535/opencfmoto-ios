@@ -162,13 +162,18 @@ public struct WiFiInterfaceAddress: Sendable, Equatable {
     public var netmask: WiFiIPv4?
     public var isUp: Bool
     public var isLoopback: Bool
+    /// IFF_POINTOPOINT: a tunnel (utun, ipsec — VPNs, IMS), never the Wi-Fi interface, even when its
+    /// functional type reads Wi-Fi (a tunnel running over Wi-Fi is delegated to it).
+    public var isPointToPoint: Bool
 
-    public init(interfaceName: String, address: WiFiIPv4, netmask: WiFiIPv4? = nil, isUp: Bool = true, isLoopback: Bool = false) {
+    public init(interfaceName: String, address: WiFiIPv4, netmask: WiFiIPv4? = nil, isUp: Bool = true, isLoopback: Bool = false,
+                isPointToPoint: Bool = false) {
         self.interfaceName = interfaceName
         self.address = address
         self.netmask = netmask
         self.isUp = isUp
         self.isLoopback = isLoopback
+        self.isPointToPoint = isPointToPoint
     }
 
     public var prefixLength: Int? { netmask.flatMap { WiFiIPv4.prefixLength(netmask: $0) } }
@@ -186,11 +191,13 @@ public enum WiFiInterfaces {
     /// The Wi-Fi interface when the path names none (an unsatisfied path lists no interface): among
     /// the interfaces carrying IPv4, the one whose functional type is Wi-Fi ("en0" first, else one with
     /// a usable address). With none typed Wi-Fi: "en0", unless its type says it is something else
-    /// (wired, cellular…): then nil.
+    /// (wired, cellular…): then nil. Point-to-point interfaces (utun / ipsec tunnels) never count: a VPN
+    /// running over Wi-Fi reads as Wi-Fi in SIOCGIFFUNCTIONALTYPE (`if_delegated`, XNU if.c), and would
+    /// make cellular look like "Wi-Fi up (local-only)" (review WIFI-3).
     public static func wifiInterfaceName(among all: [WiFiInterfaceAddress],
                                          typeOf: (String) -> UInt32? = WiFiInterfaces.functionalType(ofInterface:)) -> String? {
         var names: [String] = []
-        for a in all where a.isUp && !a.isLoopback && !names.contains(a.interfaceName) {
+        for a in all where a.isUp && !a.isLoopback && !a.isPointToPoint && !names.contains(a.interfaceName) {
             names.append(a.interfaceName)
         }
         let wifi = names.filter { typeOf($0) == functionalTypeWifiInfra }
@@ -203,15 +210,11 @@ public enum WiFiInterfaces {
         return defaultWifiInterfaceName
     }
 
-    private static let functionalTypes = Locked<[String: UInt32]>([:])
-
-    /// Functional type of a BSD interface (`SIOCGIFFUNCTIONALTYPE`, cached per name); nil where it
-    /// cannot be read (not Darwin, unknown interface).
+    /// Functional type of a BSD interface (`SIOCGIFFUNCTIONALTYPE`); nil where it cannot be read (not
+    /// Darwin, unknown interface). Read every time (one ioctl): a value cached for the process could
+    /// keep a delegated interface's momentary type (review WIFI-3).
     public static func functionalType(ofInterface name: String) -> UInt32? {
-        if let known = functionalTypes.withLock({ $0[name] }) { return known }
-        guard let type = readFunctionalType(name) else { return nil }
-        functionalTypes.withLock { $0[name] = type }
-        return type
+        readFunctionalType(name)
     }
 
     private static func readFunctionalType(_ name: String) -> UInt32? {
@@ -245,6 +248,7 @@ public enum WiFiInterfaces {
         defer { freeifaddrs(ifap) }
         let upFlag = UInt32(truncatingIfNeeded: IFF_UP)
         let loopbackFlag = UInt32(truncatingIfNeeded: IFF_LOOPBACK)
+        let pointToPointFlag = UInt32(truncatingIfNeeded: IFF_POINTOPOINT)
         var cursor: UnsafeMutablePointer<ifaddrs>? = first
         while let cur = cursor {
             let ifa = cur.pointee
@@ -259,7 +263,8 @@ public enum WiFiInterfaces {
                 address: addr,
                 netmask: mask,
                 isUp: (UInt32(ifa.ifa_flags) & upFlag) != 0,
-                isLoopback: (UInt32(ifa.ifa_flags) & loopbackFlag) != 0
+                isLoopback: (UInt32(ifa.ifa_flags) & loopbackFlag) != 0,
+                isPointToPoint: (UInt32(ifa.ifa_flags) & pointToPointFlag) != 0
             ))
         }
         return out
