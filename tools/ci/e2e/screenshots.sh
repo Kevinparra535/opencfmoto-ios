@@ -52,9 +52,12 @@ shoot navigate 9 "${DEMO[@]}" -uiScreen navigate
 for s in trips settings controls logs garage about mirror onboarding scan ride; do
   shoot "$s" 5 "${DEMO[@]}" -uiScreen "$s"
 done
+# Settings scrolled to "Apple Music on the dash" (the -demoSeed fake Music app: on, access allowed).
+shoot settings_music 5 "${DEMO[@]}" -uiScreen settings -uiSettingsAnchor music
 shoot dash_landscape_raw 9 "${DEMO[@]}" -uiScreen dash -uiOrientation landscape
 shoot es_home 5 "${DEMO[@]}" -AppleLanguages "(es)" -AppleLocale es_ES
 shoot es_settings 5 "${DEMO[@]}" -uiScreen settings -AppleLanguages "(es)" -AppleLocale es_ES
+shoot es_settings_music 5 "${DEMO[@]}" -uiScreen settings -uiSettingsAnchor music -AppleLanguages "(es)" -AppleLocale es_ES
 shoot es_dash 9 "${DEMO[@]}" -uiScreen dash -AppleLanguages "(es)" -AppleLocale es_ES
 shoot es_dash_music 7 "${DEMO[@]}" -uiScreen dash -uiDashSheet music -AppleLanguages "(es)" -AppleLocale es_ES
 xcrun simctl terminate "$UDID" "$BUNDLE" > /dev/null 2>&1 || true

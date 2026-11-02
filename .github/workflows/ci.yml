@@ -486,8 +486,8 @@ jobs:
           bash tools/ci/e2e/run-fakedash.sh "${{ steps.sim.outputs.udid }}" "$BUNDLE_ID" touch mt800 15 "$OUT" -uiScreen dash
           printf "e2e touch\t%s\tdone\n" $(( $(date +%s) - t0 )) >> "$OUT/timings.tsv"
       # Apple Music on the dash: a fake Music app (-e2eMusic) and the app's own script on the dash —
-      # Music sheet at +9 s, next song +15 s, pause +21 s, close +27 s after the first frame. Not in
-      # --require yet (it becomes required once it has passed twice).
+      # Music sheet at +9 s, next song +15 s, pause +21 s, close +27 s after the first frame. Required
+      # by the report below since it passed twice (the E2E runs of wip/music at 0f08cd0 and a71c8d5).
       - name: "E2E music (800x384 CFDL16, Apple Music fake: tile, sheet, next song, pause)"
         if: steps.install.outcome == 'success'
         run: |
@@ -499,7 +499,7 @@ jobs:
         run: |
           mkdir -p "$OUT/crash"
           cp ~/Library/Logs/DiagnosticReports/OpenCfMoto*.ips "$OUT/crash/" 2>/dev/null || true
-          python3 tools/ci/e2e/assemble.py "$OUT" "$RUNNER_TEMP/ci-artifacts" --strict --require=cfdl16,cfdl26
+          python3 tools/ci/e2e/assemble.py "$OUT" "$RUNNER_TEMP/ci-artifacts" --strict --require=cfdl16,cfdl26,music
       - name: Publish to the ci-artifacts branch
         if: always()
         env:

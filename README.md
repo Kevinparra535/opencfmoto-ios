@@ -149,7 +149,7 @@ Sigue la guía paso a paso [docs/PRUEBA-EN-LA-MOTO.md](docs/PRUEBA-EN-LA-MOTO.md
   apps** mientras está activa; no todos los tableros envían esos botones; la pulsación larga de ★
   no es detectable en iOS; los ▲/▼ de volumen solo funcionan con la opción experimental.
 - **Apple Music**: solo la app Música de Apple (ni Spotify ni YouTube Music: iOS no da acceso).
-  Mientras suena, los botones ◀ ▶ ★ de la moto controlan la música; con el control multimedia del
+  Mientras suena, los botones ◀ ▶ ★ de la moto controlan la música; con el mando multimedia del
   teléfono activado, pausa la canción con ★ para devolvérselos al tablero.
 - **App Store**: el audio silencioso para los botones y la lectura del volumen podrían no ser
   aceptados en la revisión de Apple. Además, la licencia **AGPL** es difícil de compatibilizar con
@@ -204,8 +204,9 @@ Sin cuentas, sin anuncios y sin telemetría. Las motos, los viajes y los registr
 iPhone hasta que tú los compartes; las contraseñas Wi-Fi se guardan en el llavero y se ocultan en
 los registros. Las búsquedas, rutas y teselas consultan servicios de OpenStreetMap. Con **Apple
 Music en el tablero**, la canción se lee en el iPhone y OpenCfMoto no la envía a ningún sitio (ni
-títulos ni artistas en los registros); la portada de las canciones en streaming la carga MusicKit
-de Apple desde los servidores de Apple.
+títulos, ni artistas, ni identificadores de canciones en los registros: cada canción aparece con
+un código que cambia en cada arranque de la app); la portada de las canciones en streaming la carga
+MusicKit de Apple desde los servidores de Apple.
 
 ## Créditos y licencia
 
@@ -427,8 +428,9 @@ with `python3 tools/l10n/build_strings.py`.
 No accounts, no ads, no telemetry. Bikes, trips and logs stay on the iPhone until you share them;
 Wi-Fi passwords live in the Keychain and are redacted in logs. Search, routing and map tiles query
 OpenStreetMap services. With **Apple Music on the dash** the song is read on the iPhone and
-OpenCfMoto sends it nowhere (no titles or artists in logs); the cover of streamed songs is loaded by
-Apple's MusicKit from Apple's servers.
+OpenCfMoto sends it nowhere (no titles, artists or song ids in logs: each song shows as a code that
+changes every time the app starts); the cover of streamed songs is loaded by Apple's MusicKit from
+Apple's servers.
 
 ## Credits and license
 
