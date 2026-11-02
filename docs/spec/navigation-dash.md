@@ -1364,7 +1364,12 @@ nothing) → night: 15 % black (never inverted) → 1-dp outline → progress tr
 bottom (known duration only; fill = whole px) → paused: 45 % black dim + 20-dp ❚❚ badge top-right. Tap /
 ★ → `.openMusic`. Focusable last in the map lists (free ride `pill … fab.menu, music.tile`, navigating
 `metrics.end, fab.* , music.tile`): one ◀ from the default item reaches it. Drawn but not focusable in
-preview / arrival.
+preview / arrival. Focus ring on the tile (fix F3; every close of the sheet parks the focus there, so the
+usual ring would tint the cover for the rest of the ride): no fill, and the 5-dp stroke runs OUTSIDE the
+cover (path = frame grown by 2.5 dp, radius 12.5 dp: the band starts at the cover's edge and follows its
+corners). It fits on every canvas, inside the safe area and clear of every other widget: 800×384
+725–799 × 265–339, 3 px under the Menu FAB and 9 px above the clock; with screen margins 1 px inside the
+safe area; portrait 3 px under the clock (`DashMusicFocusRingTests`).
 
 **Music sheet** (`DashSheet.music`, `DashLayout.musicSheet`). Opaque #12171E over the whole canvas;
 nothing of the map or its chrome is drawn under it. While navigating the nav card is drawn again ON TOP

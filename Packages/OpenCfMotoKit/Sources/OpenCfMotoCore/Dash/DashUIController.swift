@@ -1056,6 +1056,15 @@ public final class DashUIController: @unchecked Sendable {
                 cmds.append(.fill(DashPath.ellipse(in: r), DashPalette.focusFill, .nonZero))
                 cmds.append(.stroke(DashPath.ellipse(in: r.insetBy(dx: sw / 2, dy: sw / 2)),
                                     DashStroke(width: sw, color: DashPalette.focusStroke, cap: .butt, join: .round)))
+            } else if id == DashFocusEngine.musicTileId {
+                // Fix F3: the ring parks on the tile after every close of the Music sheet, so a fill or
+                // an inset stroke would wash out the album cover (the point of the tile) for the rest of
+                // the ride. No fill, and the stroke OUTSIDE the cover: path r grown by sw/2, so the band
+                // covers r … r + sw and follows the cover's corners. Room for it on every canvas: the tile
+                // is 8 dp under the last FAB and 8 dp above the clock (DashMusicLayoutTests).
+                let rad = min(c.dp(DashDimens.musicTileRadius), min(r.width, r.height) / 2)
+                cmds.append(.stroke(DashPath.roundedRect(r.insetBy(dx: -sw / 2, dy: -sw / 2), radius: rad + sw / 2),
+                                    DashStroke(width: sw, color: DashPalette.focusStroke, cap: .butt, join: .round)))
             } else {
                 let rad = min(c.dp(DashPalette.focusRadius), min(r.width, r.height) / 2)
                 cmds.append(.fill(DashPath.roundedRect(r, radius: rad), DashPalette.focusFill, .nonZero))
