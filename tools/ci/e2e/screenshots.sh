@@ -45,7 +45,9 @@ rm -f "$DIR/_warmup.png"
 shoot home 5 "${DEMO[@]}"
 shoot dash 9 "${DEMO[@]}" -uiScreen dash
 # Apple Music on the dash: the Dash view with the Music sheet open (fake Music app of -demoSeed).
-shoot dash_music 11 "${DEMO[@]}" -uiScreen dash -uiDashSheet music
+# 7 s, not more: the sheet opens ~1–3 s after launch and closes itself after 10 s without dash input
+# while the bike moves (contract §3.7; the demo GPS rides at 45 km/h). No map tiles show under it.
+shoot dash_music 7 "${DEMO[@]}" -uiScreen dash -uiDashSheet music
 shoot navigate 9 "${DEMO[@]}" -uiScreen navigate
 for s in trips settings controls logs garage about mirror onboarding scan ride; do
   shoot "$s" 5 "${DEMO[@]}" -uiScreen "$s"
@@ -54,7 +56,7 @@ shoot dash_landscape_raw 9 "${DEMO[@]}" -uiScreen dash -uiOrientation landscape
 shoot es_home 5 "${DEMO[@]}" -AppleLanguages "(es)" -AppleLocale es_ES
 shoot es_settings 5 "${DEMO[@]}" -uiScreen settings -AppleLanguages "(es)" -AppleLocale es_ES
 shoot es_dash 9 "${DEMO[@]}" -uiScreen dash -AppleLanguages "(es)" -AppleLocale es_ES
-shoot es_dash_music 11 "${DEMO[@]}" -uiScreen dash -uiDashSheet music -AppleLanguages "(es)" -AppleLocale es_ES
+shoot es_dash_music 7 "${DEMO[@]}" -uiScreen dash -uiDashSheet music -AppleLanguages "(es)" -AppleLocale es_ES
 xcrun simctl terminate "$UDID" "$BUNDLE" > /dev/null 2>&1 || true
 
 # The Simulator framebuffer stays portrait: the landscape-right interface is drawn rotated 90°
