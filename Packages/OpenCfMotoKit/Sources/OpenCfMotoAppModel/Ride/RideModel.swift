@@ -99,7 +99,8 @@ public final class RideModel {
     public private(set) var gpsStatus: String = ""
     /// Logs ▸ diagnostics (MP-7): the access units sent to the dash are being recorded to
     /// `dashVideoRecordingURL` (raw Annex-B H.264, the first `dashVideoRecordingFrameLimit`) — the
-    /// day-one wire dump of media-video.md §15.8.
+    /// day-one wire dump of media-video.md §15.8. False again within a housekeeping tick once the
+    /// recorder closed the file by itself.
     public private(set) var isRecordingDashVideo = false
     /// The current / last recording (share it once recording is off).
     public private(set) var dashVideoRecordingURL: URL?
@@ -284,6 +285,17 @@ public final class RideModel {
         isRecordingDashVideo = false
     }
 
+    /// The recorder closes the file by itself after `dashVideoRecordingFrameLimit` access units (or when a
+    /// write fails). The toggle follows, so the Logs screen offers the file and the next tap starts a new
+    /// recording (the Phase 0 checklist records once per condition). Housekeeping and `.active` call it.
+    private func refreshDashVideoRecording() {
+        guard isRecordingDashVideo, let mirror = dashVideoSourceIsMirror else { return }
+        let services = core.services
+        guard mirror ? services.mirror.isWireDumpFinished : services.projection.isWireDumpFinished else { return }
+        stopDashVideoRecording()
+        Log.i("RIDE", "dash video recording ended (\(dashVideoRecordingURL?.lastPathComponent ?? "-")): the recorder closed the file")
+    }
+
     /// "20261101-142530" (POSIX, local time) for file names.
     private static func fileStamp(_ date: Date) -> String {
         let f = DateFormatter()
@@ -465,6 +477,7 @@ public final class RideModel {
         case .active:
             projection.enterForeground()
             setNeedsModelUpdate()
+            refreshDashVideoRecording() // a recording that filled up while locked: the Logs toggle is off
         }
     }
 
@@ -805,11 +818,13 @@ public final class RideModel {
     /// Runs the 5 s duties now (tests, and right after a settings change that matters).
     func runHousekeeping() { housekeeping() }
 
-    /// Android's 5 s watchdog duties: trip auto-log, AUTO power mode, GPS policy.
+    /// Android's 5 s watchdog duties: trip auto-log, AUTO power mode, GPS policy; and the iOS dash video
+    /// recording toggle, which follows a recorder that closed its file by itself.
     private func housekeeping() {
         evaluateTripAutoLog()
         adaptiveTick()
         applyLocationPolicy()
+        refreshDashVideoRecording()
     }
 
     // MARK: - Location, screen, trips, encoder

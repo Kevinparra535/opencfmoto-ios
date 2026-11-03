@@ -880,6 +880,13 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
         old?.close()
     }
 
+    /// True once the recording `startWireDump` opened closed itself (`maxFrames` written, or a write
+    /// failed); false while it records and after `stopWireDump()`.
+    public var isWireDumpFinished: Bool {
+        let dump = shared.withLock { s -> H264WireDump? in s.dump }
+        return dump?.isFinished ?? false
+    }
+
     // MARK: VideoFrameSource
 
     public func prepare(canvas newCanvas: VideoCanvas, parameters: EncoderParameters) {

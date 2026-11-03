@@ -475,6 +475,13 @@ public final class MirrorRelayServer: VideoFrameSource, @unchecked Sendable {
         old?.close()
     }
 
+    /// True once the recording `startWireDump` opened closed itself (`maxFrames` written, or a write
+    /// failed); false while it records and after `stopWireDump()`.
+    public var isWireDumpFinished: Bool {
+        let d = lock.withLock { dump }
+        return d?.isFinished ?? false
+    }
+
     public var isClientConnected: Bool { lock.lock(); defer { lock.unlock() }; return connection != nil }
     /// `start()` succeeded and `stop()` was not called.
     public var isRunning: Bool { lock.lock(); defer { lock.unlock() }; return running }

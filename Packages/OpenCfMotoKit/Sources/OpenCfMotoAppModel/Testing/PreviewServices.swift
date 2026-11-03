@@ -324,10 +324,21 @@ public final class PreviewProjection: DashProjecting, @unchecked Sendable {
     /// ADDITION (fix-media, MED:MP-7): the wire-dump requests (file URLs) and whether one is open.
     public private(set) var wireDumps: [URL] = []
     public private(set) var isWireDumping = false
+    private var _wireDumpFinished = false
     public func startWireDump(to url: URL, maxFrames: Int) throws {
-        lock.lock(); wireDumps.append(url); isWireDumping = true; lock.unlock()
+        lock.lock(); wireDumps.append(url); isWireDumping = true; _wireDumpFinished = false; lock.unlock()
     }
-    public func stopWireDump() { lock.lock(); isWireDumping = false; lock.unlock() }
+    public func stopWireDump() { lock.lock(); isWireDumping = false; _wireDumpFinished = false; lock.unlock() }
+    /// ADDITION (locked iPhone, Phase 0 checklist): see `DashProjecting.isWireDumpFinished`.
+    public var isWireDumpFinished: Bool { lock.withLock { _wireDumpFinished } }
+    /// Tests: the open recording closes itself, as the engine's does at its `maxFrames`.
+    public func finishWireDump() {
+        lock.withLock {
+            guard isWireDumping else { return }
+            isWireDumping = false
+            _wireDumpFinished = true
+        }
+    }
     public func prefetchCorridor(_ points: [GeoPoint]) {}
     public func setTileURLTemplate(_ template: String) { lock.lock(); tileURLTemplate = template; lock.unlock() }
     public func clearTileCache() {}
@@ -365,10 +376,21 @@ public final class PreviewMirror: MirrorHosting, @unchecked Sendable {
     /// ADDITION (fix-media, MED:MP-7): the wire-dump requests (file URLs) and whether one is open.
     public private(set) var wireDumps: [URL] = []
     public private(set) var isWireDumping = false
+    private var _wireDumpFinished = false
     public func startWireDump(to url: URL, maxFrames: Int) throws {
-        lock.lock(); wireDumps.append(url); isWireDumping = true; lock.unlock()
+        lock.lock(); wireDumps.append(url); isWireDumping = true; _wireDumpFinished = false; lock.unlock()
     }
-    public func stopWireDump() { lock.lock(); isWireDumping = false; lock.unlock() }
+    public func stopWireDump() { lock.lock(); isWireDumping = false; _wireDumpFinished = false; lock.unlock() }
+    /// ADDITION (locked iPhone, Phase 0 checklist): see `MirrorHosting.isWireDumpFinished`.
+    public var isWireDumpFinished: Bool { lock.withLock { _wireDumpFinished } }
+    /// Tests: the open recording closes itself, as the relay's does at its `maxFrames`.
+    public func finishWireDump() {
+        lock.withLock {
+            guard isWireDumping else { return }
+            isWireDumping = false
+            _wireDumpFinished = true
+        }
+    }
 
     /// Simulates the broadcast extension connecting / leaving (tests).
     public func setExtensionConnected(_ connected: Bool) {

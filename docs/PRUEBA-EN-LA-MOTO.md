@@ -112,8 +112,9 @@ En la moto, parada y segura, con el contacto puesto:
 
 4. Conecta y espera a ver el mapa en el tablero, sin menú ni hoja abierta (abajo a la derecha se ve
    la hora).
-5. Activa Registros ▸ «Grabar el vídeo enviado al tablero». A los 5 segundos, bloquea el iPhone con
-   el botón lateral y apunta la hora.
+5. En Registros ▸ «Diagnóstico del enlace», activa «Grabar el vídeo enviado al tablero» (si ya está
+   activado, desactívalo y vuelve a activarlo: así empieza una grabación nueva). A los 5 segundos,
+   bloquea el iPhone con el botón lateral y apunta la hora.
 6. Mira el tablero a los 30 s, a los 2 min y a los 10 min. Con la moto parada el mapa en vivo no
    se mueve: lo que cambia es la **hora del tablero** (abajo a la derecha), una vez por minuto.
    ¿Qué ves?
@@ -121,15 +122,20 @@ En la moto, parada y segura, con el contacto puesto:
    - «Teléfono bloqueado»;
    - el mapa sin aviso y la hora no avanza (imagen congelada);
    - sin imagen o desconectado.
-7. Desbloquea. ¿Vuelve el mapa en menos de 5 s?
-8. Repite los pasos 5 a 7 en estas condiciones:
+7. Desbloquea. ¿Vuelve el mapa en menos de 5 s? Enseguida, antes de volver a bloquear y en este orden:
+   - desactiva «Grabar el vídeo enviado al tablero» si sigue activado (se desactiva solo al llegar a
+     los 600 fotogramas) y toca **«Compartir la grabación»**: la app solo ofrece la última grabación,
+     y compartir antes el registro puede borrarla;
+   - después, Registros ▸ **Compartir**.
+
+   Si al desbloquear la app se abrió de nuevo (iOS la cerró), la grabación de esa condición ya no está,
+   pero el registro sí: compártelo enseguida, antes de la siguiente condición.
+8. Repite los pasos 4 a 7 en estas condiciones:
    - **A:** iPhone cargando;
    - **B:** sin cargar;
    - **C** (opcional): con los botones del manillar activados.
-9. Justo al terminar (la app guarda solo las últimas 5000 líneas del registro):
-   - Registros ▸ **Compartir**, y comparte también el archivo `.h264`;
-   - envía las horas, lo que viste en cada momento, el % de batería al empezar y al terminar, y si el
-     iPhone se calentó.
+9. Al terminar, envía las horas, lo que viste en cada momento, el % de batería al empezar y al terminar,
+   y si el iPhone se calentó.
 
 Qué significa cada resultado (con el iPhone bloqueado):
 
@@ -150,8 +156,9 @@ Qué significa cada resultado (con el iPhone bloqueado):
 - **Comparte los registros**: Registros ▸ **Compartir**. Los datos sensibles van ocultos por defecto.
   Para un fallo concreto usa **Informar de un problema**, que adjunta el diagnóstico.
 - **Graba lo que se envía al tablero**: Registros ▸ **«Grabar el vídeo enviado al tablero»**.
-  Actívalo, reproduce el problema, desactívalo y comparte el archivo `.h264`. Se puede analizar con
-  ffmpeg.
+  Actívalo y reproduce el problema; si sigue activado, desactívalo (se desactiva solo al llegar a los
+  600 fotogramas). Luego toca **«Compartir la grabación»** para enviar el archivo `.h264`. Se puede
+  analizar con ffmpeg.
 - **Prueba la compatibilidad**: si el tablero **no conecta** o **corta el enlace**, activa Ajustes ▸
   **Compatibilidad ▸ «Identificarse como teléfono Android»** y reconecta. Es la única diferencia
   con la app Android en lo que se envía al tablero.

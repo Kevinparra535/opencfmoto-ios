@@ -544,12 +544,17 @@ final class VideoEngineTests: XCTestCase {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("ocm-dump-\(UUID().uuidString).h264")
         defer { try? FileManager.default.removeItem(at: url) }
         try engine.startWireDump(to: url, maxFrames: 2)
+        XCTAssertFalse(engine.isWireDumpFinished, "recording")
         engine.prepare(canvas: canvas, parameters: .default)
         engine.resynchronize()
         let f1 = await engine.nextFrame(timeout: 3)
         let f2 = await engine.nextFrame(timeout: 3)
         let dumped = try Data(contentsOf: url)
         XCTAssertEqual(dumped, (f1?.accessUnit ?? Data()) + (f2?.accessUnit ?? Data()))
+        // Two frames served: the recorder closed the file at its cap (RideModel turns the Logs toggle off).
+        XCTAssertEqual(engine.isWireDumpFinished, f1 != nil && f2 != nil)
+        engine.stopWireDump()
+        XCTAssertFalse(engine.isWireDumpFinished, "stopWireDump releases the recorder")
     }
 }
 #endif

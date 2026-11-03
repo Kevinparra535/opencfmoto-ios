@@ -122,9 +122,11 @@ public final class AppModel {
         if phase == .background {
             // A jetsam kill or a force-quit from here on must not lose the ride log (review SPEC:CL-6).
             logs.persistSession()
-            // No share sheet is open once the app left the foreground (review SEC-6 / IOS-6).
+            // No share sheet is open once the app left the foreground (review SEC-6 / IOS-6). The dash
+            // video recording the Logs screen offers stays (the Phase 0 checklist shares it after the
+            // unlock) until a new recording replaces it; the next launch clears it with the rest.
             LogicData.purgeExports(in: core.services.files.exportsDirectory, olderThan: LogicData.backgroundExportAge,
-                                   now: Date())
+                                   now: Date(), except: ride.dashVideoRecordingURL?.lastPathComponent)
             purgeInbox()
         }
         guard phase == .active else { return }
@@ -209,7 +211,8 @@ public final class AppModel {
     }
 
     /// At launch: the previous run left the marker, so it ended in the background during a session (iOS
-    /// stopped it, or the rider swiped it away): L16 first, then the marker goes.
+    /// stopped it, or the rider swiped it away): L16 first, then the marker goes. That run's restored log
+    /// stays in this run's saved log, so a second kill before the rider shares does not lose it.
     private func reportUncleanBackgroundExit() {
         let store = core.services.keyValueStore
         let key = LockDiagnostics.backgroundSessionMarkerKey
@@ -218,6 +221,7 @@ public final class AppModel {
             Log.w("APP", LockDiagnostics.uncleanBackgroundExit(backgroundedAt: Date(timeIntervalSince1970: stamp),
                                                                timeZone: logs.timeZone))
         }
+        logs.carriesRestoredSession = true
         store.removeValue(forKey: key)
     }
 

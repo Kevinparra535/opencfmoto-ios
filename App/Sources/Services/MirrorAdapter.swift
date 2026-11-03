@@ -62,6 +62,7 @@ final class MirrorAdapter: MirrorHosting, @unchecked Sendable {
     }
 
     func stopWireDump() { server?.stopWireDump() }
+    var isWireDumpFinished: Bool { server?.isWireDumpFinished ?? false }
 }
 
 /// A frame source that never produces a frame (no relay available).

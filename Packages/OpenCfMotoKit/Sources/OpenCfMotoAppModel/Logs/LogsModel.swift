@@ -89,6 +89,11 @@ public final class LogsModel {
     @ObservationIgnored let sessionFiles: SessionLogFiles
     /// The previous session's log (consumed at launch), nil when none.
     @ObservationIgnored private(set) var restoredSession: String?
+    /// Set by AppModel at launch when the previous run ended in the background during a dash session
+    /// (the unclean-exit marker, L16): this run's saves keep `restoredSession` in front of this run's
+    /// lines (the same size cap), so one share after a second kill still has the first killed run. A
+    /// normal relaunch leaves it false: the old log is shown and shared once, then consumed.
+    @ObservationIgnored var carriesRestoredSession = false
     /// Restored session + previous crash, under the Android banners: shown and shared before the live
     /// lines until Clear.
     @ObservationIgnored private(set) var restoredSection = ""
@@ -210,14 +215,16 @@ public final class LogsModel {
     }
 
     /// Writes the redacted tail of the ring buffer to `last_session.log` (app → background, and every
-    /// ~30 s while a session runs). `synchronously: false` formats and writes off the main actor.
+    /// ~30 s while a session runs), after the restored log when `carriesRestoredSession`.
+    /// `synchronously: false` formats and writes off the main actor.
     func persistSession(synchronously: Bool = true) {
         let lines = log.lines()
         let files = sessionFiles
         let zone = timeZone
+        let carried = carriesRestoredSession ? restoredSession : nil
         let work: @Sendable () -> Void = {
             do {
-                try files.writeSession(SessionLogFiles.snapshot(lines, timeZone: zone))
+                try files.writeSession(SessionLogFiles.sessionText(lines, carrying: carried, timeZone: zone))
             } catch {
                 Log.w("LOGS", "session log not saved: \(LogicData.detail(of: error))")
             }

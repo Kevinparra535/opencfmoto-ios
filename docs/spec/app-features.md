@@ -1111,6 +1111,10 @@ Files in `filesDir`: `last_crash.txt`, `last_session.log`; cap `MAX_SESSION_BYTE
 * iOS: Swift traps can't be caught. Persist the session log on `scenePhase` → background and every ~30 s while
   linked; on launch hydrate the same way; use **MetricKit** (`MXCrashDiagnostic`) to obtain crash call stacks on the
   next launch and write them to `last_crash.txt`.
+* iOS (locked iPhone, Phase 0): when a launch finds the marker of a run that ended in the background during a dash
+  session (`previous run ended in the background…`), that run's restored log stays at the head of this run's saves
+  (same 256 KiB cap, no banner in the file), so a second kill before Share Logs does not lose it. A normal relaunch
+  still consumes the old log.
 
 ### 6.5 Problem report (`ProblemReport.kt`, `MainActivity.kt:613-689`) [V-CODE]
 

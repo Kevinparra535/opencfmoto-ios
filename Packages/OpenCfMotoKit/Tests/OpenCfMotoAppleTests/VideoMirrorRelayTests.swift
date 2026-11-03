@@ -482,6 +482,7 @@ final class VideoMirrorRelayTests: XCTestCase {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("ocm-mirror-dump-\(UUID().uuidString).h264")
         defer { try? FileManager.default.removeItem(at: url) }
         try server.startWireDump(to: url, maxFrames: 2)
+        XCTAssertFalse(server.isWireDumpFinished, "recording")
         let client = MirrorRelayClient(socketPath: path)
         client.retryInterval = 0.05
         defer { client.stop() }
@@ -494,10 +495,14 @@ final class VideoMirrorRelayTests: XCTestCase {
         client.send(frame: b)
         client.send(frame: c)
         let f1 = await server.nextFrame(timeout: 3)
+        XCTAssertFalse(server.isWireDumpFinished, "1 of 2 access units")
         let f2 = await server.nextFrame(timeout: 3)
         let f3 = await server.nextFrame(timeout: 3)
         XCTAssertEqual([f1, f2, f3].map { $0?.sequence }, [1, 2, 3])
+        // The recorder closed the file at its cap: RideModel turns the Logs toggle off then.
+        XCTAssertTrue(server.isWireDumpFinished, "closed by itself at maxFrames")
         server.stopWireDump()
+        XCTAssertFalse(server.isWireDumpFinished, "stopWireDump releases the recorder")
         let dumped = try Data(contentsOf: url)
         XCTAssertEqual(dumped, a.accessUnit + b.accessUnit, "first 2 access units, byte for byte")
     }

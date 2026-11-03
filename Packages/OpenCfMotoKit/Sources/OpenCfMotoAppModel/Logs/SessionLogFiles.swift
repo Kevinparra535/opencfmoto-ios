@@ -59,6 +59,17 @@ struct SessionLogFiles: Sendable {
         return kept.reversed().joined(separator: "\n")
     }
 
+    /// What `last_session.log` gets: `snapshot(lines)`, after `carried` (an earlier run's restored log,
+    /// already redacted) when there is one, within `maxBytes` (the newest part, cut at a line start).
+    static func sessionText(_ lines: [LogLine], carrying carried: String?, timeZone: TimeZone = .current,
+                            maxBytes: Int = maxSessionBytes) -> String {
+        let text = snapshot(lines, timeZone: timeZone, maxBytes: maxBytes)
+        var earlier = carried ?? ""
+        while earlier.last?.isNewline == true { earlier.removeLast() }
+        guard !earlier.isEmpty else { return text }
+        return tail(text.isEmpty ? earlier : earlier + "\n" + text, maxBytes: maxBytes)
+    }
+
     func writeSession(_ text: String) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try Data(text.utf8).write(to: sessionURL, options: .atomic)

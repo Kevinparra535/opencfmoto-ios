@@ -534,6 +534,10 @@ public protocol DashProjecting: AnyObject, Sendable {
     func startWireDump(to url: URL, maxFrames: Int) throws
     /// Closes the recording (the file keeps what was written).
     func stopWireDump()
+    /// ADDITION (locked iPhone, Phase 0 checklist): true once the recording `startWireDump` opened has
+    /// closed itself (`maxFrames` access units written, or a write failed); false while it records and
+    /// after `stopWireDump()`. RideModel turns the Logs toggle off then. Any thread. Default: false.
+    var isWireDumpFinished: Bool { get }
     /// ADDITION (music): registers (`data` non-nil) or removes (nil) the raster image that display
     /// lists draw with `DashDrawCommand.image(id:…)` — encoded JPEG / PNG / HEIC bytes, decoded and
     /// downsampled once by the renderer side, then the picture is re-rendered (`invalidate`).
@@ -562,6 +566,7 @@ public extension DashProjecting {
     func prepareHoldPicture(expectedCanvas: VideoCanvas) { prepareHoldPicture() }
     func startWireDump(to url: URL, maxFrames: Int) throws { throw CocoaError(.featureUnsupported) }
     func stopWireDump() {}
+    var isWireDumpFinished: Bool { false }
 }
 
 // MARK: - Mirror (ReplayKit broadcast extension → App Group socket → host)
@@ -580,11 +585,14 @@ public protocol MirrorHosting: AnyObject, Sendable {
     /// Annex-B `.h264`, the first `maxFrames`). Default: throws (unsupported).
     func startWireDump(to url: URL, maxFrames: Int) throws
     func stopWireDump()
+    /// ADDITION (locked iPhone, Phase 0 checklist): as `DashProjecting.isWireDumpFinished`. Default: false.
+    var isWireDumpFinished: Bool { get }
 }
 
 public extension MirrorHosting {
     func startWireDump(to url: URL, maxFrames: Int) throws { throw CocoaError(.featureUnsupported) }
     func stopWireDump() {}
+    var isWireDumpFinished: Bool { false }
 }
 
 // MARK: - The bundle
