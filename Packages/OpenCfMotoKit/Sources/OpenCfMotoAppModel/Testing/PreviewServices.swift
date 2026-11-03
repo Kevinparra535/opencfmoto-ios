@@ -259,7 +259,7 @@ public final class PreviewProjection: DashProjecting, @unchecked Sendable {
     private var _statsSummary: ProjectionStatsSummary?
 
     /// Every hold-picture request and background-encoder pre-warm, in order (the engine runs them on its
-    /// render queue in this order: the pre-warm probes the picture the hold build just rendered).
+    /// render queue in this order: the hold IDRs are ready before the pre-warm session is probed).
     public var lockPreparations: [LockPreparation] { lock.withLock { _lockPreparations } }
     /// `prepareBackgroundEncoder()` calls so far.
     public var backgroundEncoderPreparations: Int { lock.withLock { _backgroundEncoderPreparations } }

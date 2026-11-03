@@ -454,8 +454,8 @@ public final class RideModel {
             // picture while the hardware encoder is still available — for the whole own-UI
             // session, also before the dash negotiated (MP-2: REQ 16 may come while locked). Then,
             // still in the foreground, pre-warm the background encoder (locked iPhone, P0-4): the
-            // engine runs both on its render queue in this order, so the pre-warm probes the picture
-            // the hold build just rendered.
+            // engine runs both on its render queue in this order, so the hold IDRs are ready before the
+            // pre-warm session is created and probed (a forced IDR of the last live picture, never sent).
             if previous == .active, sessionActive, !sessionIsMirror {
                 requestHoldPicture()
                 projection.prepareBackgroundEncoder()
