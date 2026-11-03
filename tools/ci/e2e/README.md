@@ -21,16 +21,21 @@ the tail of the app log.
 Step `E2E locked` runs the app with `-e2eBackgroundCycle 15:30 -e2eBackgroundEncoder vtsw` against
 fakedash's `locked` scenario (cfdl16, 60 s): 15 s after the first frame the app "locks" for 30 s and
 the engine runs its background ladder with the Mac's VideoToolbox software encoder. fakedash records
-every SPS/PPS variant (`sps_variants` in `summary.json`), requires at least two
-(`LOCKED_NO_SWITCH`) and every switch at an IDR (`SWITCH_NOT_AT_IDR`), and decodes strictly
-(`-xerror -err_detect +crccheck+bitstream+buffer+explode`). RUN.md shows the variants table with one
-picture per variant, the lock lines of the app log (`[bg] …`, `background → …`, `[switch] …`,
-`[lock] …`) and fails the scenario when there are fewer than two variants, or the app log has no
-`background → backgroundSoftware … (encoder vt-sw` line or no `[switch] first vt-sw IDR on the wire`
-line. The scenario is **not** in `--require` (only `cfdl16`, `cfdl26`, `music` are): the Simulator
-does not background the app for real, and if its software encoder writes the hardware encoder's
-SPS/PPS byte for byte `LOCKED_NO_SWITCH` is no engine bug — the app log says which encoder ran. The
-status JSON's `engine` block also reports `encoder`, `background_s`, `budget_fps` and `demotions`.
+every SPS/PPS variant (`sps_variants` in `summary.json`), checks that every new SPS/PPS starts at an
+IDR and that `frame_num` stays continuous (`SWITCH_NOT_AT_IDR`: a P-frame of a second encoder whose
+IDR never reached the dash breaks it, whatever the SPS/PPS bytes), and decodes strictly
+(`-xerror -err_detect +crccheck+bitstream+buffer+explode`). The Simulator's only `avc1` encoder writes
+the hardware encoder's SPS/PPS byte for byte, so the wire shows one variant; the CI step passes
+`FAKEDASH_ARGS="--min-variants 1"`, which turns that into a note (`LOCKED_ONE_VARIANT`; without it,
+fewer than two variants is `LOCKED_NO_SWITCH`). RUN.md shows the variants table with one picture per
+variant and the lock lines of the app log (`[bg] …`, `background → …`, `[switch] …`, `[lock] …`), and
+checks every `[switch] first <enc> IDR on the wire: <n>b … (dump frame #k)` line against frame #k of
+the transcript (SPS+PPS+IDR of n bytes). It fails the scenario when a switch frame does not match or
+the app warns of a switch on a non-IDR frame, when one variant comes without a verified vt-sw → vt-hw
+switch back, or when the app log has no `background → backgroundSoftware … (encoder vt-sw` line or no
+`[switch] first vt-sw IDR on the wire` line. The scenario is **not** in `--require` (only `cfdl16`,
+`cfdl26`, `music` are): the Simulator does not background the app for real. The status JSON's
+`engine` block also reports `encoder`, `background_s`, `budget_fps` and `demotions`.
 
 ## App launch arguments (App/Sources/Services/AppLaunchOptions.swift)
 
@@ -56,7 +61,7 @@ status JSON's `engine` block also reports `encoder`, `background_s`, `budget_fps
 | `run-fakedash.sh <udid> <bundle> <scenario> <dash> <seconds> <out> [app args]` | fakedash on 127.0.0.1 ↔ the app with `-e2eFakeDash`; screenshots while streaming, the app's Documents dumps, decoded frames (`ffmpeg`, every 60th frame) plus the pictures the app's E2E script marks (`E2E: frame mark <name> = <index>` → `frames/<name>.png`; `-e2eMusic`: `music_1_map_playing` … `music_5_map_paused`); scenario `locked`: `frames/dash_variant_N.png` (5 frames after SPS/PPS variant N first reached the dash) and `frames/headers.txt` (the SPS/PPS ffmpeg parsed) |
 | `transcript_digest.py` | readable digest of a fakedash `--transcript` (per-frame traffic folded) |
 | `assemble.py <out> <artifacts>` | artifacts tree + `RUN.md` + GitHub annotations (`E2E <scenario> PASS/FAIL`) |
-| `test_assemble.py` | unit tests of the `locked` report (variants table, failure reasons): `python3 tools/ci/e2e/test_assemble.py` |
+| `test_assemble.py` | unit tests of the `locked` report (variants table, switch frames checked on the wire, failure reasons): `python3 tools/ci/e2e/test_assemble.py` |
 | `publish.sh <dir>` | force-pushes the tree as the single commit of `ci-artifacts` (`GITHUB_TOKEN`, `contents: write`) |
 
 ## Running it on a Mac

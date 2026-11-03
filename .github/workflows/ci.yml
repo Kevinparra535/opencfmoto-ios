@@ -497,15 +497,18 @@ jobs:
       # Locked iPhone, Phase 0: a simulated lock 15 s after the first frame, for 30 s (scene inactive →
       # background → inactive → active through the real AppModel → RideModel → engine path), with the
       # VideoToolbox software session as the background encoder. The fakedash `locked` scenario records
-      # every SPS/PPS variant (≥ 2 expected: one per encoder), checks that every switch is at an IDR and
-      # decodes strictly. Not in --require below: the Simulator does not really background the app, and
-      # its software encoder may write the hardware encoder's SPS/PPS byte for byte (read the app log).
+      # every SPS/PPS variant, checks frame_num continuity (a P-frame whose IDR never reached the dash
+      # fails it) and decodes strictly. The Simulator's only avc1 encoder writes the hardware encoder's
+      # SPS/PPS byte for byte, so the wire shows one variant: `--min-variants 1` makes that a note, and
+      # assemble.py checks each `[switch] first … IDR on the wire … (dump frame #k)` line of the app log
+      # against frame #k on the wire (SPS+PPS+IDR of the logged size). Not in --require below: the
+      # Simulator does not really background the app.
       - name: "E2E locked (simulated lock at +15 s for 30 s; VideoToolbox software in the background)"
         if: steps.install.outcome == 'success'
         run: |
           t0=$(date +%s)
-          bash tools/ci/e2e/run-fakedash.sh "${{ steps.sim.outputs.udid }}" "$BUNDLE_ID" locked cfdl16 60 "$OUT" \
-            -e2eBackgroundCycle 15:30 -e2eBackgroundEncoder vtsw
+          FAKEDASH_ARGS="--min-variants 1" bash tools/ci/e2e/run-fakedash.sh "${{ steps.sim.outputs.udid }}" "$BUNDLE_ID" \
+            locked cfdl16 60 "$OUT" -e2eBackgroundCycle 15:30 -e2eBackgroundEncoder vtsw
           printf "e2e locked\t%s\tdone\n" $(( $(date +%s) - t0 )) >> "$OUT/timings.tsv"
       - name: Report (RUN.md + annotations; fails when a required scenario failed)
         if: always()

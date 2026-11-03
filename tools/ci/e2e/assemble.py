@@ -18,6 +18,7 @@ Exit code: 0 (the workflow decides what fails), 3 when a scenario did not pass a
 usage: assemble.py <out dir> <artifacts dir> [--strict]
 """
 import glob
+import re
 import json
 import os
 import shutil
@@ -113,6 +114,54 @@ LOCK_LINE_MARKERS = ("E2E: simulated lock", "E2E: simulated unlock", "APP: scene
                      "VIDEO: foreground \u2192", "first IDR")
 LOCK_SOFTWARE_LINE = ("background \u2192 backgroundSoftware", "(encoder vt-sw")
 LOCK_FIRST_IDR_LINE = "[switch] first vt-sw IDR on the wire"
+# L8 (`BackgroundLog.switchFirstIDR`) with the wire-dump frame it names, and the engine's warning when an
+# encoder tag changed on a P-frame (`DashProjectionEngine.served`).
+LOCK_L8_RE = re.compile(r"\[switch\] first (\S+) IDR on the wire: (\d+)b.*\(dump frame #(\d+)\)")
+LOCK_NON_IDR_SWITCH = ("[switch] encoder tag", "on a non-IDR frame")
+
+
+def wire_frames(d):
+    """The frames fakedash received, in wire order over all sessions (1-based index = the app's dump frame
+    #k), from transcript.jsonl; None without a transcript."""
+    frames = []
+    try:
+        with open(os.path.join(d, "transcript.jsonl"), encoding="utf-8", errors="replace") as f:
+            for line in f:
+                try:
+                    e = json.loads(line)
+                except ValueError:
+                    continue
+                if e.get("name") == "frame" and e.get("dir") == "phone->dash" and "frame" in e:
+                    frames.append(e)
+    except OSError:
+        return None
+    return frames
+
+
+def check_switch_frames(log, frames):
+    """Every L8 `[switch] first <enc> IDR on the wire: <n>b \u2026 (dump frame #k)` of the app against what the
+    dash received: frame #k must be an SPS+PPS+IDR access unit of n bytes. Returns (verified [(enc, k)],
+    problems)."""
+    verified, problems = [], []
+    for l in log:
+        if all(m in l for m in LOCK_NON_IDR_SWITCH):
+            problems.append("SWITCH_NOT_AT_IDR (app log): `%s`" % l.strip()[-120:])
+        m = LOCK_L8_RE.search(l)
+        if not m:
+            continue
+        enc, size, k = m.group(1), int(m.group(2)), int(m.group(3))
+        if frames is None:      # no transcript: nothing to check against (a single variant then fails below)
+            continue
+        f = frames[k - 1] if 1 <= k <= len(frames) else None
+        nal = (f or {}).get("nal_types") or []
+        if f is None or not (f.get("keyframe") and nal[:2] == [7, 8] and 5 in nal and 1 not in nal
+                             and f.get("len") == size):
+            problems.append("SWITCH_NOT_AT_IDR (wire): L8 says frame #%d is the first %s IDR (%d B); the dash received %s"
+                            % (k, enc, size, "no such frame (%d frames)" % len(frames) if f is None else
+                               "%s %s B nal=%s" % ("an IDR" if f.get("keyframe") else "a P-frame", f.get("len"), nal)))
+            continue
+        verified.append((enc, k))
+    return verified, problems
 
 
 def locked_section(d, summary, md):
@@ -144,8 +193,6 @@ def locked_section(d, summary, md):
         md.append("SPS #%d `%s` PPS `%s`" % (i, v.get("hex"), v.get("pps_hex")))
     md.append("")
     distinct = {(v.get("hex"), v.get("pps_hex")) for v in variants}
-    if len(distinct) < 2:
-        reasons.append("fewer than 2 SPS/PPS variants (%d): no second encoder reached the dash" % len(distinct))
     try:
         with open(os.path.join(d, "app-log.txt"), encoding="utf-8", errors="replace") as f:
             log = f.read().splitlines()
@@ -155,6 +202,24 @@ def locked_section(d, summary, md):
         reasons.append("no `background \u2192 backgroundSoftware \u2026 (encoder vt-sw` line in app-log.txt")
     if not any(LOCK_FIRST_IDR_LINE in l for l in log):
         reasons.append("no `%s` line in app-log.txt" % LOCK_FIRST_IDR_LINE)
+    verified, problems = check_switch_frames(log, wire_frames(d))
+    reasons += problems
+    to_bg = [k for enc, k in verified if enc == "vt-sw"]
+    back = [k for enc, k in verified if enc == "vt-hw" and to_bg and k > to_bg[0]]
+    if verified:
+        md.append("Encoder switches checked on the wire (L8 frame = SPS+PPS+IDR of the logged size): "
+                  + ", ".join("%s at #%d" % s for s in verified))
+        md.append("")
+    need = (summary or {}).get("min_variants", 2)
+    if len(distinct) < need:
+        reasons.append("fewer than %d SPS/PPS variants (%d): no second encoder reached the dash" % (need, len(distinct)))
+    elif len(distinct) < 2:
+        if to_bg and back:
+            md.append("One SPS/PPS variant: both encoders wrote the same SPS/PPS (switches verified at #%d and #%d)."
+                      % (to_bg[0], back[0]))
+            md.append("")
+        else:
+            reasons.append("one SPS/PPS variant and no vt-sw \u2192 vt-hw switch verified on the wire")
     lines = [l for l in log if any(m in l for m in LOCK_LINE_MARKERS)]
     if lines:
         md.append("<details><summary>Lock lines of the app log (%d)</summary>" % len(lines))

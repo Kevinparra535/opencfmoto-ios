@@ -662,6 +662,60 @@ class SpsVariantTests(unittest.TestCase):
             found = fd.locked_switch_findings(lists)
             self.assertEqual([(sev, rule) for sev, rule, _ in found], [("violation", "LOCKED_NO_SWITCH")], lists)
 
+    @staticmethod
+    def slice_nal(idr, frame_num, log2=5, ref=True):
+        """A Baseline slice NAL: first_mb 0, slice type I (IDR) or P, PPS 0, `frame_num` in `log2` bits (an IDR
+        then idr_pic_id 0), the RBSP stop bit and zero padding."""
+        def ue(v):
+            v += 1
+            return "0" * (v.bit_length() - 1) + format(v, "b")
+        bits = ue(0) + ue(7 if idr else 5) + ue(0) + format(frame_num, "0%db" % log2)
+        if idr:
+            bits += ue(0)
+        bits += "1"
+        bits += "0" * (-len(bits) % 8)
+        header = 0x65 if idr else (0x41 if ref else 0x01)   # nal_ref_idc 3 / 2 / 0
+        return bytes([header]) + int(bits, 2).to_bytes(len(bits) // 8, "big")
+
+    def test_frame_num_check_catches_a_p_frame_whose_idr_never_arrived(self):
+        """Phase 0 review E2E-IDR-UNPROVEN: byte-identical SPS/PPS of both encoders hide a switch from the
+        variant rule; frame_num continuity (gaps_in_frame_num_allowed = 0) still shows a P-frame of a second
+        encoder whose IDR the dash never got."""
+        c = fd.FrameNumCheck()
+        def feed(idr, fn, ref=True, params=False):
+            nals = ([self.VT_SPS, self.PPS] if params else []) + [self.slice_nal(idr, fn, ref=ref)]
+            a = self.au(*nals)
+            return c.observe(fd.analyze_au(a), a)
+        self.assertIsNone(feed(True, 0, params=True), "an IDR starts the sequence")
+        self.assertIsNone(feed(False, 1))
+        self.assertIsNone(feed(False, 2))
+        self.assertIsNone(feed(False, 3, ref=False), "a non-reference frame: frame_num 3 is due")
+        self.assertIsNone(feed(False, 3), "it did not advance PrevRefFrameNum")
+        self.assertEqual(feed(False, 9), (9, 4), "the other encoder's P-frame: 9 where 4 was due")
+        self.assertIsNone(feed(True, 0, params=True), "its IDR resets the sequence")
+        self.assertIsNone(feed(False, 1))
+        self.assertEqual(feed(False, 31), (31, 2))
+        self.assertIsNone(feed(False, 0), "after a break the check goes on from the frame it saw (31 + 1 wraps to 0)")
+        c2 = fd.FrameNumCheck()
+        a = self.au(self.VT_SPS, self.PPS, self.slice_nal(True, 0))
+        self.assertIsNone(c2.observe(fd.analyze_au(a), a))
+        for fn in range(1, 32):
+            a = self.au(self.slice_nal(False, fn))
+            self.assertIsNone(c2.observe(fd.analyze_au(a), a), fn)
+        a = self.au(self.slice_nal(False, 0))
+        self.assertIsNone(c2.observe(fd.analyze_au(a), a), "MaxFrameNum 32 wraps 31 to 0")
+
+    def test_locked_switch_findings_with_one_variant_allowed(self):
+        one = [{"hex": "aa", "pps_hex": "bb"}]
+        found = fd.locked_switch_findings([one], min_variants=1)
+        self.assertEqual([(sev, rule) for sev, rule, _ in found], [("info", "LOCKED_ONE_VARIANT")])
+        self.assertEqual(fd.locked_switch_findings([one + [{"hex": "cc", "pps_hex": "bb"}]], min_variants=1), [])
+        for lists in ([], [[]]):
+            found = fd.locked_switch_findings(lists, min_variants=1)
+            self.assertEqual([(sev, rule) for sev, rule, _ in found], [("violation", "LOCKED_NO_SWITCH")], lists)
+        self.assertEqual(fd.parse_args(["--scenario", "locked"]).min_variants, 2)
+        self.assertEqual(fd.parse_args(["--scenario", "locked", "--min-variants", "1"]).min_variants, 1)
+
     def test_locked_scenario_defaults(self):
         self.assertEqual(fd.SCENARIOS["locked"], ("cfdl16", 60.0))
         a = fd.parse_args(["--scenario", "locked"])

@@ -708,6 +708,55 @@ def parse_slice_type(nal):
         return None
 
 
+def first_slice_frame_num(au, log2_max_frame_num):
+    """(nal_ref_idc, frame_num) of the first slice of an access unit (no separate colour planes in
+    Baseline: frame_num follows pic_parameter_set_id), or (None, None)."""
+    for k, (_, start) in enumerate(find_start_codes(au)):
+        nal = au[start:start + 32]
+        if nal and (nal[0] & 0x1F) in (1, 5):
+            try:
+                br = BitReader(rbsp_unescape(nal[1:]))
+                br.ue()     # first_mb_in_slice
+                br.ue()     # slice_type
+                br.ue()     # pic_parameter_set_id
+                return (nal[0] >> 5) & 3, br.u(log2_max_frame_num)
+            except (ValueError, IndexError):
+                return None, None
+    return None, None
+
+
+class FrameNumCheck(object):
+    """frame_num continuity of one session (H.264 §7.4.3, gaps_in_frame_num_value_allowed_flag = 0 on every
+    encoder the app uses): a non-IDR picture must carry (PrevRefFrameNum + 1) % MaxFrameNum. A P-frame of a
+    second encoder whose IDR never reached the dash breaks it whatever the SPS/PPS bytes (byte-identical
+    SPS/PPS of both encoders included), and so does a reference frame dropped on the way."""
+
+    def __init__(self):
+        self.log2 = None
+        self.prev_ref = None
+
+    def observe(self, info, au):
+        """Returns (got, want) when this access unit breaks the sequence, else None."""
+        if info.sps:
+            self.log2 = info.sps.get("log2_max_frame_num") or self.log2
+        if self.log2 is None or not info.vcl:
+            return None
+        ref_idc, fn = first_slice_frame_num(au, self.log2)
+        if fn is None:
+            return None
+        brk = None
+        if info.has_idr:
+            self.prev_ref = fn
+        else:
+            if self.prev_ref is not None:
+                want = (self.prev_ref + 1) % (1 << self.log2)
+                if fn != want:
+                    brk = (fn, want)
+            if ref_idc:
+                self.prev_ref = fn
+        return brk
+
+
 def looks_avcc(au):
     """True if the buffer parses as AVCC (4-byte big-endian NAL lengths) — VideoToolbox output."""
     pos = 0
@@ -869,16 +918,24 @@ def variant_text(v):
                v["hex"], v["pps_hex"]))
 
 
-def locked_switch_findings(variant_lists):
+def locked_switch_findings(variant_lists, min_variants=2):
     """`locked` scenario: the simulated lock must have switched the stream to a second encoder, i.e. at
-    least two distinct SPS/PPS variants over the run (`variant_lists`: one `sps_variants` list per
-    session). Returns [(severity, rule, message)]."""
+    least `min_variants` distinct SPS/PPS variants over the run (`variant_lists`: one `sps_variants` list
+    per session). `min_variants` 1 (`--min-variants 1`: a background encoder that writes the foreground
+    encoder's SPS/PPS byte for byte, VideoToolbox software in the Simulator) turns a single variant into a
+    note: the wire cannot tell that switch from none, the app log's L8 lines can (assemble.py checks them
+    against the transcript), and FrameNumCheck still catches a switch that is not at an IDR.
+    Returns [(severity, rule, message)]."""
     seen = set()
     for variants in variant_lists:
         for v in variants:
             seen.add((v.get("hex"), v.get("pps_hex")))
-    if len(seen) >= 2:
+    if len(seen) >= max(2, min_variants):
         return []
+    if seen and len(seen) >= min_variants:
+        return [("info", "LOCKED_ONE_VARIANT",
+                 "one SPS/PPS variant over the run: both encoders wrote the same SPS/PPS, or no switch happened "
+                 "(the app's `[switch] first … IDR on the wire … (dump frame #k)` lines tell)")]
     return [("violation", "LOCKED_NO_SWITCH",
              "the stream kept %d SPS/PPS variant%s: the simulated lock never put a second encoder on the wire (the "
              "app's log says why: `background → …` and `[bg] try …`; byte-identical SPS/PPS of both encoders "
@@ -1969,6 +2026,7 @@ class Session(object):
         self.sps_hex = None
         self.pps_hex = None
         self.variants = SpsVariants()
+        self.frame_nums = FrameNumCheck()
         self.identical_idr = 0
         self.clock_modes = collections.Counter()
         self.completed = False
@@ -2666,6 +2724,12 @@ class Session(object):
                               "(NAL %s): a new SPS/PPS may only take effect at an IDR, the dash cannot decode "
                               "the next P-frames" % (n, frm + 1, to + 1, info.nal_types), conn=md.name, cycle=c,
                               key="switchnotidr")
+        brk = self.frame_nums.observe(info, au)
+        if brk is not None and self.args.scenario == "locked":
+            rep.violation("SWITCH_NOT_AT_IDR", "frame #%d is a P-frame with frame_num %d where %d was due: it continues "
+                          "another encoder's stream whose IDR never reached the dash (or a reference frame was "
+                          "dropped); the dash decodes it against the wrong picture" % ((n,) + brk), conn=md.name,
+                          cycle=c, key="framenum")
         if info.sps is not None:
             self.check_sps(info, n)
         elif info.sps_before_vcl:
@@ -3076,7 +3140,8 @@ class Runner(object):
                 if d.get("decoded_frames") is not None and d.get("decoded_frames") != self.frames_total:
                     self.report.warning("DECODE", "ffprobe counted %s frames, %d received" % (d.get("decoded_frames"), self.frames_total))
         if a.scenario == "locked":
-            for severity, rule, message in locked_switch_findings([s.variants.summary() for s in self.sessions]):
+            for severity, rule, message in locked_switch_findings([s.variants.summary() for s in self.sessions],
+                                                                  a.min_variants):
                 self.report.add(severity, rule, message)
         if self._tmp_h264 and not a.decode_keep:
             try:
@@ -3088,6 +3153,8 @@ class Runner(object):
         summary = collections.OrderedDict()
         summary["tool"] = "fakedash %s" % VERSION
         summary["scenario"] = a.scenario
+        if a.scenario == "locked":
+            summary["min_variants"] = a.min_variants
         summary["dash"] = self.model.key
         summary["dash_title"] = self.model.title
         summary["started"] = self.wall0.isoformat(timespec="seconds")
@@ -3258,6 +3325,9 @@ def parse_args(argv=None):
     p.add_argument("--out-h264", default=None, help="write the received elementary stream to FILE")
     p.add_argument("--decode", action="store_true", help="check the received stream with ffprobe/ffmpeg at the end "
                    "(scenario locked: strict, %s)" % " ".join(STRICT_DECODE_FLAGS))
+    p.add_argument("--min-variants", type=int, default=2, metavar="N",
+                   help="scenario locked: distinct SPS/PPS variants required (default 2; 1 when the background encoder "
+                        "writes the foreground encoder's SPS/PPS byte for byte, VideoToolbox software in the Simulator)")
     p.add_argument("--trace-headers", default=None, metavar="FILE",
                    help="with --decode: write the SPS/PPS of `ffmpeg -bsf:v trace_headers` to FILE each time "
                         "they change (the first and every encoder switch), with that frame's first slice header")

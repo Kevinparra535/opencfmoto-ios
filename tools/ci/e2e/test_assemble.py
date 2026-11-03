@@ -52,7 +52,9 @@ class LockedReportTests(unittest.TestCase):
         self.out = os.path.join(self.tmp, "out")
         self.art = os.path.join(self.tmp, "art")
 
-    def scenario(self, name, variants, log_lines):
+    def scenario(self, name, variants, log_lines, min_variants=None, wire=None):
+        """`wire`: {frame #: (keyframe, nal_types, bytes)} written to transcript.jsonl (frames not listed are
+        P-frames of 4000 B); None writes no transcript."""
         d = os.path.join(self.out, "e2e-" + name)
         summary = {"result": "PASS", "goal_reached": True, "violations": 0, "warnings": 0, "frames_total": 550,
                    "probes": [{"t": 1.0}], "findings": [],
@@ -62,7 +64,16 @@ class LockedReportTests(unittest.TestCase):
                               "decode_error_lines": 0},
                    "sessions": [{"cycle": 1, "end_reason": "completed", "canvas": "800x384", "frames": 550,
                                  "keyframes": 40, "sps_variants": variants}]}
+        if min_variants is not None:
+            summary["min_variants"] = min_variants
         write(os.path.join(d, "summary.json"), json.dumps(summary))
+        if wire is not None:
+            rows = []
+            for k in range(1, 551):
+                key, nal, size = wire.get(k, (False, [1], 4000))
+                rows.append(json.dumps({"name": "frame", "dir": "phone->dash", "frame": k, "keyframe": key,
+                                        "nal_types": nal, "len": size}))
+            write(os.path.join(d, "transcript.jsonl"), "\n".join(rows) + "\n")
         write(os.path.join(d, "result.env"), "scenario=%s\ndash=cfdl16\nseconds=60\n" % name)
         write(os.path.join(d, "app-status.json"), json.dumps({"phase": "streaming", "engine": {"encoder": "vt-hw"}}))
         write(os.path.join(d, "app-log.txt"), "\n".join(log_lines) + "\n")
@@ -118,6 +129,45 @@ class LockedReportTests(unittest.TestCase):
         md, _ = self.assemble()
         line = [l for l in md.splitlines() if l.startswith("**FAIL**")][0]
         self.assertEqual(line.count(";"), 2, line)
+
+    # Phase 0 review E2E-IDR-UNPROVEN: in the Simulator both encoders write the same SPS/PPS, so the wire shows one
+    # variant; with `--min-variants 1` the report checks every L8 `(dump frame #k)` against what the dash received.
+    BACK_LINE = "18:00:31.000 I/VIDEO: [switch] first vt-hw IDR on the wire: 20500b, 0.04s after the switch (dump frame #401)"
+    WIRE_OK = {301: (True, [7, 8, 5], 19876), 401: (True, [7, 8, 5], 20500)}
+
+    def test_one_variant_passes_when_both_switches_are_idrs_on_the_wire(self):
+        self.scenario("locked", VARIANTS[:1], LOCK_LOG + [self.BACK_LINE], min_variants=1, wire=self.WIRE_OK)
+        md, notes = self.assemble()
+        self.assertIn("**PASS**", md)
+        self.assertIn("Encoder switches checked on the wire (L8 frame = SPS+PPS+IDR of the logged size): "
+                      "vt-sw at #301, vt-hw at #401", md)
+        self.assertIn("One SPS/PPS variant: both encoders wrote the same SPS/PPS (switches verified at #301 and #401).", md)
+
+    def test_a_switch_frame_that_is_not_an_idr_fails(self):
+        for wire, why in [({301: (False, [1], 19876), 401: (True, [7, 8, 5], 20500)}, "a P-frame"),
+                          ({301: (True, [7, 8, 5], 19000), 401: (True, [7, 8, 5], 20500)}, "another size"),
+                          ({301: (True, [5], 19876), 401: (True, [7, 8, 5], 20500)}, "an IDR without SPS/PPS")]:
+            with self.subTest(why=why):
+                shutil.rmtree(self.out, True)
+                self.scenario("locked", VARIANTS[:1], LOCK_LOG + [self.BACK_LINE], min_variants=1, wire=wire)
+                md, notes = self.assemble()
+                self.assertIn("**FAIL** — ", md)
+                self.assertIn("SWITCH_NOT_AT_IDR (wire): L8 says frame #301 is the first vt-sw IDR (19876 B)", md)
+        shutil.rmtree(self.out, True)
+        warn = "18:00:02.000 W/VIDEO: [switch] encoder tag 2 → 3 on a non-IDR frame (dump frame #305)"
+        self.scenario("locked", VARIANTS[:1], LOCK_LOG + [warn, self.BACK_LINE], min_variants=1, wire=self.WIRE_OK)
+        md, _ = self.assemble()
+        self.assertIn("SWITCH_NOT_AT_IDR (app log)", md)
+
+    def test_one_variant_without_a_verified_switch_back_fails(self):
+        self.scenario("locked", VARIANTS[:1], LOCK_LOG, min_variants=1, wire=self.WIRE_OK)
+        md, _ = self.assemble()
+        self.assertIn("**FAIL** — ", md)
+        self.assertIn("one SPS/PPS variant and no vt-sw → vt-hw switch verified on the wire", md)
+        shutil.rmtree(self.out, True)
+        self.scenario("locked", VARIANTS[:1], LOCK_LOG + [self.BACK_LINE], wire=self.WIRE_OK)  # min_variants 2
+        md, _ = self.assemble()
+        self.assertIn("fewer than 2 SPS/PPS variants (1): no second encoder reached the dash", md)
 
     def test_other_scenarios_never_get_the_locked_rules(self):
         self.scenario("cfdl16", VARIANTS[:1], ["18:00:00.000 I/APP: Ready."])
