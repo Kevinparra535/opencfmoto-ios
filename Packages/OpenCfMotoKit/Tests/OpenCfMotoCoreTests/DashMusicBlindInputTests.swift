@@ -208,6 +208,53 @@ final class DashMusicBlindInputTests: XCTestCase {
         }
     }
 
+    // MARK: Preview and arrival (R3-FOCUS-2)
+
+    /// Over a route preview (free ride, or over a running navigation) or the arrival card no Music control
+    /// exists: no menu entry, an inert tile, no sheet. So no blind sequence starts from a Music state there,
+    /// and a song gone for one frame or for good changes nothing for any 1–3 presses of ★, BACK, HOME, ◀, ▶:
+    /// same intents, same focus, same sheet. (A sheet there used to close onto Go / Park: ★ meant for ⏭
+    /// replaced the navigation.)
+    func testPreviewAndArrivalHaveNoMusicStateAndAVanishChangesNothing() {
+        let all: [DashInput] = [.key(.enter), .key(.back), .key(.home), .knob(-1), .knob(1)]
+        var navPreview = DashFixtures.navigating()
+        navPreview.nav.preview = DashFixtures.preview().nav.preview
+        var sequences: [[Int]] = all.indices.map { [$0] }
+        for _ in 0 ..< 2 { sequences += sequences.filter { $0.count == sequences.last!.count }.flatMap { s in all.indices.map { s + [$0] } } }
+        XCTAssertEqual(sequences.count, 5 + 25 + 125)
+        for (name, base) in [("preview", DashFixtures.preview()), ("preview over a navigation", navPreview),
+                             ("arrival", DashFixtures.arrival())] {
+            let with = DashFixtures.withMusic(base)
+            func run(_ presses: [Int], vanish: Vanish) -> [String] {
+                let ui = DashUIController()
+                ui.update(with)
+                _ = ui.displayList(now: Self.t0)
+                switch vanish {
+                case .none: break
+                case .oneFrame:
+                    ui.update(base); _ = ui.displayList(now: Self.t0 + 0.5)
+                    ui.update(with); _ = ui.displayList(now: Self.t0 + 1)
+                case .forGood:
+                    ui.update(base); _ = ui.displayList(now: Self.t0 + 0.5)
+                }
+                return presses.enumerated().map { i, k in
+                    let now = Self.t0 + 1.5 + Double(i) * 0.4
+                    let out = ui.handle(all[k], now: now)
+                    _ = ui.displayList(now: now + 0.1)
+                    let st = ui.state
+                    XCTAssertNotEqual(st.sheet, .music, "\(name) \(presses): a Music sheet")
+                    XCTAssertFalse(st.focusOrder.contains { DashFocusEngine.isMusicControl($0) }, "\(name) \(presses)")
+                    return "\(out) \(st.focusedId ?? "-") \(st.sheet)"
+                }
+            }
+            for p in sequences {
+                let reference = run(p, vanish: .none)
+                XCTAssertEqual(run(p, vanish: .oneFrame), reference, "\(name) \(p): gone one frame")
+                XCTAssertEqual(run(p, vanish: .forGood), reference, "\(name) \(p): gone for good")
+            }
+        }
+    }
+
     func testKnobPathsToEndAreDocumentedAndAVanishAddsOnlyTheRecenterTradeOff() {
         let all = Self.everyKey
         for (c, o) in all {

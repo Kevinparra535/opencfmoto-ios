@@ -1367,13 +1367,14 @@ music note 40 %) → artwork (`DashDrawCommand.image`, aspect fill, rounded clip
 nothing) → night: 15 % black (never inverted) → 1-dp outline → progress track 3 dp inset 6 dp at the
 bottom (known duration only; fill = whole px) → paused: 45 % black dim + 20-dp ❚❚ badge top-right. Tap /
 ★ → `.openMusic`. Focusable last in the map lists (free ride `pill … fab.menu, music.tile`, navigating
-`metrics.end, fab.* , music.tile`): one ◀ from the default item reaches it. Drawn but not focusable in
-preview / arrival. Focus ring on the tile (fix F3; every close of the sheet parks the focus there, so the
-usual ring would tint the cover for the rest of the ride): no fill, and the 5-dp stroke runs OUTSIDE the
-cover (path = frame grown by 2.5 dp, radius 12.5 dp: the band starts at the cover's edge and follows its
-corners). It fits on every canvas, inside the safe area and clear of every other widget: 800×384
-725–799 × 265–339, 3 px under the Menu FAB and 9 px above the clock; with screen margins 1 px inside the
-safe area; portrait 3 px under the clock (`DashMusicFocusRingTests`).
+`metrics.end, fab.* , music.tile`): one ◀ from the default item reaches it. Drawn but inert in preview /
+arrival: not focusable, and a tap does nothing (it swallows touches; R3-FOCUS-2, see "No Music sheet over
+a preview or the arrival card" below). Focus ring on the tile (fix F3; every close of the sheet parks the
+focus there, so the usual ring would tint the cover for the rest of the ride): no fill, and the 5-dp
+stroke runs OUTSIDE the cover (path = frame grown by 2.5 dp, radius 12.5 dp: the band starts at the
+cover's edge and follows its corners). It fits on every canvas, inside the safe area and clear of every
+other widget: 800×384 725–799 × 265–339, 3 px under the Menu FAB and 9 px above the clock; with screen
+margins 1 px inside the safe area; portrait 3 px under the clock (`DashMusicFocusRingTests`).
 
 **Music sheet** (`DashSheet.music`, `DashLayout.musicSheet`). Opaque #12171E over the whole canvas;
 nothing of the map or its chrome is drawn under it. While navigating the nav card is drawn again ON TOP
@@ -1394,7 +1395,8 @@ corner, inset 8 dp. No seek, queue, volume, marquee or animation; targets ≥ 48
 **Ids and intents.** `music.tile` (`.openMusic`), `music.sheet` (full-canvas blocker), `music.previous`
 (`.musicPrevious`), `music.playPause` (`.musicPlayPause`), `music.next` (`.musicNext`), `music.close`
 (`.closeSheets`), menu `menu.music` "Music" / "Música" after `menu.circuit` (`.openMusic`, only with
-music). `.openMusic` is UI-only (without music: toast "Nothing playing in Apple Music"); the app performs
+music and never over a preview or the arrival card). `.openMusic` is UI-only (without music: toast
+"Nothing playing in Apple Music"; over a preview or the arrival card it opens nothing); the app performs
 the transport intents. Sheet focus order: ⏮ ⏯ ⏭ ✕, initial focus ⏯; BACK / ✕ / auto-close → focus on the
 tile (not listed: see below); BACK on the tile keeps it (R2-DASH-2: after the sheet closed by itself —
 idle, near a turn, R2 — the rider's BACK was meant for that sheet, and Android's idle BACK → End would
@@ -1413,19 +1415,28 @@ back to the default item — End while navigating, where the rider's next ★, m
 It applies when the focused `music.*` / `menu.music` id is no longer listed (the song went away, or a lap
 card took the tile's room), when the sheet closes because `music == nil` stayed so for
 `Options.musicSheetVanishGrace` (2 s; arrival keeps its own rule), and when the closing sheet's
-`.musicTile` finds no tile (no room for it, or the song went away in the same frame; preview / arrival
-keep their first item as before). A shorter vanish does not close the open sheet (R3-FOCUS-1): it stays on
-the song it showed and on the control the rider left. Closed at once, it handed the knob back to the
-tile, the last item of the map list, from where the rider's next ▶ ★, meant for ⏭, wrapped to End
-(`DashMusicSheetVanishTests`). When the control is listed again and no
-dash input came in between, the focus returns to it (the tile for the tile and the sheet's controls,
-`menu.music` in the menu); after any input it stays where it is. A closed sheet stays closed. Trade-off
-of the map target: `fab.recenter` follows End in the map list, so ◀★ while the tile is still gone ends
-navigation — the same two presses as ▶★ from the tile itself. Nothing else hands the focus to End this
+`.musicTile` finds no tile (no room for it, or the song went away in the same frame). A shorter vanish
+does not close the open sheet (R3-FOCUS-1): it stays on the song it showed and on the control the rider
+left. Closed at once, it handed the knob back to the tile, the last item of the map list, from where the
+rider's next ▶ ★, meant for ⏭, wrapped to End (`DashMusicSheetVanishTests`). When the control is listed
+again and no dash input came in between, the focus returns to it (the tile for the tile and the sheet's
+controls, `menu.music` in the menu); after any input it stays where it is. A closed sheet stays closed.
+Trade-off of the map target: `fab.recenter` follows End in the map list, so ◀★ while the tile is still
+gone ends navigation — the same two presses as ▶★ from the tile itself. Nothing else hands the focus to End this
 way (F2 audit, pinned by `testNothingButMusicCanVanishFromTheListsThatFallBackToEnd`): while navigating
 the map list is End, the FABs and the tile (the pill is not drawn; cards, toasts and the banner are not
 focusable), and the menu's ids are fixed except `menu.music`; a search row that vanishes falls back to
 the sheet's first item, a route chip of a preview to Go, and a preview only ends on an explicit action.
+
+**No Music sheet over a preview or the arrival card** (iOS addition, review R3-FOCUS-2,
+`DashModel.offersMusicSheet`). The tile is drawn there but inert, the menu has no "Music" and `.openMusic`
+opens nothing; a sheet open on the map still closes when a preview or the arrival card comes up. Their
+lists hold neither the tile nor a harmless stand-in, so every close of a sheet there — a song gone for a
+moment, the idle close, BACK — left the focus on their first item: the rider's next ★, meant for ⏭, was
+Go (it replaces a running navigation without confirmation) or Park, BACK cancelled the preview, ★ on the
+menu's parked "Circuit" built a circuit to the previewed place, and on a touch dash a second tap on ⏭
+hit-tested after the gap could land on Go. Pinned by `testNoMusicSheetOverAPreviewOrTheArrivalCard` and
+`DashMusicBlindInputTests.testPreviewAndArrivalHaveNoMusicStateAndAVanishChangesNothing`.
 
 **Blind input** (iOS addition, review round 2). While the Music app holds the bars, or with the eyes on
 the road, the rider presses ★ and BACK for the Music control the focus was left on without looking.

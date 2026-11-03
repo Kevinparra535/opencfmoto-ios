@@ -659,7 +659,9 @@ struct DashSceneBuilder {
             roundRect(f, radius: t.cornerRadius, fill: DashPalette.musicPausedDim)
             roundButton(t.badgeRect, .pause, glyph: 0.6, fill: DashPalette.musicBadge, stroke: nil)
         }
-        widget(DashFocusEngine.musicTileId, f, .control(.openMusic))
+        // Over a route preview or the arrival card the tile only shows what plays (R3-FOCUS-2): it swallows
+        // touches (no map gesture under a drawn control) and opens nothing.
+        widget(DashFocusEngine.musicTileId, f, model.offersMusicSheet ? .control(.openMusic) : .blocker)
     }
 
     private var musicFocus: [String] = []
@@ -760,7 +762,7 @@ struct DashSceneBuilder {
 
     private func menuContent() -> DashMenuContent {
         DashMenuContent(language: L, follow: input.camera.follow, headingUp: input.camera.headingUp,
-                        recording: model.recording, preferences: model.preferences, showsMusic: model.music != nil)
+                        recording: model.recording, preferences: model.preferences, showsMusic: model.offersMusicSheet)
     }
 
     private mutating func drawMenu() {

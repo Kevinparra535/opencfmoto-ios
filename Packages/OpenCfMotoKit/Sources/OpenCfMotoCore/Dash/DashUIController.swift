@@ -1077,6 +1077,7 @@ public final class DashUIController: @unchecked Sendable {
                 feedback(.nothingPlaying, now: now)
                 break
             }
+            guard model.offersMusicSheet else { break } // never over a preview or the arrival card (R3-FOCUS-2)
             sheet = .music
             musicActivityAt = now
             // A turn already near when the rider opens the sheet does not close it again.

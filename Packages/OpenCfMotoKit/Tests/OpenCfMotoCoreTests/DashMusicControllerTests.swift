@@ -627,16 +627,37 @@ final class DashMusicControllerTests: XCTestCase {
         _ = noTile.perform(.openMusic, now: t0)
         XCTAssertEqual(tapRegion(noTile, "music.close", at: t0 + 1), [.closeSheets])
         XCTAssertEqual(noTile.state.focusedId, "fab.recenter")
-        // preview / arrival (tile not focusable): their own first item, as before
-        for (model, first) in [(DashFixtures.preview(), "preview.go"), (DashFixtures.arrival(), "arrive.park")] {
+        // preview / arrival: no Music sheet there at all (next test)
+    }
+
+    /// R3-FOCUS-2: no Music sheet over a route preview or the arrival card. Every close of a sheet there
+    /// (a song gone for a moment, the idle close, BACK) left the focus on their first item, so the rider's
+    /// next ★, meant for ⏭, was Go — it replaces the running navigation — or Park, BACK cancelled the
+    /// preview, and a second tap on ⏭ hit-tested after the gap could land on Go. The tile is drawn but
+    /// inert there (not focusable, it swallows touches), the menu has no "Music", and `.openMusic` opens
+    /// nothing; a song gone for a moment changes nothing.
+    func testNoMusicSheetOverAPreviewOrTheArrivalCard() throws {
+        var navPreview = DashFixtures.navigating()
+        navPreview.nav.preview = DashFixtures.preview().nav.preview
+        for (model, first) in [(DashFixtures.preview(), "preview.go"), (navPreview, "preview.go"), (DashFixtures.arrival(), "arrive.park")] {
             let ui = controller(music(model))
-            _ = ui.perform(.openMusic, now: t0)
-            _ = ui.handle(.key(.back), now: t0 + 1)
             XCTAssertEqual(ui.state.focusedId, first)
-            _ = ui.perform(.openMusic, now: t0 + 2)
-            ui.update(model) // the song goes away for good: the sheet closes after the grace
-            XCTAssertEqual(ui.tick(now: t0 + 4), [.closeSheets])
+            let tile = try XCTUnwrap(region(ui.displayList(now: t0), "music.tile"), "drawn, as on the map")
+            XCTAssertFalse(tile.focusable)
+            XCTAssertEqual(tap(ui, tile.rect.center, at: t0), [], "the tile is inert here")
+            _ = touch(ui, .down, tile.rect.center, t0 + 1)
+            XCTAssertEqual(ui.tick(now: t0 + 1.6), [], "a long press on it drops no pin")
+            _ = touch(ui, .up, tile.rect.center, t0 + 1.7)
+            XCTAssertEqual(ui.handle(.key(.home), now: t0 + 2), [.openMenu])
+            XCTAssertFalse(ui.state.focusOrder.contains("menu.music"), "no Music in the menu here")
+            XCTAssertFalse(has(ui.displayList(now: t0 + 2), "menu.music"))
+            _ = ui.handle(.key(.home), now: t0 + 3)
+            _ = ui.perform(.openMusic, now: t0 + 4) // the phone
             XCTAssertEqual(ui.state.sheet, .none)
+            XCTAssertEqual(ui.state.focusedId, first)
+            ui.update(model) // a song gone for a moment, a frame, the song back
+            _ = ui.displayList(now: t0 + 5)
+            ui.update(music(model))
             XCTAssertEqual(ui.state.focusedId, first)
         }
     }

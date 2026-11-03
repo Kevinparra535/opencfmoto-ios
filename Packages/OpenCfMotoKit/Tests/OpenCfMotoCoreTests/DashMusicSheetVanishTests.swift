@@ -154,29 +154,4 @@ final class DashMusicSheetVanishTests: XCTestCase {
         _ = ui.displayList(now: t0 + 10.6)
         XCTAssertEqual(ui.state.focusedId, DashFocusEngine.musicTileId)
     }
-
-    func testPreviewSheetGapKeepsGoOutOfReach() {
-        // The sheet opened from the menu over a preview, ⏭, one reading with no item: ★ is ⏭ again, not Go.
-        var m = DashFixtures.preview()
-        m.music = DashFixtures.song()
-        let ui = DashUIController()
-        ui.update(m)
-        _ = ui.displayList(now: t0)
-        _ = ui.handle(.key(.home), now: t0 + 0.1)
-        let order = ui.state.focusOrder
-        let at = order.firstIndex(of: ui.state.focusedId ?? "") ?? 0
-        guard let music = order.firstIndex(of: "menu.music") else { return XCTFail("no menu.music in \(order)") }
-        _ = ui.handle(.knob(music - at), now: t0 + 0.2)
-        XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 0.3), [.openMusic])
-        _ = ui.displayList(now: t0 + 0.35)
-        _ = ui.handle(.knob(1), now: t0 + 0.5)
-        XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 0.8), [.musicNext])
-        var gone = m
-        gone.music = nil
-        ui.update(gone)
-        _ = ui.displayList(now: t0 + 1)
-        ui.update(m)
-        _ = ui.displayList(now: t0 + 1.5)
-        XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 2), [.musicNext], "★ is ⏭ again, never Go")
-    }
 }

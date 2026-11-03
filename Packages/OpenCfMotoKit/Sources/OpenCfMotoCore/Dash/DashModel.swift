@@ -193,6 +193,11 @@ public struct DashModel: Sendable, Equatable {
     public var navigating: Bool { !inPreview && nav.mode.isNavigating }
     /// The arrive card is shown (never together with a preview).
     public var showsArrival: Bool { nav.arrival != nil && !inPreview }
+    /// The Music sheet can be opened (tile, menu "Music"): a song is shown, and no route preview or
+    /// arrival card is up (R3-FOCUS-2). Every close of the sheet there (a song gone for a moment, the idle
+    /// close, BACK) leaves the focus on their first item, Go / Park here, and the rider's next ★, meant for
+    /// ⏭ or ⏯, would replace the running navigation or overwrite the parked spot.
+    public var offersMusicSheet: Bool { music != nil && !inPreview && !showsArrival }
     /// The rider position for the map: snapped puck from the nav engine, else the raw fix.
     public var riderPosition: GeoPoint? { nav.puck ?? fix?.point }
 }
