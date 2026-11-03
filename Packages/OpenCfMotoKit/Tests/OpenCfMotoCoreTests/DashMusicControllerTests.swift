@@ -332,7 +332,7 @@ final class DashMusicControllerTests: XCTestCase {
         _ = gone.perform(.openMusic, now: t0)
         gone.update(DashFixtures.navigating())
         XCTAssertEqual(gone.state.sheet, .none)
-        XCTAssertEqual(gone.state.focusedId, "fab.menu", "F2: never End when the song goes away")
+        XCTAssertEqual(gone.state.focusedId, "fab.recenter", "F2: never End when the song goes away")
         XCTAssertFalse(has(gone.displayList(now: t0), "music.tile"))
         // a change of song keeps it open
         let skip = controller(music(DashFixtures.freeRide()))
@@ -370,16 +370,12 @@ final class DashMusicControllerTests: XCTestCase {
             _ = ui.handle(.knob(-1), now: t0) // ◀ from the default item → the tile
             XCTAssertEqual(ui.state.focusedId, "music.tile", name)
             blink(ui, base, withSong, at: t0 + 0.1) { st in
-                XCTAssertEqual(st.focusedId, "fab.menu", "\(name): the tile is gone")
+                XCTAssertEqual(st.focusedId, "fab.recenter", "\(name): the tile is gone (★ there only recenters)")
             }
-            XCTAssertEqual(ui.state.focusedId, "fab.menu", "\(name): stays put when the tile is back")
-            // the tile is one ▶ away again (it closes the map list)
-            _ = ui.handle(.knob(1), now: t0 + 1)
-            XCTAssertEqual(ui.state.focusedId, "music.tile", name)
-            _ = ui.handle(.knob(-1), now: t0 + 1.2)
-            let star = ui.handle(.key(.enter), now: t0 + 1.5)
-            XCTAssertFalse(star.contains(.endNavigation), name)
-            XCTAssertEqual(star, [.openMenu], name)
+            XCTAssertEqual(ui.state.focusedId, "music.tile", "\(name): R2-DASH-1, back on the tile with the song")
+            // The tile's usual ★★ (open the sheet, then ⏯): on fab.menu it was the menu, then its End.
+            XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 1), [.openMusic], name)
+            XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 1.4), [.musicPlayPause], name)
         }
     }
 
@@ -394,13 +390,12 @@ final class DashMusicControllerTests: XCTestCase {
             // the stale "other audio" reading right after the pause hides the song: the sheet closes
             blink(ui, base, paused, at: t0 + 1.1) { st in
                 XCTAssertEqual(st.sheet, .none, name)
-                XCTAssertEqual(st.focusedId, "fab.menu", name)
+                XCTAssertEqual(st.focusedId, "fab.recenter", name)
             }
             XCTAssertEqual(ui.state.sheet, .none, "\(name): a closed sheet stays closed")
-            XCTAssertEqual(ui.state.focusedId, "fab.menu", name)
-            let star = ui.handle(.key(.enter), now: t0 + 2.5)
-            XCTAssertFalse(star.contains(.endNavigation), name)
-            XCTAssertEqual(star, [.openMenu], name)
+            XCTAssertEqual(ui.state.focusedId, "music.tile", "\(name): the sheet's ⏯ returns to the tile")
+            XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 2.5), [.openMusic], name)
+            XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 3), [.musicPlayPause], name)
         }
     }
 
@@ -417,10 +412,17 @@ final class DashMusicControllerTests: XCTestCase {
                 XCTAssertFalse(st.focusOrder.contains("menu.music"), name)
                 XCTAssertEqual(st.focusedId, "menu.circuit", "\(name): not menu.end (End navigation)")
             }
-            XCTAssertEqual(ui.state.focusedId, "menu.circuit", name)
-            let star = ui.handle(.key(.enter), now: t0 + 2)
-            XCTAssertFalse(star.contains(.endNavigation), name)
-            XCTAssertEqual(star, [.startCircuit], name) // without a previewed place: a hint only
+            XCTAssertEqual(ui.state.focusedId, "menu.music", "\(name): R2-DASH-1, back on Music with the song")
+            XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 2), [.openMusic], name)
+            XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 2.4), [.musicPlayPause], name)
+            // the song stays gone: ★ on "Circuit" without a previewed place is a hint only
+            let gone = controller(withSong)
+            _ = gone.handle(.key(.home), now: t0)
+            _ = gone.handle(.knob(i), now: t0 + 0.1)
+            gone.update(base)
+            _ = gone.displayList(now: t0 + 1)
+            XCTAssertEqual(gone.state.focusedId, "menu.circuit", name)
+            XCTAssertEqual(gone.handle(.key(.enter), now: t0 + 2), [.startCircuit], name)
         }
     }
 
@@ -441,16 +443,16 @@ final class DashMusicControllerTests: XCTestCase {
         _ = ui.perform(.openMusic, now: t0)
         XCTAssertEqual(ui.handle(.key(.back), now: t0 + 1), [.closeSheets])
         ui.update(DashFixtures.navigating())
-        XCTAssertEqual(ui.state.focusedId, "fab.menu")
-        XCTAssertFalse(ui.handle(.key(.enter), now: t0 + 2).contains(.endNavigation))
-        // ✕ while a lap card leaves no room for the tile (navigating): the Menu FAB, not End
+        XCTAssertEqual(ui.state.focusedId, "fab.recenter")
+        XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 2), [.recenter], "★ only recenters, never End")
+        // ✕ while a lap card leaves no room for the tile (navigating): the Recenter FAB, not End
         var lap = music(DashFixtures.navigating())
         lap.lapTimer = DashLapTimer(title: String(repeating: "LAP 12  1:31.20 ", count: 6), meta: "LAST 1:30.00   BEST 1:30.00")
         let noTile = controller(lap)
         XCTAssertFalse(noTile.state.focusOrder.contains("music.tile"))
         _ = noTile.perform(.openMusic, now: t0)
         XCTAssertEqual(tapRegion(noTile, "music.close", at: t0 + 1), [.closeSheets])
-        XCTAssertEqual(noTile.state.focusedId, "fab.menu")
+        XCTAssertEqual(noTile.state.focusedId, "fab.recenter")
         // preview / arrival (tile not focusable): their own first item, as before
         for (model, first) in [(DashFixtures.preview(), "preview.go"), (DashFixtures.arrival(), "arrive.park")] {
             let ui = controller(music(model))
@@ -499,7 +501,7 @@ final class DashMusicControllerTests: XCTestCase {
             }
         }
         XCTAssertEqual(menus.count, 2)
-        // A lap card that takes the tile's room is one more way for the tile to vanish: the Menu FAB.
+        // A lap card that takes the tile's room is one more way for the tile to vanish: the Recenter FAB.
         let ui = controller(music(DashFixtures.navigating()))
         _ = ui.handle(.knob(-1), now: t0)
         XCTAssertEqual(ui.state.focusedId, "music.tile")
@@ -508,8 +510,90 @@ final class DashMusicControllerTests: XCTestCase {
         ui.update(lap)
         _ = ui.displayList(now: t0 + 1)
         XCTAssertFalse(ui.state.focusOrder.contains("music.tile"))
-        XCTAssertEqual(ui.state.focusedId, "fab.menu")
-        XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 2), [.openMenu])
+        XCTAssertEqual(ui.state.focusedId, "fab.recenter")
+        XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 2), [.recenter])
+    }
+
+    // MARK: The focus returns to the Music control (review R2-DASH-1)
+
+    func testInputWhileTheSongIsGoneMeansNoJumpAfterwards() {
+        let base = DashFixtures.navigating()
+        let paused = music(base, DashFixtures.song(.paused))
+        // ★ meant for the tile, ⏯ and again ⏯ while the song is gone: the map's Recenter only
+        let ui = controller(paused)
+        _ = ui.handle(.knob(-1), now: t0)
+        ui.update(base)
+        _ = ui.displayList(now: t0 + 0.1)
+        for i in 0 ..< 3 {
+            XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 1 + Double(i) * 0.3), [.recenter], "★ \(i + 1)")
+            XCTAssertEqual(ui.state.focusedId, "fab.recenter")
+        }
+        ui.update(paused)
+        _ = ui.displayList(now: t0 + 2.5)
+        XCTAssertEqual(ui.state.focusedId, "fab.recenter", "the rider pressed something meanwhile: no jump")
+        // the knob moved the focus meanwhile: it stays where the rider put it
+        let knob = controller(paused)
+        _ = knob.handle(.knob(-1), now: t0)
+        knob.update(base)
+        _ = knob.displayList(now: t0 + 0.1)
+        _ = knob.handle(.knob(1), now: t0 + 1)
+        XCTAssertEqual(knob.state.focusedId, "fab.zoomIn")
+        knob.update(paused)
+        _ = knob.displayList(now: t0 + 2)
+        XCTAssertEqual(knob.state.focusedId, "fab.zoomIn")
+        // the song is back but no frame showed it yet: ★ acts on what the dash showed (the ring on Recenter)
+        let early = controller(paused)
+        _ = early.handle(.knob(-1), now: t0)
+        early.update(base)
+        _ = early.displayList(now: t0 + 0.1)
+        early.update(paused)
+        XCTAssertEqual(early.handle(.key(.enter), now: t0 + 1), [.recenter])
+        XCTAssertEqual(early.handle(.key(.enter), now: t0 + 1.5), [.recenter])
+        XCTAssertEqual(early.state.focusedId, "fab.recenter")
+    }
+
+    func testLapCardThatLeavesHandsTheFocusBackToTheTile() {
+        var lap = music(DashFixtures.navigating())
+        lap.lapTimer = DashLapTimer(title: String(repeating: "LAP 12  1:31.20 ", count: 6), meta: "LAST 1:30.00   BEST 1:30.00")
+        let base = music(DashFixtures.navigating())
+        let ui = controller(base)
+        _ = ui.handle(.knob(-1), now: t0)
+        ui.update(lap) // the card takes the tile's room
+        _ = ui.displayList(now: t0 + 0.1)
+        XCTAssertEqual(ui.state.focusedId, "fab.recenter")
+        ui.update(base) // and leaves
+        _ = ui.displayList(now: t0 + 1)
+        XCTAssertEqual(ui.state.focusedId, "music.tile")
+        XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 2), [.openMusic])
+        XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 2.4), [.musicPlayPause])
+    }
+
+    func testThePhoneOrANavigationStartWhileTheSongIsGone() {
+        let base = DashFixtures.navigating()
+        let paused = music(base, DashFixtures.song(.paused))
+        // a phone-side action is not a dash input: the focus still returns with the song
+        let phone = controller(paused)
+        _ = phone.handle(.knob(-1), now: t0)
+        phone.update(base)
+        _ = phone.displayList(now: t0 + 0.1)
+        XCTAssertEqual(phone.perform(.recenter, now: t0 + 0.5), [.recenter])
+        phone.update(paused)
+        _ = phone.displayList(now: t0 + 1)
+        XCTAssertEqual(phone.state.focusedId, "music.tile")
+        // navigation starts while the tile is gone (free ride → navigating): End owns the focus, no jump
+        let free = DashFixtures.freeRide()
+        let ui = controller(music(free, DashFixtures.song(.paused)))
+        _ = ui.handle(.knob(-1), now: t0)
+        XCTAssertEqual(ui.state.focusedId, "music.tile")
+        ui.update(free)
+        _ = ui.displayList(now: t0 + 0.1)
+        XCTAssertEqual(ui.state.focusedId, "fab.recenter")
+        ui.update(base)
+        _ = ui.displayList(now: t0 + 0.5)
+        XCTAssertEqual(ui.state.focusedId, "metrics.end", "navigation start: End, as without music")
+        ui.update(paused)
+        _ = ui.displayList(now: t0 + 1)
+        XCTAssertEqual(ui.state.focusedId, "metrics.end")
     }
 
     func testOpenMusicWithoutMusicToasts() {
@@ -697,17 +781,18 @@ final class DashMusicControllerTests: XCTestCase {
         XCTAssertEqual(f.focusedId, "x")
         XCTAssertEqual(DashFocusEngine.musicTileId, "music.tile")
         XCTAssertEqual(DashFocusEngine.musicPlayPauseId, "music.playPause")
-        // F2: a vanished Music control → a harmless neighbour, never the first item (End)
+        // F2 / R2-DASH-1: a vanished Music control → a harmless neighbour, never the first item (End)
         let map = ["metrics.end"] + fabs
+        XCTAssertEqual(DashFocusEngine.musicGoneIds, ["fab.recenter", "menu.circuit"])
         f = DashFocusEngine(focusedId: "music.tile")
         f.ensure(map, prefer: .musicGone)
-        XCTAssertEqual(f.focusedId, "fab.menu")
+        XCTAssertEqual(f.focusedId, "fab.recenter")
         f = DashFocusEngine(focusedId: "menu.music")
         f.ensure(["menu.end", "menu.park", "menu.circuit", "menu.follow"], prefer: .musicGone)
         XCTAssertEqual(f.focusedId, "menu.circuit")
         f = DashFocusEngine(focusedId: "music.close")
         f.ensure(map, prefer: .musicTile) // the tile is not listed
-        XCTAssertEqual(f.focusedId, "fab.menu")
+        XCTAssertEqual(f.focusedId, "fab.recenter")
         f.ensure(map + ["music.tile"], prefer: .musicTile)
         XCTAssertEqual(f.focusedId, "music.tile")
         f = DashFocusEngine(focusedId: "music.close")

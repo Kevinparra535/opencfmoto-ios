@@ -1394,17 +1394,22 @@ music). `.openMusic` is UI-only (without music: toast "Nothing playing in Apple 
 the transport intents. Sheet focus order: ⏮ ⏯ ⏭ ✕, initial focus ⏯; BACK / ✕ / auto-close → focus on the
 tile (not listed: see below); HOME opens the menu.
 
-**Focus when a Music control vanishes** (fix F2). The song can go away for a moment (a paused song while
-another app plays, a stale "other audio" reading right after a pause, no item between songs) and with it
-the tile, the menu's "Music" or the open sheet. The handlebar focus then never falls back to the default
-item — End while navigating, where the rider's next ★, meant for the tile, ⏯ or "Music", would end
-navigation without confirmation. `DashFocusPreference.musicGone` → the first listed of `fab.menu` (map)
-and `menu.circuit` (menu; ★ without a previewed place only shows a hint), else the usual keep / first
-item. It applies when the focused `music.*` / `menu.music` id is no longer listed (the song went away,
-or a lap card took the tile's room), when the sheet closes because `music == nil` (arrival keeps its own
-rule), and when the closing sheet's `.musicTile` finds no tile (no room for it, or the song went away in
-the same frame; preview / arrival keep their first item as before). The focus stays there when the song
-comes back (one ▶ from `fab.menu` reaches the tile). Nothing else hands the focus to End this way (F2
+**Focus when a Music control vanishes** (fixes F2, R2-DASH-1). The song can go away for a moment (a
+paused song while another app plays, a stale "other audio" reading right after a pause, no item between
+songs) and with it the tile, the menu's "Music" or the open sheet. The handlebar focus then never falls
+back to the default item — End while navigating, where the rider's next ★, meant for the tile, ⏯ or
+"Music", would end navigation without confirmation. `DashFocusPreference.musicGone` → the first listed of
+`fab.recenter` (map; ★ only recenters and the focus stays on the map, so repeated ★ meant for the tile or
+⏯ are harmless — on `fab.menu`, round 1, ★★ opened the menu on End and ended navigation) and
+`menu.circuit` (menu; ★ without a previewed place only shows a hint), else the usual keep / first item.
+It applies when the focused `music.*` / `menu.music` id is no longer listed (the song went away, or a lap
+card took the tile's room), when the sheet closes because `music == nil` (arrival keeps its own rule),
+and when the closing sheet's `.musicTile` finds no tile (no room for it, or the song went away in the
+same frame; preview / arrival keep their first item as before). When the control is listed again and no
+dash input came in between, the focus returns to it (the tile for the tile and the sheet's controls,
+`menu.music` in the menu); after any input it stays where it is. A closed sheet stays closed. Trade-off
+of the map target: `fab.recenter` follows End in the map list, so ◀★ while the tile is still gone ends
+navigation — the same two presses as ▶★ from the tile itself. Nothing else hands the focus to End this way (F2
 audit, pinned by `testNothingButMusicCanVanishFromTheListsThatFallBackToEnd`): while navigating the map
 list is End, the FABs and the tile (the pill is not drawn; cards, toasts and the banner are not
 focusable), and the menu's ids are fixed except `menu.music`; a search row that vanishes falls back to

@@ -34,9 +34,10 @@ public struct DashFocusEngine: Sendable, Equatable {
     public static let endId = "metrics.end"
     public static let musicPlayPauseId = "music.playPause"
     public static let musicTileId = "music.tile"
-    /// Where the focus goes when a Music control vanishes (F2): the map's Menu FAB (★ opens the menu),
-    /// in the menu its "Circuit" (★ without a previewed place only shows a hint). Neither ends anything.
-    public static let musicGoneIds = ["fab.menu", "menu.circuit"]
+    /// Where the focus goes when a Music control vanishes (F2, R2-DASH-1): the map's Recenter FAB (★ only
+    /// recenters and the focus stays on the map, so repeated ★ meant for the tile or ⏯ are harmless), in the
+    /// menu its "Circuit" (★ without a previewed place only shows a hint). Neither ends anything.
+    public static let musicGoneIds = ["fab.recenter", "menu.circuit"]
 
     public private(set) var focusedId: String?
 

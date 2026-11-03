@@ -121,6 +121,11 @@ public final class DashUIController: @unchecked Sendable {
     /// The upcoming turn (index) the Music sheet already closed for — or that was already near when it
     /// opened: closed once per turn.
     private var musicTurnHandled: Int?
+    /// R2-DASH-1: the Music control a vanish took the focus from (`music.tile` for the tile and the sheet's
+    /// controls, or `menu.music`) and where it was parked. When the control is listed again and the focus is
+    /// still parked there, the focus goes back. The rider's ★★ meant for the tile (open the sheet, then ⏯)
+    /// must never reach the menu's End. Any dash input drops it.
+    private var musicFocusReturn: (id: String, parkedOn: String)?
 
     public init(measurer: any DashTextMeasurer = ApproximateTextMeasurer(), options: Options = Options()) {
         self.measurer = measurer
@@ -157,6 +162,7 @@ public final class DashUIController: @unchecked Sendable {
     public func handle(_ input: DashInput, now: TimeInterval) -> [DashIntent] {
         lock.lock(); defer { lock.unlock() }
         advance(now)
+        musicFocusReturn = nil // the rider acted on what the dash showed: no jump afterwards
         if sheet == .music { musicActivityAt = max(musicActivityAt, now) } // any dash input keeps it open
         switch input {
         case let .touch(t):
@@ -709,12 +715,27 @@ public final class DashUIController: @unchecked Sendable {
         if let pref = pendingPreference {
             focus.ensure(s.focusOrder, prefer: pref)
             pendingPreference = nil
+            if pref == .musicGone || (pref == .musicTile && !s.focusOrder.contains(DashFocusEngine.musicTileId)),
+               let parked = focus.focusedId {
+                musicFocusReturn = (DashFocusEngine.musicTileId, parked)
+            }
         } else if focus.focusedId.map({ !s.focusOrder.contains($0) }) ?? true {
             // F2: a Music control that vanished under the focus (the tile or the menu's "Music" while
             // the song is gone for a moment) never hands it to the default item: while navigating that
             // is End, and the rider's next ★ would end navigation without confirmation.
-            let musicGone = focus.focusedId.map(DashFocusEngine.isMusicControl) ?? false
+            let gone = focus.focusedId
+            let musicGone = gone.map(DashFocusEngine.isMusicControl) ?? false
             focus.ensure(s.focusOrder, prefer: musicGone ? .musicGone : defaultPref)
+            if musicGone, let gone, let parked = focus.focusedId {
+                musicFocusReturn = (gone == "menu.music" ? gone : DashFocusEngine.musicTileId, parked)
+            }
+        } else if let r = musicFocusReturn {
+            if focus.focusedId != r.parkedOn {
+                musicFocusReturn = nil // something else moved it (navigation start, a sheet…)
+            } else if s.focusOrder.contains(r.id) {
+                focus.focus(r.id, in: s.focusOrder) // the song is back: so is the rider's focus
+                musicFocusReturn = nil
+            }
         }
         // Scroll the focused control into view only when the focus moved (never fight a drag).
         if focus.focusedId != before || revealFocus {
