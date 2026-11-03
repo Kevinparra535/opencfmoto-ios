@@ -1412,11 +1412,28 @@ same frame; preview / arrival keep their first item as before). When the control
 dash input came in between, the focus returns to it (the tile for the tile and the sheet's controls,
 `menu.music` in the menu); after any input it stays where it is. A closed sheet stays closed. Trade-off
 of the map target: `fab.recenter` follows End in the map list, so ◀★ while the tile is still gone ends
-navigation — the same two presses as ▶★ from the tile itself. Nothing else hands the focus to End this way (F2
-audit, pinned by `testNothingButMusicCanVanishFromTheListsThatFallBackToEnd`): while navigating the map
-list is End, the FABs and the tile (the pill is not drawn; cards, toasts and the banner are not
+navigation — the same two presses as ▶★ from the tile itself. Nothing else hands the focus to End this
+way (F2 audit, pinned by `testNothingButMusicCanVanishFromTheListsThatFallBackToEnd`): while navigating
+the map list is End, the FABs and the tile (the pill is not drawn; cards, toasts and the banner are not
 focusable), and the menu's ids are fixed except `menu.music`; a search row that vanishes falls back to
 the sheet's first item, a route chip of a preview to Go, and a preview only ends on an explicit action.
+
+**Blind input** (iOS addition, review round 2). While the Music app holds the bars, or with the eyes on
+the road, the rider presses ★ and BACK for the Music control the focus was left on without looking.
+Closing the menu from "Music" (BACK, HOME) lands on the tile (`.musicTile`), not on End — Android's own
+items keep Android's rule. While the focus rests on the stand-in a vanish parked it on (`fab.recenter`
+for the tile, `menu.circuit` for the menu's "Music"), BACK there and any sheet close under it (★ on the
+parked Circuit closes the menu) go to `.musicTile` too: the tile, else parked again until it is back.
+★ on the stand-in keeps it parked (Recenter only recenters; Circuit closes the menu onto the tile, else
+Recenter, parked again); moving the knob off it ends that. No Android flow lands here: "Music" is an iOS
+addition, and a stand-in only exists after a Music control vanished — a Recenter FAB or Circuit the
+rider moved to keeps Android's rule. `DashMusicBlindInputTests` pins it
+exhaustively — from the tile (playing, paused), the sheet on each of ⏮ ⏯ ⏭ ✕ and the menu on "Music",
+navigating and in free ride, with the song staying, gone for one built frame or gone for good, with or
+without a frame between the presses, no sequence of 1–3 ★ / BACK returns `.endNavigation`. Knob steps
+reach End on purpose (End is a stop of the map's list); that test lists the shortest such sequences from
+every state, and a vanish adds none, except the Recenter trade-off above (◀★, and B◀★ / ★◀★ since BACK
+and ★ keep the stand-in).
 
 **Safety rules** (`DashUIController`): the sheet never opens by itself and closes on ✕ / BACK; after
 10 s without dash input while the bike moves or has no fix (`Options.musicSheetIdleTimeout`; it stays

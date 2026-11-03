@@ -126,6 +126,11 @@ public final class DashUIController: @unchecked Sendable {
     /// still parked there, the focus goes back. The rider's ★★ meant for the tile (open the sheet, then ⏯)
     /// must never reach the menu's End. Any dash input drops it.
     private var musicFocusReturn: (id: String, parkedOn: String)?
+    /// Blind-input safety: the stand-in (one of `DashFocusEngine.musicGoneIds`) a vanished Music control
+    /// parked the focus on, while the focus rests there. Unlike `musicFocusReturn` it survives ★ on it (on
+    /// Recenter ★ only recenters; on Circuit it closes the menu onto the tile, else Recenter, parked
+    /// again); moving the focus drops it.
+    private var musicFocusParkedOn: String?
 
     public init(measurer: any DashTextMeasurer = ApproximateTextMeasurer(), options: Options = Options()) {
         self.measurer = measurer
@@ -717,7 +722,7 @@ public final class DashUIController: @unchecked Sendable {
             pendingPreference = nil
             if pref == .musicGone || (pref == .musicTile && !s.focusOrder.contains(DashFocusEngine.musicTileId)),
                let parked = focus.focusedId {
-                musicFocusReturn = (DashFocusEngine.musicTileId, parked)
+                parkMusicFocus(returnTo: DashFocusEngine.musicTileId, parkedOn: parked)
             }
         } else if focus.focusedId.map({ !s.focusOrder.contains($0) }) ?? true {
             // F2: a Music control that vanished under the focus (the tile or the menu's "Music" while
@@ -727,7 +732,7 @@ public final class DashUIController: @unchecked Sendable {
             let musicGone = gone.map(DashFocusEngine.isMusicControl) ?? false
             focus.ensure(s.focusOrder, prefer: musicGone ? .musicGone : defaultPref)
             if musicGone, let gone, let parked = focus.focusedId {
-                musicFocusReturn = (gone == "menu.music" ? gone : DashFocusEngine.musicTileId, parked)
+                parkMusicFocus(returnTo: gone == "menu.music" ? gone : DashFocusEngine.musicTileId, parkedOn: parked)
             }
         } else if let r = musicFocusReturn {
             if focus.focusedId != r.parkedOn {
@@ -737,6 +742,7 @@ public final class DashUIController: @unchecked Sendable {
                 musicFocusReturn = nil
             }
         }
+        if musicFocusParkedOn != focus.focusedId { musicFocusParkedOn = nil } // the focus left the stand-in
         // Scroll the focused control into view only when the focus moved (never fight a drag).
         if focus.focusedId != before || revealFocus {
             revealFocus = false
@@ -745,6 +751,26 @@ public final class DashUIController: @unchecked Sendable {
         clampScrolls(s)
         scene = s
         return s
+    }
+
+    /// A vanished Music control parked the focus on `parked`: back to `id` when it is listed again with no
+    /// dash input in between (R2-DASH-1); a `musicGoneIds` stand-in also takes BACK and sheet closes the
+    /// way the Music control it stands for would (`focusStandsForMusic`).
+    private func parkMusicFocus(returnTo id: String, parkedOn parked: String) {
+        musicFocusReturn = (id, parked)
+        musicFocusParkedOn = DashFocusEngine.musicGoneIds.contains(parked) ? parked : nil
+    }
+
+    /// Blind-input safety (iOS addition): the focus is on the menu's "Music", or rests where a vanished
+    /// Music control parked it. BACK there, or a sheet closing under it (HOME, ★ on the parked "Circuit"),
+    /// sends the focus to the tile (`.musicTile`: the tile, else parked again until it is back), never to
+    /// the default item — End while navigating, where the rider's next ★, meant for the Music controls,
+    /// would end navigation without a confirmation. No Android flow lands here: "Music" is an iOS addition,
+    /// and a stand-in only exists after a Music control vanished (a Recenter or Circuit the rider moved to
+    /// keeps Android's rule).
+    private var focusStandsForMusic: Bool {
+        guard let id = focus.focusedId else { return false }
+        return id == "menu.music" || id == musicFocusParkedOn
     }
 
     private func clampScrolls(_ s: DashScene) {
@@ -888,6 +914,7 @@ public final class DashUIController: @unchecked Sendable {
             // a timed close's pending `.musicTile` is applied only at the next build.
             _ = ensureScene()
             let onTile = focus.focusedId == DashFocusEngine.musicTileId
+            let forMusic = focusStandsForMusic // the menu's "Music", or a vanished Music control's stand-in
             if sheet != .none {
                 out = activate(.closeSheets, now: now)
             } else if model.showsArrival {
@@ -898,7 +925,7 @@ public final class DashUIController: @unchecked Sendable {
                 Log.d("GPX", "[GPX] Back — idle")
             }
             // Leaving the Music sheet returns the focus to the now-playing tile.
-            pendingPreference = closesMusic || onTile ? .musicTile
+            pendingPreference = closesMusic || onTile || forMusic ? .musicTile
                 : DashFocusEngine.defaultPreference(inPreview: model.inPreview, navigating: model.navigating)
             scene = nil
             return out
@@ -931,7 +958,10 @@ public final class DashUIController: @unchecked Sendable {
 
     /// Applies the UI-side effect of an intent and returns it for the app.
     private func activate(_ intent: DashIntent, now: TimeInterval) -> [DashIntent] {
-        let navPref = DashFocusEngine.defaultPreference(inPreview: model.inPreview, navigating: model.navigating)
+        // Where a sheet closing leaves the focus: a sheet closed from the menu's "Music" or from a vanished
+        // Music control's stand-in (★ on the parked "Circuit", HOME) hands it to the tile, never to End.
+        let navPref: DashFocusPreference = sheet != .none && focusStandsForMusic ? .musicTile
+            : DashFocusEngine.defaultPreference(inPreview: model.inPreview, navigating: model.navigating)
         switch intent {
         case .recenter:
             camera.follow = true

@@ -416,6 +416,84 @@ final class DashMusicControllerTests: XCTestCase {
         XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 13), [.openMusic])
     }
 
+    // MARK: Safety: BACK and closes from the menu's Music or a vanished control's stand-in (blind input)
+
+    func testClosingTheMenuFromMusicLandsOnTheTile() {
+        // The menu's "Music" leads to the tile's sheet: closing the menu from it (BACK, HOME) hands the
+        // focus to the tile, not to End (Android's rule for its own items, kept below).
+        for (name, base) in bases {
+            for close in [HandlebarKey.back, .home] {
+                let ui = controller(music(base))
+                _ = ui.handle(.key(.home), now: t0)
+                _ = ui.handle(.knob(try! XCTUnwrap(ui.state.focusOrder.firstIndex(of: "menu.music"))), now: t0 + 0.1)
+                XCTAssertEqual(ui.handle(.key(close), now: t0 + 1), [.closeSheets], "\(name) \(close)")
+                XCTAssertEqual(ui.state.focusedId, "music.tile", "\(name) \(close)")
+                XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 2), [.openMusic], "\(name) \(close)")
+            }
+        }
+        // no room for the tile (a lap card): parked on Recenter until it is back
+        var lap = music(DashFixtures.navigating())
+        lap.lapTimer = DashLapTimer(title: String(repeating: "LAP 12  1:31.20 ", count: 6), meta: "LAST 1:30.00   BEST 1:30.00")
+        let ui = controller(lap)
+        _ = ui.handle(.key(.home), now: t0)
+        _ = ui.handle(.knob(try! XCTUnwrap(ui.state.focusOrder.firstIndex(of: "menu.music"))), now: t0 + 0.1)
+        XCTAssertEqual(ui.handle(.key(.back), now: t0 + 1), [.closeSheets])
+        XCTAssertEqual(ui.state.focusedId, "fab.recenter")
+        XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 2), [.recenter])
+        // Android's items keep Android's rule: the menu closed from Circuit while navigating → End
+        let circuit = controller(music(DashFixtures.navigating()))
+        _ = circuit.handle(.key(.home), now: t0)
+        _ = circuit.handle(.knob(try! XCTUnwrap(circuit.state.focusOrder.firstIndex(of: "menu.circuit"))), now: t0 + 0.1)
+        XCTAssertEqual(circuit.handle(.key(.back), now: t0 + 1), [.closeSheets])
+        XCTAssertEqual(circuit.state.focusedId, "metrics.end")
+    }
+
+    func testBackAndStarWhereAVanishParkedTheFocusStayClearOfEnd() {
+        let base = DashFixtures.navigating()
+        let paused = music(base, DashFixtures.song(.paused))
+        // the tile gone for good: Recenter stands in for it. ★ only recenters, BACK keeps it parked, and
+        // the song back (no dash input since BACK) brings the knob back to the tile
+        let ui = controller(paused)
+        _ = ui.handle(.knob(-1), now: t0)
+        ui.update(base)
+        _ = ui.displayList(now: t0 + 0.1)
+        XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 1), [.recenter])
+        XCTAssertEqual(ui.handle(.key(.back), now: t0 + 1.4), [])
+        XCTAssertEqual(ui.state.focusedId, "fab.recenter", "BACK on the stand-in keeps it, like BACK on the tile")
+        XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 1.8), [.recenter])
+        XCTAssertEqual(ui.handle(.key(.back), now: t0 + 2.2), [])
+        ui.update(paused)
+        _ = ui.displayList(now: t0 + 3)
+        XCTAssertEqual(ui.state.focusedId, "music.tile", "BACK is \"to the tile\": parked until it is back")
+        // the menu's Music gone for good: Circuit stands in. ★ there (a hint) or BACK closes the menu onto
+        // Recenter, parked again; the next ★ only recenters
+        let withSong = music(base)
+        for first in [HandlebarKey.enter, .back] {
+            let menu = controller(withSong)
+            _ = menu.handle(.key(.home), now: t0)
+            _ = menu.handle(.knob(try! XCTUnwrap(menu.state.focusOrder.firstIndex(of: "menu.music"))), now: t0 + 0.1)
+            menu.update(base)
+            _ = menu.displayList(now: t0 + 0.5)
+            XCTAssertEqual(menu.state.focusedId, "menu.circuit")
+            XCTAssertEqual(menu.handle(.key(first), now: t0 + 1), first == .enter ? [.startCircuit] : [.closeSheets])
+            XCTAssertEqual(menu.state.sheet, .none, "\(first)")
+            XCTAssertEqual(menu.state.focusedId, "fab.recenter", "\(first): never End")
+            XCTAssertEqual(menu.handle(.key(.enter), now: t0 + 1.5), [.recenter], "\(first)")
+            XCTAssertEqual(menu.handle(.key(.back), now: t0 + 2), [], "\(first)")
+            XCTAssertEqual(menu.handle(.key(.enter), now: t0 + 2.5), [.recenter], "\(first)")
+        }
+        // the rider moved the knob off the stand-in (even back onto it): Android's rules again
+        for steps in [[1], [1, -1]] {
+            let moved = controller(paused)
+            _ = moved.handle(.knob(-1), now: t0)
+            moved.update(base)
+            _ = moved.displayList(now: t0 + 0.1)
+            for (i, d) in steps.enumerated() { _ = moved.handle(.knob(d), now: t0 + 1 + Double(i) * 0.3) }
+            _ = moved.handle(.key(.back), now: t0 + 2)
+            XCTAssertEqual(moved.state.focusedId, "metrics.end", "\(steps): BACK at idle on a FAB the rider moved to")
+        }
+    }
+
     // MARK: Closing transitions
 
     func testSheetClosesWhenMusicGoesAndOnPreviewNavigationArrival() {
