@@ -107,6 +107,68 @@ def fmt_findings(findings, limit=40):
     return rows
 
 
+# Scenario `locked` (locked iPhone, Phase 0): the app lines that tell the lock story, in log order.
+LOCK_LINE_MARKERS = ("E2E: simulated lock", "E2E: simulated unlock", "APP: scene ", "APP: [lock]", "VIDEO: [bg]",
+                     "VIDEO: [bg-probe]", "VIDEO: [vt-list]", "VIDEO: [switch]", "VIDEO: background \u2192",
+                     "VIDEO: foreground \u2192", "first IDR")
+LOCK_SOFTWARE_LINE = ("background \u2192 backgroundSoftware", "(encoder vt-sw")
+LOCK_FIRST_IDR_LINE = "[switch] first vt-sw IDR on the wire"
+
+
+def locked_section(d, summary, md):
+    """RUN.md part of scenario `locked`: the SPS/PPS variants on the wire (one per encoder that fed the
+    dash, with its picture) and the app's lock lines. Returns the failure reasons: fewer than 2 variants,
+    no `background → backgroundSoftware … (encoder vt-sw` line, no `[switch] first vt-sw IDR on the
+    wire` line (the scenario is not required: a simulator whose VideoToolbox software encoder writes the
+    hardware encoder's SPS/PPS byte for byte also gives a single variant; the app log says which)."""
+    reasons = []
+    variants = []
+    for ss in (summary or {}).get("sessions") or []:
+        variants += ss.get("sps_variants") or []
+    name = os.path.basename(d)
+    md.append("SPS/PPS variants on the wire (one per encoder that fed the dash):")
+    md.append("")
+    md.append("| # | first frame | frames | profile | constraints | level | size | poc | refs | frame_num bits | vui | reorder | picture |")
+    md.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    for i, v in enumerate(variants, 1):
+        pic = "dash_variant_%d.png" % i
+        link = "[%s](%s/frames/%s)" % (pic, name, pic) if os.path.isfile(os.path.join(d, "frames", pic)) else "-"
+        cons = v.get("constraints")
+        md.append("| %d | %s | %s | %s | %s | %s | %sx%s | %s | %s | %s | %s | %s | %s |"
+                  % (i, v.get("first_frame"), v.get("frames"), v.get("profile"),
+                     "0x%02X" % cons if isinstance(cons, int) else "-", v.get("level"), v.get("width"), v.get("height"),
+                     v.get("poc_type"), v.get("refs"), v.get("log2_max_frame_num"), v.get("vui"),
+                     "-" if v.get("reorder") is None else v.get("reorder"), link))
+    for i, v in enumerate(variants, 1):
+        md.append("")
+        md.append("SPS #%d `%s` PPS `%s`" % (i, v.get("hex"), v.get("pps_hex")))
+    md.append("")
+    distinct = {(v.get("hex"), v.get("pps_hex")) for v in variants}
+    if len(distinct) < 2:
+        reasons.append("fewer than 2 SPS/PPS variants (%d): no second encoder reached the dash" % len(distinct))
+    try:
+        with open(os.path.join(d, "app-log.txt"), encoding="utf-8", errors="replace") as f:
+            log = f.read().splitlines()
+    except OSError:
+        log = []
+    if not any(all(m in l for m in LOCK_SOFTWARE_LINE) for l in log):
+        reasons.append("no `background \u2192 backgroundSoftware \u2026 (encoder vt-sw` line in app-log.txt")
+    if not any(LOCK_FIRST_IDR_LINE in l for l in log):
+        reasons.append("no `%s` line in app-log.txt" % LOCK_FIRST_IDR_LINE)
+    lines = [l for l in log if any(m in l for m in LOCK_LINE_MARKERS)]
+    if lines:
+        md.append("<details><summary>Lock lines of the app log (%d)</summary>" % len(lines))
+        md.append("")
+        md.append("```")
+        md.extend(lines[:80])
+        if len(lines) > 80:
+            md.append("\u2026 %d more" % (len(lines) - 80))
+        md.append("```")
+        md.append("</details>")
+        md.append("")
+    return reasons
+
+
 def scenario_section(out, art, d, md, annotations):
     name = os.path.basename(d)[len("e2e-"):]
     dst = os.path.join(art, os.path.basename(d))
@@ -135,7 +197,7 @@ def scenario_section(out, art, d, md, annotations):
         frames = [fr for fr in frames if fr != "app_first.png"]
     for fr in frames:
         copy(os.path.join(d, "frames", fr), os.path.join(dst, "frames", fr))
-    for extra in ("ffprobe-dash.json", "ffprobe-app.json", "ffprobe-dash.err", "ffprobe-app.err", "ffmpeg.log"):
+    for extra in ("ffprobe-dash.json", "ffprobe-app.json", "ffprobe-dash.err", "ffprobe-app.err", "ffmpeg.log", "headers.txt"):
         p = os.path.join(d, "frames", extra)
         if os.path.isfile(p) and os.path.getsize(p) > 0:
             copy(p, os.path.join(dst, "frames", extra))
@@ -182,10 +244,12 @@ def scenario_section(out, art, d, md, annotations):
         if s0.get("idr_interval_s"):
             md.append("| IDR interval | mean %s s, max %s s |" % (s0["idr_interval_s"].get("mean"), s0["idr_interval_s"].get("max")))
         if decode:
-            md.append("| decode (ffprobe/ffmpeg) | decodable: **%s**, %s %s %sx%s, %s decoded / %s received, %s error line(s) %s |"
-                      % (decode.get("decodable"), decode.get("codec"), decode.get("profile"), decode.get("width"),
+            md.append("| decode (ffprobe/ffmpeg%s) | decodable: **%s**, %s %s %sx%s, %s decoded / %s received, %s error line(s) %s%s |"
+                      % (", strict: `%s`" % decode.get("strict_flags") if decode.get("strict") else "",
+                         decode.get("decodable"), decode.get("codec"), decode.get("profile"), decode.get("width"),
                          decode.get("height"), decode.get("decoded_frames"), decode.get("frames_received"),
-                         decode.get("decode_error_lines"), decode.get("error", "")))
+                         decode.get("decode_error_lines"), decode.get("error", ""),
+                         "" if not decode.get("strict") else "; lenient decode clean: %s" % decode.get("lenient_decodable")))
         ident = summary.get("identity") or {}
         if ident:
             md.append("| phone identity | %s |" % ", ".join("%s=%s" % kv for kv in ident.items()))
@@ -201,6 +265,8 @@ def scenario_section(out, art, d, md, annotations):
             md.append("|---|---|---|---|")
             md.extend(fmt_findings(findings))
             md.append("")
+        if name == "locked":
+            reasons += locked_section(d, summary, md)
         if summary.get("result") != "PASS":
             reasons.append("fakedash result %s (%s violations, goal reached: %s)"
                            % (summary.get("result"), summary.get("violations"), summary.get("goal_reached")))

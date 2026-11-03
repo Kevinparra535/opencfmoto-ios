@@ -4,6 +4,13 @@ Research date: 2026-10-31. Baseline: deployment target iOS 17.0 (`project.yml`),
 iOS 27.x. This note covers questions (a)–(k) from the architecture review. It records what Apple documents
 or what Apple engineers have said, labels everything else, and ends with design decisions.
 
+**Update 2026-11-03** (research for keeping the dash map live while the iPhone is locked; it feeds the
+Phase 0 diagnostics build): (d) background hardware encoding raised to High on an Apple Media Engineer's
+statement, background GPU for `BGContinuedProcessingTask` limited to M3 iPads, the software-encoder probe;
+(e) the When-In-Use indicator, the CPU-monitor limits, Wi-Fi while locked, the activity type; (f) the
+`screen-capture` mode; (i) TestFlight upload validation; device questions 1–2 and design recommendations 2
+and 4. The owner's Phase 0 log answers the device questions; its results go here once known.
+
 **Confidence scale**
 
 - **High**: an Apple document, technote, WWDC session, or an Apple DTS / Apple engineer forum answer says
@@ -36,11 +43,11 @@ networking API) and Quinn "The Eskimo!"'s *Extra-ordinary Networking* forum seri
 | b | URLSession equivalent | **None.** You can prohibit cellular, but you cannot force it. | High |
 | c | What triggers the Local Network alert? | Outgoing TCP to the dash (192.168.x.1:10930), Bonjour browse or resolve, and `.local` lookups. Listening for and accepting inbound TCP does **not** trigger it. | High |
 | c | Ports below 1024 | Allowed on iOS. The 109xx ports have no issue. | High |
-| d | Hardware H.264 encoding in the background | Expect it to fail: sessions are invalidated (`kVTInvalidSessionErr` −12903). Apple documents nothing; widely used code (WebRTC, FFmpeg) confirms the invalidation. | Medium |
-| d | Software H.264 encoder on iOS | None is documented. Bundle your own (OpenH264). | Medium |
-| d | GPU in the background | Not allowed. Metal returns `notPermitted`, OpenGL ES terminates the app, `MKMapSnapshotter` waits for the foreground. CPU Core Graphics is fine. | High |
+| d | Hardware H.264 encoding in the background | **Not available.** An Apple Media Engineer: encoding resources are given up in the background (forum 672056). Sessions come back invalid (`kVTInvalidSessionErr` −12903); widely used code (WebRTC, FFmpeg) handles exactly that. | High (unavailable) / Medium (exact codes) |
+| d | Software H.264 encoder on iOS | None is documented (still in Nov 2026), and no device report says either way. The Phase 0 diagnostics build probes it on the owner's iPhone; otherwise bundle one (OpenH264). | Low |
+| d | GPU in the background | Not allowed. Metal returns `notPermitted`, OpenGL ES terminates the app, `MKMapSnapshotter` waits for the foreground. `BGContinuedProcessingTask` GPU access exists only on iPads with M3 or newer, never on an iPhone. CPU Core Graphics is fine. | High |
 | e | Location background mode keeps the process running | Yes, while standard location updates keep running. Disable automatic pausing. | High |
-| e | Wi-Fi association while locked | **Not guaranteed.** iOS can leave Wi-Fi when the device sleeps after screen lock. | Low (device test) |
+| e | Wi-Fi association while locked | **Not guaranteed.** iOS can leave Wi-Fi when the device sleeps after screen lock; DTS: the system aims to sleep the whole application processor unless something like music playback prevents it, and there is no API to stop that. | Low (device test) |
 | f | Broadcast-extension memory limit | About 50 MB. This is community-documented, not Apple-documented. | Medium |
 | f | ReplayKit status | **Deprecated in the iOS 27 SDK.** ScreenCaptureKit, with the `screen-capture` background mode, replaces it on iOS 27+. | High |
 | g | AVRCP buttons | Delivered only to the **Now Playing** app, which needs a non-mixable session that is actually playing. | High |
@@ -437,9 +444,11 @@ let ctrl = try NWListener(using: params, on: 10922)   // likewise 10921, 10920 �
 
 ### Answer
 
-**Hardware H.264 encoding in the background.** No Apple document or Apple engineer statement was found,
-either confirming or denying it. Widely deployed code all treats the iOS hardware encoder as unavailable or
-invalidated around backgrounding:
+**Hardware H.264 encoding in the background.** *Updated 2026-11-03:* an Apple Media Engineer answered it
+for AVAssetWriter, which encodes with the same hardware (forum 672056, 2021): "This is expected behavior.
+The asset writer must give up encoding resources when your app goes into the background, and there is no
+way to reliably pick up where you left off once that happens." Widely deployed code all treats the iOS
+hardware encoder as unavailable or invalidated around backgrounding:
 
 - **WebRTC** (current, `RTCVideoEncoderH264.mm`): on `kVTInvalidSessionErr`, "This error occurs when
   entering foreground after backgrounding the app". The session is reset. The 2016 Chromium change that
@@ -461,9 +470,11 @@ Nothing suggests that the `location` background mode changes this. Expect:
 | −12912 | `kVTVideoEncoderMalfunctionErr` | Encoder malfunction |
 | −12902 | `kVTParameterErr` | A generic parameter error, not a background signal |
 
-**Confidence: medium.** Device test: open question 2.
+**Confidence: high** that hardware encoding is unavailable in the background (the Apple statement above);
+medium for the exact codes (via AVAssetWriter: `AVError` −11847 with the underlying −16121). Device test:
+open question 2.
 
-**Is there a software encoder?** No software H.264 encoder on iOS is documented.
+**Is there a software encoder?** No software H.264 encoder on iOS is documented (still true in Nov 2026).
 
 - Since the iOS 17.4 SDK, `kVTVideoEncoderSpecification_EnableHardwareAcceleratedVideoEncoder` and
   `…_RequireHardwareAcceleratedVideoEncoder` exist on iOS. Setting Enable to `false` is documented as the way
@@ -472,6 +483,13 @@ Nothing suggests that the `location` background mode changes this. Expect:
   H.264/HEVC encoders "are always hardware accelerated" (forum 751291, not an Apple engineer).
 - **Test on a device:** create a session with Enable = `false` and read
   `kVTCompressionPropertyKey_UsingHardwareAcceleratedVideoEncoder`.
+- *Added 2026-11-03:* the probe needs three more things. Dump `VTCopyVideoEncoderList` and try any `avc1`
+  `EncoderID` not marked hardware (the list alone settles nothing: one report saw no
+  `IsHardwareAccelerated` flag even for the hardware encoder). Create the session while still in the
+  foreground (at `.inactive`), not only after `didEnterBackground`. And do not treat an unanswered
+  `UsingHardware…` as hardware: test it with a real encode (the property can fail with −12900 on some
+  session types, forum 751291). The Phase 0 diagnostics build does exactly this and logs each step
+  (`[vt-list]`, `[bg] pre-warm vt-sw …`, `[bg] try vt-sw …`; media-video.md §15.3a).
 - Plan for a bundled encoder. **OpenH264** (BSD-2-Clause, Constrained Baseline) is preferred over x264
   (GPL-2.0-or-later). x264 is license-compatible with AGPL but adds copyright holders, which hurts App Store
   options (see i). H.264 patent licensing for a self-built encoder is the distributor's responsibility. Cisco's
@@ -491,7 +509,8 @@ verifying that the dash decodes the output. Otherwise use a normal real-time ses
 | OpenGL ES | "An OpenGL ES app is terminated if it attempts to execute OpenGL ES commands on the graphics hardware" while in the background. |
 | Core Image | GPU-backed. `useSoftwareRenderer` "has no effect if the platform does not support OpenCL", and iOS has no OpenCL. Treat Core Image as GPU-only and keep it out of the dash path. |
 | `MKMapSnapshotter` | Delivers images only in the foreground. |
-| `BGContinuedProcessingTask` (iOS 26) | Can get background GPU with the *Background GPU Access* entitlement. It is meant for finite, user-started jobs with a Live Activity showing progress, and the user can cancel it. It doesn't fit a ride-long stream. |
+| `BGContinuedProcessingTask` (iOS 26) | *Updated 2026-11-03:* background GPU access exists, but DTS says it is supported only on "iPads with M3 or newer" and "not supported on any iPhone" (forum 797538), so it can never apply to this app. The task is meant for finite, user-started jobs with a Live Activity showing progress, and the user can cancel it; it doesn't fit a ride-long stream either. |
+| Picture in Picture | *Added 2026-11-03:* no exception: GPU submission is revoked about 8 s after backgrounding even while the app feeds an active PiP window (iOS 27 report, OcPlayer PR #71); only a CPU compositing path fixed the frozen picture. |
 
 **CPU drawing is fine.** Core Graphics bitmap contexts, Core Text and Accelerate/vImage run on the CPU. No
 document restricts them in the background. The limits that do apply are the system's resource limits:
@@ -525,6 +544,8 @@ VTSessionSetProperty(s, key: kVTCompressionPropertyKey_AverageBitRate, value: 1_
 - Linphone: https://gitlab.linphone.org/BC/public/mediastreamer2/blob/a3ef55cdb23f59600fe62d86f927d15754f5effd/src/videofilters/videotoolbox.c
 - GStreamer: https://gitlab.freedesktop.org/gstreamer/gst-plugins-bad/-/issues/288
 - SDL: https://github.com/smartdevicelink/sdl_ios/issues/1540
+- Apple Media Engineer, encoding resources given up in the background: https://developer.apple.com/forums/thread/672056
+- DTS, background GPU only on M3 iPads: https://developer.apple.com/forums/thread/797538
 - Encoder specification keys: https://developer.apple.com/documentation/videotoolbox/kvtvideoencoderspecification_enablehardwareacceleratedvideoencoder
   and https://developer.apple.com/documentation/videotoolbox/kvtvideoencoderspecification_requirehardwareacceleratedvideoencoder
 - Low latency: https://developer.apple.com/documentation/videotoolbox/kvtvideoencoderspecification_enablelowlatencyratecontrol
@@ -554,16 +575,33 @@ Requirements and pitfalls:
 - Start updates **in the foreground**.
 - **When-In-Use authorization is enough**. The system shows the blue background-location indicator. Always
   authorization is needed only to be relaunched by region monitoring or significant-change updates.
+  *Confirmed 2026-11-03:* `showsBackgroundLocationIndicator` "affects only apps that received Always
+  authorization … For apps with When In Use authorization, the system changes the appearance of the status
+  bar when the app uses location services in the background."
+- **Set `allowsBackgroundLocationUpdates`, then start updates in the foreground** — the only order Apple
+  documents. When updates already run (for example for a preview), flipping the flag on them is
+  undocumented: restart them in the foreground instead (the app does since the Phase 0 build, log line
+  `GPS restarted with background updates …`).
 - Set `pausesLocationUpdatesAutomatically = false`. It defaults to `true`, and a pause stops updates, so the
   app gets suspended at long stops. With When-In-Use, a pause "ends access to location changes until the app
   launches again".
 - Set `activityType = .automotiveNavigation`. Apple notes it "might cause the system to pause location
   updates when the vehicle doesn't move for an extended period of time", which the line above prevents.
+  Keep it for roads; Apple's `.otherNavigation` is the literal category for "off-road vehicles" (neither
+  changes the keep-alive).
 - The iOS 17 API (`CLBackgroundActivitySession` with `CLLocationUpdate.liveUpdates`) can suspend updates while
   stationary (`isStationary`). For a keep-alive, use the classic `CLLocationManager`.
 - **"Indefinitely" isn't guaranteed.** "The system can terminate apps at any time to free up memory or other
   system resources." CPU and wakeup limits (`EXC_RESOURCE`) and thermal pressure also apply. After
   termination there's no relaunch for standard location updates.
+- **The CPU monitor can kill a background app** (*added 2026-11-03*; `EXC_RESOURCE` `CPU` / `CPU_FATAL`).
+  Apple publishes no limit. Logged ones: DTS quoting a killed background VoIP app, "exceeding limit of 60%
+  cpu over 15 second" (forum 758387: treat the limits "as a hard limit that your app shouldn't be getting
+  anywhere near"); a BGProcessingTask "exceeding limit of 80% cpu over 60 seconds … Process killed" (forum
+  123975); background location and CarPlay navigation apps killed at "15% cpu over 60 seconds" in iOS
+  15.2–15.3, fixed in 15.4 (forum 700124). The percentage is CPU time over wall time (100 % = one core).
+  Termination code `0xd00d2bad` means "excessive use of key system resources". Stay well under about 30 % of
+  one core; the Phase 0 build measures its background cost (`[bg-probe] … cpu=` lines).
 
 **Staying alive doesn't keep the Wi-Fi association.** DTS lists, among the "circumstances where iOS will
 leave a Wi-Fi network":
@@ -576,8 +614,23 @@ iOS "keeps it open while the app is running"; without it, "iOS closes the active
 minutes". DTS is "least confident" about how Wi-Fi apps behave today. Consumer reports describe Wi-Fi
 dropping about 30 s after lock unless the phone is charging (anecdotal, low).
 
+*Added 2026-11-03:*
+
+- Quinn (DTS, forum 662951): "It's not just the Wi-Fi chip that goes to sleep. Unless there's something that
+  specifically prevents it — like music playback — the system aims to sleep the entire application
+  processor." Asked whether an app can stop it: "No." **High** (statement).
+- A developer relaying Wi-Fi traffic from a Network Extension saw the device disassociate in system sleep
+  although packets flowed every second (same thread; single report, no location session). **Low–Medium**.
+- DTS on `UIRequiresPersistentWiFi` (forum 765960, 2024): "The exact semantics … are fuzzy, and I suspect that
+  they have drifted"; set it if the app benefits from staying on Wi-Fi (the app does).
+- DTS (forum 848895, 2026) recommends `joinOnce = true` for a no-internet accessory, because with `false` iOS
+  treats it like any saved network — and one iOS 26 report saw a nearly idle accessory link dropped for a
+  saved internet network. `joinOnce = true` is unusable locked (torn down on device sleep), so the app keeps
+  `false` and keeps the link busy (the REQ 114 pull loop does, even in hold).
+
 Whether a running location app with live TCP traffic keeps the dash Wi-Fi while locked is **the main
-device-test question** (open question 1).
+device-test question** (open question 1). Still **Low**: charging and continuous traffic should help, audio
+playback is the only exception Apple names.
 
 **App Review 2.5.4** (guidelines updated 2026-10-16): "Multitasking apps may only use background services
 for their intended purposes: VoIP, audio playback, location, task completion, local notifications, etc."
@@ -625,6 +678,12 @@ try s.setActive(false, options: .notifyOthersOnDeactivation)
 - https://developer.apple.com/documentation/xcode/configuring-background-execution-modes
 - https://developer.apple.com/documentation/bundleresources/information-property-list/uirequirespersistentwifi
 - DTS, Wi-Fi lifecycle: https://developer.apple.com/forums/thread/734361
+- Application-processor sleep: https://developer.apple.com/forums/thread/662951
+- `UIRequiresPersistentWiFi` semantics: https://developer.apple.com/forums/thread/765960
+- `joinOnce` for accessories: https://developer.apple.com/forums/thread/848895
+- CPU limits: https://developer.apple.com/forums/thread/758387, https://developer.apple.com/forums/thread/123975,
+  https://developer.apple.com/forums/thread/700124
+- `EXC_RESOURCE`: https://developer.apple.com/documentation/xcode/exc_resource
 - App Review Guidelines: https://developer.apple.com/app-store/review/guidelines/
 - https://developer.apple.com/documentation/coreaudiotypes/avaudiosession/errorcode/cannotstartplaying
 - https://developer.apple.com/documentation/avfaudio/avaudiosession/mode-swift.struct/voiceprompt
@@ -656,7 +715,8 @@ SCStreamOutput to your host app."
 
 iOS 27 adds `UIBackgroundModes` value `screen-capture`: "The app captures and streams screen content while in
 the background". Apple's sample declares it "so the stream survives backgrounding for full-display
-capture". On iOS, `SCStreamConfiguration.width`/`height` are available, but `minimumFrameInterval` and
+capture". *Added 2026-11-03:* the mode is checked explicitly (−3824 without it, even with silent audio
+running), and App Store Connect's upload allowlist rejected the value until Aug 2026. On iOS, `SCStreamConfiguration.width`/`height` are available, but `minimumFrameInterval` and
 `pixelFormat` are macOS-only.
 
 Deprecated APIs still run, per secondary sources. Guideline 2.5.1 asks apps to phase out deprecated
@@ -852,6 +912,9 @@ Also:
 - the first build sent to external testers goes through App Review
 - a build can be tested **for up to 90 days**
 - up to 100 builds can be shared
+- *added 2026-11-03:* builds for **internal** testers get no App Review, but App Store Connect's upload
+  validation still runs on them (in Aug 2026 it rejected an unknown `UIBackgroundModes` value until Apple
+  fixed its allowlist)
 
 **EU (and Japan) alternative distribution.** EU users on iOS 17.4+ can install notarized apps from
 alternative marketplaces or via Web Distribution. Requirements and terms:
@@ -1012,7 +1075,11 @@ performance level, which avoids changes in thermal headroom over time. It is not
 2. **VideoToolbox in the background.** Exactly how does a `VTCompressionSession` fail after backgrounding or
    locking (−12903 or −12915)? Does creating a new one in the background fail? Does
    `EnableHardwareAcceleratedVideoEncoder = false` (iOS 17.4+) yield a usable software encoder that also
-   runs in the background?
+   runs in the background? *2026-11-03:* the Phase 0 diagnostics build answers this from one locked test
+   (encoder list, a session pre-warmed in the foreground and probed, fresh and `EncoderID` sessions in the
+   background, each with its OSStatus, `hw=` and probe result), and question 1 with `[lock]` lines every 30 s
+   (link, Wi-Fi, pulls, GPS and heading age, battery) and a marker that tells on the next launch whether iOS
+   ended the app in the background.
 3. **Default route on the dash network.** With the dash joined (its DHCP hands out a router and DNS), does
    the default route stay on cellular, so MapKit and URLSession still work? Does iOS prompt to "stay
    connected without internet", or hop to saved networks?
@@ -1051,23 +1118,30 @@ performance level, which avoids changes in thermal headroom over time. It is not
    `didEnterBackground`:
    - Stop all GPU, Core Image, MapKit and VideoToolbox work.
    - Switch the dash renderer to Core Graphics at a reduced rate (5–10 fps).
-   - Switch to the software H.264 encoder (decision 4).
+   - Switch to a background encoder through the ladder of decision 4.
    - Keep sockets and listeners up.
 
-   On `didBecomeActive`, recreate the VT session and force an IDR frame.
+   On `didBecomeActive`, recreate the VT session and force an IDR frame. *2026-11-03:* the background path is
+   CPU only by construction (Core Graphics, vImage; no `VTPixelTransferSession`, Core Image or Metal), and
+   the Phase 0 build measures its cost in hold with a dry run (render, convert to I420, 10 ms of load, at
+   8 fps for 10 minutes) before any encoder is bundled.
 3. **Render the dash with Core Graphics only.** Draw into IOSurface-backed 32BGRA `CVPixelBuffer`s from a
    `CVPixelBufferPool`, and convert to NV12/I420 with vImage when the software encoder needs it. Build our
    own tile or vector map renderer, fed by tiles fetched over cellular. Use MapKit only in the phone UI:
    `MKMapSnapshotter` doesn't work in the background, and routing directions need the paid program.
-4. **Put a `VideoEncoder` protocol in front of two encoders.**
-   - (a) **VideoToolbox:** Baseline or ConstrainedBaseline, `RealTime`, no frame reordering, keyframe
-     interval of about 2 s, on-demand IDR, and a live bitrate and frame-rate API. Don't use
-     `EnableLowLatencyRateControl` unless the dash is shown to decode its output.
-   - (b) **OpenH264** (BSD-2), Constrained Baseline, for the background and as the fallback on −12903,
-     −12915 or −12912.
+4. **Put an encoder protocol in front of the encoders** — *implemented (2026-11-03)* as `DashVideoEncoder`
+   (`OpenCfMotoApple/DashVideoEncoder.swift`) with a background ladder:
+   - foreground: **VideoToolbox hardware**, unchanged: Baseline, `RealTime`, no frame reordering, IDR every
+     second, on-demand IDR, live bitrate and frame rate. Don't use `EnableLowLatencyRateControl` unless the
+     dash is shown to decode its output;
+   - background, the first rung whose probe IDR passes the stream check (`H264StreamCheck`) wins: (1) a
+     **VideoToolbox software** session (`EnableHardwareAcceleratedVideoEncoder = false`, pre-warmed at
+     `.inactive`, or fresh, or by `EncoderID`); (2) a **bundled CPU encoder** (Phase 1, owner's decision:
+     minih264, OpenH264 (BSD-2) or a hand-written one; absent in the Phase 0 build); (3) the pre-encoded
+     **hold picture**. A failing encoder is demoted to the next rung.
 
-   Spike first: test the iOS 17.4+ `EnableHardwareAcceleratedVideoEncoder = false` path. If it gives a
-   working software encoder in the background, drop OpenH264.
+   Phase 0 is the spike: if the VideoToolbox software session works in the background on the owner's iPhone,
+   nothing is bundled.
 5. **Keep the process alive during rides with classic `CLLocationManager`:**
    - `allowsBackgroundLocationUpdates = true`
    - `pausesLocationUpdatesAutomatically = false`

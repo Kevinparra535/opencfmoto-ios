@@ -494,6 +494,19 @@ jobs:
           t0=$(date +%s)
           bash tools/ci/e2e/run-fakedash.sh "${{ steps.sim.outputs.udid }}" "$BUNDLE_ID" music cfdl16 36 "$OUT" -e2eMusic
           printf "e2e music\t%s\tdone\n" $(( $(date +%s) - t0 )) >> "$OUT/timings.tsv"
+      # Locked iPhone, Phase 0: a simulated lock 15 s after the first frame, for 30 s (scene inactive →
+      # background → inactive → active through the real AppModel → RideModel → engine path), with the
+      # VideoToolbox software session as the background encoder. The fakedash `locked` scenario records
+      # every SPS/PPS variant (≥ 2 expected: one per encoder), checks that every switch is at an IDR and
+      # decodes strictly. Not in --require below: the Simulator does not really background the app, and
+      # its software encoder may write the hardware encoder's SPS/PPS byte for byte (read the app log).
+      - name: "E2E locked (simulated lock at +15 s for 30 s; VideoToolbox software in the background)"
+        if: steps.install.outcome == 'success'
+        run: |
+          t0=$(date +%s)
+          bash tools/ci/e2e/run-fakedash.sh "${{ steps.sim.outputs.udid }}" "$BUNDLE_ID" locked cfdl16 60 "$OUT" \
+            -e2eBackgroundCycle 15:30 -e2eBackgroundEncoder vtsw
+          printf "e2e locked\t%s\tdone\n" $(( $(date +%s) - t0 )) >> "$OUT/timings.tsv"
       - name: Report (RUN.md + annotations; fails when a required scenario failed)
         if: always()
         run: |

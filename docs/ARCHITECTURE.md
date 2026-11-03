@@ -76,7 +76,9 @@ CLLocation ─▶ LocationService ─▶ LocationFix ─┬─▶ NavigationSess
             │   HandlebarGestureEngine ◀── HandlebarRemote  tiles from TileImageCache)     │
             │        (MPRemoteCommandCenter)                       │ CVPixelBuffer (BGRA)  │
             │                                                      ▼                        │
-            │                                    H264Encoder (VideoToolbox, Baseline 3.1)  │
+            │                     DashVideoEncoder: foreground H264Encoder (VT hardware,   │
+            │                     Baseline 3.1); locked: background ladder (VT software →  │
+            │                     [CPU encoder, Phase 1] → pre-encoded hold IDRs)          │
             │                                                      │ AVCC → AnnexB         │
             │                                                      ▼                        │
             │                         DashProjectionEngine : VideoFrameSource ─▶ FrameQueue │
@@ -142,9 +144,17 @@ the owner, signatures are frozen). Spanish strings: each UI agent writes its own
    (20 s cooldown). Reconnect budget 20, backoff `min(500+500n, 4000)` ms, 2.5 s settle.
    Add a connect-back timeout (~10 s) that Android lacks.
 7. iOS background: projection runs in the foreground with the idle timer disabled; with the
-   `location` background mode the process keeps the sockets alive while locked; if VideoToolbox
-   refuses to encode in the background, the media plane keeps answering pulls with the cached
-   last IDR (a "hold" picture) so the dash does not drop the link.
+   `location` background mode the process keeps the sockets alive while locked. The engine encodes
+   through the `DashVideoEncoder` seam (`OpenCfMotoApple/DashVideoEncoder.swift`; `H264Encoder`
+   conforms): in the foreground the VideoToolbox hardware session; at `.background` a **ladder** of
+   background encoders (pure rules in `OpenCfMotoCore/Video/BackgroundEncoding.swift`): a VideoToolbox
+   software session (pre-warmed at `.inactive`), then a bundled CPU encoder (Phase 1; none in the Phase 0
+   build), then the pre-encoded hold picture ("Phone locked"). A rung is used only after a probe IDR
+   passed `H264StreamCheck` (nothing of a rejected encoder reaches the dash); a failing encoder is demoted
+   to the next rung; every encoder change happens at an IDR (gate closed, `EncodedFrame.encoderTag`
+   changes only on IDRs). A timed-out pull is answered with the live background encoder's last IDR, then
+   the hold picture, then any live IDR of the canvas (foreground: live only), so the dash never drops the
+   link for want of a frame. Details and log lines: `spec/media-video.md` §15.3a.
 8. Dash rendering: CoreGraphics only (no GPU map views in front of the encoder), BGRA buffers at
    exactly the negotiated canvas, top-left origin; dash touches map 1:1 to canvas pixels.
 9. Deliberate iOS deviations of the dash map, each with an Android-parity switch: the follow camera

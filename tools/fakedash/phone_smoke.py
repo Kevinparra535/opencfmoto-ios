@@ -62,6 +62,7 @@ BUGS = {
     "rly17-raw": "reply RLY 17 with the unrounded size",
     "avcc": "send AVCC length-prefixed access units instead of Annex-B",
     "unsolicited-10601": "push an unsolicited 0x10601 after CLIENT_INFO",
+    "sps-on-p": "with --sps-switch-at: switch to the second SPS/PPS on a P-frame instead of an IDR",
 }
 
 
@@ -229,6 +230,41 @@ def strip_params(au):
     return b"".join(parts)
 
 
+def param_sets(au):
+    """The SPS and PPS NALs of an Annex-B access unit, with 4-byte start codes (the inverse of strip_params)."""
+    parts = []
+    i = 0
+    starts = []
+    while True:
+        p = au.find(b"\x00\x00\x00\x01", i)
+        if p < 0:
+            break
+        starts.append(p)
+        i = p + 4
+    for k, s in enumerate(starts):
+        e = starts[k + 1] if k + 1 < len(starts) else len(au)
+        nal = au[s:e]
+        if len(nal) > 4 and (nal[4] & 0x1F) in (7, 8):
+            parts.append(nal)
+    return b"".join(parts)
+
+
+def variant_sps(au):
+    """The access unit with constraint_set2_flag flipped in its SPS: a second SPS variant for the very same
+    picture (decoders ignore the constraint flags), like the SPS of another encoder (--sps-switch-at)."""
+    out = bytearray(au)
+    i = 0
+    while True:
+        p = au.find(b"\x00\x00\x01", i)
+        if p < 0:
+            break
+        nal = p + 3
+        if nal + 2 < len(au) and (au[nal] & 0x1F) == 7:
+            out[nal + 2] ^= 0x20
+        i = nal
+    return bytes(out)
+
+
 class Phone(object):
     def __init__(self, a):
         self.a = a
@@ -248,6 +284,7 @@ class Phone(object):
         self.last_recovery = -1e9
         self.zero_sent = False
         self.prev_p = None
+        self.switched = False   # --sps-switch-at: serving the second SPS variant
         self.uuid = str(uuid.uuid4())
         self.n, self.e, self.d = parse_private_key(FIXTURE_PKCS1)
         pkcs1 = der_seq(der_int(self.n) + der_int(self.e))
@@ -549,6 +586,16 @@ class Phone(object):
                     self.prev_p = au
                 if "no-sps" in self.bugs and idr and self.served > 1:
                     au = strip_params(au)
+                if self.a.sps_switch_at and self.served >= self.a.sps_switch_at and not self.switched:
+                    if "sps-on-p" in self.bugs:
+                        if not idr:    # the second variant's SPS/PPS in front of a P-frame
+                            first_idr = next(f for f, k in self.frames if k)
+                            au = variant_sps(param_sets(first_idr)) + au
+                            self.switched = True
+                    elif idr:
+                        self.switched = True
+                if self.switched and idr:
+                    au = variant_sps(au)
             if "avcc" in self.bugs and au:
                 au = to_avcc(au)
         self.send(c, wlock, struct.pack("<i", len(au)) + au)
@@ -568,6 +615,8 @@ def main(argv=None):
     p.add_argument("--hb-interval", type=float, default=2.0)
     p.add_argument("--watchdog-tick", type=float, default=5.0, help="watchdog tick (Android: 5 s)")
     p.add_argument("--bug", action="append", default=[], choices=sorted(BUGS))
+    p.add_argument("--sps-switch-at", type=int, default=0, metavar="N",
+                   help="from the first IDR at or after served frame N, serve a second SPS variant (an encoder switch)")
     p.add_argument("-q", "--quiet", action="store_true")
     a = p.parse_args(argv)
     a.ports = [int(x) for x in a.ports.split(",")]

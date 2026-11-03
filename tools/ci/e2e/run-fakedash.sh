@@ -10,6 +10,9 @@
 # screenshots, app-log.txt / app-status.json / app.h264 (the app's Documents dumps), app-std*.log,
 # frames/dash_first.png + dash_NN.jpg (evenly spaced) + dash_last.png (decoded from what the fake
 # dash received), frames/app_first.png (decoded from the app-side wire dump) and result.env.
+# Scenario `locked` (a simulated phone lock: the app switches encoders) also writes
+# frames/dash_variant_N.png (5 frames after SPS/PPS variant N first reached the dash) and
+# frames/headers.txt (the SPS/PPS headers ffmpeg parsed, `fakedash.py --trace-headers`).
 
 UDID=$1
 BUNDLE=$2
@@ -27,7 +30,11 @@ xcrun simctl terminate "$UDID" "$BUNDLE" > /dev/null 2>&1 || true
 sleep 1
 
 EXTRA=()
-if command -v ffprobe > /dev/null && command -v ffmpeg > /dev/null; then EXTRA=(--decode); fi
+if command -v ffprobe > /dev/null && command -v ffmpeg > /dev/null; then
+  EXTRA=(--decode)
+  # The SPS/PPS of both encoders as ffmpeg parsed them (scenario locked).
+  if [ "$SCENARIO" = locked ]; then EXTRA+=(--trace-headers "$D/frames/headers.txt"); fi
+fi
 # shellcheck disable=SC2206
 [ -n "${FAKEDASH_ARGS:-}" ] && EXTRA+=($FAKEDASH_ARGS)
 
@@ -114,6 +121,27 @@ if command -v ffmpeg > /dev/null && [ -s "$D/dash.h264" ]; then
       ffmpeg -hide_banner -loglevel error -f h264 -i "$D/dash.h264" -vf "select=eq(n\,$idx)" -fps_mode vfr \
         -frames:v 1 "$D/frames/$name.png" >> "$D/frames/ffmpeg.log" 2>&1
       echo "frame mark $name: frame $idx of $total"
+    done
+  fi
+  # Scenario locked: one picture per SPS/PPS variant (one per encoder that fed the dash), 5 frames after
+  # it first reached the dash (frame indices of the whole stream: the sessions follow each other).
+  if [ "$SCENARIO" = locked ] && [ -s "$D/summary.json" ] && [ "$total" -gt 0 ]; then
+    variants=$(python3 -c '
+import json, sys
+s = json.load(open(sys.argv[1]))
+offset, n = 0, 0
+for ss in s.get("sessions") or []:
+    for v in ss.get("sps_variants") or []:
+        n += 1
+        print(n, offset + v["first_frame"] + 4)
+    offset += ss.get("frames") or 0
+' "$D/summary.json" 2>/dev/null)
+    echo "$variants" | while read -r n idx; do
+      [ -z "$n" ] && continue
+      [ "$idx" -ge "$total" ] && idx=$(( total - 1 ))
+      ffmpeg -hide_banner -loglevel error -f h264 -i "$D/dash.h264" -vf "select=eq(n\,$idx)" -fps_mode vfr \
+        -frames:v 1 "$D/frames/dash_variant_$n.png" >> "$D/frames/ffmpeg.log" 2>&1
+      echo "SPS variant $n: frame $idx of $total"
     done
   fi
 fi

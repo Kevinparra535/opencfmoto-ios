@@ -78,6 +78,7 @@ listar el servicio; comprueba que el iPhone y el Mac están en la misma subred.
 | `stall` | `cfdl16` | transmite, **deja de pedir fotogramas 12 s** (`--stall-seconds`) con los sockets abiertos y luego reanuda; informa si el *watchdog* del teléfono (> 8 s sin fotograma, tic de 5 s) cortó y re‑sondeó | 4 antes y después |
 | `touch` | `mt800` | inyecta `cmd 32` (input‑controls §2/§4.5): toques en esquinas y centro, arrastre con recontacto, **contacto fantasma** y pellizco con dos dedos (`--touch-fuzz` añade cuerpos inválidos) | 6 |
 | `music` | `cfdl16` | como `cfdl16`, más largo: la app con `-e2eMusic` abre la hoja Música, pasa de canción, pausa y la cierra mientras se transmite | 30 |
+| `locked` | `cfdl16` | como `cfdl16`, a través de un bloqueo simulado del iPhone (la app con `-e2eBackgroundCycle 15:30 -e2eBackgroundEncoder vtsw` cambia de codificador): anota cada SPS/PPS distinto, exige al menos dos [LOCKED_NO_SWITCH] y cada cambio en un IDR [SWITCH_NOT_AT_IDR]; con `--decode`, decodificación estricta | 60 |
 
 Cualquier escenario acepta `--dash cfdl16|cfdl26|mt800`.
 
@@ -121,11 +122,22 @@ Cualquier escenario acepta `--dash cfdl16|cfdl26|mt800`.
   probe durante una sesión viva [PROBE_DURING_SESSION]; `phoneUUID`/`pubkey` que cambian entre
   reconexiones [IDENTITY_CHANGED]; *watchdog* prematuro [WATCHDOG_EARLY]; sin re‑sondeo
   [NO_REPROBE]; con `--decode`, decodificación limpia con `ffmpeg` y resolución [DECODE].
+- **Variantes de SPS/PPS** (todos los escenarios): cada par SPS + PPS distinto se anota en
+  `sps_variants` de la sesión (`hex`, `pps_hex`, `first_frame`, `frames`, `profile`, `level`,
+  `constraints`, `poc_type`, `refs`, `log2_max_frame_num`, `vui`, `reorder`, tamaño) y en el log
+  (`SPS #n at frame k: …`); las reglas del SPS se aplican a cada una. Solo en `locked`: menos de dos
+  variantes en toda la ejecución [LOCKED_NO_SWITCH] (el bloqueo simulado nunca llevó un segundo
+  codificador al tablero; también pasa si los dos escriben el mismo SPS/PPS byte a byte: el log de la
+  app dice cuál), un cambio de variante fuera de un IDR [SWITCH_NOT_AT_IDR], y `--decode` decodifica
+  con `-xerror -err_detect +crccheck+bitstream+buffer+explode` (`decodable`; la pasada normal queda
+  como `lenient_decodable`). `--trace-headers F` guarda los SPS/PPS que leyó `ffmpeg -bsf:v
+  trace_headers` cada vez que cambian (el primero y cada cambio de codificador), con la primera
+  cabecera de *slice* de ese fotograma y su número.
 
 ### Opciones útiles
 
 `--transcript F.jsonl` (cada trama en ambos sentidos), `--summary-json F.json`, `--out-h264 F`,
-`--decode`, `--ffplay`, `--strict` (código de salida 1 si hay violaciones), `--lenient`,
+`--decode`, `--trace-headers F`, `--ffplay`, `--strict` (código de salida 1 si hay violaciones), `--lenient`,
 `--reject-probes N` (prueba los reintentos de probe), `--fps`, `--reply-timeout`,
 `--no-dash-heartbeat`, `--silence-teardown 7`, `--burst-mode sequential`, `--start-h264`,
 `--bind`, `--probe-port`, `--phone-ports`, `--connect-back-ip`, `-v` / `-q`.
@@ -162,6 +174,9 @@ toques §2.4, Annex‑B). Las de extremo a extremo lanzan `fakedash.py` contra `
 teléfono **mínimo** solo para probar el simulador: escucha, probe, respuestas del spec, fotogramas
 de `clips/*.h264`, latidos, watchdog y reconexión) en puertos libres altos (sin candado), e inyectan
 fallos (`phone_smoke.py --bug …`) para comprobar que cada validador los detecta.
+`phone_smoke.py --sps-switch-at N` cambia a un segundo SPS (otros *constraint flags*, la misma
+imagen) desde el primer IDR a partir del fotograma N, como un cambio de codificador; con
+`--bug sps-on-p` el cambio llega en un fotograma P (escenario `locked`).
 
 Los clips de prueba se generaron así (`clips/`, < 300 KB cada uno):
 
@@ -263,6 +278,7 @@ the service; check that the iPhone and the Mac are on the same subnet.
 | `stall` | `cfdl16` | streams, **stops pulling for 12 s** (`--stall-seconds`) with every socket open, then resumes; reports whether the phone watchdog (> 8 s without a frame, 5 s tick) dropped and re-probed | 4 before and after |
 | `touch` | `mt800` | injects `cmd 32` (input-controls §2/§4.5): corner/centre taps, drag with a re-acquired contact, a **ghost second contact** and a two-finger pinch (`--touch-fuzz` adds invalid bodies) | 6 |
 | `music` | `cfdl16` | like `cfdl16`, longer: the app run with `-e2eMusic` opens the Music sheet, skips a song, pauses and closes it while streaming | 30 |
+| `locked` | `cfdl16` | like `cfdl16`, across a simulated iPhone lock (the app run with `-e2eBackgroundCycle 15:30 -e2eBackgroundEncoder vtsw` switches encoders): records every distinct SPS/PPS, requires at least two [LOCKED_NO_SWITCH] and every switch at an IDR [SWITCH_NOT_AT_IDR]; with `--decode`, a strict decode | 60 |
 
 Every scenario accepts `--dash cfdl16|cfdl26|mt800`.
 
@@ -306,11 +322,21 @@ Every scenario accepts `--dash cfdl16|cfdl26|mt800`.
   live session [PROBE_DURING_SESSION]; `phoneUUID`/`pubkey` changing across reconnects
   [IDENTITY_CHANGED]; premature watchdog [WATCHDOG_EARLY]; no re-probe [NO_REPROBE]; with `--decode`,
   clean `ffmpeg` decode and resolution [DECODE].
+- **SPS/PPS variants** (every scenario): each distinct SPS + PPS pair is recorded in the session's
+  `sps_variants` (`hex`, `pps_hex`, `first_frame`, `frames`, `profile`, `level`, `constraints`,
+  `poc_type`, `refs`, `log2_max_frame_num`, `vui`, `reorder`, size) and logged (`SPS #n at frame k:
+  …`); the SPS rules apply to each. `locked` only: fewer than two variants over the run
+  [LOCKED_NO_SWITCH] (the simulated lock never put a second encoder on the wire; two encoders that
+  write the same SPS/PPS byte for byte look the same: the app log tells which), a variant change that
+  is not at an IDR [SWITCH_NOT_AT_IDR], and `--decode` decodes with `-xerror -err_detect
+  +crccheck+bitstream+buffer+explode` (`decodable`; the normal pass stays as `lenient_decodable`).
+  `--trace-headers F` saves the SPS/PPS that `ffmpeg -bsf:v trace_headers` read each time they change
+  (the first one and every encoder switch), with the first slice header of that frame and its number.
 
 ### Useful options
 
 `--transcript F.jsonl` (every frame, both directions), `--summary-json F.json`, `--out-h264 F`,
-`--decode`, `--ffplay`, `--strict` (exit 1 on violations), `--lenient`, `--reject-probes N` (exercises
+`--decode`, `--trace-headers F`, `--ffplay`, `--strict` (exit 1 on violations), `--lenient`, `--reject-probes N` (exercises
 the probe retries), `--fps`, `--reply-timeout`, `--no-dash-heartbeat`, `--silence-teardown 7`,
 `--burst-mode sequential`, `--start-h264`, `--bind`, `--probe-port`, `--phone-ports`,
 `--connect-back-ip`, `-v` / `-q`. Exit codes: 0 done, 1 violations with `--strict`, 2 setup error
@@ -354,7 +380,9 @@ recovered message §9.3, scoring table §12.6, clock §13.2, RLY 17/49/65/97/113
 End-to-end tests run `fakedash.py` against `phone_smoke.py` (a **minimal** phone only meant to test
 the simulator: listeners, probe, spec replies, frames from `clips/*.h264`, heartbeats, watchdog,
 reconnect loop) on free high ports (no lock needed), and inject bugs (`phone_smoke.py --bug …`) to
-prove each validator fires.
+prove each validator fires. `phone_smoke.py --sps-switch-at N` switches to a second SPS (other
+constraint flags, the same picture) from the first IDR at or after frame N, like an encoder switch;
+with `--bug sps-on-p` the switch comes on a P-frame (scenario `locked`).
 
 Test clips (`clips/`, < 300 KB each) were generated with:
 

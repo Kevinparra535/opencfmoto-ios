@@ -143,7 +143,18 @@ public final class ConnectionModel {
     /// A Connect / Mirror session exists (joining, linking, streaming, reconnecting, parked, or an
     /// .error phase whose link keeps re-arming). The big button must offer Stop whenever this is true,
     /// not only when `phase.showsStop` (review finding CL-1).
-    public private(set) var isSessionActive = false
+    public private(set) var isSessionActive = false {
+        didSet { onSessionActiveChange?(isSessionActive) }
+    }
+
+    /// ADDITION (locked iPhone, Phase 0): the session's bike Wi-Fi is gone right now — lost and not
+    /// re-acquired yet, including while the session is parked waiting for the bike (`wifi=down` in the
+    /// `[lock]` line). Read-only.
+    public var isBikeWifiLost: Bool { wifiLostAt != nil }
+
+    /// ADDITION (locked iPhone, Phase 0): called (main actor) whenever a session starts (true) or ends
+    /// (false). AppModel clears the unclean-background-exit marker at the session end.
+    @ObservationIgnored var onSessionActiveChange: ((Bool) -> Void)?
 
     // MARK: Internal state
 

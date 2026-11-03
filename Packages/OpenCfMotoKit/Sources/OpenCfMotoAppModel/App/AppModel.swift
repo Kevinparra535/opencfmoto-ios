@@ -60,9 +60,14 @@ public final class AppModel {
     @ObservationIgnored var inboxDirectory: URL? = AppModel.defaultInboxDirectory()
     @ObservationIgnored private var started = false
     @ObservationIgnored private var bannerTask: Task<Void, Never>?
-    /// Saves the session log every `sessionLogInterval` while a Connect / Mirror session runs.
+    /// Saves the session log every `sessionLogInterval` while a Connect / Mirror session runs (and logs
+    /// the `[lock]` line then while the phone is locked during an own-UI session).
     @ObservationIgnored private var sessionLogTask: Task<Void, Never>?
     @ObservationIgnored var sessionLogInterval: TimeInterval = 30
+    /// Locked iPhone (Phase 0): the scene phase last reported (`.active` at launch, not logged).
+    @ObservationIgnored private(set) var scenePhase: AppScenePhase = .active
+    /// Monotonic time (`services.clock`) the scene went to `.background`; nil outside the background.
+    @ObservationIgnored private var backgroundSince: TimeInterval?
 
     public init(services: AppServices) {
         let core = AppCore(services: services)
@@ -91,6 +96,7 @@ public final class AppModel {
         logs.hydrate()
         startSessionLogSaver()
         Log.i("APP", "OpenCfMoto iOS \(system.appVersion) (\(system.buildNumber)) \u{00B7} \(system.deviceModel) \(system.systemVersion) \u{00B7} \(system.flavor.rawValue) build \u{00B7} lang=\(core.language.rawValue)")
+        reportUncleanBackgroundExit()
         let core = self.core
         Task.detached(priority: .utility) {
             do {
@@ -109,6 +115,7 @@ public final class AppModel {
     }
 
     public func scenePhaseChanged(_ phase: AppScenePhase) {
+        noteScenePhase(phase) // L14 and the unclean-exit marker, before the sub-models react
         ride.scenePhaseChanged(phase)
         connection.scenePhaseChanged(phase)
         music.scenePhaseChanged(phase)
@@ -142,9 +149,82 @@ public final class AppModel {
             while !Task.isCancelled {
                 await sleepSeconds(interval)
                 guard !Task.isCancelled, let self else { return }
+                self.logLockStatus() // before the save: the saved log ends with it
                 if self.connection.isSessionActive { self.logs.persistSession(synchronously: false) }
             }
         }
+    }
+
+    // MARK: - Locked iPhone diagnostics (Phase 0: L14, L15, L16)
+
+    /// L14 on every scene-phase change, and the unclean-background-exit marker: set at `.background`
+    /// during a session, cleared at `.active` (and at the session end and at launch).
+    private func noteScenePhase(_ phase: AppScenePhase) {
+        let old = scenePhase
+        guard phase != old else { return }
+        scenePhase = phase
+        let now = core.services.clock.now()
+        let away = old == .background ? backgroundSince.map { now - $0 } : nil
+        Log.i("APP", LockDiagnostics.sceneChange(from: old, to: phase, backgroundSeconds: away, context: lockSessionContext))
+        switch phase {
+        case .background:
+            backgroundSince = now
+            if connection.isSessionActive {
+                core.services.keyValueStore.set(core.services.now().timeIntervalSince1970,
+                                                forKey: LockDiagnostics.backgroundSessionMarkerKey)
+            }
+        case .active:
+            backgroundSince = nil
+            clearBackgroundMarker()
+        case .inactive:
+            backgroundSince = nil
+        }
+    }
+
+    /// L14's context: what the session is doing right now.
+    private var lockSessionContext: String {
+        LockDiagnostics.sessionContext(isSessionActive: connection.isSessionActive, mode: connection.mode,
+                                       phase: connection.phase)
+    }
+
+    /// L15 (`[lock]`), from the session-log saver loop: only while the scene is `.background` and an
+    /// own-UI session runs (streaming or not: `link=reconnecting wifi=down` is what a lost link looks like).
+    func logLockStatus() {
+        guard scenePhase == .background, connection.isSessionActive, connection.mode == .dashUI else { return }
+        let services = core.services
+        let now = services.clock.now()
+        let wall = services.now().timeIntervalSince1970
+        let system = services.system
+        let status = LockDiagnostics.LockStatus(
+            lockedSeconds: backgroundSince.map { now - $0 } ?? 0,
+            link: connection.phase,
+            bikeWifiLost: connection.isBikeWifiLost,
+            projection: services.projection.stats,
+            gpsAgeSeconds: ride.lastFix.map { wall - Double($0.timeMs) / 1000 },
+            headingAgeSeconds: ride.lastHeadingAt.map { now - $0 },
+            battery: system.batteryStatus,
+            thermal: system.thermalLevel,
+            lowPowerMode: system.isLowPowerModeEnabled)
+        Log.i("APP", LockDiagnostics.lockStatus(status))
+    }
+
+    /// At launch: the previous run left the marker, so it ended in the background during a session (iOS
+    /// stopped it, or the rider swiped it away): L16 first, then the marker goes.
+    private func reportUncleanBackgroundExit() {
+        let store = core.services.keyValueStore
+        let key = LockDiagnostics.backgroundSessionMarkerKey
+        guard let stamp = store.double(forKey: key) else { return }
+        if stamp.isFinite {
+            Log.w("APP", LockDiagnostics.uncleanBackgroundExit(backgroundedAt: Date(timeIntervalSince1970: stamp),
+                                                               timeZone: logs.timeZone))
+        }
+        store.removeValue(forKey: key)
+    }
+
+    private func clearBackgroundMarker() {
+        let store = core.services.keyValueStore
+        let key = LockDiagnostics.backgroundSessionMarkerKey
+        if store.double(forKey: key) != nil { store.removeValue(forKey: key) }
     }
 
     public func showBanner(_ text: String) {
@@ -188,6 +268,10 @@ public final class AppModel {
         }
         permissions.onOnboardingCompleted = { [weak connection] in connection?.maybeAutoConnect() }
         logs.diagnostics = { [weak self] in self?.problemDiagnostics() ?? [:] }
+        // Locked iPhone (Phase 0): a session that ended can no longer end "during a dash session".
+        connection.onSessionActiveChange = { [weak self] active in
+            if !active { self?.clearBackgroundMarker() }
+        }
         wireMusic()
     }
 
