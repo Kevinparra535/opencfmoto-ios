@@ -6,6 +6,8 @@
 // to End and ended navigation without a confirmation (likewise ⏮ then ▶ ★, and ◀ ★ ★). A song gone for
 // good still closes the sheet, 2 s later, onto Recenter as F2 says; arrival, preview and navigation
 // start still close it at once, and the idle / near-turn rules still count from the rider's last input.
+// (The app holds the song through one reading without one too — MusicModel's `trackGapGrace` — so the
+// dash sees a vanish only once that outlasted 2 s; these tests feed the dash model directly.)
 import Foundation
 import XCTest
 @testable import OpenCfMotoCore

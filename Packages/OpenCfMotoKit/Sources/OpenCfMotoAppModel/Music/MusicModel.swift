@@ -15,6 +15,11 @@
 //   Music app's own fading audio as "other audio", and one short sound is no reason to close the
 //   rider's Music sheet. A song already silent, or other audio already playing, when observing
 //   starts counts as "long ago": Spotify at dash start still hides a paused song at once.
+// - A reading with no song right after one with a song (the Music app between two songs, typically
+//   right after ⏮ / ⏭) keeps presenting that song, as last seen, for `trackGapGrace` (review round 3,
+//   R3-FOCUS-1): a one-reading gap never reaches the dash, so the tile, the open Music sheet and the
+//   menu's "Music" stay where the rider's next blind ★ or ▶ ★ expects them. A gap that lasts hides the
+//   song; the F1 rule, the artwork and the hand-over rules act on what is presented.
 // - Artwork per song: placeholder at once, then the in-memory cache (4 songs) or attempts at 0, +1,
 //   +3 and +10 s after the song became current; an image is registered BEFORE its id is published
 //   and images no longer referenced are removed AFTER the next dash model went out.
@@ -75,6 +80,9 @@ public final class MusicModel {
     /// F1: the wait until the end of the grace — separate from `sleeper`, so the waits tests record
     /// there stay the artwork retries and the command re-reads (tests end this one by hand).
     @ObservationIgnored var graceSleeper: @MainActor (TimeInterval) async -> Void = { await sleepSeconds($0) }
+    /// R3-FOCUS-1: a reading with no song right after one with a song keeps presenting that song this
+    /// long (the end is re-evaluated once, through `graceSleeper`, like F1's grace).
+    static let trackGapGrace: TimeInterval = 2
 
     /// The dash model must be rebuilt (RideModel.setNeedsModelUpdate coalesces).
     @ObservationIgnored var onDashChange: (() -> Void)?
@@ -111,6 +119,16 @@ public final class MusicModel {
     @ObservationIgnored private var otherSince: TimeInterval?
     /// F1: the one re-evaluation at the end of the grace (every reading reschedules or cancels it).
     @ObservationIgnored private var graceTask: Task<Void, Never>?
+    /// R3-FOCUS-1: the last reading with a song and when the readings lost it. It is presented in place
+    /// of the readings without one until `trackGapGrace` is over; an expired hold stays (inert) until a
+    /// song is back, so more readings without one never restart it. nil while the latest reading has a
+    /// song, or when none was seen since observing started.
+    @ObservationIgnored private var trackGap: (last: MusicSnapshot, since: TimeInterval)?
+    /// R3-FOCUS-1: the one re-evaluation at the end of the hold (a reading with a song cancels it).
+    @ObservationIgnored private var trackGapTask: Task<Void, Never>?
+    /// What F1, the artwork and the hand-over rules last acted on (`presented`, at the last reading or at
+    /// the end of a hold).
+    @ObservationIgnored private var lastPresented: MusicSnapshot = .empty
 
     public init(core: AppCore) {
         self.core = core
@@ -156,23 +174,36 @@ public final class MusicModel {
     // MARK: - Dash (RideModel / AppModel)
 
     /// `DashModel.music` (contract §3.1): nil unless enabled, authorized, observing and a song is
-    /// loaded — and a song the Music app is not playing is hidden once another app's audio played
-    /// through the F1 grace (it would be stale: Spotify plays).
+    /// presented (`presented`: the loaded one, or the last one through a short gap) — and a song the
+    /// Music app is not playing is hidden once another app's audio played through the F1 grace (it would
+    /// be stale: Spotify plays).
     var dashNowPlaying: DashNowPlaying? {
-        guard isEnabled, authorization == .authorized, isObserving, let track = snapshot.track else { return nil }
-        guard !isHiddenForOtherAudio(at: core.services.clock.now()) else { return nil }
-        let playing = snapshot.state == .playing
+        guard isEnabled, authorization == .authorized, isObserving else { return nil }
+        let now = core.services.clock.now()
+        let reading = presented(at: now)
+        guard let track = reading.track, !isHiddenForOtherAudio(reading, at: now) else { return nil }
+        let playing = reading.state == .playing
         let artworkId = published.flatMap { $0.trackID == track.id ? $0.imageID : nil }
         return DashNowPlaying(title: track.title, artist: track.artist, album: track.album, artworkId: artworkId,
                               state: playing ? .playing : .paused, duration: track.duration,
-                              position: snapshot.position, positionAt: snapshot.sampledAt,
-                              rate: playing ? snapshot.rate : 0)
+                              position: reading.position, positionAt: reading.sampledAt,
+                              rate: playing ? reading.rate : 0)
+    }
+
+    /// R3-FOCUS-1: what the dash presents — the latest reading, or through a short gap (`trackGapGrace`
+    /// from the first reading without a song) the last reading with one, as last seen, with the latest
+    /// reading's other-audio flag: F1 applies to it as to any reading.
+    private func presented(at now: TimeInterval) -> MusicSnapshot {
+        guard snapshot.track == nil, let gap = trackGap, now - gap.since < Self.trackGapGrace else { return snapshot }
+        var held = gap.last
+        held.otherAudioPlaying = snapshot.otherAudioPlaying
+        return held
     }
 
     /// D7 with the F1 grace: the Music app makes no sound, another app's does, and that has lasted
     /// `otherAudioGrace` since the later of "went silent" and "other audio started".
-    private func isHiddenForOtherAudio(at now: TimeInterval) -> Bool {
-        guard !Self.isAudible(snapshot.state), snapshot.otherAudioPlaying else { return false }
+    private func isHiddenForOtherAudio(_ reading: MusicSnapshot, at now: TimeInterval) -> Bool {
+        guard !Self.isAudible(reading.state), reading.otherAudioPlaying else { return false }
         return now - graceAnchor >= Self.otherAudioGrace
     }
 
@@ -202,14 +233,15 @@ public final class MusicModel {
             return
         }
         let action: TransportAction
+        let now = core.services.clock.now()
+        let reading = presented(at: now) // what the rider sees: through a short gap, the song held on the dash
         switch command {
         case .playPause:
-            action = snapshot.state == .playing ? .pause : .play
+            action = reading.state == .playing ? .pause : .play
         case .next:
             action = .next
         case .previous:
-            let now = core.services.clock.now()
-            let position = dashNowPlaying?.position(at: now) ?? snapshot.extrapolatedPosition(at: now)
+            let position = dashNowPlaying?.position(at: now) ?? reading.extrapolatedPosition(at: now)
             action = position > 3 ? .beginning : .previous
         }
         Log.i("MUSIC", "command \(action.rawValue) (from \(fromDash ? "dash" : "phone"))")
@@ -250,6 +282,7 @@ public final class MusicModel {
         guard wanted != isObserving else { return }
         let port = core.services.music
         resetGrace() // F1: whatever was seen before is "long ago" for the next observation
+        resetTrackGap() // R3-FOCUS-1: no song is held across observations
         if wanted {
             isObserving = true
             transitionsArmed = false
@@ -279,7 +312,6 @@ public final class MusicModel {
         guard reading != old || first else { return }
         transitionsArmed = true
         snapshot = reading
-        noteAudio(reading, old: old, first: first)
         // Also when only `other` flips (F1): the field log then shows how long iOS still reported
         // the Music app's own audio after a pause.
         if first || reading.track?.id != old.track?.id || reading.state != old.state
@@ -287,6 +319,19 @@ public final class MusicModel {
             let token = reading.track.map { MusicTrackID.logToken($0.id) } ?? "none"
             Log.i("MUSIC", "state \(reading.state.rawValue) track=\(token) other=\(reading.otherAudioPlaying ? 1 : 0)")
         }
+        noteTrackGap(reading, old: old, first: first)
+        present(first: first)
+    }
+
+    /// Acts on what the dash presents now (`presented`): F1's times, the artwork, the hand-over rules
+    /// (contract R2 / R3) and the dash model. Through a short gap the presented song is the held one, so
+    /// none of them sees the gap: no placeholder flash, no "Apple Music took the buttons" when the next
+    /// song starts, no reclaim of the buttons for a stop that is none.
+    private func present(first: Bool) {
+        let reading = presented(at: core.services.clock.now())
+        let old = lastPresented
+        lastPresented = reading
+        noteAudio(reading, old: old, first: first)
         let songChanged = reading.track?.id != artworkTrackID
         if songChanged { startArtwork(for: reading.track) }
         let before = settledState
@@ -300,6 +345,56 @@ public final class MusicModel {
         }
         onDashChange?()
         if songChanged { scheduleImageCleanup() } // the previous song's image, once the model moved on
+    }
+
+    // MARK: - A reading without a song (R3-FOCUS-1)
+
+    /// A reading without a song right after one with a song starts the hold — never on the first reading
+    /// after observing starts (nothing was presented yet); a reading with a song ends it. More readings
+    /// without one change nothing: the hold counts from the first of them.
+    private func noteTrackGap(_ reading: MusicSnapshot, old: MusicSnapshot, first: Bool) {
+        if reading.track != nil {
+            trackGap = nil
+        } else if !first, old.track != nil {
+            trackGap = (old, core.services.clock.now())
+            Log.i("MUSIC", "no song in the reading: the last one stays on the dash for \(Int(Self.trackGapGrace)) s")
+        }
+        scheduleTrackGapEnd()
+    }
+
+    /// While a song is presented only thanks to the hold: ONE re-evaluation at its end, like F1's. The
+    /// port reports changes only, so a player that simply stays empty would never take the song off the
+    /// dash without it: read the player again; still no song, the hold is over — the artwork goes, a real
+    /// stop is a pause for R3, and the dash model is rebuilt.
+    private func scheduleTrackGapEnd() {
+        trackGapTask?.cancel()
+        trackGapTask = nil
+        guard isObserving, snapshot.track == nil, let gap = trackGap else { return }
+        let wait = gap.since + Self.trackGapGrace - core.services.clock.now()
+        guard wait > 0 else { return } // over: nothing is held any more
+        let sleep = graceSleeper
+        trackGapTask = Task { @MainActor [weak self] in
+            await sleep(wait)
+            guard !Task.isCancelled, let self, self.isObserving else { return }
+            self.trackGapTask = nil
+            self.core.services.music.refresh() // a reading with a song ends the hold by itself
+            if self.snapshot.track == nil, let gap = self.trackGap,
+               self.core.services.clock.now() - gap.since >= Self.trackGapGrace {
+                Log.i("MUSIC", "no song for \(Int(Self.trackGapGrace)) s: hidden")
+                self.present(first: false) // rebuilds the dash model
+            } else {
+                self.onDashChange?()
+                if self.trackGapTask == nil { self.scheduleTrackGapEnd() } // woke before the end
+            }
+        }
+    }
+
+    /// Observing turned on or off: nothing is held.
+    private func resetTrackGap() {
+        trackGapTask?.cancel()
+        trackGapTask = nil
+        trackGap = nil
+        lastPresented = .empty
     }
 
     // MARK: - Other audio grace (F1)
@@ -328,8 +423,10 @@ public final class MusicModel {
     private func scheduleGraceEnd() {
         graceTask?.cancel()
         graceTask = nil
-        guard isObserving, snapshot.track != nil, !Self.isAudible(snapshot.state), snapshot.otherAudioPlaying else { return }
-        let wait = graceAnchor + Self.otherAudioGrace - core.services.clock.now()
+        let now = core.services.clock.now()
+        let reading = presented(at: now)
+        guard isObserving, reading.track != nil, !Self.isAudible(reading.state), reading.otherAudioPlaying else { return }
+        let wait = graceAnchor + Self.otherAudioGrace - now
         guard wait > 0 else { return } // "long ago" (−∞) or over: already hidden
         let sleep = graceSleeper
         graceTask = Task { @MainActor [weak self] in
@@ -338,7 +435,9 @@ public final class MusicModel {
             self.graceTask = nil
             self.core.services.music.refresh() // a reading that changed reschedules or cancels by itself
             self.onDashChange?()
-            if self.isHiddenForOtherAudio(at: self.core.services.clock.now()) {
+            let now = self.core.services.clock.now()
+            let shown = self.presented(at: now)
+            if shown.track != nil, self.isHiddenForOtherAudio(shown, at: now) {
                 Log.i("MUSIC", "other audio for \(Int(Self.otherAudioGrace)) s: song hidden")
             } else if self.graceTask == nil {
                 self.scheduleGraceEnd() // woke before the end (the sleep's clock is not the uptime clock)
@@ -448,8 +547,9 @@ public final class MusicModel {
     }
 
     private func removeUnusedImages() {
-        // The current song's image stays while the tile is merely hidden (paused + other audio).
-        let current = snapshot.track?.id
+        // The current song's image stays while the tile is merely hidden (paused + other audio), and
+        // through a short gap (the song held on the dash, R3-FOCUS-1).
+        let current = lastPresented.track?.id
         let keep = isObserving ? published.flatMap { $0.trackID == current ? $0.imageID : nil } : nil
         for id in registeredImageIDs.sorted() where id != keep {
             core.services.projection.setDashImage(id: id, data: nil)

@@ -85,7 +85,8 @@ public final class DashUIController: @unchecked Sendable {
         public var musicSheetTurnDistanceM: Double? = 200
         public var musicSheetInputGrace: TimeInterval = 3
         /// iOS addition (music, review R3-FOCUS-1): an open Music sheet outlasts a song that goes away for at
-        /// most this long (one reading with no item between two songs), still drawn with the song it showed;
+        /// most this long (no item between two songs for longer than the app's own hold, a paused song the
+        /// app hid for another app's sound that stopped at once), still drawn with the song it showed;
         /// `tick` closes it (`.musicGone`) when the song stays gone. nil = it closes at once.
         public var musicSheetVanishGrace: TimeInterval? = 2
         public init() {}
@@ -629,8 +630,8 @@ public final class DashUIController: @unchecked Sendable {
         // when arrival starts (a preview / navigation start already closed every sheet above). A song
         // that went away may be back in a moment, and the rider's next ★ was meant for ⏯: never the
         // default item, End while navigating (F2). Arrival keeps its own rule below.
-        // R3-FOCUS-1: a song gone for a moment (one reading with no item between two songs) does not close
-        // the sheet: it stays open on the song it showed for `musicSheetVanishGrace` (`tick` closes it when
+        // R3-FOCUS-1: a song gone for a moment (no item between two songs, past the app's own hold) does not
+        // close the sheet: it stays open on the song it showed for `musicSheetVanishGrace` (`tick` closes it when
         // the song stays gone), so the rider's next ★, ▶ ★ or ◀ ★ still means ⏯, ⏭ or ⏮. Closed, the knob
         // would come back to the tile, from where ▶ wraps to End.
         let arrivalStarts = new.showsArrival && !prev.showsArrival

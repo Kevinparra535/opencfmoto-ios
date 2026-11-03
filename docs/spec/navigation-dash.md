@@ -1351,7 +1351,10 @@ artwork id, playing / paused, duration, and the position as a sample `position` 
 controller's `now` clock), the dash shows what the system Music app plays. Only Apple Music: iOS gives
 apps no access to other players. `music == nil` (feature off, no permission, nothing loaded, or a paused
 song while another app plays) → no tile, no menu entry, and an open sheet closes once that lasted 2 s
-(`Options.musicSheetVanishGrace`, see "Focus when a Music control vanishes").
+(`Options.musicSheetVanishGrace`, see "Focus when a Music control vanishes"). The app keeps the last
+song through a reading without one for 2 s (MusicModel `trackGapGrace`, review round 3): one reading with
+no item between two songs never reaches the dash, so the tile, the open sheet, the menu's "Music" and
+the focus stay put; a gap that lasts sets `music = nil`.
 
 **Now-playing tile** (`music.tile`, map screen, no sheet; free ride, navigating, preview, arrival). A
 square under the FAB column, right-aligned with it, 8 dp under the last FAB: min(64 dp, room), at least
@@ -1400,7 +1403,8 @@ no frame has applied yet counts too); HOME opens the menu.
 
 **Focus when a Music control vanishes** (fixes F2, R2-DASH-1). The song can go away for a moment (a
 paused song while another app plays, a stale "other audio" reading right after a pause, no item between
-songs) and with it the tile, the menu's "Music" or the open sheet. The handlebar focus then never falls
+songs for longer than the app's 2-s hold) and with it the tile, the menu's "Music" or the open sheet.
+The handlebar focus then never falls
 back to the default item — End while navigating, where the rider's next ★, meant for the tile, ⏯ or
 "Music", would end navigation without confirmation. `DashFocusPreference.musicGone` → the first listed of
 `fab.recenter` (map; ★ only recenters and the focus stays on the map, so repeated ★ meant for the tile or

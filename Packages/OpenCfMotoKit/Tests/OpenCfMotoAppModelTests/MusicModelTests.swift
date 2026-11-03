@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // MusicModel (Apple Music on the dash): opt-in + permission, when the Music app is followed, the
-// mapping to DashModel.music, the other-audio rule and its grace (review fix F1), the artwork
-// pipeline (order, retries, stale results, memory cache, cleanup), the dash commands, the hand-over
-// callbacks, diagnostics and log privacy (no titles, artists, albums or ids: F4).
+// mapping to DashModel.music, the other-audio rule and its grace (review fix F1), a reading without a
+// song (the last one held for 2 s, review round 3), the artwork pipeline (order, retries, stale
+// results, memory cache, cleanup), the dash commands, the hand-over callbacks, diagnostics and log
+// privacy (no titles, artists, albums or ids: F4).
 
 import Foundation
 import XCTest
@@ -160,6 +161,8 @@ final class MusicModelTests: XCTestCase {
         XCTAssertEqual(rig.model.dashNowPlaying?.rate, 1.5)
         XCTAssertEqual(rig.model.dashNowPlaying?.title, "Mountain Pass")
         port.emit(F.reading(nil, .playing, at: 1_020))
+        XCTAssertEqual(rig.model.dashNowPlaying?.title, "Mountain Pass", "R3-FOCUS-1: held for 2 s")
+        rig.clock.advance(2)
         XCTAssertNil(rig.model.dashNowPlaying, "nothing loaded / a Home Sharing item")
         let radio = MusicTrack(id: "h0123456789abcdef", title: "", duration: .nan)
         port.emit(F.reading(radio, .playing, at: 1_030))
@@ -366,6 +369,189 @@ final class MusicModelTests: XCTestCase {
         XCTAssertNil(rig.model.dashNowPlaying)
         await settle()
         XCTAssertEqual(rig.grace.requests, [3])
+    }
+
+    // MARK: A reading without a song (R3-FOCUS-1)
+
+    /// The Music app between two songs (typically right after ⏮ / ⏭): one reading without a song. The
+    /// dash keeps presenting the last one, as last seen — title, state, time, cover — and never hears of
+    /// the gap: every model it gets has a song.
+    @MainActor
+    func testAOneReadingGapBetweenTwoSongsNeverReachesTheDash() async {
+        let rig = MusicRig { _ in ScriptedMusic() }
+        let port = rig.scripted
+        port.artworkHandler = { id in id == "p1a" ? F.art(1) : F.art(2) }
+        rig.model.artworkAttemptDelays = [0]
+        port.pending = F.reading(F.ruta, .playing, position: 133, at: 1_000)
+        rig.model.setDashActive(true)
+        let covered = await eventually { rig.model.dashNowPlaying?.artworkId == "music.art.p1a" }
+        XCTAssertTrue(covered)
+        let before = rig.publications.count
+        rig.clock.advance(1)
+        port.emit(F.reading(nil, .stopped, at: 1_001)) // between two songs
+        let held = rig.model.dashNowPlaying
+        XCTAssertEqual(held?.title, F.ruta.title, "the last song, as last seen")
+        XCTAssertEqual(held?.state, .playing)
+        XCTAssertEqual(held?.artworkId, "music.art.p1a", "with its cover")
+        XCTAssertEqual(held?.position(at: 1_001), 134, "its time goes on as it did")
+        let waiting = await eventually { rig.grace.requests == [2] }
+        XCTAssertTrue(waiting, "one re-evaluation at the end of the hold: \(rig.grace.requests)")
+        await settle()
+        XCTAssertNotNil(rig.projection.dashImages["music.art.p1a"], "the cover stays registered")
+        rig.clock.advance(0.6)
+        port.emit(F.reading(F.pass, .playing, at: 1_001.6)) // the adapter's settle read: the next song
+        XCTAssertEqual(rig.model.dashNowPlaying?.title, "Mountain Pass")
+        let cancelled = await eventually { rig.grace.pendingCount == 0 }
+        XCTAssertTrue(cancelled, "a song again: nothing to re-evaluate")
+        let next = await eventually { rig.model.dashNowPlaying?.artworkId == "music.art.s100000002" }
+        XCTAssertTrue(next)
+        XCTAssertTrue(rig.publications.dropFirst(before).allSatisfy { $0.shown }, "no dash model without a song")
+        XCTAssertEqual(port.refreshes, 0, "the cancelled re-evaluation read nothing")
+    }
+
+    @MainActor
+    func testAGapLongerThanTheHoldHidesTheSongAtItsEnd() async {
+        let capture = LogCapture()
+        defer { capture.stop() }
+        let rig = MusicRig { _ in ScriptedMusic() }
+        let port = rig.scripted
+        port.artworkHandler = { _ in F.art(1) }
+        rig.model.artworkAttemptDelays = [0]
+        port.pending = F.reading(F.ruta, .playing, at: 1_000)
+        rig.model.setDashActive(true)
+        let covered = await eventually { rig.model.dashNowPlaying?.artworkId == "music.art.p1a" }
+        XCTAssertTrue(covered)
+        port.emit(F.reading(nil, .stopped, at: 1_000))
+        let waiting = await eventually { rig.grace.requests == [2] }
+        XCTAssertTrue(waiting)
+        rig.clock.advance(1.9)
+        XCTAssertEqual(rig.model.dashNowPlaying?.title, F.ruta.title, "1.9 s: still held")
+        let over = await rig.endGrace(after: 0.1)
+        XCTAssertTrue(over, "the port reports changes only: the model re-evaluates by itself")
+        XCTAssertEqual(port.refreshes, 1, "the player is read again first")
+        XCTAssertNil(rig.model.dashNowPlaying, "no song for 2 s: off the dash")
+        XCTAssertEqual(rig.publications.last?.shown, false, "the dash hears about it")
+        let removed = await eventually { rig.projection.dashImages.isEmpty }
+        XCTAssertTrue(removed, "its cover goes once the dash moved on")
+        let music = capture.messages(tag: "MUSIC")
+        XCTAssertTrue(music.contains("no song in the reading: the last one stays on the dash for 2 s"), "\(music)")
+        XCTAssertTrue(music.contains("no song for 2 s: hidden"), "\(music)")
+        port.emit(F.reading(F.ruta, .playing, at: 1_005)) // the song back later
+        XCTAssertEqual(rig.model.dashNowPlaying?.artworkId, "music.art.p1a", "at once, from memory")
+    }
+
+    @MainActor
+    func testTheHoldNeverStartsAnObservationAndCountsFromTheFirstEmptyReading() async {
+        let rig = MusicRig { _ in ScriptedMusic() }
+        let port = rig.scripted
+        rig.model.artworkAttemptDelays = [0]
+        port.pending = F.reading(nil, .stopped) // nothing loaded when the dash goes live
+        rig.model.setDashActive(true)
+        XCTAssertNil(rig.model.dashNowPlaying, "the first reading: nothing was presented, nothing is held")
+        await settle()
+        XCTAssertEqual(rig.grace.requests, [])
+        port.emit(F.reading(F.ruta, .playing, at: 1_000))
+        port.emit(F.reading(nil, .stopped, at: 1_000)) // the hold starts now (1000)
+        rig.clock.advance(1.5)
+        port.emit(F.reading(nil, .stopped, at: 1_001.5, other: true)) // another reading without a song
+        XCTAssertEqual(rig.model.dashNowPlaying?.title, F.ruta.title)
+        rig.clock.advance(0.5)
+        XCTAssertNil(rig.model.dashNowPlaying, "2 s after the first reading without a song, not after the last")
+        port.emit(F.reading(nil, .stopped, at: 1_002.5)) // more of them never restart it
+        XCTAssertNil(rig.model.dashNowPlaying)
+    }
+
+    @MainActor
+    func testObservingOffAndOnForgetsTheHold() async {
+        let rig = MusicRig { _ in ScriptedMusic() }
+        let port = rig.scripted
+        rig.model.artworkAttemptDelays = [0]
+        port.pending = F.reading(F.ruta, .playing)
+        rig.model.setDashActive(true)
+        port.emit(F.reading(nil, .stopped, at: 1_001))
+        let waiting = await eventually { rig.grace.pendingCount == 1 }
+        XCTAssertTrue(waiting)
+        rig.model.setDashActive(false)
+        let cancelled = await eventually { rig.grace.pendingCount == 0 }
+        XCTAssertTrue(cancelled, "no re-evaluation while not observing")
+        XCTAssertEqual(port.refreshes, 0)
+        rig.model.setDashActive(true) // the player still has no song: a first reading, nothing held
+        XCTAssertNil(rig.model.dashNowPlaying)
+        await settle()
+        XCTAssertEqual(rig.grace.requests, [2], "no new hold")
+    }
+
+    /// The hand-over rules (contract R2 / R3) see what is presented: one reading without a song between
+    /// two playing songs is no pause (ControlsModel would claim the buttons back from the Music app) and,
+    /// when the next song plays, no start (the toast, the Music sheet closed); real ones around a gap
+    /// still count, and a gap that lasts after a playing song is a stop.
+    @MainActor
+    func testTheHandOverRulesNeverMisfireOnAGap() async {
+        let rig = MusicRig { _ in ScriptedMusic() }
+        let port = rig.scripted
+        rig.model.artworkAttemptDelays = [0]
+        port.pending = F.reading(F.ruta, .playing)
+        rig.model.setDashActive(true)
+        port.emit(F.reading(nil, .stopped, at: 1_001))
+        port.emit(F.reading(F.pass, .playing, at: 1_002))
+        XCTAssertEqual([rig.started, rig.paused], [0, 0], "between two playing songs: no hand-over")
+        port.emit(F.reading(nil, .stopped, at: 1_003))
+        port.emit(F.reading(F.pass, .paused, at: 1_004)) // paused from the lock screen meanwhile
+        XCTAssertEqual([rig.started, rig.paused], [0, 1], "a real pause across a gap")
+        port.emit(F.reading(nil, .paused, at: 1_005))
+        port.emit(F.reading(F.night, .playing, at: 1_006))
+        XCTAssertEqual([rig.started, rig.paused], [1, 1], "a real start across a gap")
+        port.emit(F.reading(nil, .stopped, at: 1_007))
+        XCTAssertEqual([rig.started, rig.paused], [1, 1])
+        let over = await rig.endGrace(after: 2)
+        XCTAssertTrue(over)
+        XCTAssertEqual([rig.started, rig.paused], [1, 2], "no song for 2 s after a playing one: a stop (R3)")
+    }
+
+    /// F1 applies to the held song as to any: a paused song whose other audio started before the gap is
+    /// hidden at the end of F1's grace, inside the hold; a playing one is never hidden for other audio.
+    @MainActor
+    func testTheOtherAudioRuleAppliesToTheHeldSong() async {
+        let rig = MusicRig { _ in ScriptedMusic() }
+        let port = rig.scripted
+        rig.model.artworkAttemptDelays = [0]
+        port.pending = F.reading(F.ruta, .paused, at: 1_000)
+        rig.model.setDashActive(true)
+        port.emit(F.reading(F.ruta, .paused, at: 1_000, other: true)) // Spotify starts at 1000
+        rig.clock.advance(2.5)
+        port.emit(F.reading(nil, .stopped, at: 1_002.5, other: true)) // the Music app drops its item
+        XCTAssertEqual(rig.model.dashNowPlaying?.state, .paused, "held, still inside F1's grace")
+        rig.clock.advance(0.5) // 1003: Spotify played 3 s
+        XCTAssertNil(rig.model.dashNowPlaying, "the held paused song is stale too (D7)")
+        let hidden = await eventually {
+            rig.grace.endWaits()
+            return rig.publications.last?.shown == false
+        }
+        XCTAssertTrue(hidden, "the dash hears about it at the end of F1's grace")
+
+        let rig2 = MusicRig { _ in ScriptedMusic() }
+        rig2.model.artworkAttemptDelays = [0]
+        rig2.scripted.pending = F.reading(F.ruta, .playing, other: true) // iOS counts its own sound
+        rig2.model.setDashActive(true)
+        rig2.scripted.emit(F.reading(nil, .stopped, at: 1_001, other: true))
+        rig2.clock.advance(1.9)
+        XCTAssertEqual(rig2.model.dashNowPlaying?.state, .playing, "a playing song, held: never stale")
+        await settle()
+        XCTAssertEqual(rig2.grace.requests, [2], "the hold's re-evaluation only: F1 has nothing to wait for")
+    }
+
+    /// The rider's ⏯ on the sheet during a gap means what the sheet shows: the held song plays, so it pauses.
+    @MainActor
+    func testACommandDuringTheHoldActsOnTheSongShown() async {
+        let rig = MusicRig { _ in ScriptedMusic() }
+        let port = rig.scripted
+        rig.model.artworkAttemptDelays = [0]
+        rig.model.refreshDelaysAfterCommand = []
+        port.pending = F.reading(F.ruta, .playing, position: 133, at: 1_000)
+        rig.model.setDashActive(true)
+        port.emit(F.reading(nil, .stopped, at: 1_000))
+        rig.model.perform(.playPause, fromDash: true)
+        XCTAssertEqual(port.commands, ["pause"], "the dash showed it playing")
     }
 
     // MARK: Artwork
@@ -587,7 +773,10 @@ final class MusicModelTests: XCTestCase {
         port.emit(F.reading(F.night, .playing, at: 1_100))
         XCTAssertEqual([rig.started, rig.paused], [2, 2])
         port.emit(F.reading(nil, .stopped, at: 1_110))
-        XCTAssertEqual([rig.started, rig.paused], [2, 3], "playing → stopped")
+        XCTAssertEqual([rig.started, rig.paused], [2, 2], "R3-FOCUS-1: one reading without a song is no stop")
+        let over = await rig.endGrace(after: 2)
+        XCTAssertTrue(over)
+        XCTAssertEqual([rig.started, rig.paused], [2, 3], "playing → stopped: no song came back for 2 s")
 
         // Observing again: the first reading is no transition, even if the state differs.
         rig.model.setDashActive(false)

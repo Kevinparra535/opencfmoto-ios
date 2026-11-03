@@ -6,8 +6,9 @@
 // F1 grace) and what a shared log or problem report says about the songs (F4). The last sections
 // ride the review repros end to end while navigating: no stale or vanished Music control ever hands
 // the rider's ★ to End (F1 + F2 together, through the real focus engine), the focus returns to the
-// tile with the song, so the tile's ★★ stays the tile's (R2-DASH-1), and an open Music sheet outlasts a
-// short vanish, so its ▶ ★ stays the sheet's (R3-FOCUS-1).
+// tile with the song, so the tile's ★★ stays the tile's (R2-DASH-1), one reading without a song never
+// reaches the dash and hands nothing over (R3-FOCUS-1, MusicModel), and an open Music sheet outlasts a
+// longer vanish, so its ▶ ★ stays the sheet's (R3-FOCUS-1, the dash).
 // NOTE (Linux): main-actor tests must be `async` (swift-corelibs-xctest).
 
 import Foundation
@@ -250,6 +251,41 @@ final class RideModelMusicIntegrationTests: XCTestCase {
         let back = await eventually { h.ride.lastModel?.music?.state == .paused }
         XCTAssertTrue(back, "the paused song comes back")
         XCTAssertTrue(h.ride.displayList(now: clock.now()).hitRegions.contains { $0.id == "music.tile" })
+    }
+
+    /// R3-FOCUS-1: the one re-evaluation at the end of MusicModel's 2-s hold must redraw the dash by itself,
+    /// like F1's grace end above: parked, the sheet closed, the tile on the map, and the Music app's queue
+    /// ends — no song, and no reading comes after that one, so the port reports nothing new. With the ride
+    /// loop's slow tick held off, a hold end that forgets `onDashChange` would leave the tile up for good.
+    @MainActor
+    func testParkedAPlayerLeftEmptyLosesTheTileAtTheEndOfTheHoldByItself() async {
+        let (h, fake, clock, grace) = await iosHarness(quietRideLoop: true)
+        defer { h.ride.stopLocationPreview() } // ends the held-off tick's wait
+        h.location.emit(LocationFix(lat: 4.65, lon: -74.05, speedMps: 0, courseDeg: 0, accuracyM: 5,
+                                    timeMs: Int64(Date().timeIntervalSince1970 * 1000)))
+        let parked = await eventually { h.ride.lastModel?.fix?.isMoving == false }
+        XCTAssertTrue(parked, "parked: a fix, standing still")
+        XCTAssertEqual(h.ride.dashUIState.sheet, .none, "the Music sheet is closed: the tile is on the map")
+        clock.advance(1)
+        fake.queue = [] // the queue ended: no song
+        fake.refresh()
+        XCTAssertNil(h.model.music.snapshot.track)
+        let waiting = await eventually { grace.pendingCount == 1 }
+        XCTAssertTrue(waiting, "one re-evaluation waits for the end of the hold")
+        await settle(0.1) // the model update that reading asked for
+        XCTAssertNotNil(h.ride.lastModel?.music, "inside the hold: still on the dash")
+        let refreshes = fake.refreshes
+        let invalidations = h.projection.invalidations
+        clock.advance(2)
+        await settle(0.1)
+        XCTAssertNotNil(h.ride.lastModel?.music, "nothing else rebuilds the dash model here")
+        grace.endWaits()
+        let hidden = await eventually { h.ride.lastModel?.music == nil }
+        XCTAssertTrue(hidden, "the end of the hold takes the song off the dash at once")
+        XCTAssertEqual(fake.refreshes, refreshes + 1, "the player is read again at the end of the hold")
+        XCTAssertGreaterThan(h.projection.invalidations, invalidations, "the dash frame is redrawn")
+        XCTAssertFalse(h.ride.displayList(now: clock.now()).hitRegions.contains { $0.id == "music.tile" },
+                       "the dash draws no tile")
     }
 
     @MainActor
@@ -559,17 +595,87 @@ extension RideModelMusicIntegrationTests {
         XCTAssertTrue(h.core.navigation.snapshot.mode.isNavigating)
     }
 
-    /// DASH-1 (F2) + R2-DASH-1, handlebar: the player holds no item for ONE reading (between two songs —
-    /// no grace covers that) while the knob is on the tile, or on ⏯ of the open sheet. The Music control
-    /// goes away under the focus: it moves to the Recenter button (★ there only recenters), never to End,
-    /// and comes back to the tile with the song, so the rider's ★★ opens the sheet and plays / pauses.
-    /// On a71c8d5 it landed on End and ★ ended navigation; on 1af3c44 it stayed on the Menu button, and
-    /// ★★ opened the menu on End, then ended navigation.
+    /// R3-FOCUS-1 (the root cause), handlebar: the player holds no item for ONE reading between two songs
+    /// while the knob is on the tile, on ⏯ of the open sheet or on the menu's "Music". MusicModel keeps
+    /// presenting the last song for up to 2 s: no dash model ever lacks it, so nothing on the dash moves —
+    /// the tile, the sheet, the menu's "Music" and the knob stay put, through every frame of the gap — and
+    /// the rider's next press means what it meant. On bfa6c93 the gap reached the dash: the Music control
+    /// vanished under the knob, and from the sheet the knob came back to the tile, next to End.
     @MainActor
-    func testNavigatingASongGoneForOneReadingNeverHandsTheRidersStarToEnd() async {
+    func testNavigatingOneReadingWithoutASongNeverReachesTheDash() async {
+        for start in ["tile", "sheet ⏯", "menu Music"] {
+            let (h, fake, clock, grace) = await navigatingHarness()
+            switch start {
+            case "tile":
+                h.ride.handleDashInput(.knob(-1)) // ◀ from End wraps to the tile
+            case "sheet ⏯":
+                h.ride.handleDashInput(.knob(-1))
+                clock.advance(0.5)
+                h.ride.handleDashInput(.key(.enter))
+            default:
+                h.ride.handleDashInput(.key(.home))
+                let order = h.ride.dashUIState.focusOrder
+                guard let from = order.firstIndex(of: h.ride.dashUIState.focusedId ?? ""),
+                      let to = order.firstIndex(of: "menu.music") else { return XCTFail("no menu.music in \(order)") }
+                clock.advance(0.3)
+                h.ride.handleDashInput(.knob(to - from))
+            }
+            _ = list(h)
+            let focus = h.ride.dashUIState.focusedId, sheet = h.ride.dashUIState.sheet
+            XCTAssertEqual(focus, ["tile": DashFocusEngine.musicTileId, "sheet ⏯": DashFocusEngine.musicPlayPauseId,
+                                   "menu Music": "menu.music"][start], start)
+            clock.advance(1)
+            let queue = fake.queue
+            fake.queue = [] // the Music app between two songs
+            fake.refresh()
+            XCTAssertNil(h.model.music.snapshot.track, "\(start): the reading has no song")
+            for _ in 0 ..< 3 { // the frames the render loop pulls meanwhile
+                _ = list(h)
+                XCTAssertEqual(h.ride.lastModel?.music?.title, MusicFixtures.ruta.title, "\(start): the dash keeps the song")
+                XCTAssertEqual(h.ride.dashUIState.focusedId, focus, start)
+                XCTAssertEqual(h.ride.dashUIState.sheet, sheet, start)
+                XCTAssertTrue(has(h, focus ?? ""), "\(start): the focused control is drawn")
+                clock.advance(0.2)
+            }
+            let waiting = await eventually { grace.pendingCount == 1 }
+            XCTAssertTrue(waiting, "\(start): one re-evaluation waits for the end of the hold")
+            fake.queue = queue
+            fake.simulate(index: 1) // the adapter's settle read: the next song
+            let next = await eventually { h.ride.lastModel?.music?.title == MusicFixtures.pass.title }
+            XCTAssertTrue(next, start)
+            let cancelled = await eventually { grace.pendingCount == 0 }
+            XCTAssertTrue(cancelled, "\(start): a song again, nothing to re-evaluate")
+            _ = list(h)
+            XCTAssertEqual(h.ride.dashUIState.focusedId, focus, start)
+            XCTAssertEqual(h.ride.dashUIState.sheet, sheet, start)
+            clock.advance(0.5)
+            if start == "sheet ⏯" {
+                h.ride.handleDashInput(.knob(1)) // the rider's ▶ ★, meant for ⏭
+                clock.advance(0.4)
+                h.ride.handleDashInput(.key(.enter))
+                XCTAssertEqual(fake.commands, ["next"], "\(start): ▶ ★ is ⏭")
+            } else {
+                h.ride.handleDashInput(.key(.enter)) // ★, meant for the tile / "Music"
+                XCTAssertEqual(h.ride.dashUIState.sheet, .music, "\(start): ★ opens the Music sheet")
+            }
+            await settle(0.1)
+            XCTAssertTrue(h.core.navigation.snapshot.mode.isNavigating, "\(start): navigation goes on")
+        }
+    }
+
+    /// DASH-1 (F2) + R2-DASH-1 + R3-FOCUS-1, handlebar: the player holds no item for longer than
+    /// MusicModel's 2-s hold while the knob is on the tile, or on ⏯ of the open sheet. At the hold's end the
+    /// dash model loses the song. The tile goes away under the focus: it moves to the Recenter button (★
+    /// there only recenters), never to End, and comes back to the tile with the song, so the rider's ★★
+    /// opens the sheet and plays / pauses. The open sheet outlasts the vanish (the dash's own 2 s): with the
+    /// song back it is still open on ⏯, and ▶ ★ is ⏭. On a71c8d5 the tile's focus landed on End and ★ ended
+    /// navigation; on 1af3c44 it stayed on the Menu button, and ★★ opened the menu on End, then ended
+    /// navigation; on bfa6c93 the sheet closed, and ▶ ★ from the tile wrapped to End.
+    @MainActor
+    func testNavigatingASongGoneLongerThanTheHoldNeverHandsTheRidersStarToEnd() async {
         for sheetOpen in [false, true] {
             let name = sheetOpen ? "sheet ⏯" : "tile"
-            let (h, fake, clock, _) = await navigatingHarness()
+            let (h, fake, clock, grace) = await navigatingHarness()
             h.ride.handleDashInput(.knob(-1))
             XCTAssertEqual(h.ride.dashUIState.focusedId, DashFocusEngine.musicTileId, name)
             if sheetOpen {
@@ -580,15 +686,22 @@ extension RideModelMusicIntegrationTests {
             }
             clock.advance(1)
             let queue = fake.queue
-            fake.queue = [] // no item for a moment
+            fake.queue = [] // no item…
             fake.refresh()
             XCTAssertNil(h.model.music.snapshot.track, name)
             _ = list(h)
-            XCTAssertNil(h.ride.lastModel?.music, "\(name): nothing to show")
+            XCTAssertNotNil(h.ride.lastModel?.music, "\(name): held for 2 s")
+            clock.advance(2) // …for longer than the hold
+            _ = h.ride.displayList(now: clock.now()) // the render loop's frame: the dash's time is now
+            let gone = await eventually {
+                grace.endWaits()
+                return h.ride.lastModel?.music == nil
+            }
+            XCTAssertTrue(gone, "\(name): the hold's end takes the song off the dash")
+            _ = list(h)
             if sheetOpen {
-                // R3-FOCUS-1: the sheet outlasts one reading with no item, on the control the rider left
-                XCTAssertEqual(h.ride.dashUIState.sheet, .music, name)
-                XCTAssertEqual(h.ride.dashUIState.focusedId, DashFocusEngine.musicPlayPauseId, name)
+                XCTAssertEqual(h.ride.dashUIState.sheet, .music, "\(name): the sheet outlasts a short vanish")
+                XCTAssertEqual(h.ride.dashUIState.focusedId, DashFocusEngine.musicPlayPauseId, "\(name): on ⏯")
             } else {
                 XCTAssertFalse(has(h, DashFocusEngine.musicTileId), name)
                 XCTAssertEqual(h.ride.dashUIState.focusedId, "fab.recenter", "\(name): a harmless neighbour, never End")
@@ -700,15 +813,17 @@ extension RideModelMusicIntegrationTests {
 // MARK: - Review round 2 end to end: a song gone while the bars drive the Music app (R2-DASH-1)
 
 extension RideModelMusicIntegrationTests {
-    /// R2-DASH-1, the documented capture-on flow (field guide item 6): the phone media remote drives the
-    /// dash, the rider plays the paused song from the dash (◀ ★ ★), the Music app takes the bars and the
-    /// sheet closes with the knob parked on the tile. Minutes later one reading has no item between two
-    /// songs — the rider cannot see or move the dash focus then, the bars drive the Music app. The rider
-    /// pauses from the bars, R3 hands the buttons back to the dash, and the rider resumes the way the
-    /// tile always works: ★ (open the sheet), ★ (⏯). On 1af3c44 the gap had left the focus on the Menu
-    /// button: ★ opened the menu on End and the second ★ ended navigation, with nothing sent to Music.
+    /// R2-DASH-1 + R3-FOCUS-1, the documented capture-on flow (field guide item 6): the phone media remote
+    /// drives the dash, the rider plays the paused song from the dash (◀ ★ ★), the Music app takes the bars
+    /// and the sheet closes with the knob parked on the tile. Minutes later one reading has no item between
+    /// two songs — the rider cannot see or move the dash focus then, the bars drive the Music app. The gap
+    /// never reaches the dash (the tile and the knob stay) and hands nothing over: no pause (R3 would claim
+    /// the buttons back from the Music app), no start when the next song plays (R2's toast). The rider
+    /// pauses from the bars, R3 hands the buttons back to the dash, and the rider resumes the way the tile
+    /// always works: ★ (open the sheet), ★ (⏯). On 1af3c44 the gap had left the focus on the Menu button: ★
+    /// opened the menu on End and the second ★ ended navigation, with nothing sent to Music.
     @MainActor
-    func testCaptureOnASongGoneWhileTheBarsDriveMusicThenStarStarResumesAndKeepsNavigating() async {
+    func testCaptureOnASongGapWhileTheBarsDriveMusicHandsNothingOverThenStarStarResumes() async {
         let (h, fake, clock, _) = await navigatingHarness(capture: true, playing: false)
         h.ride.handleDashInput(.knob(-1))
         clock.advance(0.5)
@@ -721,23 +836,32 @@ extension RideModelMusicIntegrationTests {
         _ = list(h)
         XCTAssertEqual(h.ride.dashUIState.focusedId, DashFocusEngine.musicTileId, "the knob parks on the tile")
         clock.advance(120)
+        _ = list(h)
+        let takes = SessionText.musicTakesHandlebar(h.language), back = SessionText.handlebarBackToDash(h.language)
+        XCTAssertNotEqual(h.ride.ui.state.toast, takes, "R2's toast is long gone")
+        let reclaims = h.handlebar.reclaimRequests
         let queue = fake.queue
         fake.queue = [] // one reading with no item between two songs
         fake.refresh()
         _ = list(h)
-        XCTAssertFalse(has(h, DashFocusEngine.musicTileId))
-        XCTAssertEqual(h.ride.dashUIState.focusedId, "fab.recenter", "a harmless map control while the song is gone")
+        XCTAssertTrue(has(h, DashFocusEngine.musicTileId), "the gap never reaches the dash")
+        XCTAssertEqual(h.ride.dashUIState.focusedId, DashFocusEngine.musicTileId)
         clock.advance(0.3)
         fake.queue = queue
         fake.simulate(index: 1) // the next song
         let next = await eventually { h.ride.lastModel?.music?.title == MusicFixtures.pass.title }
         XCTAssertTrue(next)
+        await settle(0.3) // a misfired R3 claims the buttons back 0.05 s / 0.15 s later
         _ = list(h)
-        XCTAssertEqual(h.ride.dashUIState.focusedId, DashFocusEngine.musicTileId, "the song is back: so is the knob")
+        XCTAssertEqual(h.ride.dashUIState.focusedId, DashFocusEngine.musicTileId, "the knob never moved")
+        XCTAssertEqual(h.handlebar.reclaimRequests, reclaims, "no pause: the bars stay with the Music app")
+        XCTAssertNotEqual(h.ride.ui.state.toast, back)
+        XCTAssertNotEqual(h.ride.ui.state.toast, takes, "no start either: R2's toast does not come back")
         clock.advance(30)
         fake.simulate(playing: false) // the rider pauses from the bars
-        let backOnTheDash = await eventually { h.ride.ui.state.toast == SessionText.handlebarBackToDash(h.language) }
+        let backOnTheDash = await eventually { h.ride.ui.state.toast == back }
         XCTAssertTrue(backOnTheDash, "R3: the buttons are back on the dash")
+        XCTAssertEqual(h.handlebar.reclaimRequests, reclaims + 1)
         clock.advance(0.6)
         fake.refresh() // the adapter's settle read: the fade is over
         _ = list(h)
@@ -758,15 +882,17 @@ extension RideModelMusicIntegrationTests {
 
 extension RideModelMusicIntegrationTests {
     /// R3-FOCUS-1, handlebar while navigating: the sheet on ⏮; ★ at 2:13 restarts the song, ★ again within
-    /// 3 s goes to the previous one, and the Music app holds no item for one reading on the way. The rider
-    /// then presses ▶ ★, meant for ⏯ (pause). The sheet stayed open through the gap on ⏮, so ▶ is ⏯ and ★
-    /// pauses. On bfa6c93 the gap closed the sheet and the knob came back to the tile, the last item of the
-    /// map list: ▶ wrapped to End and ★ ended navigation, with nothing more sent to the Music app.
+    /// 3 s goes to the previous one, and the Music app holds no item on the way — for one reading, or for
+    /// 2.5 s. The rider then presses ▶ ★, meant for ⏯ (pause). One reading never reaches the dash (MusicModel
+    /// holds the song); a longer gap does, at the end of that 2-s hold, and the open sheet outlasts it (the
+    /// dash's own 2 s). Either way the sheet is still open on ⏮, so ▶ is ⏯ and ★ pauses. On bfa6c93 the gap
+    /// closed the sheet and the knob came back to the tile, the last item of the map list: ▶ wrapped to End
+    /// and ★ ended navigation, with nothing more sent to the Music app.
     @MainActor
     func testNavigatingPreviousTwiceAcrossAnEmptyReadingThenRightStarPausesAndKeepsNavigating() async {
-        for gap in [false, true] {
-            let name = gap ? "one reading with no item" : "no gap"
-            let (h, fake, clock, _) = await navigatingHarness()
+        for gap in [nil, 0, 2.5] as [TimeInterval?] {
+            let name = gap.map { $0 == 0 ? "one reading with no item" : "no item for \($0) s" } ?? "no gap"
+            let (h, fake, clock, grace) = await navigatingHarness()
             h.ride.handleDashInput(.knob(-1))
             clock.advance(0.4)
             h.ride.handleDashInput(.key(.enter))
@@ -782,16 +908,27 @@ extension RideModelMusicIntegrationTests {
             _ = list(h)
             clock.advance(1)
             let queue = fake.queue
-            if gap { fake.queue = [] } // the Music app is between two songs when the command lands
+            if gap != nil { fake.queue = [] } // the Music app is between two songs when the command lands
             h.ride.handleDashInput(.key(.enter)) // ⏮ within 3 s: the previous song
             XCTAssertEqual(fake.commands, ["beginning", "previous"], name)
-            if gap {
+            if let gap {
                 fake.refresh() // the reading with no item
                 _ = list(h)
-                XCTAssertNil(h.ride.lastModel?.music, name)
-                XCTAssertEqual(h.ride.dashUIState.sheet, .music, "\(name): the sheet outlasts one reading with no item")
+                XCTAssertNotNil(h.ride.lastModel?.music, "\(name): MusicModel holds the song")
+                if gap > 0 {
+                    clock.advance(2)
+                    _ = h.ride.displayList(now: clock.now()) // the render loop's frame: the dash's time is now
+                    let gone = await eventually {
+                        grace.endWaits()
+                        return h.ride.lastModel?.music == nil
+                    }
+                    XCTAssertTrue(gone, "\(name): off the dash at the end of the hold")
+                    _ = list(h)
+                    clock.advance(gap - 2)
+                }
+                XCTAssertEqual(h.ride.dashUIState.sheet, .music, "\(name): the sheet stays open")
                 XCTAssertEqual(h.ride.dashUIState.focusedId, "music.previous", "\(name): on the control the rider left")
-                clock.advance(0.6)
+                clock.advance(0.1)
                 fake.queue = queue
                 fake.simulate(index: 2) // the adapter's settle read: the previous song (the queue wraps)
                 let back = await eventually { h.ride.lastModel?.music?.title == MusicFixtures.night.title }

@@ -66,6 +66,8 @@ canción justo tras una pausa).
 2. **Una canción descargada**: la portada en el recuadro del mapa (abajo a la derecha), la barra de
    progreso y, al tocarlo, la hoja **Música** con ⏮ ⏯ ⏭. **Pausar con ⏯ deja la hoja abierta** y
    ⏯ la reanuda. ⏮ con más de 3 s de canción vuelve al principio; con menos, va a la anterior.
+   Al pasar de canción con ⏮ o ⏭ la hoja sigue abierta en el mismo botón; si el registro muestra
+   `no song in the reading`, iOS dio un instante sin canción y el tablero siguió con la anterior.
 3. **Una canción en streaming** que no está en tu biblioteca: si sale la portada (registro
    `artwork source=mp`, `musickit` o `none`, y `ms=`). Repítelo con los **datos móviles desactivados
    para OpenCfMoto** (Ajustes de iOS ▸ Datos móviles).
