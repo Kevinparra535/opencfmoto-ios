@@ -379,8 +379,12 @@ final class ConnectionReviewFixTests: XCTestCase {
         h.wifi.setNetwork(AppTestHarness.bikeNetwork(ssid: qr.ssid))
         h.wifi.nextJoinResult = .failure(WifiJoinFailure(message: "The phone did not join \u{201C}\(qr.ssid)\u{201D}."))
         h.connection.maybeAutoConnect()
-        let ended = await eventually { h.wifi.joinedSSIDs.count == 1 && h.connection.session == nil && h.connection.retryAutoConnectAfterBackground }
+        // `PreviewWifi.join` runs off the main actor (the session task hops to it), so the test never
+        // polls `joinedSSIDs` while a join may be appending to it: it waits for what the model does on
+        // the main actor once the join returned, then reads the fake's record once.
+        let ended = await eventually { h.connection.session == nil && h.connection.retryAutoConnectAfterBackground }
         XCTAssertTrue(ended)
+        XCTAssertEqual(h.wifi.joinedSSIDs.count, 1)
         XCTAssertEqual(h.connection.phase, .idle) // no stale red error
         XCTAssertEqual(h.connection.detail, "")
         XCTAssertNil(h.connection.issue)
@@ -399,7 +403,10 @@ final class ConnectionReviewFixTests: XCTestCase {
         XCTAssertFalse(h.connection.autoConnectLatched)
         h.connection.scenePhaseChanged(.active)
         h.connection.maybeAutoConnect()
-        let started = await eventually { h.connection.session != nil }
+        // The session exists as soon as `begin` runs; its join comes later, on the session task. The link
+        // is created only after the join returned: wait for it (waiting for the session alone read the
+        // record before the join had run — 1 instead of 2 — in about 1 run of 7 under load).
+        let started = await eventually { h.connection.session != nil && h.connection.link != nil }
         XCTAssertTrue(started)
         XCTAssertEqual(h.wifi.joinedSSIDs.count, 2)
         h.connection.stop()
