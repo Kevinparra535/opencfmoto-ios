@@ -325,6 +325,97 @@ final class DashMusicControllerTests: XCTestCase {
         XCTAssertEqual(off.state.sheet, .music)
     }
 
+    // MARK: Safety: BACK after the sheet closed by itself (review R2-DASH-2)
+
+    private func feed(_ cmds: [HandlebarCommand], _ ui: DashUIController) -> [DashIntent] {
+        cmds.flatMap { c in c.input.map { ui.handle($0, now: Double(c.timeMs) / 1000) } ?? [] }
+    }
+
+    private func ms(_ t: TimeInterval) -> Int64 { Int64((t * 1000).rounded()) }
+
+    func testBackAfterTheSheetClosedByItselfKeepsTheTile() {
+        // Navigating at speed: ◀ ★ opened the sheet, then it closed by itself and parked the focus on the
+        // tile. The rider's BACK, meant for that sheet, keeps it there: the next ★ is the tile's, never End
+        // (Android's idle BACK → End turned it into an unconfirmed end of navigation).
+        var nearTurnOnly = DashUIController.Options()
+        nearTurnOnly.musicSheetIdleTimeout = nil
+        let closes: [(name: String, options: DashUIController.Options, model: DashModel, close: (DashUIController) -> [DashIntent])] = [
+            ("idle 10 s while moving", .init(), music(DashFixtures.navigating()), { $0.tick(now: self.t0 + 11) }),
+            ("turn 4 within 200 m", nearTurnOnly, music(DashFixtures.navigating(turn: 4, at: 350)), { ui in
+                ui.update(self.music(DashFixtures.navigating(turn: 4, at: 190)))
+                return ui.tick(now: self.t0 + 4)
+            }),
+            ("R2: the Music app takes the bars", .init(), music(DashFixtures.navigating()), { $0.perform(.closeSheets, now: self.t0 + 2) }),
+        ]
+        for c in closes {
+            let ui = controller(c.model, options: c.options)
+            _ = ui.handle(.knob(-1), now: t0)
+            XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 0.5), [.openMusic], c.name)
+            XCTAssertEqual(c.close(ui), [.closeSheets], c.name)
+            XCTAssertEqual(ui.state.sheet, .none, c.name)
+            XCTAssertEqual(ui.state.focusedId, "music.tile", c.name)
+            XCTAssertEqual(ui.handle(.key(.back), now: t0 + 12), [], c.name)
+            XCTAssertEqual(ui.state.focusedId, "music.tile", "\(c.name): BACK on the tile keeps it")
+            XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 13), [.openMusic], "\(c.name): never End")
+        }
+    }
+
+    func testBackRightAfterTheTimedCloseWithoutAFrameKeepsTheTile() {
+        // tick, then BACK with no frame (no state, no displayList) in between: the timed close's pending
+        // `.musicTile` is applied only at the next build, so BACK builds the scene first — the focus engine
+        // still held ⏯ until then.
+        let ui = controller(music(DashFixtures.navigating()))
+        _ = ui.handle(.knob(-1), now: t0)
+        _ = ui.handle(.key(.enter), now: t0 + 0.5)
+        XCTAssertEqual(ui.state.focusedId, "music.playPause")
+        XCTAssertEqual(ui.tick(now: t0 + 11), [.closeSheets])
+        XCTAssertEqual(ui.handle(.key(.back), now: t0 + 11.05), [])
+        XCTAssertEqual(ui.state.focusedId, "music.tile")
+        XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 12), [.openMusic])
+    }
+
+    func testBackAnywhereElseKeepsAndroidParity() {
+        // no music: BACK at idle → End
+        let plain = controller(DashFixtures.navigating())
+        _ = plain.handle(.knob(-1), now: t0)
+        XCTAssertEqual(plain.handle(.key(.back), now: t0 + 1), [])
+        XCTAssertEqual(plain.state.focusedId, "metrics.end")
+        // music loaded, a FAB the rider moved to: BACK at idle → End
+        let fab = controller(music(DashFixtures.navigating()))
+        _ = fab.handle(.knob(1), now: t0)
+        XCTAssertEqual(fab.state.focusedId, "fab.recenter")
+        _ = fab.handle(.key(.back), now: t0 + 1)
+        XCTAssertEqual(fab.state.focusedId, "metrics.end")
+        // the menu (opened on End) closed with BACK while navigating → End
+        let menu = controller(music(DashFixtures.navigating()))
+        XCTAssertEqual(menu.handle(.key(.home), now: t0), [.openMenu])
+        XCTAssertEqual(menu.handle(.key(.back), now: t0 + 1), [.closeSheets])
+        XCTAssertEqual(menu.state.focusedId, "metrics.end")
+        // preview: BACK cancels it; arrival: BACK dismisses it (the tile is drawn, not focusable, there)
+        XCTAssertEqual(controller(music(DashFixtures.preview())).handle(.key(.back), now: t0), [.cancelPreview])
+        XCTAssertEqual(controller(music(DashFixtures.arrival())).handle(.key(.back), now: t0), [.dismissArrival])
+        // free ride: BACK on the tile keeps it, as before (the default preference keeps a listed focus)
+        let free = controller(music(DashFixtures.freeRide()))
+        _ = free.handle(.knob(-1), now: t0)
+        XCTAssertEqual(free.state.focusedId, "music.tile")
+        _ = free.handle(.key(.back), now: t0 + 1)
+        XCTAssertEqual(free.state.focusedId, "music.tile")
+    }
+
+    func testDefaultMapStarStarAfterTheTimedCloseStaysOnTheTile() {
+        // The shipped map (five_way / mode_ent → iosDefaultMapping, snappy singles): BACK is ★★ and its
+        // first ★ fires ENTER at once. On the parked tile that ★ re-opens the sheet and the second closes it.
+        let ui = controller(music(DashFixtures.navigating()))
+        _ = ui.handle(.knob(-1), now: t0)
+        _ = ui.handle(.key(.enter), now: t0 + 0.5)
+        XCTAssertEqual(ui.tick(now: t0 + 11), [.closeSheets])
+        let e = HandlebarGestureEngine(configuration: .init(buttonMap: HandlebarPresets.iosMapping(for: .fiveWay)))
+        XCTAssertEqual(feed(e.tap(.select, atMs: ms(t0 + 12)), ui) + feed(e.tap(.select, atMs: ms(t0 + 12.25)), ui),
+                       [.openMusic, .closeSheets])
+        XCTAssertEqual(ui.state.focusedId, "music.tile")
+        XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 13), [.openMusic])
+    }
+
     // MARK: Closing transitions
 
     func testSheetClosesWhenMusicGoesAndOnPreviewNavigationArrival() {

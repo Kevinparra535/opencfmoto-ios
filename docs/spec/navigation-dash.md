@@ -1392,7 +1392,10 @@ corner, inset 8 dp. No seek, queue, volume, marquee or animation; targets ≥ 48
 (`.closeSheets`), menu `menu.music` "Music" / "Música" after `menu.circuit` (`.openMusic`, only with
 music). `.openMusic` is UI-only (without music: toast "Nothing playing in Apple Music"); the app performs
 the transport intents. Sheet focus order: ⏮ ⏯ ⏭ ✕, initial focus ⏯; BACK / ✕ / auto-close → focus on the
-tile (not listed: see below); HOME opens the menu.
+tile (not listed: see below); BACK on the tile keeps it (R2-DASH-2: after the sheet closed by itself —
+idle, near a turn, R2 — the rider's BACK was meant for that sheet, and Android's idle BACK → End would
+turn the next ★ into an unconfirmed end of navigation; the scene is built first, so a timed close that
+no frame has applied yet counts too); HOME opens the menu.
 
 **Focus when a Music control vanishes** (fixes F2, R2-DASH-1). The song can go away for a moment (a
 paused song while another app plays, a stale "other audio" reading right after a pause, no item between

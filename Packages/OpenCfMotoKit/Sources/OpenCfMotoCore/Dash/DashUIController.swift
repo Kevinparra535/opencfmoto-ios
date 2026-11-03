@@ -881,6 +881,13 @@ public final class DashUIController: @unchecked Sendable {
         case .back:
             var out: [DashIntent] = []
             let closesMusic = sheet == .music
+            // R2-DASH-2: BACK on the now-playing tile keeps it. A Music sheet that closed by itself (idle,
+            // near a turn, R2) parked the focus there and the rider's BACK was meant for that sheet:
+            // Android's idle BACK → End would turn the next ★, meant for the tile, into an unconfirmed end
+            // of navigation. The tile is an iOS addition, so no Android flow lands here. The scene first:
+            // a timed close's pending `.musicTile` is applied only at the next build.
+            _ = ensureScene()
+            let onTile = focus.focusedId == DashFocusEngine.musicTileId
             if sheet != .none {
                 out = activate(.closeSheets, now: now)
             } else if model.showsArrival {
@@ -891,7 +898,7 @@ public final class DashUIController: @unchecked Sendable {
                 Log.d("GPX", "[GPX] Back — idle")
             }
             // Leaving the Music sheet returns the focus to the now-playing tile.
-            pendingPreference = closesMusic ? .musicTile
+            pendingPreference = closesMusic || onTile ? .musicTile
                 : DashFocusEngine.defaultPreference(inPreview: model.inPreview, navigating: model.navigating)
             scene = nil
             return out
