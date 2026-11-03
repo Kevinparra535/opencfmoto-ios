@@ -224,6 +224,53 @@ final class DashMusicControllerTests: XCTestCase {
         XCTAssertEqual(map.state.focusedId, "menu.end")
     }
 
+    /// R4-FOCUS-1: HOME from where a closed Music sheet left the knob — the tile (BACK, ✕, an idle close) —
+    /// opens the menu on "Music" too, as BACK already treats the tile (R2-DASH-2). Before, HOME there was the
+    /// map's HOME: the menu opened on End and the next ★ ended navigation without a confirmation.
+    func testHomeFromTheTileAClosedSheetLeftOpensTheMenuOnMusic() {
+        for navigating in [true, false] {
+            let base = navigating ? DashFixtures.navigating() : DashFixtures.freeRide()
+            for step in [-1, 0, 1, 2] { // ⏮ ⏯ ⏭ ✕, then BACK
+                let ui = controller(music(base))
+                _ = ui.perform(.openMusic, now: t0)
+                if step != 0 { _ = ui.handle(.knob(step), now: t0 + 0.1) }
+                XCTAssertEqual(ui.handle(.key(.back), now: t0 + 0.5), [.closeSheets])
+                XCTAssertEqual(ui.handle(.key(.home), now: t0 + 1), [.openMenu])
+                XCTAssertEqual(ui.state.focusedId, "menu.music", "BACK from step \(step), then HOME (navigating \(navigating))")
+                XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 2), [.openMusic])
+            }
+            // ★ on ✕, then HOME
+            let ui = controller(music(base))
+            _ = ui.perform(.openMusic, now: t0)
+            _ = ui.handle(.knob(2), now: t0 + 0.1)
+            XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 0.5), [.closeSheets])
+            XCTAssertEqual(ui.state.focusedId, "music.tile")
+            XCTAssertEqual(ui.handle(.key(.home), now: t0 + 1), [.openMenu])
+            XCTAssertEqual(ui.state.focusedId, "menu.music", "✕ then HOME (navigating \(navigating))")
+        }
+        // the idle close while moving, then HOME
+        let moved = controller(moving(36, DashFixtures.navigating()))
+        XCTAssertEqual(moved.perform(.openMusic, now: 1_000), [.openMusic])
+        XCTAssertEqual(moved.tick(now: 1_010.1), [.closeSheets])
+        XCTAssertEqual(moved.state.focusedId, "music.tile")
+        XCTAssertEqual(moved.handle(.key(.home), now: 1_011), [.openMenu])
+        XCTAssertEqual(moved.state.focusedId, "menu.music", "idle close, then HOME")
+        XCTAssertFalse(moved.handle(.key(.enter), now: 1_012).contains(.endNavigation))
+        // Android's End stays where the rider put the knob on the map: End itself, or a FAB they moved to
+        let end = controller(music(DashFixtures.navigating()))
+        _ = end.displayList(now: t0)
+        XCTAssertEqual(end.state.focusedId, "metrics.end")
+        XCTAssertEqual(end.handle(.key(.home), now: t0 + 0.5), [.openMenu])
+        XCTAssertEqual(end.state.focusedId, "menu.end", "HOME from End keeps Android's menu focus")
+        let fab = controller(music(DashFixtures.navigating()))
+        _ = fab.displayList(now: t0)
+        _ = fab.handle(.knob(1), now: t0 + 0.1) // End → Recenter, moved there by the rider
+        _ = fab.displayList(now: t0 + 0.2)
+        XCTAssertEqual(fab.state.focusedId, "fab.recenter")
+        XCTAssertEqual(fab.handle(.key(.home), now: t0 + 0.5), [.openMenu])
+        XCTAssertEqual(fab.state.focusedId, "menu.end", "HOME from a FAB the rider chose keeps Android's menu focus")
+    }
+
     func testHomeFromTheSheetWhileTheSongGoesAwayInTheSameFrameParksOnCircuit() {
         let base = DashFixtures.navigating()
         for presses in [[HandlebarKey.enter], [.enter, .enter], [.back, .enter], [.enter, .back, .enter]] {

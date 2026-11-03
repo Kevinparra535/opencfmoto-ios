@@ -188,6 +188,61 @@ final class DashMusicSheetVanishTests: XCTestCase {
         XCTAssertEqual(ui.state.sheet, .none, "a closed sheet stays closed")
     }
 
+    /// R4-FOCUS-1: once the hold ended and the sheet closed onto Recenter (the song gone for good), HOME there
+    /// takes the Music path: the menu has no "Music", so the knob parks on its stand-in Circuit, whose ★ is only a
+    /// hint without a preview. Before, it was the map's HOME (menu on End, ★ ended navigation). With the song
+    /// back first, the knob is on the tile and HOME lands on "Music".
+    func testHomeAfterTheHoldEndedTakesTheMusicPathNeverEnd() {
+        for base in [DashFixtures.navigating(), DashFixtures.freeRide()] {
+            let name = base.navigating ? "navigating" : "free ride"
+            var (ui, b, with) = sheetOpen(base)
+            ui.update(b) // held from t0 + 0.45
+            XCTAssertEqual(ui.tick(now: t0 + 2.5), [.closeSheets], name)
+            _ = ui.displayList(now: t0 + 2.55)
+            XCTAssertEqual(ui.state.focusedId, "fab.recenter", name)
+            XCTAssertEqual(ui.handle(.key(.home), now: t0 + 3), [.openMenu], name)
+            _ = ui.displayList(now: t0 + 3.05)
+            XCTAssertEqual(ui.state.focusedId, "menu.circuit", "\(name): \"Music\" is not listed, its stand-in")
+            XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 3.5), [.startCircuit], "\(name): a hint, never End")
+            // the song back first: the knob returns to the tile, and HOME lands on "Music"
+            (ui, b, with) = sheetOpen(base)
+            ui.update(b)
+            XCTAssertEqual(ui.tick(now: t0 + 2.5), [.closeSheets], name)
+            _ = ui.displayList(now: t0 + 2.55)
+            ui.update(with)
+            _ = ui.displayList(now: t0 + 2.6)
+            XCTAssertEqual(ui.state.focusedId, DashFocusEngine.musicTileId, name)
+            XCTAssertEqual(ui.handle(.key(.home), now: t0 + 3), [.openMenu], name)
+            XCTAssertEqual(ui.state.focusedId, "menu.music", name)
+            XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 3.5), [.openMusic], name)
+        }
+    }
+
+    /// R4-FOCUS-1 through the real gesture engine: the hold ends between the two ▶ of a quick ▶▶ (HOME on every
+    /// shipped map). The first ▶ is a knob step on the sheet (⏯ → ⏭), the hold's end closes the sheet onto
+    /// Recenter, the second ▶ is HOME from that stand-in: the menu parks on Circuit and ★ is its hint.
+    func testQuickRightRightAcrossTheHoldsEndNeverEndsNavigation() {
+        for preset in ButtonClusterPreset.allCases {
+            let (ui, base, _) = sheetOpen()
+            ui.update(base) // held from t0 + 0.45: the hold ends at t0 + 2.45
+            let engine = HandlebarGestureEngine(configuration: .init(buttonMap: HandlebarPresets.iosMapping(for: preset)))
+            var out: [DashIntent] = []
+            func press(_ channel: HandlebarGestureEngine.Channel, _ t: TimeInterval) {
+                for c in engine.tap(channel, atMs: Int64((t * 1000).rounded())) {
+                    if let input = c.input { out += ui.handle(input, now: Double(c.timeMs) / 1000) }
+                }
+                _ = ui.displayList(now: t + 0.02)
+            }
+            press(.forward, t0 + 2.3)
+            XCTAssertEqual(ui.tick(now: t0 + 2.5), [.closeSheets], preset.rawValue)
+            _ = ui.displayList(now: t0 + 2.51)
+            press(.forward, t0 + 2.55) // 0.25 s after the first: HOME
+            press(.select, t0 + 3.5)
+            XCTAssertFalse(out.contains(.endNavigation), "\(preset.rawValue): \(out)")
+            XCTAssertEqual(out, [.openMenu, .startCircuit], preset.rawValue)
+        }
+    }
+
     func testTheGraceRestartsWithEachVanishAndNilKeepsTheOldRule() {
         let (ui, base, with) = sheetOpen()
         _ = ui.displayList(now: t0 + 1.0)

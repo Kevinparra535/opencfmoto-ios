@@ -979,8 +979,14 @@ public final class DashUIController: @unchecked Sendable {
             // from ⏯ to ✕: the ★ meant for ✕ would end navigation without confirmation. The mirror of the
             // blind-input rule (closing the menu from "Music" lands on the tile); Android has no Music sheet.
             // The scene first, as for BACK: a second HOME before any frame closes that menu from "Music".
+            // R4-FOCUS-1: so does HOME from where a closed sheet left the knob — the tile, or the stand-in a
+            // vanish parked it on — as BACK does (R2-DASH-2, focusStandsForMusic): a sheet that closed by itself
+            // (the song gone past musicSheetVanishGrace, which can end between the two ▶ of ▶▶; idle; near a
+            // turn) must not turn HOME ★ into an unconfirmed end of navigation. Map only: with the menu open HOME
+            // closes it, and a close from "Music" or the parked Circuit already lands on the tile.
             _ = ensureScene()
             let fromMusic = sheet == .music
+                || (sheet == .none && (focusStandsForMusic || focus.focusedId == DashFocusEngine.musicTileId))
             let out = activate(sheet == .menu ? .closeSheets : .openMenu, now: now)
             if fromMusic { pendingPreference = .menuMusic }
             return out

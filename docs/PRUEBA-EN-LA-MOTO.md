@@ -81,7 +81,9 @@ canción justo tras una pausa).
    cierra; los botones pasan de canción. ★ en el manillar pausa la música → aviso «Los botones del
    manillar vuelven a controlar el tablero» (registro `handlebar buttons back on the dash`). Con la
    hoja abierta y la música en pausa, dos ▶ rápidos abren el menú en «Música», no en «Finalizar
-   navegación» (★ vuelve a la hoja). Un aviso de voz con música baja la música sin pararla.
+   navegación» (★ vuelve a la hoja). Si la hoja ya se cerró sola (10 s sin tocarla en marcha, cerca
+   de un giro, o la canción se fue), dos ▶ rápidos pueden abrir el menú en «Finalizar navegación»:
+   mira antes de pulsar ★. Un aviso de voz con música baja la música sin pararla.
 7. **Spotify con Música en pausa**: si Spotify ya sonaba al abrir el tablero, no aparece el recuadro;
    si empieza después, el recuadro se va a los 3 s (registro `other audio for 3 s: song hidden`). Un
    sonido corto de otra app no lo quita.

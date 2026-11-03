@@ -1401,9 +1401,13 @@ the transport intents. Sheet focus order: ⏮ ⏯ ⏭ ✕, initial focus ⏯; BA
 tile (not listed: see below); BACK on the tile keeps it (R2-DASH-2: after the sheet closed by itself —
 idle, near a turn, R2 — the rider's BACK was meant for that sheet, and Android's idle BACK → End would
 turn the next ★ into an unconfirmed end of navigation; the scene is built first, so a timed close that
-no frame has applied yet counts too); HOME opens the menu on "Music", not End (R3-FOCUS-3: on the iOS
-default map HOME is ▶▶, and two quick ▶ are also the rider's way from ⏯ to ✕ — on End, the ★ meant for ✕
-ended navigation; "Music" not listed in that frame → its stand-in Circuit, parked).
+no frame has applied yet counts too); HOME opens the menu on "Music", not End, from the sheet, from the
+tile and from a vanish's stand-in (R3-FOCUS-3, R4-FOCUS-1: on the iOS default map HOME is ▶▶, and two
+quick ▶ are also the rider's way from ⏯ to ✕ — on End, the ★ meant for ✕ ended navigation; after the
+sheet closed by itself, HOME on the tile or the parked Recenter was the map's HOME and its ★ ended
+navigation the same way; "Music" not listed → its stand-in Circuit, parked). ▶▶ is a knob step first:
+begun after the sheet already closed, its first ▶ leaves the tile (for End) or Recenter (for Zoom in)
+before HOME arrives, and the menu then opens on End as after any close.
 
 **Focus when a Music control vanishes** (fixes F2, R2-DASH-1). The song can go away for a moment (a
 paused song while another app plays, a stale "other audio" reading right after a pause, no item between
@@ -1459,7 +1463,8 @@ addition, and a stand-in only exists after a Music control vanished — a Recent
 rider moved to keeps Android's rule. `DashMusicBlindInputTests` pins it
 exhaustively — from the tile (playing, paused), the sheet on each of ⏮ ⏯ ⏭ ✕ and the menu on "Music",
 navigating and in free ride, with the song staying, gone for one built frame or gone for good, with or
-without a frame between the presses, no sequence of 1–3 ★ / BACK returns `.endNavigation` or any other
+without a frame between the presses, no sequence of 1–3 ★ / BACK (and HOME from the tile or a stand-in,
+R4-FOCUS-1) returns `.endNavigation` or any other
 action of consequence. Knob steps are not blind-safe: End is a stop of the map's list, and from where a
 vanish parked the focus a knob step lands on other neighbours than from the vanished control. That test
 lists, from every one of those states, the shortest knob sequences to End — a vanish for one frame adds

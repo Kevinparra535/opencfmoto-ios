@@ -28,7 +28,8 @@ public enum DashFocusPreference: String, Sendable, Equatable {
     /// the first listed of `musicGoneIds` (harmless neighbours), else like `.default`.
     case musicGone
     /// Focus the menu's "Music" when listed (iOS addition, R3-FOCUS-3): the menu opened by HOME from the Music
-    /// sheet. Never its first item: while navigating that is End, and on the iOS default map HOME is ▶▶ —
+    /// sheet, the tile, or the stand-in a vanished Music control parked the knob on (R4-FOCUS-1). Never its
+    /// first item: while navigating that is End, and on the iOS default map HOME is ▶▶ —
     /// two quick ▶ are also the rider's way from ⏯ to ✕, so the ★ meant for ✕ would end navigation without
     /// confirmation. When "Music" is not listed (the song went away in the same frame) → like `.musicGone`.
     case menuMusic
