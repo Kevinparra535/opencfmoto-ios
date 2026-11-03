@@ -86,12 +86,89 @@ final class DashMusicSheetVanishTests: XCTestCase {
 
     func testInputDuringTheVanishIsTheSheets() {
         let (ui, base, _) = sheetOpen()
-        ui.update(base)
+        ui.update(base) // the hold counts from the last frame's time, t0 + 0.45
         _ = ui.displayList(now: t0 + 1.5)
         XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 1.6), [.musicPlayPause], "the app sends it to the player")
         XCTAssertEqual(ui.handle(.key(.back), now: t0 + 1.8), [.closeSheets], "BACK closes it")
         _ = ui.displayList(now: t0 + 1.9)
-        XCTAssertEqual(ui.state.focusedId, "fab.recenter", "no tile: parked as F2 says, never End")
+        XCTAssertEqual(ui.state.focusedId, DashFocusEngine.musicTileId, "onto the tile, held with the song (R4-FOCUS-2)")
+        XCTAssertEqual(ui.tick(now: t0 + 2.4), [])
+        XCTAssertEqual(ui.state.focusedId, DashFocusEngine.musicTileId)
+        XCTAssertEqual(ui.tick(now: t0 + 2.5), [], "the hold's end closes nothing")
+        _ = ui.displayList(now: t0 + 2.6)
+        XCTAssertEqual(ui.state.focusedId, "fab.recenter", "the song stayed gone: parked as F2 says, never End")
+    }
+
+    /// R4-FOCUS-2: HOME (▶▶ on the iOS default maps) from the held sheet opens the menu with the held song, on
+    /// "Music" as without the vanish: ◀ ★ is Circuit's hint and ★ re-opens the held sheet. Without the hold
+    /// reaching the menu it had no "Music": the knob parked on Circuit, whose ◀ ★ is Record (the trip log
+    /// stops), and BACK / HOME closed it onto the parked Recenter, whose ◀ ★ ends navigation.
+    func testHomeDuringTheHoldOpensTheMenuOnTheHeldMusic() {
+        for base in [DashFixtures.navigating(), DashFixtures.freeRide()] {
+            let name = base.navigating ? "navigating" : "free ride"
+            var (ui, b, _) = sheetOpen(base)
+            ui.update(b) // held until t0 + 2.45
+            _ = ui.displayList(now: t0 + 1.5)
+            XCTAssertEqual(ui.handle(.key(.home), now: t0 + 1.6), [.openMenu], name)
+            _ = ui.displayList(now: t0 + 1.65)
+            XCTAssertEqual(ui.state.focusedId, "menu.music", name)
+            XCTAssertEqual(ui.handle(.knob(-1), now: t0 + 1.8), [], name)
+            XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 2.0), [.startCircuit], "\(name): Circuit's hint, never Record")
+            (ui, b, _) = sheetOpen(base)
+            ui.update(b)
+            _ = ui.displayList(now: t0 + 1.5)
+            _ = ui.handle(.key(.home), now: t0 + 1.6)
+            XCTAssertEqual(ui.handle(.key(.back), now: t0 + 1.8), [.closeSheets], name)
+            XCTAssertEqual(ui.state.focusedId, DashFocusEngine.musicTileId, "\(name): closing it lands on the held tile")
+            XCTAssertEqual(ui.handle(.knob(-1), now: t0 + 2.0), [], name)
+            XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 2.2), [.openMenu], "\(name): ◀ ★ from the tile, never End or Lap")
+            (ui, b, _) = sheetOpen(base)
+            ui.update(b)
+            _ = ui.displayList(now: t0 + 1.5)
+            _ = ui.handle(.key(.home), now: t0 + 1.6)
+            XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 1.8), [.openMusic], name)
+            XCTAssertEqual(ui.state.sheet, .music, "\(name): ★ on the held \"Music\" re-opens the held sheet")
+            XCTAssertEqual(ui.tick(now: t0 + 2.5), [.closeSheets], "\(name): the song stayed gone")
+            _ = ui.displayList(now: t0 + 2.6)
+            XCTAssertEqual(ui.state.focusedId, "fab.recenter", name)
+            (ui, b, _) = sheetOpen(base)
+            ui.update(b)
+            _ = ui.displayList(now: t0 + 1.5)
+            _ = ui.handle(.key(.home), now: t0 + 1.6)
+            XCTAssertEqual(ui.tick(now: t0 + 2.5), [], name)
+            _ = ui.displayList(now: t0 + 2.6)
+            XCTAssertEqual(ui.state.sheet, .menu, name)
+            XCTAssertEqual(ui.state.focusedId, "menu.circuit", "\(name): \"Music\" goes at the hold's end, parked as F2 says")
+        }
+    }
+
+    /// R4-FOCUS-2: while the sheet's song is held, a vanish is invisible to every press. From ⏯ and ✕, navigating
+    /// and in free ride, every sequence of 1–3 presses over ★, BACK, HOME, ◀, ▶ (0.3 s apart, a tick and a frame
+    /// after each) returns the same intents and leaves the same focus and sheet as with the song.
+    func testEveryPressDuringTheHoldMeansWhatItWouldWithTheSong() {
+        let keys: [DashInput] = [.key(.enter), .key(.back), .key(.home), .knob(-1), .knob(1)]
+        var seqs: [[Int]] = keys.indices.map { [$0] }
+        for _ in 0 ..< 2 { seqs += seqs.filter { $0.count == seqs.last!.count }.flatMap { s in keys.indices.map { s + [$0] } } }
+        XCTAssertEqual(seqs.count, 5 + 25 + 125)
+        for base in [DashFixtures.navigating(), DashFixtures.freeRide()] {
+            for step in [0, 2] {
+                func run(_ p: [Int], vanish: Bool) -> [String] {
+                    let (ui, b, _) = sheetOpen(base, step: step)
+                    _ = ui.displayList(now: t0 + 1.0)
+                    if vanish { ui.update(b) } // held until t0 + 3
+                    _ = ui.displayList(now: t0 + 1.1)
+                    return p.enumerated().map { i, k in
+                        let now = t0 + 1.3 + Double(i) * 0.3
+                        let out = ui.handle(keys[k], now: now) + ui.tick(now: now + 0.1)
+                        _ = ui.displayList(now: now + 0.1)
+                        return "\(out) \(ui.state.focusedId ?? "-") \(ui.state.sheet)"
+                    }
+                }
+                for p in seqs {
+                    XCTAssertEqual(run(p, vanish: true), run(p, vanish: false), "\(base.navigating ? "navigating" : "free ride") step \(step) \(p)")
+                }
+            }
+        }
     }
 
     func testASongGoneForGoodClosesTheSheetAtTheEndOfTheGraceOnly() {

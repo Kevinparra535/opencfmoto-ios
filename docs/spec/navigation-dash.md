@@ -1420,7 +1420,13 @@ card took the tile's room), when the sheet closes because `music == nil` stayed 
 `.musicTile` finds no tile (no room for it, or the song went away in the same frame). A shorter vanish
 does not close the open sheet (R3-FOCUS-1): it stays on the song it showed and on the control the rider
 left. Closed at once, it handed the knob back to the tile, the last item of the map list, from where the
-rider's next ▶ ★, meant for ⏭, wrapped to End (`DashMusicSheetVanishTests`). When the control is listed
+rider's next ▶ ★, meant for ⏭, wrapped to End (`DashMusicSheetVanishTests`). For those 2 s the song is held
+for whatever the rider reaches from the sheet too (review R4-FOCUS-2): the menu HOME opens lists "Music"
+(focused, `.menuMusic`), BACK / ✕ land on the tile, ★ on either re-opens the held sheet — so every press
+means what it would mean with the song (`testEveryPressDuringTheHoldMeansWhatItWouldWithTheSong`); when the
+hold ends they go as above. Without it HOME's menu had no "Music" and parked on Circuit, whose ◀ ★ is Record,
+and a sheet closed during the hold landed on the parked Recenter, whose ◀ ★ ends navigation (Lap in free
+ride). A preview, the arrival card or a navigation start drop the hold. When the control is listed
 again and no dash input came in between, the focus returns to it (the tile for the tile and the sheet's
 controls, `menu.music` in the menu); after any input it stays where it is. A closed sheet stays closed.
 Trade-off of the map target: `fab.recenter` follows End in the map list, so ◀★ while the tile is still
