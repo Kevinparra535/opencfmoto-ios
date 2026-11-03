@@ -273,7 +273,7 @@ public extension HandlebarRemoteProviding {
 // OpenCfMotoApple, and App Store Connect checks NSAppleMusicUsageDescription bundle by bundle
 // (ITMS-90683, tools/testflight/lint_bundle.py).
 // Privacy: song titles, artists, albums, track / store / image ids and artwork URLs never go to logs,
-// problem reports or any server of ours; log states, artwork sources and the salted per-run token of
+// problem reports or any server of ours; log states, artwork sources and the keyed per-run token of
 // a track id only (`MusicTrackID.logToken`, review fix F4: a catalog id names the song).
 
 /// The media-library permission (Settings ▸ "Media & Apple Music"; MPMediaLibrary and MusicKit share

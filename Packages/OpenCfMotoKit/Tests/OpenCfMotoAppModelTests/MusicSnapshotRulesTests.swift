@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Apple Music on the dash: stable track ids and their salted log tokens (F4), what counts as a
+// Apple Music on the dash: stable track ids and their keyed log tokens (F4, R2-IOS-1), what counts as a
 // meaningful change of the Music app's reading (the adapter only reports those), when MusicKit's
 // playing entry is MediaPlayer's song (F5), and the artwork size read from PNG / JPEG headers.
 
@@ -66,7 +66,7 @@ final class MusicSnapshotRulesTests: XCTestCase {
 
     // MARK: Log tokens (F4)
 
-    func testALogTokenIsTheKindLetterAndEightHexDigitsOfASaltedHash() {
+    func testALogTokenIsTheKindLetterAndEightHexDigitsOfAKeyedHash() {
         let hex = CharacterSet(charactersIn: "0123456789abcdef")
         for id in ["p1a", "s100000002", "p3c", "h0123456789abcdef",
                    MusicTrackID.make(persistentID: .max, storeID: nil, title: "", artist: "", album: "", duration: 0)] {
@@ -77,19 +77,31 @@ final class MusicSnapshotRulesTests: XCTestCase {
             XCTAssertNotEqual(token, id)
             XCTAssertEqual(MusicTrackID.logToken(id), token, "the same song gives the same token for the whole run")
         }
-        XCTAssertEqual(MusicTrackID.logToken("s100000002"), MusicTrackID.logToken("s100000002", salt: MusicTrackID.logSalt))
+        XCTAssertEqual(MusicTrackID.logToken("s100000002"), MusicTrackID.logToken("s100000002", key: MusicTrackID.logKey))
         XCTAssertTrue(MusicTrackID.logToken("").hasPrefix("-"))
         let fixtures = MusicFixtures.privateIDs.map { MusicTrackID.logToken($0) }
         XCTAssertEqual(Set(fixtures).count, fixtures.count, "different songs, different tokens")
-        // FNV-1a 64 over the 8 salt bytes (little-endian), then the id; the first 8 hex digits.
-        let salt: UInt64 = 0x0123_4567_89ab_cdef
-        let bytes: [UInt8] = [0xef, 0xcd, 0xab, 0x89, 0x67, 0x45, 0x23, 0x01] + Array("s100000002".utf8)
-        XCTAssertEqual(MusicTrackID.logToken("s100000002", salt: salt),
-                       "s" + MusicTrackID.hex16(MusicTrackID.fnv1a64(bytes)).prefix(8))
-        // Another salt (another run of the app), another token: the tokens of two runs cannot be
-        // matched, and without the salt the catalog id cannot be brute-forced from its token.
-        let tokens = Set((0 ..< 16).map { MusicTrackID.logToken("s100000002", salt: salt &+ UInt64($0)) })
+        // SipHash-2-4 of the id's UTF-8 under the key; the first 8 hex digits.
+        let key: (UInt64, UInt64) = (0x0706_0504_0302_0100, 0x0f0e_0d0c_0b0a_0908)
+        XCTAssertEqual(MusicTrackID.logToken("s100000002", key: key),
+                       "s" + MusicTrackID.hex16(MusicTrackID.sipHash24(Array("s100000002".utf8), key: key)).prefix(8))
+        XCTAssertEqual(MusicTrackID.logToken("s100000002", key: key), "scd16c1ee", "a known answer, computed apart")
+        // Another key (another run of the app), another token: the tokens of two runs cannot be
+        // matched. Without the key a token reveals nothing about the id, even next to known songs of
+        // the same run (review R2-IOS-1: FNV-1a over salt ‖ id did).
+        let tokens = Set((0 ..< 16).map { MusicTrackID.logToken("s100000002", key: (key.0 &+ UInt64($0), key.1)) })
         XCTAssertEqual(tokens.count, 16)
+    }
+
+    func testSipHash24MatchesTheReferenceVectors() {
+        // Aumasson & Bernstein's reference: key 00 01 … 0f, message 00 01 … (n − 1), n = 0 … 15
+        // (vectors.h; n = 15 is the paper's appendix example). Covers an empty, a partial and a full block.
+        let key: (UInt64, UInt64) = (0x0706_0504_0302_0100, 0x0f0e_0d0c_0b0a_0908)
+        let expected: [Int: UInt64] = [0: 0x726f_db47_dd0e_0e31, 7: 0xab02_00f5_8b01_d137,
+                                       8: 0x93f5_f579_9a93_2462, 15: 0xa129_ca61_49be_45e5]
+        for (n, want) in expected {
+            XCTAssertEqual(MusicTrackID.sipHash24((0 ..< n).map { UInt8($0) }, key: key), want, "\(n) bytes")
+        }
     }
 
     // MARK: MusicKit entry vs MediaPlayer item (F5)

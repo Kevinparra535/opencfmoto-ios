@@ -41,23 +41,52 @@ public enum MusicTrackID {
     }
 
     /// What a log line may say about a song (F4): its kind letter ("p" library item, "s" catalog id,
-    /// "h" hash) + 8 hex digits of FNV-1a 64 over (a random per-process salt ‖ the id). Equal within
-    /// one run of the app, so a log still shows "the same song again" — but a raw id never reaches a
-    /// log or a shared problem report: a catalog id ("s" + ~10 digits) names the song on
-    /// music.apple.com, and an unsalted hash of one is brute-forced in seconds. The salt is never
-    /// stored, so the tokens of two runs cannot be matched either.
-    public static func logToken(_ id: String) -> String { logToken(id, salt: logSalt) }
+    /// "h" hash) + the first 8 hex digits of SipHash-2-4 of the id under a random per-process key.
+    /// Equal within one run of the app, so a log still shows "the same song again" — but a raw id
+    /// never reaches a log or a shared problem report: a catalog id ("s" + ~10 digits) names the song
+    /// on music.apple.com, and an unkeyed hash of one is brute-forced in seconds. A keyed PRF, not
+    /// FNV-1a over (salt ‖ id) (review R2-IOS-1): FNV-1a's low 32 bits never depend on its high 32,
+    /// so two songs of a run named in a report pinned the salted state in a 2^32 search, and every
+    /// other catalog token of that run fell to a 10^10 scan in seconds. The key is never stored or
+    /// logged, so the tokens of two runs cannot be matched either.
+    public static func logToken(_ id: String) -> String { logToken(id, key: logKey) }
 
-    /// `logToken(_:)` with an explicit salt (tests).
-    static func logToken(_ id: String, salt: UInt64) -> String {
+    /// `logToken(_:)` with an explicit key (tests).
+    static func logToken(_ id: String, key: (UInt64, UInt64)) -> String {
         let kind = id.first.map(String.init) ?? "-"
-        let saltBytes = (0 ..< 8).map { UInt8(truncatingIfNeeded: salt >> (8 * $0)) }
-        return kind + String(hex16(fnv1a64(saltBytes + Array(id.utf8))).prefix(8))
+        return kind + String(hex16(sipHash24(Array(id.utf8), key: key)).prefix(8))
     }
 
-    /// Random once per process, never persisted (F4: a known salt would make the ~10-digit catalog
-    /// ids brute-forceable again).
-    static let logSalt = UInt64.random(in: .min ... .max)
+    /// Random once per process, never persisted or logged (F4: a known key would make the ~10-digit
+    /// catalog ids brute-forceable again).
+    static let logKey = (UInt64.random(in: .min ... .max), UInt64.random(in: .min ... .max))
+
+    /// SipHash-2-4 (Aumasson & Bernstein), 64-bit output; `key` = the 16 key bytes as two
+    /// little-endian words. Reference vectors in MusicSnapshotRulesTests.
+    static func sipHash24(_ bytes: [UInt8], key: (UInt64, UInt64)) -> UInt64 {
+        var v0: UInt64 = 0x736f_6d65_7073_6575 ^ key.0, v1: UInt64 = 0x646f_7261_6e64_6f6d ^ key.1
+        var v2: UInt64 = 0x6c79_6765_6e65_7261 ^ key.0, v3: UInt64 = 0x7465_6462_7974_6573 ^ key.1
+        func rounds(_ n: Int) {
+            for _ in 0 ..< n {
+                v0 &+= v1; v1 = v1 << 13 | v1 >> 51; v1 ^= v0; v0 = v0 << 32 | v0 >> 32
+                v2 &+= v3; v3 = v3 << 16 | v3 >> 48; v3 ^= v2
+                v0 &+= v3; v3 = v3 << 21 | v3 >> 43; v3 ^= v0
+                v2 &+= v1; v1 = v1 << 17 | v1 >> 47; v1 ^= v2; v2 = v2 << 32 | v2 >> 32
+            }
+        }
+        func absorb(_ m: UInt64) { v3 ^= m; rounds(2); v0 ^= m }
+        let whole = bytes.count / 8 * 8
+        for i in stride(from: 0, to: whole, by: 8) {
+            absorb((0 ..< 8).reduce(UInt64(0)) { $0 | UInt64(bytes[i + $1]) << (8 * $1) })
+        }
+        // Last block: the length's low byte on top, the 0-7 remaining bytes below.
+        absorb((whole ..< bytes.count).reduce(UInt64(truncatingIfNeeded: bytes.count) << 56) {
+            $0 | UInt64(bytes[$1]) << (8 * ($1 - whole))
+        })
+        v2 ^= 0xff
+        rounds(4)
+        return v0 ^ v1 ^ v2 ^ v3
+    }
 
     /// FNV-1a 64-bit.
     static func fnv1a64(_ bytes: [UInt8]) -> UInt64 {

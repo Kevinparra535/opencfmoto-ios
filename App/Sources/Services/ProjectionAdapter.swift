@@ -100,7 +100,7 @@ final class ProjectionAdapter: DashProjecting, @unchecked Sendable {
         if let data {
             if !images.set(id: id, data: data) {
                 // No id (F4): "music.art.<track id>" holds the song's catalog id. MusicModel's artwork
-                // line just before this one names the song by its salted token.
+                // line just before this one names the song by its keyed token.
                 Log.w("MUSIC", "artwork bytes rejected (\(data.count) bytes)")
             }
         } else {

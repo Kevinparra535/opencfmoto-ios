@@ -21,7 +21,7 @@
 // - Handlebar hand-over (contract §7): `onPlaybackStarted` (→ toast, sheet closed) and
 //   `onPlaybackPaused` (→ ControlsModel re-claims the buttons) fire on transitions only, never on the
 //   first reading after observing starts.
-// - Privacy: logs carry states, artwork sources and salted per-run song tokens
+// - Privacy: logs carry states, artwork sources and keyed per-run song tokens
 //   (`MusicTrackID.logToken`, F4) — never titles, artists, albums, track / store / image ids or URLs.
 
 import Foundation

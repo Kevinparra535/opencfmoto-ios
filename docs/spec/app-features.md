@@ -359,7 +359,7 @@ available) and the Controls ▸ Phone media remote footer says that starting App
 gives the handlebar buttons to the music until it is paused. What the dash shows and the handlebar
 hand-over: `navigation-dash.md` §15 and `input-controls.md` §10 item 15. Nothing is sent anywhere:
 titles, artists, albums and song ids stay on the phone and never reach logs or problem reports — a
-log line names a song by a token salted per app run (`track=s1a2b3c4d`), and the report carries
+log line names a song by a token keyed per app run (`track=s1a2b3c4d`), and the report carries
 `music=on/authorized/playing/art=mp`; the artwork of streamed songs is loaded by Apple's MusicKit
 from Apple.
 

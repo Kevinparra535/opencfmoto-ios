@@ -33,7 +33,7 @@ enum MusicFixtures {
     /// id names the song on music.apple.com).
     static let privateWords = ["Ruta del Sol", "Los Pistones", "Ruta Sessions", "Mountain Pass", "Gearshift",
                                "Twisties", "Night Ride Home", "Asphalt Echo", "Open Throttle", "100000002"]
-    /// The track ids above: a log line carries their salted tokens only (F4). Short, so they are
+    /// The track ids above: a log line carries their keyed tokens only (F4). Short, so they are
     /// checked as whole words (a token "p1a…" is one word with more hex digits).
     static let privateIDs = ["p1a", "s100000002", "p3c"]
 
