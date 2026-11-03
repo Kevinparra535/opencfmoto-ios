@@ -5,8 +5,9 @@
 // follows what the Music app does — including what iOS reports as other audio around a pause (the
 // F1 grace) and what a shared log or problem report says about the songs (F4). The last sections
 // ride the review repros end to end while navigating: no stale or vanished Music control ever hands
-// the rider's ★ to End (F1 + F2 together, through the real focus engine), and the focus returns to
-// the tile with the song, so the tile's ★★ stays the tile's (R2-DASH-1).
+// the rider's ★ to End (F1 + F2 together, through the real focus engine), the focus returns to the
+// tile with the song, so the tile's ★★ stays the tile's (R2-DASH-1), and an open Music sheet outlasts a
+// short vanish, so its ▶ ★ stays the sheet's (R3-FOCUS-1).
 // NOTE (Linux): main-actor tests must be `async` (swift-corelibs-xctest).
 
 import Foundation
@@ -189,7 +190,10 @@ final class RideModelMusicIntegrationTests: XCTestCase {
         let hidden = await eventually { h.ride.lastModel?.music == nil }
         XCTAssertTrue(hidden, "Spotify played through the grace: the paused song is stale (D7)")
         _ = list(h)
-        XCTAssertEqual(h.ride.dashUIState.sheet, .none, "the Music sheet closes with the song")
+        XCTAssertEqual(h.ride.dashUIState.sheet, .music, "R3-FOCUS-1: open through a short vanish")
+        clock.advance(2)
+        let closed = await eventually { h.ride.dashUIState.sheet == .none }
+        XCTAssertTrue(closed, "the Music sheet closes once the song stayed gone for 2 s")
         XCTAssertFalse(has(h, "music.tile"))
         fake.simulate(otherAudioPlaying: false) // Spotify stopped
         let back = await eventually { h.ride.lastModel?.music?.state == .paused }
@@ -444,7 +448,9 @@ final class RideModelMusicIntegrationTests: XCTestCase {
         await h.model.music.setEnabled(false)
         let gone = await eventually { h.ride.lastModel?.music == nil }
         XCTAssertTrue(gone)
-        XCTAssertEqual(h.ride.dashUIState.sheet, .none, "the Music sheet closes with the music")
+        clock.advance(2) // R3-FOCUS-1: the open sheet outlasts a vanish of up to 2 s
+        let closed = await eventually { h.ride.dashUIState.sheet == .none }
+        XCTAssertTrue(closed, "the Music sheet closes with the music")
         XCTAssertFalse(has(h, "music.tile"))
         tap(h, clock, "fab.menu")
         XCTAssertFalse(has(h, "menu.music"))
@@ -579,15 +585,32 @@ extension RideModelMusicIntegrationTests {
             XCTAssertNil(h.model.music.snapshot.track, name)
             _ = list(h)
             XCTAssertNil(h.ride.lastModel?.music, "\(name): nothing to show")
-            XCTAssertEqual(h.ride.dashUIState.sheet, .none, "\(name): the Music sheet closes with the song")
-            XCTAssertFalse(has(h, DashFocusEngine.musicTileId), name)
-            XCTAssertEqual(h.ride.dashUIState.focusedId, "fab.recenter", "\(name): a harmless neighbour, never End")
+            if sheetOpen {
+                // R3-FOCUS-1: the sheet outlasts one reading with no item, on the control the rider left
+                XCTAssertEqual(h.ride.dashUIState.sheet, .music, name)
+                XCTAssertEqual(h.ride.dashUIState.focusedId, DashFocusEngine.musicPlayPauseId, name)
+            } else {
+                XCTAssertFalse(has(h, DashFocusEngine.musicTileId), name)
+                XCTAssertEqual(h.ride.dashUIState.focusedId, "fab.recenter", "\(name): a harmless neighbour, never End")
+            }
             clock.advance(0.3)
             fake.queue = queue
             fake.refresh() // the next reading has the song again
             let back = await eventually { h.ride.lastModel?.music != nil }
             XCTAssertTrue(back, name)
             _ = list(h)
+            if sheetOpen {
+                XCTAssertEqual(h.ride.dashUIState.sheet, .music, name)
+                XCTAssertEqual(h.ride.dashUIState.focusedId, DashFocusEngine.musicPlayPauseId, name)
+                clock.advance(1)
+                h.ride.handleDashInput(.knob(1)) // the rider's ▶ ★, meant for ⏭
+                clock.advance(0.4)
+                h.ride.handleDashInput(.key(.enter))
+                XCTAssertEqual(fake.commands, ["next"], "\(name): ▶ ★ is ⏭, never End")
+                await settle(0.1)
+                XCTAssertTrue(h.core.navigation.snapshot.mode.isNavigating, name)
+                continue
+            }
             XCTAssertTrue(has(h, DashFocusEngine.musicTileId), name)
             XCTAssertEqual(h.ride.dashUIState.focusedId, DashFocusEngine.musicTileId, "\(name): back on the tile with the song")
             XCTAssertEqual(h.ride.dashUIState.sheet, .none, "\(name): a closed sheet stays closed")
@@ -728,5 +751,63 @@ extension RideModelMusicIntegrationTests {
         XCTAssertEqual(fake.commands, ["play", "play"], "★★ resumed the song")
         await settle(0.1)
         XCTAssertTrue(h.core.navigation.snapshot.mode.isNavigating, "navigation goes on")
+    }
+}
+
+// MARK: - Review round 3 end to end: the open sheet outlasts a short vanish (R3-FOCUS-1)
+
+extension RideModelMusicIntegrationTests {
+    /// R3-FOCUS-1, handlebar while navigating: the sheet on ⏮; ★ at 2:13 restarts the song, ★ again within
+    /// 3 s goes to the previous one, and the Music app holds no item for one reading on the way. The rider
+    /// then presses ▶ ★, meant for ⏯ (pause). The sheet stayed open through the gap on ⏮, so ▶ is ⏯ and ★
+    /// pauses. On bfa6c93 the gap closed the sheet and the knob came back to the tile, the last item of the
+    /// map list: ▶ wrapped to End and ★ ended navigation, with nothing more sent to the Music app.
+    @MainActor
+    func testNavigatingPreviousTwiceAcrossAnEmptyReadingThenRightStarPausesAndKeepsNavigating() async {
+        for gap in [false, true] {
+            let name = gap ? "one reading with no item" : "no gap"
+            let (h, fake, clock, _) = await navigatingHarness()
+            h.ride.handleDashInput(.knob(-1))
+            clock.advance(0.4)
+            h.ride.handleDashInput(.key(.enter))
+            _ = list(h)
+            XCTAssertEqual(h.ride.dashUIState.focusedId, DashFocusEngine.musicPlayPauseId, name)
+            clock.advance(0.4)
+            h.ride.handleDashInput(.knob(-1))
+            _ = list(h)
+            XCTAssertEqual(h.ride.dashUIState.focusedId, "music.previous", name)
+            clock.advance(0.4)
+            h.ride.handleDashInput(.key(.enter)) // ⏮ at 2:13: back to the beginning
+            XCTAssertEqual(fake.commands, ["beginning"], name)
+            _ = list(h)
+            clock.advance(1)
+            let queue = fake.queue
+            if gap { fake.queue = [] } // the Music app is between two songs when the command lands
+            h.ride.handleDashInput(.key(.enter)) // ⏮ within 3 s: the previous song
+            XCTAssertEqual(fake.commands, ["beginning", "previous"], name)
+            if gap {
+                fake.refresh() // the reading with no item
+                _ = list(h)
+                XCTAssertNil(h.ride.lastModel?.music, name)
+                XCTAssertEqual(h.ride.dashUIState.sheet, .music, "\(name): the sheet outlasts one reading with no item")
+                XCTAssertEqual(h.ride.dashUIState.focusedId, "music.previous", "\(name): on the control the rider left")
+                clock.advance(0.6)
+                fake.queue = queue
+                fake.simulate(index: 2) // the adapter's settle read: the previous song (the queue wraps)
+                let back = await eventually { h.ride.lastModel?.music?.title == MusicFixtures.night.title }
+                XCTAssertTrue(back, name)
+            }
+            _ = list(h)
+            XCTAssertEqual(h.ride.dashUIState.sheet, .music, name)
+            clock.advance(0.8)
+            h.ride.handleDashInput(.knob(1)) // ▶, meant for ⏯
+            _ = list(h)
+            XCTAssertEqual(h.ride.dashUIState.focusedId, DashFocusEngine.musicPlayPauseId, "\(name): ▶ from ⏮ is ⏯")
+            clock.advance(0.4)
+            h.ride.handleDashInput(.key(.enter)) // ★: pause the song
+            await settle(0.1)
+            XCTAssertTrue(h.core.navigation.snapshot.mode.isNavigating, "\(name): ▶ ★ never ends navigation")
+            XCTAssertEqual(fake.commands, ["beginning", "previous", "pause"], "\(name): ▶ ★ paused the song")
+        }
     }
 }

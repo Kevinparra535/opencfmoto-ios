@@ -84,6 +84,10 @@ public final class DashUIController: @unchecked Sendable {
         /// index, and only ≥ `musicSheetInputGrace` after the last dash input; nil = never.
         public var musicSheetTurnDistanceM: Double? = 200
         public var musicSheetInputGrace: TimeInterval = 3
+        /// iOS addition (music, review R3-FOCUS-1): an open Music sheet outlasts a song that goes away for at
+        /// most this long (one reading with no item between two songs), still drawn with the song it showed;
+        /// `tick` closes it (`.musicGone`) when the song stays gone. nil = it closes at once.
+        public var musicSheetVanishGrace: TimeInterval? = 2
         public init() {}
     }
 
@@ -131,6 +135,10 @@ public final class DashUIController: @unchecked Sendable {
     /// Recenter ★ only recenters; on Circuit it closes the menu onto the tile, else Recenter, parked
     /// again); moving the focus drops it.
     private var musicFocusParkedOn: String?
+    /// R3-FOCUS-1: the song the open Music sheet still shows while `model.music` is nil, and since when
+    /// (`Options.musicSheetVanishGrace`). Closed, the sheet would hand the knob back to the tile, where the
+    /// rider's next blind ▶ ★ (meant for ⏭) wraps to End.
+    private var musicHeld: (music: DashNowPlaying, since: TimeInterval)?
 
     public init(measurer: any DashTextMeasurer = ApproximateTextMeasurer(), options: Options = Options()) {
         self.measurer = measurer
@@ -198,9 +206,13 @@ public final class DashUIController: @unchecked Sendable {
         advance(now)
         let events = gestures.tick(now: now)
         var out = events.isEmpty ? [] : apply(events, now: now)
-        if musicSheetShouldClose(now: now) {
+        // R3-FOCUS-1: a song that stayed gone through `musicSheetVanishGrace` closes the sheet as F2 says.
+        let vanished = sheet == .music && model.music == nil
+            && now - (musicHeld?.since ?? -.infinity) >= (options.musicSheetVanishGrace ?? 0)
+        if vanished || musicSheetShouldClose(now: now) {
+            musicHeld = nil
             sheet = .none
-            pendingPreference = .musicTile
+            pendingPreference = vanished ? .musicGone : .musicTile
             scene = nil
             out.append(.closeSheets)
         }
@@ -617,11 +629,20 @@ public final class DashUIController: @unchecked Sendable {
         // when arrival starts (a preview / navigation start already closed every sheet above). A song
         // that went away may be back in a moment, and the rider's next ★ was meant for ⏯: never the
         // default item, End while navigating (F2). Arrival keeps its own rule below.
-        if sheet == .music && (new.music == nil || (new.showsArrival && !prev.showsArrival)) {
+        // R3-FOCUS-1: a song gone for a moment (one reading with no item between two songs) does not close
+        // the sheet: it stays open on the song it showed for `musicSheetVanishGrace` (`tick` closes it when
+        // the song stays gone), so the rider's next ★, ▶ ★ or ◀ ★ still means ⏯, ⏭ or ⏮. Closed, the knob
+        // would come back to the tile, from where ▶ wraps to End.
+        let arrivalStarts = new.showsArrival && !prev.showsArrival
+        if sheet == .music, new.music == nil, !arrivalStarts, options.musicSheetVanishGrace != nil,
+           let shown = musicHeld?.music ?? prev.music {
+            if musicHeld == nil { musicHeld = (shown, lastNow ?? 0) }
+        } else if sheet == .music && (new.music == nil || arrivalStarts) {
             sheet = .none
             pendingPreference = new.music == nil ? .musicGone
                 : DashFocusEngine.defaultPreference(inPreview: new.inPreview, navigating: new.navigating)
         }
+        if new.music != nil || sheet != .music { musicHeld = nil }
         if new.showsArrival && !prev.showsArrival {
             focus.clear()
             pendingPreference = .default
@@ -682,13 +703,16 @@ public final class DashUIController: @unchecked Sendable {
         let musicNow = max(lastNow ?? now, now)
         lastNow = musicNow
         if let sc = scene, let key = sc.musicTimeKey,
-           DashSceneBuilder.musicTimeKey(model.music, sheetOpen: sheet == .music, tileBarWidth: sc.musicTileBarWidth,
+           DashSceneBuilder.musicTimeKey(shownMusic, sheetOpen: sheet == .music, tileBarWidth: sc.musicTileBarWidth,
                                          now: musicNow) != key {
             scene = nil
         }
     }
 
     // MARK: - Scene
+
+    /// The song drawn: the model's, or the one the open Music sheet still shows through a short vanish.
+    private var shownMusic: DashNowPlaying? { model.music ?? (sheet == .music ? musicHeld?.music : nil) }
 
     private func buildScene() -> DashScene {
         // The map is drawn as shown (follow ease); the chrome reads the camera flags.
@@ -702,12 +726,14 @@ public final class DashUIController: @unchecked Sendable {
             puck = v.puck
             puckBrg = v.puckBearingDeg
         }
-        let input = DashSceneInput(model: model, sheet: sheet, camera: drawn, puckBearingDeg: puckBrg, puck: puck, anchor: anchor,
+        var shown = model
+        shown.music = shownMusic // R3-FOCUS-1: the open sheet keeps its song through a short vanish
+        let input = DashSceneInput(model: shown, sheet: sheet, camera: drawn, puckBearingDeg: puckBrg, puck: puck, anchor: anchor,
                                    menuScroll: menuScroll, searchListScroll: searchListScroll,
                                    searchChipScroll: searchChipScroll, previewChipScroll: previewChipScroll,
                                    lapReachableByHandlebar: options.lapReachableByHandlebar,
                                    handlebarReachesSettings: options.handlebarReachesSettings,
-                                   musicNow: lastNow ?? model.music?.positionAt ?? 0)
+                                   musicNow: lastNow ?? shown.music?.positionAt ?? 0)
         var b = DashSceneBuilder(input: input, measurer: measurer)
         return b.build()
     }

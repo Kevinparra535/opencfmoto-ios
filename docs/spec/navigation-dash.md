@@ -1350,7 +1350,8 @@ No Android counterpart. When the app fills `DashModel.music` (`DashNowPlaying`: 
 artwork id, playing / paused, duration, and the position as a sample `position` at `positionAt` on the
 controller's `now` clock), the dash shows what the system Music app plays. Only Apple Music: iOS gives
 apps no access to other players. `music == nil` (feature off, no permission, nothing loaded, or a paused
-song while another app plays) → no tile, no menu entry, and an open sheet closes.
+song while another app plays) → no tile, no menu entry, and an open sheet closes once that lasted 2 s
+(`Options.musicSheetVanishGrace`, see "Focus when a Music control vanishes").
 
 **Now-playing tile** (`music.tile`, map screen, no sheet; free ride, navigating, preview, arrival). A
 square under the FAB column, right-aligned with it, 8 dp under the last FAB: min(64 dp, room), at least
@@ -1406,9 +1407,13 @@ back to the default item — End while navigating, where the rider's next ★, m
 ⏯ are harmless — on `fab.menu`, round 1, ★★ opened the menu on End and ended navigation) and
 `menu.circuit` (menu; ★ without a previewed place only shows a hint), else the usual keep / first item.
 It applies when the focused `music.*` / `menu.music` id is no longer listed (the song went away, or a lap
-card took the tile's room), when the sheet closes because `music == nil` (arrival keeps its own rule),
-and when the closing sheet's `.musicTile` finds no tile (no room for it, or the song went away in the
-same frame; preview / arrival keep their first item as before). When the control is listed again and no
+card took the tile's room), when the sheet closes because `music == nil` stayed so for
+`Options.musicSheetVanishGrace` (2 s; arrival keeps its own rule), and when the closing sheet's
+`.musicTile` finds no tile (no room for it, or the song went away in the same frame; preview / arrival
+keep their first item as before). A shorter vanish does not close the open sheet (R3-FOCUS-1): it stays on
+the song it showed and on the control the rider left. Closed at once, it handed the knob back to the
+tile, the last item of the map list, from where the rider's next ▶ ★, meant for ⏭, wrapped to End
+(`DashMusicSheetVanishTests`). When the control is listed again and no
 dash input came in between, the focus returns to it (the tile for the tile and the sheet's controls,
 `menu.music` in the menu); after any input it stays where it is. A closed sheet stays closed. Trade-off
 of the map target: `fab.recenter` follows End in the map list, so ◀★ while the tile is still gone ends
@@ -1432,16 +1437,18 @@ exhaustively — from the tile (playing, paused), the sheet on each of ⏮ ⏯ �
 navigating and in free ride, with the song staying, gone for one built frame or gone for good, with or
 without a frame between the presses, no sequence of 1–3 ★ / BACK returns `.endNavigation`. Knob steps
 reach End on purpose (End is a stop of the map's list); that test lists the shortest such sequences from
-every state, and a vanish adds none, except the Recenter trade-off above (◀★, and B◀★ / ★◀★ since BACK
-and ★ keep the stand-in).
+every state. A vanish for one frame adds none, compared with the same start without a vanish (the sheet
+stays open through it); a song gone for good adds only the Recenter trade-off above (◀★, and B◀★ / ★◀★
+since BACK and ★ keep the stand-in) to what any close of the sheet leaves (the tile's paths).
 
-**Safety rules** (`DashUIController`): the sheet never opens by itself and closes on ✕ / BACK; after
+**Safety rules** (`DashUIController`): the sheet never opens by itself and closes on ✕ / BACK; 2 s after
+its song went away (`Options.musicSheetVanishGrace`, drawn with that song meanwhile); after
 10 s without dash input while the bike moves or has no fix (`Options.musicSheetIdleTimeout`; it stays
 open while stopped); while navigating when the next turn comes within 200 m
 (`musicSheetTurnDistanceM`; once per turn, never within 3 s of an input — `musicSheetInputGrace`; a
 turn already near when the sheet opens does not close it); on preview start, navigation start, arrival
-start and `music == nil`. `tick(now:)` returns `[.closeSheets]` for the timed closes. Every dash input
-and every music intent counts as activity.
+start. `tick(now:)` returns `[.closeSheets]` for the timed closes (idle, near a turn, the song gone
+2 s). Every dash input and every music intent counts as activity.
 
 **Re-render cadence.** The scene extrapolates the position to the frame time; the display list changes
 only when what is drawn changes: on the sheet once per elapsed second (labels and bar move together:

@@ -80,13 +80,14 @@ final class DashMusicBlindInputTests: XCTestCase {
         case .oneFrame:
             ui.update(base); _ = ui.displayList(now: t0 + 0.5)
             ui.update(with); _ = ui.displayList(now: t0 + 1)
-        case .forGood:
+        case .forGood: // past the open sheet's vanish grace (R3-FOCUS-1)
             ui.update(base); _ = ui.displayList(now: t0 + 0.5)
+            _ = ui.tick(now: t0 + 2.6); _ = ui.displayList(now: t0 + 2.7)
         }
         let focus = presses.isEmpty ? ui.state.focusedId : nil
         var ends: [Bool] = []
         for (i, k) in presses.enumerated() {
-            let now = t0 + 1.5 + Double(i) * 0.4
+            let now = t0 + 3 + Double(i) * 0.4
             ends.append(ui.handle(keys[k].input, now: now).contains(.endNavigation))
             if ends.last == true { break }
             if frames { _ = ui.displayList(now: now + 0.1) }
@@ -199,11 +200,11 @@ final class DashMusicBlindInputTests: XCTestCase {
         case (.menuMusic, .forGood): return ("menu.circuit", "parked Circuit")
         case (.menuMusic, _): return ("menu.music", "menu Music")
         case (_, .forGood): return ("fab.recenter", "parked Recenter")
-        case (.tilePlaying, _), (.tilePaused, _), (_, .oneFrame): return ("music.tile", "tile") // the vanish closed the sheet
-        case (.previous, .none): return ("music.previous", "sheet")
-        case (.playPause, .none): return ("music.playPause", "sheet")
-        case (.next, .none): return ("music.next", "sheet")
-        case (.close, .none): return ("music.close", "sheet ✕")
+        case (.tilePlaying, _), (.tilePaused, _): return ("music.tile", "tile")
+        case (.previous, _): return ("music.previous", "sheet") // a one-frame vanish keeps the sheet open (R3-FOCUS-1)
+        case (.playPause, _): return ("music.playPause", "sheet")
+        case (.next, _): return ("music.next", "sheet")
+        case (.close, _): return ("music.close", "sheet ✕")
         }
     }
 
@@ -216,9 +217,10 @@ final class DashMusicBlindInputTests: XCTestCase {
             XCTAssertEqual(o.shortestEnds, table[row], "\(c) (\(row))")
             guard c.vanish != .none else { continue }
             // A vanish adds no path to End: each one also ends navigation without any vanish, from the same
-            // start or, when the vanish closed an open sheet, from the tile (where the knob comes back to,
-            // as after any close of the sheet) — except the Recenter trade-off while the song stays gone.
-            let reference = all[Config(mode: c.mode, start: c.start.isSheet ? .tilePlaying : c.start, vanish: .none)]!
+            // start (a one-frame vanish leaves an open sheet open: R3-FOCUS-1) or, when the song stayed gone
+            // and the sheet closed 2 s later, from the tile (where the knob comes back to, as after any close
+            // of the sheet) — except the Recenter trade-off while the song stays gone.
+            let reference = all[Config(mode: c.mode, start: c.start.isSheet && c.vanish == .forGood ? .tilePlaying : c.start, vanish: .none)]!
             for s in o.shortestEnds where !Self.ends(s, reference) {
                 XCTAssertTrue(c.vanish == .forGood && c.mode == .navigating && Self.recenterTradeOff.contains(s),
                               "\(c): \(s) ends navigation only because of the vanish")

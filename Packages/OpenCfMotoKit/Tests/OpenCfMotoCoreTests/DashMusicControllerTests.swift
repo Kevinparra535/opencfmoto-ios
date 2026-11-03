@@ -500,6 +500,9 @@ final class DashMusicControllerTests: XCTestCase {
         let gone = controller(music(DashFixtures.navigating()))
         _ = gone.perform(.openMusic, now: t0)
         gone.update(DashFixtures.navigating())
+        XCTAssertEqual(gone.state.sheet, .music, "R3-FOCUS-1: open through a short vanish")
+        XCTAssertEqual(gone.tick(now: t0 + 1.9), [])
+        XCTAssertEqual(gone.tick(now: t0 + 2), [.closeSheets], "the song stayed gone for 2 s")
         XCTAssertEqual(gone.state.sheet, .none)
         XCTAssertEqual(gone.state.focusedId, "fab.recenter", "F2: never End when the song goes away")
         XCTAssertFalse(has(gone.displayList(now: t0), "music.tile"))
@@ -556,15 +559,17 @@ final class DashMusicControllerTests: XCTestCase {
             XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 0.5), [.openMusic], name)
             XCTAssertEqual(ui.state.focusedId, "music.playPause", name)
             XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 1), [.musicPlayPause], name) // ★ pauses
-            // the stale "other audio" reading right after the pause hides the song: the sheet closes
+            // the stale "other audio" reading right after the pause hides the song for one frame: the
+            // sheet stays open on ⏯ (R3-FOCUS-1), so the next ★ / ▶ ★ keep their sheet meaning
             blink(ui, base, paused, at: t0 + 1.1) { st in
-                XCTAssertEqual(st.sheet, .none, name)
-                XCTAssertEqual(st.focusedId, "fab.recenter", name)
+                XCTAssertEqual(st.sheet, .music, name)
+                XCTAssertEqual(st.focusedId, "music.playPause", name)
             }
-            XCTAssertEqual(ui.state.sheet, .none, "\(name): a closed sheet stays closed")
-            XCTAssertEqual(ui.state.focusedId, "music.tile", "\(name): the sheet's ⏯ returns to the tile")
-            XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 2.5), [.openMusic], name)
-            XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 3), [.musicPlayPause], name)
+            XCTAssertEqual(ui.state.sheet, .music, name)
+            XCTAssertEqual(ui.state.focusedId, "music.playPause", name)
+            XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 2.5), [.musicPlayPause], name)
+            XCTAssertEqual(ui.handle(.knob(1), now: t0 + 3), [], name)
+            XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 3.4), [.musicNext], "\(name): ▶ ★ is still ⏭")
         }
     }
 
@@ -629,7 +634,8 @@ final class DashMusicControllerTests: XCTestCase {
             _ = ui.handle(.key(.back), now: t0 + 1)
             XCTAssertEqual(ui.state.focusedId, first)
             _ = ui.perform(.openMusic, now: t0 + 2)
-            ui.update(model) // the song goes away: the sheet closes
+            ui.update(model) // the song goes away for good: the sheet closes after the grace
+            XCTAssertEqual(ui.tick(now: t0 + 4), [.closeSheets])
             XCTAssertEqual(ui.state.sheet, .none)
             XCTAssertEqual(ui.state.focusedId, first)
         }
