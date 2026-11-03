@@ -48,12 +48,19 @@ public struct EncodedFrame: Sendable, Equatable {
     public var presentationTime: TimeInterval
     /// Monotonic per-encoder sequence number.
     public var sequence: UInt64
+    /// ADDITION (locked iPhone, Phase 0, P0-6): which encoder instance produced this access unit,
+    /// stamped by the dash projection engine: 0 = not stamped (every other producer), 1 = the
+    /// pre-encoded hold IDRs, then 2, 3, … one per live encoder instance of the engine (never reused).
+    /// Diagnostics only: never written to the wire (`wireBytes`) or to the wire dump.
+    public var encoderTag: UInt32
 
-    public init(accessUnit: Data, isKeyframe: Bool, presentationTime: TimeInterval = 0, sequence: UInt64 = 0) {
+    public init(accessUnit: Data, isKeyframe: Bool, presentationTime: TimeInterval = 0, sequence: UInt64 = 0,
+                encoderTag: UInt32 = 0) {
         self.accessUnit = accessUnit
         self.isKeyframe = isKeyframe
         self.presentationTime = presentationTime
         self.sequence = sequence
+        self.encoderTag = encoderTag
     }
 
     /// Exact bytes for one REQ_RV_DATA_NEXT (114) answer on :10920:

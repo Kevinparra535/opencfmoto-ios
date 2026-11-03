@@ -252,6 +252,19 @@ public struct DashProjectionStats: Sendable, Equatable {
     public var usingHardwareEncoder: Bool?
     public var thermalLevel: ThermalLevel = .none
     public var lowPowerMode = false
+    // ADDITION (locked iPhone, Phase 0). step-0 stubs: V fills them.
+    /// The encoder now feeding the dash (`DashEncoderKind.description`): `vt-hw` in the foreground,
+    /// `vt-sw` / `cpu-<backend>` in backgroundSoftware, `hold` in hold; nil when idle / stopped.
+    public var encoder: String?
+    /// Seconds since the current background period began; 0 in the foreground.
+    public var backgroundSeconds: Double = 0
+    /// The background frame-rate cap in effect while backgroundSoftware (Phase 0: `backgroundFrameRate`;
+    /// Phase 1: the budget); nil otherwise.
+    public var backgroundFpsCap: Int?
+    /// Background encoders demoted since the engine was created.
+    public var demotions = 0
+    /// Process CPU % of one core (100 = one core busy), latest background measurement; nil until measured.
+    public var cpuPercent: Double?
     public init() {}
 }
 
@@ -324,6 +337,8 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
         var dump: H264WireDump?
         var pullMeter = RateMeter()
         var outputMeter = RateMeter()
+        var cpuEncoderFactory: (@Sendable (_ label: String) -> any DashVideoEncoder)?
+        var batteryProvider: (@Sendable () -> BatteryStatus?)?
     }
 
     public let renderer: DashRenderer
@@ -353,6 +368,48 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
     /// Maximum preview rate (frames per second).
     public var previewMaxFPS: Double { get { flags.current.previewFps } set { flags.withLock { $0.previewFps = max(0.1, newValue) } } }
 
+    // MARK: locked iPhone (Phase 0 seam; step-0 stubs: V implements the behaviour)
+
+    /// ADDITION (locked iPhone, Phase 0): what the dash gets while the app is in the background — the
+    /// rungs of the background ladder (Core `BackgroundEncoderLadder.rungs`). Default `.automatic`; the
+    /// Phase 0 app sets `.videoToolboxSoftwareOnly`. Any thread; read at every ladder run (background
+    /// entry, retry, canvas change while backgrounded). `allowsSoftwareEncodingInBackground` becomes an
+    /// alias of it (false = `.holdOnly`).
+    /// step-0 stub: stored only; V implements the ladder.
+    public var lockedStreamPolicy: LockedStreamPolicy {
+        get { flags.current.policy } set { flags.withLock { $0.policy = newValue } }
+    }
+
+    /// ADDITION (locked iPhone, Phase 0): makes the background CPU encoder (rung 2) for a label
+    /// (`own-cpu`); nil = no rung 2 (the Phase 0 app leaves it nil). Any thread; read at ladder runs.
+    /// step-0 stub: stored only.
+    public var cpuEncoderFactory: (@Sendable (_ label: String) -> any DashVideoEncoder)? {
+        get { shared.current.cpuEncoderFactory } set { shared.withLock { $0.cpuEncoderFactory = newValue } }
+    }
+
+    /// ADDITION (locked iPhone, Phase 0 build only): in hold, during the first 10 minutes of every
+    /// background period, render the live UI at 8 fps, convert it to I420 on the CPU, burn 10 ms of
+    /// synthetic load and discard the result (never sent), logging `[bg-probe]` lines. Default false.
+    /// step-0 stub: stored only.
+    public var backgroundDryRun: Bool {
+        get { flags.current.dryRun } set { flags.withLock { $0.dryRun = newValue } }
+    }
+
+    /// ADDITION (locked iPhone, Phase 0): the battery state for the background lines and the budget.
+    /// Called on the render queue: it must be cheap and thread-safe. nil = unknown.
+    /// step-0 stub: stored only.
+    public var batteryProvider: (@Sendable () -> BatteryStatus?)? {
+        get { shared.current.batteryProvider } set { shared.withLock { $0.batteryProvider = newValue } }
+    }
+
+    /// ADDITION (locked iPhone, Phase 0): the app is becoming `.inactive` (call right after
+    /// `prepareHoldPicture`; both run on the render queue in call order): pre-warm the VideoToolbox
+    /// software session (`own-sw-pre`) and probe it once with the last picture, into a probe sink —
+    /// never into the frame queue, the hardware encoder is still live. The session is re-pointed and
+    /// probed again at `.background`, or invalidated when the app becomes `.active` first.
+    /// step-0 stub: does nothing; V implements.
+    public func prepareBackgroundEncoder() {}
+
     private struct Flags {
         var thermal = true
         var lowPower = true
@@ -360,6 +417,8 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
         var software = true
         var secondIDR: TimeInterval?
         var previewFps = 5.0
+        var policy: LockedStreamPolicy = .automatic
+        var dryRun = false
     }
     private let flags = Locked(Flags())
 

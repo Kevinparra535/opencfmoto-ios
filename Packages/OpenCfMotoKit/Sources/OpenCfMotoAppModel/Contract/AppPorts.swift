@@ -71,6 +71,10 @@ public protocol SystemControlling: AnyObject {
     /// system alert if it was due, so unlike `checkLocalNetworkAccess` this may probe without an earlier
     /// explicit request. Default (protocol extension): `checkLocalNetworkAccess()`.
     func checkLocalNetworkAccessAfterBlockedConnect() async -> LocalNetworkAccessState
+    /// ADDITION (locked iPhone, Phase 0, P0-12): the battery level and state (UIDevice battery
+    /// monitoring, cached by the app's BatteryMonitor), for the `[lock]` status line. nil = unknown.
+    /// Default (protocol extension): nil.
+    var batteryStatus: BatteryStatus? { get }
 }
 
 public extension SystemControlling {
@@ -81,6 +85,9 @@ public extension SystemControlling {
     func checkLocalNetworkAccessAfterBlockedConnect() async -> LocalNetworkAccessState {
         await checkLocalNetworkAccess()
     }
+
+    /// Conformers without battery monitoring report nothing.
+    var batteryStatus: BatteryStatus? { nil }
 }
 
 /// Where the app keeps its files.
@@ -440,15 +447,42 @@ public struct ProjectionStatsSummary: Sendable, Equatable {
     public var framesPerSecond: Double
     public var bitrate: Int
     public var lastError: String?
+    // ADDITION (locked iPhone, Phase 0): what the `[lock]` status line and the diagnostics need.
+    /// The encoder now feeding the dash: "vt-hw", "vt-sw", "cpu-<backend>", "hold"; nil when idle /
+    /// stopped or unknown.
+    public var encoder: String?
+    /// REQ 114 pulls per second (the dash's demand).
+    public var pullRate: Double
+    /// Pulls answered with a frame, of which hold IDRs and fallback IDRs (counters since the engine
+    /// was created).
+    public var pullsServed: Int
+    public var holdFramesServed: Int
+    public var fallbackKeyframesServed: Int
+    public var encoderErrors: Int
+    /// Process CPU % of one core (100 = one core busy), latest background measurement; nil when not
+    /// measured.
+    public var cpuPercent: Double?
+    /// The background frame-rate cap in effect while a background encoder runs; nil otherwise.
+    public var backgroundFpsCap: Int?
 
     public init(mode: String = "idle", renderedFrames: Int = 0, encodedFrames: Int = 0,
-                framesPerSecond: Double = 0, bitrate: Int = 0, lastError: String? = nil) {
+                framesPerSecond: Double = 0, bitrate: Int = 0, lastError: String? = nil, encoder: String? = nil,
+                pullRate: Double = 0, pullsServed: Int = 0, holdFramesServed: Int = 0, fallbackKeyframesServed: Int = 0,
+                encoderErrors: Int = 0, cpuPercent: Double? = nil, backgroundFpsCap: Int? = nil) {
         self.mode = mode
         self.renderedFrames = renderedFrames
         self.encodedFrames = encodedFrames
         self.framesPerSecond = framesPerSecond
         self.bitrate = bitrate
         self.lastError = lastError
+        self.encoder = encoder
+        self.pullRate = pullRate
+        self.pullsServed = pullsServed
+        self.holdFramesServed = holdFramesServed
+        self.fallbackKeyframesServed = fallbackKeyframesServed
+        self.encoderErrors = encoderErrors
+        self.cpuPercent = cpuPercent
+        self.backgroundFpsCap = backgroundFpsCap
     }
 }
 
@@ -505,10 +539,20 @@ public protocol DashProjecting: AnyObject, Sendable {
     /// downsampled once by the renderer side, then the picture is re-rendered (`invalidate`).
     /// Unknown ids draw nothing (the scene's placeholder shows). Any thread. Default: ignored.
     func setDashImage(id: String, data: Data?)
+    /// ADDITION (locked iPhone, Phase 0, P0-4): the app is becoming inactive — call right after
+    /// `prepareHoldPicture(expectedCanvas:)` (the engine runs both on its render queue, in call order):
+    /// pre-warm the background encoder (rung 1) while the app is still in the foreground. Any thread.
+    /// Default: no-op.
+    func prepareBackgroundEncoder()
+    /// ADDITION (locked iPhone, Phase 0): what the dash gets while the phone is locked (the ladder of
+    /// background encoders). Takes effect at the next background entry. Any thread. Default: no-op.
+    func setLockedStreamPolicy(_ policy: LockedStreamPolicy)
 }
 
 public extension DashProjecting {
     func setDashImage(id: String, data: Data?) {}
+    func prepareBackgroundEncoder() {}
+    func setLockedStreamPolicy(_ policy: LockedStreamPolicy) {}
 
     var onCanvasPrepared: (@Sendable (VideoCanvas) -> Void)? {
         get { nil }
