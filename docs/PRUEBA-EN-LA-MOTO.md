@@ -110,13 +110,16 @@ Antes de salir:
 
 En la moto, parada y segura, con el contacto puesto:
 
-4. Conecta y espera a ver el mapa en el tablero.
+4. Conecta y espera a ver el mapa en el tablero, sin menú ni hoja abierta (abajo a la derecha se ve
+   la hora).
 5. Activa Registros ▸ «Grabar el vídeo enviado al tablero». A los 5 segundos, bloquea el iPhone con
    el botón lateral y apunta la hora.
-6. Mira el tablero a los 30 s, a los 2 min y a los 10 min. ¿Qué ves?
-   - el mapa moviéndose;
+6. Mira el tablero a los 30 s, a los 2 min y a los 10 min. Con la moto parada el mapa en vivo no
+   se mueve: lo que cambia es la **hora del tablero** (abajo a la derecha), una vez por minuto.
+   ¿Qué ves?
+   - el mapa sin aviso y la hora del tablero avanza (en vivo);
    - «Teléfono bloqueado»;
-   - la imagen congelada;
+   - el mapa sin aviso y la hora no avanza (imagen congelada);
    - sin imagen o desconectado.
 7. Desbloquea. ¿Vuelve el mapa en menos de 5 s?
 8. Repite los pasos 5 a 7 en estas condiciones:
@@ -130,12 +133,14 @@ En la moto, parada y segura, con el contacto puesto:
 
 Qué significa cada resultado (con el iPhone bloqueado):
 
-- **El mapa se mueve**: iOS dejó a la app comprimir el vídeo por software con el teléfono bloqueado.
-  Es justo lo que esta prueba busca: compártelo aunque solo dure un rato.
+- **El mapa en vivo** (sin aviso y la hora del tablero avanza; con la moto parada el mapa no se
+  mueve): iOS dejó a la app comprimir el vídeo por software con el teléfono bloqueado. Es justo lo
+  que esta prueba busca: compártelo aunque solo dure un rato.
 - **«Teléfono bloqueado»**: lo esperado en esta build. iOS no dio un codificador de vídeo, pero la
   app siguió viva y respondió al tablero; el registro dice por qué (líneas `[bg] try vt-sw …`).
-- **La imagen congelada** (el último mapa, sin el aviso): la app dejó de recibir peticiones del
-  tablero o no tenía imagen de pausa para esa pantalla; el registro lo dice.
+- **La imagen congelada** (el último mapa, sin el aviso, y la hora del tablero no avanza): la app
+  dejó de recibir peticiones del tablero, no tenía imagen de pausa para esa pantalla, o el tablero
+  no muestra el vídeo nuevo; el registro lo dice.
 - **Sin imagen o desconectado**: iOS cortó el Wi-Fi del tablero o paró la app. Repite con el iPhone
   cargando (condición A).
 - Para rodar, **Modo ruta** sigue siendo lo fiable: pantalla negra y el teléfono no se bloquea.
