@@ -258,6 +258,44 @@ final class VideoEngineLockSeamTests: XCTestCase {
         }, "L13 without a background encoder")
     }
 
+    // MARK: the background frame-rate cap against a dash that pulls as fast as it can
+
+    /// Pulls back to back for `seconds` (a dash pulls the next frame as soon as it has decoded one).
+    private func pullFlat(_ engine: DashProjectionEngine, seconds: TimeInterval) async -> [EncodedFrame] {
+        let end = ProcessInfo.processInfo.systemUptime + seconds
+        var frames: [EncodedFrame] = []
+        while ProcessInfo.processInfo.systemUptime < end {
+            if let f = await engine.nextFrame(timeout: 1.5) { frames.append(f) }
+        }
+        return frames
+    }
+
+    /// The E2E `locked` run showed `[bg] … cap=8fps out=9.0fps pulls=9.0/s`: a pull that found the queue
+    /// empty rendered and encoded at once, so the background stream followed the dash's pull rate (about
+    /// 24/s on a real dash while the map moves) instead of the cap. With a background encoder the render
+    /// timer alone paces the stream (design §3.6); in the foreground pulls still render at once.
+    func testTheBackgroundCapHoldsAgainstADashThatPullsAsFastAsItCan() async throws {
+        let engine = makeAppEngine(FakeEncoderFactory(), encoderList: [])
+        engine.prepare(canvas: canvas, parameters: parameters)
+        engine.resynchronize()
+        _ = await pull(engine, 2)
+        let foreground = await pullFlat(engine, seconds: 1)
+        inactive(engine)
+        engine.enterBackground()
+        XCTAssertTrue(eventually { engine.mode == .backgroundSoftware })
+        let background = await pullFlat(engine, seconds: 2)
+        let cap = try XCTUnwrap(engine.stats.backgroundFpsCap)
+        XCTAssertEqual(cap, 8)
+        XCTAssertLessThanOrEqual(background.count, 2 * cap + 3, "the background stream stays at the cap (8 fps)")
+        XCTAssertGreaterThanOrEqual(background.count, cap, "and keeps streaming")
+        XCTAssertLessThanOrEqual(engine.stats.outputFPS, Double(cap) + 1.5)
+        XCTAssertGreaterThan(foreground.count, 2 * parameters.frameRate,
+                             "the foreground stays pull-paced (unchanged): more than its 24-fps timer alone gives")
+        XCTAssertTrue(background.first?.isKeyframe ?? false)
+        engine.enterForeground()
+        XCTAssertTrue(eventually { engine.mode == .foreground })
+    }
+
     // MARK: vImage (Apple) against the integer reference (Core)
 
     private struct PlaneDiff {

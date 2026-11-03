@@ -920,8 +920,12 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
             shared.withLock { $0.stats.pullsUnanswered += 1 }
             return nil
         }
-        if frameQueue.pendingCount == 0 {
-            renderQueue.async { [weak self] in self?.tick() } // answer within one encode latency
+        // Answer within one encode latency: render now rather than at the next timer tick. Not with a
+        // background encoder (locked iPhone): there the render timer at the background cap paces the
+        // stream (design §3.6, "at most the cap while the map moves"); a pull-triggered tick would render
+        // and encode at the dash's pull rate (about 24/s while the map moves) instead of the cap.
+        if frameQueue.pendingCount == 0, mode != .backgroundSoftware {
+            renderQueue.async { [weak self] in self?.tick() }
         }
         guard mode != .stopped else { return nil }
         let result = await FramePull.next(from: frameQueue, timeout: timeout) { [weak self] in

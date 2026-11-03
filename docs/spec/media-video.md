@@ -943,6 +943,10 @@ iOS takes the hardware encoder away in the background (ios-platform-facts.md §d
   live encoders; never on the wire), and a change of tag on the wire always falls on an IDR (tested). The
   dash has never been shown an SPS change mid-session before: the E2E scenario `locked`
   (tools/ci/e2e/README.md) records every SPS/PPS variant and decodes strictly.
+- **Frame rate.** With a background encoder the render timer at `backgroundFrameRate` (8 fps) alone paces
+  the stream: a pull that finds the queue empty does not render at once as in the foreground (§15.4), so the
+  stream stays at the cap even when the dash pulls faster (about 24/s while the map moves; the E2E fake dash
+  pulls about 9/s).
 - **Phase 0 only:** in hold the engine also runs a background CPU **dry run** for the first 10 minutes
   (render, vImage BGRA→I420, 10 ms of synthetic load, at 8 fps, all discarded) to measure what iOS tolerates.
 
