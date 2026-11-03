@@ -89,8 +89,56 @@ canción justo tras una pausa).
    sonido corto de otra app no lo quita.
 8. **Navegando**: la hoja Música se cierra sola unos 200 m antes de un giro y tras 10 s sin tocarla
    en marcha; con la moto parada sigue abierta.
-9. **Bloquear y desbloquear el iPhone**: la imagen fija de «Teléfono bloqueado» y, al desbloquear,
-   el recuadro correcto.
+9. **Bloquear y desbloquear el iPhone**: lo que muestre el tablero bloqueado (casi siempre la imagen
+   fija de «Teléfono bloqueado», ver la sección siguiente) y, al desbloquear, el recuadro correcto.
+
+## Teléfono bloqueado: prueba de diagnóstico (fase 0)
+
+Esta build **mide** qué pasa con el iPhone bloqueado; no promete el mapa en vivo. En el tablero verás
+casi siempre lo mismo que antes (la imagen fija «Teléfono bloqueado»): la app intenta un codificador
+de vídeo por software de iOS y apunta en los registros qué responde iOS, si el Wi-Fi y el enlace
+siguen vivos, cuánto gasta y si llegan el GPS y la brújula.
+
+Antes de salir:
+
+1. Instala la última build desde TestFlight.
+2. En Ajustes de iOS ▸ OpenCfMoto:
+   - Ubicación: «Mientras se usa la app», con «Ubicación exacta» activada;
+   - «Red local» activada;
+   - «Actualización en segundo plano» activada.
+3. Desactiva el Modo de bajo consumo. Apunta si tienes activados los botones del manillar.
+
+En la moto, parada y segura, con el contacto puesto:
+
+4. Conecta y espera a ver el mapa en el tablero.
+5. Activa Registros ▸ «Grabar el vídeo enviado al tablero». A los 5 segundos, bloquea el iPhone con
+   el botón lateral y apunta la hora.
+6. Mira el tablero a los 30 s, a los 2 min y a los 10 min. ¿Qué ves?
+   - el mapa moviéndose;
+   - «Teléfono bloqueado»;
+   - la imagen congelada;
+   - sin imagen o desconectado.
+7. Desbloquea. ¿Vuelve el mapa en menos de 5 s?
+8. Repite los pasos 5 a 7 en estas condiciones:
+   - **A:** iPhone cargando;
+   - **B:** sin cargar;
+   - **C** (opcional): con los botones del manillar activados.
+9. Justo al terminar (la app guarda solo las últimas 5000 líneas del registro):
+   - Registros ▸ **Compartir**, y comparte también el archivo `.h264`;
+   - envía las horas, lo que viste en cada momento, el % de batería al empezar y al terminar, y si el
+     iPhone se calentó.
+
+Qué significa cada resultado (con el iPhone bloqueado):
+
+- **El mapa se mueve**: iOS dejó a la app comprimir el vídeo por software con el teléfono bloqueado.
+  Es justo lo que esta prueba busca: compártelo aunque solo dure un rato.
+- **«Teléfono bloqueado»**: lo esperado en esta build. iOS no dio un codificador de vídeo, pero la
+  app siguió viva y respondió al tablero; el registro dice por qué (líneas `[bg] try vt-sw …`).
+- **La imagen congelada** (el último mapa, sin el aviso): la app dejó de recibir peticiones del
+  tablero o no tenía imagen de pausa para esa pantalla; el registro lo dice.
+- **Sin imagen o desconectado**: iOS cortó el Wi-Fi del tablero o paró la app. Repite con el iPhone
+  cargando (condición A).
+- Para rodar, **Modo ruta** sigue siendo lo fiable: pantalla negra y el teléfono no se bloquea.
 
 ## Si algo falla
 
@@ -115,8 +163,9 @@ canción justo tras una pausa).
   arriba (red local activada, ninguna VPN ni restricción) y comparte los registros.
 - **Pulsaste Conectar justo cuando la app ya conectaba sola**: ese toque no la detiene (cuenta como
   Conectar). Para detenerla, vuelve a pulsar.
-- **El tablero muestra «Teléfono bloqueado»**: es lo esperado si bloqueas el iPhone. iOS no deja
-  codificar vídeo en segundo plano. Usa **Modo ruta** en lugar de bloquear.
+- **El tablero muestra «Teléfono bloqueado»**: lo esperado si bloqueas el iPhone, salvo que iOS le
+  dé a la app un codificador por software (ver «Qué significa cada resultado» en la prueba de
+  diagnóstico de arriba). Para rodar, usa **Modo ruta** en lugar de bloquear.
 
 ## Qué me ayuda saber de tu prueba
 

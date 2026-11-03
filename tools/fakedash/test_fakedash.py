@@ -594,6 +594,208 @@ class AnnexBTests(unittest.TestCase):
                 self.assertFalse(info.sps.get("max_num_reorder_frames"))
 
 
+class SpsVariantTests(unittest.TestCase):
+    """Locked iPhone, Phase 0: every distinct SPS/PPS of a stream (the `locked` scenario), with the
+    vectors of the contract (CI simulator VideoToolbox SPS, the reference SPS, PPS 28 de 09 c8)."""
+
+    VT_SPS = H("2742e01fa918190636 02d4080808c2b5ef7c04".replace(" ", ""))
+    REF_SPS = H("6742c01fda0320c680784423 50".replace(" ", ""))
+    PPS = H("28de09c8")
+    PPS2 = H("68ce3c80")
+
+    @staticmethod
+    def au(*nals):
+        return b"".join(b"\x00\x00\x00\x01" + n for n in nals)
+
+    def idr(self, sps, pps=None):
+        return fd.analyze_au(self.au(sps, pps or self.PPS, H("658884aa")))
+
+    def p(self):
+        return fd.analyze_au(self.au(H("419a11")))
+
+    def test_two_encoders_give_two_variants_with_their_fields(self):
+        v = fd.SpsVariants()
+        self.assertEqual(v.observe(self.idr(self.VT_SPS), 1), (None, 0, True, True))
+        self.assertIsNone(v.observe(self.p(), 2))
+        self.assertEqual(v.observe(self.idr(self.REF_SPS), 3), (0, 1, True, True))
+        self.assertIsNone(v.observe(self.p(), 4))
+        self.assertIsNone(v.observe(self.p(), 5))
+        a, b = v.summary()
+        self.assertEqual(a, {"hex": self.VT_SPS.hex(), "pps_hex": self.PPS.hex(), "first_frame": 1, "frames": 2,
+                             "profile": 66, "level": 31, "constraints": 0xE0, "poc_type": 0, "refs": 2,
+                             "log2_max_frame_num": 5, "vui": True, "reorder": None, "width": 800, "height": 384})
+        self.assertEqual(b, {"hex": self.REF_SPS.hex(), "pps_hex": self.PPS.hex(), "first_frame": 3, "frames": 3,
+                             "profile": 66, "level": 31, "constraints": 0xC0, "poc_type": 2, "refs": 1,
+                             "log2_max_frame_num": 4, "vui": True, "reorder": 0, "width": 800, "height": 384})
+        self.assertEqual(v.changes, [(1, None, 0, True), (3, 0, 1, True)])
+        self.assertEqual(fd.variant_text(a), "profile 66 constraints 0xE0 level 31 800x384 poc 0 refs 2 frame_num_bits 5 "
+                                             "vui=yes reorder=- | SPS %s PPS %s" % (self.VT_SPS.hex(), self.PPS.hex()))
+        json.dumps(v.summary())  # JSON-ready (summary.json)
+
+    def test_switching_back_reuses_the_first_variant(self):
+        v = fd.SpsVariants()
+        v.observe(self.idr(self.VT_SPS), 1)
+        v.observe(self.idr(self.REF_SPS), 2)
+        self.assertEqual(v.observe(self.idr(self.VT_SPS), 3), (1, 0, True, False))
+        self.assertEqual(v.observe(self.idr(self.VT_SPS), 4), None, "same variant: no change")
+        self.assertEqual([x["frames"] for x in v.summary()], [3, 1])
+        self.assertEqual(len(v.summary()), 2)
+
+    def test_a_new_pps_alone_is_a_new_variant(self):
+        v = fd.SpsVariants()
+        v.observe(self.idr(self.VT_SPS), 1)
+        self.assertEqual(v.observe(self.idr(self.VT_SPS, self.PPS2), 2), (0, 1, True, True))
+        self.assertEqual(v.summary()[1]["pps_hex"], self.PPS2.hex())
+
+    def test_a_switch_on_a_p_frame_is_reported_as_not_at_an_idr(self):
+        v = fd.SpsVariants()
+        v.observe(self.idr(self.VT_SPS), 1)
+        info = fd.analyze_au(self.au(self.REF_SPS, self.PPS, H("419a11")))
+        self.assertEqual(v.observe(info, 2), (0, 1, False, True))
+
+    def test_locked_switch_findings(self):
+        one = [{"hex": "aa", "pps_hex": "bb"}]
+        two = one + [{"hex": "cc", "pps_hex": "bb"}]
+        self.assertEqual(fd.locked_switch_findings([two]), [])
+        self.assertEqual(fd.locked_switch_findings([one, [{"hex": "cc", "pps_hex": "bb"}]]), [], "across sessions")
+        for lists in ([one], [one, one], [], [[]]):
+            found = fd.locked_switch_findings(lists)
+            self.assertEqual([(sev, rule) for sev, rule, _ in found], [("violation", "LOCKED_NO_SWITCH")], lists)
+
+    def test_locked_scenario_defaults(self):
+        self.assertEqual(fd.SCENARIOS["locked"], ("cfdl16", 60.0))
+        a = fd.parse_args(["--scenario", "locked"])
+        self.assertEqual((a.dash, a.seconds, a.trace_headers), ("cfdl16", 60.0, None))
+        self.assertEqual(fd.STRICT_DECODE_FLAGS, ["-xerror", "-err_detect", "+crccheck+bitstream+buffer+explode"])
+
+    TRACE = "\n".join([
+        "Input #0, h264, from 'in.h264':",
+        "[trace_headers @ 0x1] Sequence Parameter Set",
+        "[trace_headers @ 0x1] 8           profile_idc                                          01000010 = 66",
+        "[trace_headers @ 0x1] 18          constraint_set2_flag                                        0 = 0",
+        "[trace_headers @ 0x1] Picture Parameter Set",
+        "[trace_headers @ 0x1] 0           forbidden_zero_bit                                          0 = 0",
+        "[trace_headers @ 0x1] Packet: 1200 bytes, key frame, pts 0, dts 0.",
+        "[trace_headers @ 0x1] Sequence Parameter Set",
+        "[trace_headers @ 0x1] 8           profile_idc                                          01000010 = 66",
+        "[trace_headers @ 0x1] 18          constraint_set2_flag                                        0 = 0",
+        "[trace_headers @ 0x1] Picture Parameter Set",
+        "[trace_headers @ 0x1] 0           forbidden_zero_bit                                          0 = 0",
+        "[trace_headers @ 0x1] Supplemental Enhancement Information",
+        "[trace_headers @ 0x1] 0           forbidden_zero_bit                                          0 = 0",
+        "[trace_headers @ 0x1] Slice Header",
+        "[trace_headers @ 0x1] 8           first_mb_in_slice                                           1 = 0",
+        "[trace_headers @ 0x1] 9           slice_type                                              0001000 = 7",
+        "[trace_headers @ 0x1] Packet: 300 bytes, pts 1, dts 1.",
+        "[trace_headers @ 0x1] Slice Header",
+        "[trace_headers @ 0x1] 8           first_mb_in_slice                                           1 = 0",
+        "[trace_headers @ 0x2] Packet: 1210 bytes, key frame, pts 2, dts 2.",
+        "[trace_headers @ 0x2] Sequence Parameter Set",
+        "[trace_headers @ 0x2] 8           profile_idc                                          01000010 = 66",
+        "[trace_headers @ 0x2] 18          constraint_set2_flag                                        0 = 0",
+        "[trace_headers @ 0x2] Picture Parameter Set",
+        "[trace_headers @ 0x2] 0           forbidden_zero_bit                                          0 = 0",
+        "[trace_headers @ 0x2] Slice Header",
+        "[trace_headers @ 0x2] 8           first_mb_in_slice                                           1 = 0",
+        "[trace_headers @ 0x1] Packet: 1300 bytes, key frame, pts 3, dts 3.",
+        "[trace_headers @ 0x1] Sequence Parameter Set",
+        "[trace_headers @ 0x1] 8           profile_idc                                          01000010 = 66",
+        "[trace_headers @ 0x1] 18          constraint_set2_flag                                        1 = 1",
+        "[trace_headers @ 0x1] Picture Parameter Set",
+        "[trace_headers @ 0x1] 0           forbidden_zero_bit                                          0 = 0",
+        "[trace_headers @ 0x1] Slice Header",
+        "[trace_headers @ 0x1] 8           first_mb_in_slice                                           1 = 0",
+        "[trace_headers @ 0x1] 9           slice_type                                              0001000 = 7",
+    ]) + "\n"
+
+    def test_trace_headers_keep_the_first_and_each_changed_parameter_set_with_its_slice_header(self):
+        out = fd.filter_trace_headers(self.TRACE).splitlines()
+        lines = self.TRACE.splitlines()
+        self.assertEqual(out, lines[1:6]                    # the extradata's SPS / PPS
+                         + ["#1 " + lines[6]] + lines[7:12] + lines[14:17]  # packet 1: SPS, PPS, its slice header
+                         + ["#4 " + lines[28]] + lines[29:])                 # packet 4: the switch
+        self.assertNotIn("#2 ", "\n".join(out), "a P-frame without parameter sets")
+        self.assertNotIn("#3 ", "\n".join(out), "the same SPS/PPS again (another trace prefix does not count)")
+        self.assertNotIn("Supplemental Enhancement Information", "\n".join(out))
+        self.assertEqual(len(fd.filter_trace_headers(self.TRACE, slice_lines=1).splitlines()), len(out) - 2)
+        other = "\n".join("line %d" % i for i in range(5000))
+        self.assertEqual(fd.filter_trace_headers(other).splitlines(), ["line %d" % i for i in range(2000)],
+                         "no parameter-set block: the head of the dump")
+
+
+class StrictDecodeTests(unittest.TestCase):
+    """`decode_check(strict=True)` (scenario `locked`): the strict ffmpeg flags, the lenient run kept apart,
+    and the filtered trace_headers dump — with stub ffprobe / ffmpeg on PATH that record their arguments."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="fakedash-strict-")
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        with open(os.path.join(self.tmp, "trace.txt"), "w") as f:
+            f.write(SpsVariantTests.TRACE)
+        self.stub("ffprobe", "echo '{\"streams\":[{\"codec_name\":\"h264\",\"profile\":\"Constrained Baseline\",\"level\":31,"
+                             "\"width\":800,\"height\":384,\"pix_fmt\":\"yuv420p\",\"nb_read_frames\":\"3\"}]}'")
+        old = os.environ["PATH"]
+        os.environ["PATH"] = self.tmp + os.pathsep + old
+        self.addCleanup(os.environ.__setitem__, "PATH", old)
+        self.h264 = os.path.join(self.tmp, "in.h264")
+        with open(self.h264, "wb") as f:
+            f.write(b"\x00\x00\x00\x01\x65\x88")
+
+    def stub(self, name, body):
+        path = os.path.join(self.tmp, name)
+        with open(path, "w") as f:
+            f.write("#!/bin/sh\n" + body + "\n")
+        os.chmod(path, 0o755)
+
+    def ffmpeg(self, strict_rc=0, strict_err=""):
+        # Records every call; the strict run (it has -xerror) answers strict_rc / strict_err; the
+        # trace_headers run prints the synthetic trace on stderr.
+        self.stub("ffmpeg", 'D=$(dirname "$0"); echo "$*" >> "$D/ffmpeg-args.txt"\n'
+                            'case "$*" in *trace_headers*) cat "$D/trace.txt" >&2;; '
+                            '*-xerror*) [ -n "%s" ] && echo "%s" >&2; exit %d;; esac\nexit 0' % (strict_err, strict_err, strict_rc))
+
+    def calls(self):
+        with open(os.path.join(self.tmp, "ffmpeg-args.txt")) as f:
+            return f.read().splitlines()
+
+    def test_strict_decode_runs_the_strict_flags_before_the_input(self):
+        self.ffmpeg()
+        headers = os.path.join(self.tmp, "frames", "headers.txt")
+        res = fd.decode_check(self.h264, (800, 384), 3, strict=True, headers_path=headers)
+        calls = self.calls()
+        self.assertEqual(len(calls), 3, calls)
+        self.assertEqual(calls[0], "-hide_banner -v error -f h264 -i %s -f null -" % self.h264, "the lenient run")
+        self.assertEqual(calls[1], "-hide_banner -v error -xerror -err_detect +crccheck+bitstream+buffer+explode -f h264 "
+                                   "-i %s -f null -" % self.h264)
+        self.assertEqual(calls[2], "-hide_banner -f h264 -i %s -c:v copy -bsf:v trace_headers -f null -" % self.h264)
+        self.assertTrue(res["strict"])
+        self.assertEqual(res["strict_flags"], "-xerror -err_detect +crccheck+bitstream+buffer+explode")
+        self.assertTrue(res["decodable"])
+        self.assertTrue(res["lenient_decodable"])
+        with open(headers) as f:
+            text = f.read()
+        self.assertEqual(text, fd.filter_trace_headers(SpsVariantTests.TRACE))
+        self.assertEqual(res["headers_file"], headers)
+        self.assertEqual(res["headers_lines"], len(fd.filter_trace_headers(SpsVariantTests.TRACE).splitlines()))
+
+    def test_a_strict_only_failure_is_not_decodable_but_lenient_clean(self):
+        self.ffmpeg(strict_rc=1, strict_err="[h264 @ 0x1] error while decoding MB 3 7")
+        res = fd.decode_check(self.h264, (800, 384), 3, strict=True)
+        self.assertFalse(res["decodable"])
+        self.assertTrue(res["lenient_decodable"])
+        self.assertEqual(res["decode_returncode"], 1)
+        self.assertEqual(res["decode_errors"], ["[h264 @ 0x1] error while decoding MB 3 7"])
+        self.assertEqual(len(self.calls()), 2, "no trace_headers run without a headers path")
+
+    def test_the_other_scenarios_decode_as_before(self):
+        self.ffmpeg()
+        res = fd.decode_check(self.h264, (800, 384), 3)
+        self.assertEqual(self.calls(), ["-hide_banner -v error -f h264 -i %s -f null -" % self.h264])
+        self.assertNotIn("strict", res)
+        self.assertNotIn("lenient_decodable", res)
+        self.assertTrue(res["decodable"])
+
+
 class SinkTests(unittest.TestCase):
     class _Run(object):
         def __init__(self):
@@ -825,6 +1027,52 @@ class EndToEndTests(unittest.TestCase):
         self.assertIn("FRAME_MAGIC", self.violations(s))
         s = self.run_pair("cfdl16", "cfdl16", seconds=5, bugs=["no-heartbeat"])
         self.assertIn("HEARTBEAT_MISSING", self.violations(s))
+
+    def test_locked_switch_at_an_idr_is_clean(self):
+        s = self.run_pair("locked", "cfdl16", seconds=3, phone_args=["--sps-switch-at", "15"])
+        self.assert_clean(s)
+        ss = s["sessions"][0]
+        vs = ss["sps_variants"]
+        self.assertEqual(len(vs), 2, vs)
+        self.assertEqual(vs[0]["first_frame"], 1)
+        self.assertGreaterEqual(vs[1]["first_frame"], 15)
+        self.assertEqual(vs[0]["constraints"] ^ vs[1]["constraints"], 0x20)
+        self.assertEqual(vs[0]["frames"] + vs[1]["frames"], ss["frames"])
+        self.assertEqual((vs[1]["width"], vs[1]["height"]), (800, 384))
+
+    def test_locked_without_a_switch_is_a_violation(self):
+        s = self.run_pair("locked", "cfdl16", seconds=1.5)
+        self.assertEqual(self.violations(s), ["LOCKED_NO_SWITCH"])
+        self.assertEqual(len(s["sessions"][0]["sps_variants"]), 1)
+        self.assertEqual(s["result"], "FAIL")
+        # The other scenarios record the variants but never require a switch.
+        s = self.run_pair("cfdl16", "cfdl16", seconds=1.5)
+        self.assert_clean(s)
+        self.assertEqual(len(s["sessions"][0]["sps_variants"]), 1)
+
+    def test_locked_switch_on_a_p_frame_is_a_violation(self):
+        s = self.run_pair("locked", "cfdl16", seconds=2.5, phone_args=["--sps-switch-at", "15"], bugs=["sps-on-p"])
+        self.assertIn("SWITCH_NOT_AT_IDR", self.violations(s))
+        self.assertNotIn("LOCKED_NO_SWITCH", self.violations(s))
+        # Not a locked run: the same stream is no violation of that rule.
+        s = self.run_pair("cfdl16", "cfdl16", seconds=2.5, phone_args=["--sps-switch-at", "15"], bugs=["sps-on-p"])
+        self.assertNotIn("SWITCH_NOT_AT_IDR", self.violations(s))
+
+    def test_locked_decodes_strictly_and_writes_the_headers(self):
+        if not (shutil.which("ffmpeg") and shutil.which("ffprobe")):
+            self.skipTest("ffmpeg not installed")
+        headers = os.path.join(tempfile.mkdtemp(prefix="fakedash-headers-"), "frames", "headers.txt")
+        self.addCleanup(shutil.rmtree, os.path.dirname(os.path.dirname(headers)), True)
+        s = self.run_pair("locked", "cfdl16", seconds=3, phone_args=["--sps-switch-at", "15"],
+                          dash_args=["--decode", "--trace-headers", headers])
+        self.assert_clean(s)
+        d = s["decode"]
+        self.assertTrue(d["strict"])
+        self.assertTrue(d["decodable"], d)
+        self.assertTrue(d["lenient_decodable"], d)
+        with open(headers) as f:
+            text = f.read()
+        self.assertIn("Parameter Set", text)
 
     def test_burst_unacked_stalls_like_a_cfdl26(self):
         s = self.run_pair("cfdl26", "cfdl26", seconds=1, bugs=["no-burst-ack"],

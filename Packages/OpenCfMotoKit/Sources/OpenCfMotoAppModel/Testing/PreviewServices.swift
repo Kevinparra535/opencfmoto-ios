@@ -26,6 +26,9 @@ public final class PreviewSystem: SystemControlling {
     /// ADDITION (fix-media, SPEC:CL-10): the simulated system appearance (tests flip it and call
     /// `onPowerStateChange`).
     public var isSystemDarkMode = false
+    /// ADDITION (locked iPhone, Phase 0, P0-12): the simulated battery (nil = no reading, as on a
+    /// platform without battery monitoring).
+    public var batteryStatus: BatteryStatus?
     public private(set) var openedSettingsCount = 0
     public private(set) var hapticCount = 0
 
@@ -118,6 +121,17 @@ public final class PreviewLocation: LocationProviding {
     public var onRawHeading: ((Double) -> Void)?
     public var onPermissionChange: ((LocationPermission) -> Void)?
 
+    /// ADDITION (locked iPhone, Phase 0, P0-10): one update-control call.
+    public enum Call: Equatable, Sendable {
+        case start(rideActive: Bool)
+        case setRideActive(Bool)
+        case stop
+    }
+
+    /// Every `start` / `setRideActive` / `stop`, in order (the GPS restart with background updates is
+    /// `stop` then `start(rideActive: true)`). Keeps the last 200.
+    public private(set) var calls: [Call] = []
+
     public init() {}
 
     public func requestPermission() {
@@ -126,9 +140,14 @@ public final class PreviewLocation: LocationProviding {
             onPermissionChange?(permission)
         }
     }
-    public func start(rideActive: Bool) { isUpdating = true; isRideActive = rideActive }
-    public func setRideActive(_ active: Bool) { isRideActive = active }
-    public func stop() { isUpdating = false; isRideActive = false }
+    public func start(rideActive: Bool) { record(.start(rideActive: rideActive)); isUpdating = true; isRideActive = rideActive }
+    public func setRideActive(_ active: Bool) { record(.setRideActive(active)); isRideActive = active }
+    public func stop() { record(.stop); isUpdating = false; isRideActive = false }
+
+    private func record(_ call: Call) {
+        calls.append(call)
+        if calls.count > 200 { calls.removeFirst(calls.count - 200) }
+    }
 
     /// Feeds a fix as if CoreLocation produced it (tests / demo).
     public func emit(_ fix: LocationFix) {
@@ -221,7 +240,47 @@ public final class PreviewProjection: DashProjecting, @unchecked Sendable {
 
     public var stats: ProjectionStatsSummary {
         lock.lock(); defer { lock.unlock() }
-        return ProjectionStatsSummary(mode: mode, bitrate: parameters?.bitrate ?? 0)
+        return _statsSummary ?? ProjectionStatsSummary(mode: mode, bitrate: parameters?.bitrate ?? 0)
+    }
+
+    // MARK: ADDITION (locked iPhone, Phase 0)
+
+    /// One of the preparations the app makes when it leaves the foreground, in call order.
+    public enum LockPreparation: Equatable, Sendable {
+        /// `prepareHoldPicture(expectedCanvas:)`.
+        case holdPicture(VideoCanvas)
+        /// `prepareBackgroundEncoder()`.
+        case backgroundEncoder
+    }
+
+    private var _lockPreparations: [LockPreparation] = []
+    private var _backgroundEncoderPreparations = 0
+    private var _lockedStreamPolicies: [LockedStreamPolicy] = []
+    private var _statsSummary: ProjectionStatsSummary?
+
+    /// Every hold-picture request and background-encoder pre-warm, in order (the engine runs them on its
+    /// render queue in this order: the pre-warm probes the picture the hold build just rendered).
+    public var lockPreparations: [LockPreparation] { lock.withLock { _lockPreparations } }
+    /// `prepareBackgroundEncoder()` calls so far.
+    public var backgroundEncoderPreparations: Int { lock.withLock { _backgroundEncoderPreparations } }
+    /// Every `setLockedStreamPolicy(_:)`, in order.
+    public var lockedStreamPolicies: [LockedStreamPolicy] { lock.withLock { _lockedStreamPolicies } }
+    /// What `stats` reports (tests: the `[lock]` line's `pulls=` / `dash=`); nil = derived from the mode
+    /// and the encoder parameters.
+    public var statsSummary: ProjectionStatsSummary? {
+        get { lock.withLock { _statsSummary } }
+        set { lock.withLock { _statsSummary = newValue } }
+    }
+
+    public func prepareBackgroundEncoder() {
+        lock.withLock {
+            _backgroundEncoderPreparations += 1
+            _lockPreparations.append(.backgroundEncoder)
+        }
+    }
+
+    public func setLockedStreamPolicy(_ policy: LockedStreamPolicy) {
+        lock.withLock { _lockedStreamPolicies.append(policy) }
     }
 
     public var onTileLoaded: (@Sendable () -> Void)? {
@@ -253,7 +312,10 @@ public final class PreviewProjection: DashProjecting, @unchecked Sendable {
     /// ADDITION (fix-media, MED:MP-2): every `prepareHoldPicture(expectedCanvas:)` request.
     public private(set) var holdPictureRequests: [VideoCanvas] = []
     public func prepareHoldPicture(expectedCanvas: VideoCanvas) {
-        lock.lock(); holdPictureRequests.append(expectedCanvas); lock.unlock()
+        lock.lock()
+        holdPictureRequests.append(expectedCanvas)
+        _lockPreparations.append(.holdPicture(expectedCanvas))
+        lock.unlock()
     }
     public func enterBackground() { lock.lock(); mode = "hold"; lock.unlock() }
     public func enterForeground() { lock.lock(); mode = "foreground"; lock.unlock() }

@@ -13,6 +13,12 @@
 // song, +21 s pause, +27 s close (`E2E music: …` log lines; `music` block in e2e-status.json; one
 // `E2E frame mark` per state, decoded by the CI job as frames/music_*.png).
 //
+// `-e2eBackgroundCycle <start>:<duration>` (locked iPhone, Phase 0) simulates a lock: `start` s after
+// the session first streams the scene goes `.inactive`, 0.5 s later `.background`, and `duration` s
+// after the lock `.inactive` then `.active` (`E2E: simulated lock at +15.0s` / `simulated unlock at
+// +45.0s`). With `-e2eBackgroundEncoder vtsw` the engine tries the Mac's VideoToolbox software encoder
+// at the lock (CI job step `E2E locked`; fakedash scenario `locked`).
+//
 // Evidence for the CI job, in the app's Documents folder (`xcrun simctl get_app_container booted
 // <bundle id> data`): `e2e-log.txt` (every Log line, appended every 2 s), `e2e-status.json`
 // (connection / link / projection counters every 2 s) and `e2e-app.h264` (the first served access
@@ -105,6 +111,7 @@ final class E2EFakeDashHarness {
     private var player: DemoRoutePlayer?
     private var statusTask: Task<Void, Never>?
     private var musicScript: Task<Void, Never>?
+    private var lockScript: Task<Void, Never>?
     private var everStreaming = false
     private var maxFramesSent = 0
 
@@ -199,6 +206,7 @@ final class E2EFakeDashHarness {
         }
         Log.i("E2E", "fake dash mode: \(options.e2eDash) at \(options.e2eHost):10930, phone \(ConnectionTestingOverrides.loopbackPhoneIPv4) (lo0)")
         if options.e2eMusic { startMusicScript(model) }
+        if let cycle = options.e2eBackgroundCycle { startLockScript(model, cycle) }
         statusTask = Task { @MainActor [weak self, weak model] in
             var fallbackChecked = false
             while !Task.isCancelled {
@@ -256,6 +264,46 @@ final class E2EFakeDashHarness {
             }
         }
     }
+
+    /// `-e2eBackgroundCycle <start>:<duration>` (locked iPhone, Phase 0): the rider locks the phone `start`
+    /// s after the session first reaches STREAMING and unlocks it `duration` s after the lock — the scene
+    /// phases SwiftUI delivers on a device (`.inactive`, 0.5 s later `.background`; at the unlock
+    /// `.inactive`, then `.active`), through the real AppModel → RideModel → ProjectionAdapter → engine
+    /// path. The Simulator never really backgrounds the app: VideoToolbox keeps working and there is no CPU
+    /// monitor or Wi-Fi sleep, so only the switching machinery is exercised (the device test covers the rest).
+    private func startLockScript(_ model: AppModel, _ cycle: AppLaunchOptions.BackgroundCycle) {
+        let clock = self.clock
+        let lockAt = cycle.start
+        let unlockAt = cycle.start + max(cycle.duration, 1)
+        lockScript = Task { @MainActor [weak model] in
+            func live() -> AppModel? { Task.isCancelled ? nil : model }
+            while let m = live(), m.connection.phase != .streaming {
+                try? await Task.sleep(nanoseconds: 100_000_000)
+            }
+            guard live() != nil else { return }
+            let t0 = clock.now()
+            Log.i("E2E", "lock cycle: lock at +\(Self.tenths(lockAt))s, unlock at +\(Self.tenths(unlockAt))s (after the first STREAMING)")
+            func waitUntil(_ offset: TimeInterval) async {
+                let wait = t0 + offset - clock.now()
+                if wait > 0 { try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
+            }
+            await waitUntil(lockAt)
+            guard let locking = live() else { return }
+            Log.i("E2E", "simulated lock at +\(Self.tenths(clock.now() - t0))s")
+            locking.scenePhaseChanged(.inactive)
+            await waitUntil(lockAt + 0.5)
+            guard let locked = live() else { return }
+            locked.scenePhaseChanged(.background)
+            await waitUntil(unlockAt)
+            guard let unlocking = live() else { return }
+            Log.i("E2E", "simulated unlock at +\(Self.tenths(clock.now() - t0))s")
+            unlocking.scenePhaseChanged(.inactive)
+            unlocking.scenePhaseChanged(.active)
+        }
+    }
+
+    /// `15.0`: seconds with one decimal for the E2E lines.
+    private static func tenths(_ seconds: TimeInterval) -> String { String(format: "%.1f", seconds) }
 
     /// Asks the CI job for one decoded dash picture (tools/ci/e2e/run-fakedash.sh reads the
     /// `frame mark` log lines): the last frame served to the fake dash so far — its index in the
@@ -324,6 +372,12 @@ final class E2EFakeDashHarness {
             "hold_frames_served": e.holdFramesServed,
             "pull_rate": (e.pullRate * 10).rounded() / 10,
             "output_fps": (e.outputFPS * 10).rounded() / 10,
+            // Locked iPhone (Phase 0): which encoder feeds the dash, the current background period, the
+            // background frame-rate cap and the demotions since launch.
+            "encoder": e.encoder ?? NSNull(),
+            "background_s": (e.backgroundSeconds * 10).rounded() / 10,
+            "budget_fps": e.backgroundFpsCap.map { $0 as Any } ?? NSNull(),
+            "demotions": e.demotions,
         ] as [String: Any]
         let music = model.music
         // `track_id` is the raw id on purpose (not a log token, F4): the e2e run only ever sees the

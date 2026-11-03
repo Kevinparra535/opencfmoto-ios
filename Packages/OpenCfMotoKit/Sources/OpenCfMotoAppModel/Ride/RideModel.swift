@@ -89,6 +89,10 @@ public final class RideModel {
     public private(set) var revision: UInt64 = 0
     /// Latest fix (speed / accuracy for the home card).
     public private(set) var lastFix: LocationFix?
+    /// ADDITION (locked iPhone, Phase 0): monotonic time (`services.clock`) of the last raw compass
+    /// sample; nil before the first. The `[lock]` line's `heading=` age (does heading keep coming while
+    /// the phone is locked? CM open question 11).
+    @ObservationIgnored public private(set) var lastHeadingAt: TimeInterval?
     /// Current speed text in the rider's units ("47 km/h").
     public private(set) var speedText: String = ""
     /// Status of the location permission / GPS for the UI ("Waiting for GPS…").
@@ -448,8 +452,14 @@ public final class RideModel {
         case .inactive:
             // Leaving the foreground (not coming back from the background): pre-encode the hold
             // picture while the hardware encoder is still available — for the whole own-UI
-            // session, also before the dash negotiated (MP-2: REQ 16 may come while locked).
-            if previous == .active, sessionActive, !sessionIsMirror { requestHoldPicture() }
+            // session, also before the dash negotiated (MP-2: REQ 16 may come while locked). Then,
+            // still in the foreground, pre-warm the background encoder (locked iPhone, P0-4): the
+            // engine runs both on its render queue in this order, so the pre-warm probes the picture
+            // the hold build just rendered.
+            if previous == .active, sessionActive, !sessionIsMirror {
+                requestHoldPicture()
+                projection.prepareBackgroundEncoder()
+            }
         case .background:
             projection.enterBackground()
         case .active:
@@ -510,6 +520,20 @@ public final class RideModel {
         projection.onCanvasPrepared = { @Sendable [weak self] canvas in
             Task { @MainActor [weak self] in self?.canvasPrepared(canvas) }
         }
+        pushStoredLockedStreamPolicy()
+    }
+
+    /// Locked iPhone (Phase 0): a valid locked-phone policy stored under `ios.locked_stream_policy`
+    /// reaches the projection at start (nothing writes the key in Phase 0; the Phase 1 setting will).
+    /// Without one the projection keeps the build's own default.
+    private func pushStoredLockedStreamPolicy() {
+        guard let raw = core.services.keyValueStore.string(forKey: LockDiagnostics.lockedStreamPolicyKey) else { return }
+        guard let policy = LockedStreamPolicy(rawValue: raw) else {
+            Log.w("RIDE", "unknown locked-phone policy in the settings (\(raw.prefix(16))) \u{2014} keeping the default")
+            return
+        }
+        core.services.projection.setLockedStreamPolicy(policy)
+        Log.i("RIDE", "locked-phone policy from the settings: \(policy.rawValue)")
     }
 
     private func wireLocation() {
@@ -563,9 +587,10 @@ public final class RideModel {
 
     private func handleHeading(_ raw: Double) {
         guard raw.isFinite else { return }
+        let now = clock.now()
+        lastHeadingAt = now
         core.navigation.updateHeading(raw)
         compassDeg = compass.add(raw)
-        let now = clock.now()
         if now - lastCompassModelAt >= tuning.compassModelInterval {
             lastCompassModelAt = now
             setNeedsModelUpdate()
@@ -802,8 +827,21 @@ public final class RideModel {
                 appliedRideActive = background
                 Log.i("RIDE", "GPS on (background=\(background))")
             } else if appliedRideActive != background {
-                loc.setRideActive(background)
-                appliedRideActive = background
+                if background, scenePhase == .active {
+                    // Locked iPhone (P0-10): updates already run for the phone's dash preview. Apple
+                    // documents only "set allowsBackgroundLocationUpdates, then start in the foreground"
+                    // as the order that keeps the app running in the background, so restart them that
+                    // way rather than flipping the flag on running updates.
+                    loc.stop()
+                    loc.start(rideActive: true)
+                    appliedRideActive = true
+                    Log.i("RIDE", LockDiagnostics.gpsRestartedForBackground)
+                } else {
+                    // Turning background updates off, or already in the background, where a When-In-Use
+                    // app cannot start updates: flip the flag on the running updates.
+                    loc.setRideActive(background)
+                    appliedRideActive = background
+                }
             }
         } else if !wanted, loc.isUpdating {
             loc.stop()

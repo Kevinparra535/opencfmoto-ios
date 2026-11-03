@@ -71,6 +71,9 @@ final class AppPlatform {
         if !options.logDescription.isEmpty {
             Log.i("APP", "launch arguments: \(options.logDescription)")
         }
+        for warning in options.warnings { Log.w("APP", "launch arguments: \(warning)") }
+        // Locked iPhone (P0-12): the battery reading for the engine's background lines and `[lock]`.
+        BatteryMonitor.shared.start()
 
         #if targetEnvironment(simulator)
         let demo = !options.e2eFakeDash
@@ -86,7 +89,8 @@ final class AppPlatform {
         #endif
 
         let http = SmartHTTPClient(preferCellular: false)
-        let projection = ProjectionAdapter(http: http, tileURLTemplate: BikeSettings().tileURLTemplate, clock: clock)
+        let projection = ProjectionAdapter(http: http, tileURLTemplate: BikeSettings().tileURLTemplate, clock: clock,
+                                           lockedStreamPolicyOverride: options.e2eBackgroundEncoder)
         self.projection = projection
         dashRenderer = projection.renderer
 

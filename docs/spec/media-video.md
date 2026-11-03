@@ -910,6 +910,74 @@ if isKey, let fd = CMSampleBufferGetFormatDescription(sb) {
 - Compare the first iOS SPS/PPS against the known-good Android pair (§7.6). VideoToolbox Baseline output usually differs (constraint flags, POC type, VUI); that is expected to be fine but is **untested** on dashes — capture it on the first bike test.
 - `kVTInvalidSessionErr` (e.g. after backgrounding or a media-services reset): recreate the session with the same canvas and properties, then apply the **112 sequence** (gate, flush, forced IDR) before serving frames again.
 
+### 15.3a Background encoder ladder (locked phone; Phase 0 diagnostics build)
+
+iOS takes the hardware encoder away in the background (ios-platform-facts.md §d), so the engine
+(`DashProjectionEngine`) feeds the dash through `DashVideoEncoder` (`OpenCfMotoApple/DashVideoEncoder.swift`;
+`H264Encoder` conforms) and a **ladder of background encoders**, with pure rules in Core
+(`OpenCfMotoCore/Video/BackgroundEncoding.swift`, `H264StreamCheck.swift`):
+
+- **Foreground:** VideoToolbox hardware (`own`), unchanged.
+- **Background** (`.background` scene phase): the rungs of `LockedStreamPolicy` — `auto`: vt-sw, cpu,
+  hold; `vtsw`: vt-sw, hold (**the Phase 0 build**); `cpu`: cpu, hold; `hold`: hold; unavailable rungs are
+  skipped (no CPU encoder is bundled in Phase 0). vt-sw tries, in order: the session pre-warmed at
+  `.inactive` (`own-sw-pre`, created in the foreground and probed into a sink that never reaches the frame
+  queue), a fresh `EnableHardwareAcceleratedVideoEncoder = false` session, then one per `avc1` `EncoderID`
+  not marked hardware. Each try is **probed** before anything of it is served: a forced IDR of the last
+  picture within 500 ms, accepted only if the session was created, `UsingHardware…` is not `true` (an
+  unanswered one is accepted only with a probe IDR), and `H264StreamCheck` finds nothing wrong (4-byte start
+  codes; NAL types 1, 5, 7, 8; `[7, 8, 5…]` IDRs; Baseline, the level the canvas needs, exactly the canvas,
+  no cropping, frame MBs only, POC 0 or 2, ≤ 2 references, no reorder, ids 0, CAVLC, one slice group, I/P
+  slices). The last rung is the pre-encoded **hold picture** ("Phone locked").
+- **Demotion:** 3 encode failures within 10 s, or 3 s without output after an accepted submission, moves to
+  the next rung with the full acceptance again; a hold reached by a demotion is retried 60 s later, at most
+  3 times per background period.
+- **Fallback order (P0-5).** A pull that times out is answered with: in `backgroundSoftware`, the live
+  background encoder's last IDR, then the hold picture, then any live IDR of this canvas; in `hold`, the
+  hold picture, then the live IDR; in the foreground, the last live IDR only (unchanged). Before Phase 0
+  the hold picture came first in `backgroundSoftware`: the "Phone locked" card while the map is live was
+  wrong, and every extra encoder change on the wire is a risk.
+- **Switches only at an IDR.** Every encoder change closes the frame-queue gate (`resynchronize()`), so the
+  next frame on the wire is the new encoder's IDR with its SPS + PPS; the probe IDR of an accepted encoder is
+  its first frame. Each encoder instance stamps its frames (`EncodedFrame.encoderTag`: 1 hold, 2, 3, …
+  live encoders; never on the wire), and a change of tag on the wire always falls on an IDR (tested). The
+  dash has never been shown an SPS change mid-session before: the E2E scenario `locked`
+  (tools/ci/e2e/README.md) records every SPS/PPS variant and decodes strictly.
+- **Phase 0 only:** in hold the engine also runs a background CPU **dry run** for the first 10 minutes
+  (render, vImage BGRA→I420, 10 ms of synthetic load, at 8 fps, all discarded) to measure what iOS tolerates.
+
+**Diagnostics lines** (format `HH:mm:ss.SSS L/TAG: message`; the texts are pure functions —
+`BackgroundLog` in Core for L1–L13, `LockDiagnostics` in the app model for L14–L18 — pinned by Linux tests;
+field values below are examples):
+
+| ID | Level/tag | When | Form |
+|---|---|---|---|
+| L1 | I/VIDEO | first IDR of every encoder (`own`, `own-sw-pre`, `own-sw`, `own-sw-id`, `hold`, `mirror`) | `[own] first IDR 23410b SPS 27 42 e0 1f … PPS 28 de 09 c8 — profile 66 constraints 0xE0 level 31 800x384 poc 0 refs 2 frame_num_bits 5 vui=yes reorder=- \| pps cavlc deblock_ctrl=1 qp=28` (full hex) |
+| L2 | I/VIDEO | first foreground prepare of the run | `[vt-list] avc1 encoders: <id> name=<name> hw=<true\|false\|?>; …` |
+| L3 | I/VIDEO | pre-warm at `.inactive` | `[bg] pre-warm vt-sw at inactive: create=noErr hw=? probe=IDR 20112b in 45ms` |
+| L4 | I/VIDEO | ladder run | `[bg] enter: canvas 800x384 policy=vtsw rungs=vt-sw,hold last-live-idr=23410b hold-idrs=2` |
+| L5 | I/VIDEO | each try | `[bg] try vt-sw (fresh): create=noErr hw=? probe=IDR 20112b in 45ms sps=ok → accepted` / `… → rejected: hw=true` / `… probe=none in 500ms sps=- → rejected: probe=none` |
+| L6 | I/VIDEO | ladder outcome | `background → backgroundSoftware @8fps (encoder vt-sw, 3375kbps)` / `background → hold (2 hold IDR(s); reason: all rungs rejected)` |
+| L7 | I/VIDEO | every encoder change | `[switch] vt-hw → vt-sw: gate closed; next frame on the wire is an IDR (dump frame #133)` |
+| L8 | I/VIDEO | first IDR of a new encoder on the wire | `[switch] first vt-sw IDR on the wire: 19876b, 0.21s after the switch (dump frame #133)` |
+| L9 | I/VIDEO | every 10 s while backgrounded | `[bg] +1m00s mode=backgroundSoftware enc=vt-sw cap=8fps out=5.2fps pulls=5.1/s served=312 (hold 0, fallback 2, none 0) errs=0 render=6.1ms enc=7.8ms cpu=14% thermal=none lowPower=false q=0` |
+| L10 | I/VIDEO | dry run (Phase 0), every 60 s | `[bg-probe] render=6.3ms convert=0.9ms load=10ms n=480 cpu=13%` / `[bg-probe] dry run ended after 10m00s` |
+| L11 | I/VIDEO | budget (Phase 1; none in Phase 0) | `[bg-budget] fps cap 8→5: cpu 27% (15s) thermal=none lowPower=false batt=64% unplugged` |
+| L12 | W/VIDEO, I/VIDEO | demotion, retry | `[bg] vt-sw demoted: 3 encode errors in 10s (last …) → hold` / `[bg] retry ladder (60s after the demotion, attempt 1/3)` |
+| L13 | I/VIDEO | unlock | `foreground → hardware encoder, IDR forced (background 12m03s: vt-sw 3412 frames 812 IDR 0 errors enc 8.1ms; hold served 4)` |
+| L14 | I/APP | every scene change | `scene inactive → background (own UI session, streaming)` / `scene background → inactive after 12m03s (…)` |
+| L15 | I/APP | every 30 s while locked with an own-UI session | `[lock] 5m00s locked link=streaming wifi=up pulls=5.1/s dash=backgroundSoftware vt-sw 5.2fps gps=1s heading=2s batt=63% charging thermal=none lowPower=false` |
+| L16 | W/APP | next launch after the app ended in the background during a session | `previous run ended in the background during a dash session (backgrounded 14:03:12): iOS stopped the app, or it was swiped away` |
+| L17 | I/RIDE | GPS that ran for the preview restarted with background updates (foreground only) | `GPS restarted with background updates (it was running for the preview)` |
+| L18 | W/CRASH, I/APP | MetricKit | `[metrickit] CPU exception: 54s CPU in 60s (build 12, iOS 27.0.1)`, `[metrickit] hang: 3.2s (…)`, `[metrickit] disk writes: 1024 MB (…)`; `[metrickit] background exits (24h): cpu-limit=1 memory=0 memory-pressure=0 watchdog=0 locked-file=0 task-timeout=0 abnormal=0 normal=3` |
+
+Reading one locked test, in time order: L14 (locked while streaming) → L3 / L4 / L5 / L6 (which rung iOS
+allowed, and why the others were refused: the OSStatus, `hw=true`, `probe=none` or an SPS issue code) →
+L7 / L8 (the first new IDR on the wire within about 1 s) → L9 every 10 s, L15 every 30 s and the link's
+`hb#` every 5 s without gaps (the process, the Wi-Fi and the link alive) → L13 + L1 `[own]` at the unlock.
+L16 (+ L18) on the next launch means iOS ended the app. No line carries `sn=`, `key=`, `token=`, `pwd=`, an
+SSID, a MAC, a serial, a password or coordinates.
+
 ### 15.4 Keyframe gate and queue (fixing the Android gaps)
 
 ```swift
@@ -962,7 +1030,7 @@ Port `AdaptivePolicy` verbatim (pure, testable; use the §14.1 vectors) and tick
 ### 15.8 Diagnostics to build in from day one
 
 - An Annex-B dump of exactly what goes on the wire (Android `DUMP_H264`, 600-AU cap), shareable from the app — it is how the black-screen bug was solved.
-- Log: full REQ 16 body hex (to finally learn `wantFps`, `bitRate`, `min/maxQuality`, `orientation`), request tokens, every unknown cmdType with hex, `sent frame #N (S b)` for the first 5 and every 60th, every 114 that waited longer than 1 s, overflow counts, SPS/PPS hex on session creation.
+- Log: full REQ 16 body hex (to finally learn `wantFps`, `bitRate`, `min/maxQuality`, `orientation`), request tokens, every unknown cmdType with hex, `sent frame #N (S b)` for the first 5 and every 60th, every 114 that waited longer than 1 s, overflow counts, SPS/PPS hex on session creation (the **full** SPS and PPS with a parsed summary at the first IDR of every encoder since the locked-phone Phase 0 build: L1 of §15.3a).
 
 ---
 
@@ -975,7 +1043,7 @@ Port `AdaptivePolicy` verbatim (pure, testable; use the §14.1 vectors) and tick
 5. **`supportExtendProtocol` and 96/97.** Echoed byte and `{"state":0}` work, but the content of the 96 JSON and the meaning of `state` are undocumented.
 6. **`128` REQ_START_H264** has never been seen on a bike; if a dash used it instead of 112, Android would never start an encoder or force an IDR. Recommended iOS behaviour: reply 129 and also run the 112 sequence (harmless if unused). Unverified.
 7. **VideoToolbox bitstream acceptance** (constraint flags, POC type, VUI, possible SEI, slice layout) on CFDL16/CFDL26 decoders is untested. The Android SPS/PPS in §7.6 is the reference that is known to decode.
-8. **iOS background execution** is the biggest platform risk: hardware encoding with the screen locked or the app in the background (VT session invalidation, `kVTInvalidSessionErr`), Metal/GPU being unavailable in the background (CoreGraphics on the CPU is safer), and no Wi-Fi power-save control (Android holds `WIFI_MODE_FULL_HIGH_PERF` + `WIFI_MODE_FULL_LOW_LATENCY` locks, `AndroidAutoService.kt:353-372`, `07-IDEAS-AND-ISSUES.md:16-23`). Validate early with a spike.
+8. **iOS background execution** is the biggest platform risk: hardware encoding with the screen locked or the app in the background (VT session invalidation, `kVTInvalidSessionErr`; an Apple Media Engineer confirms the resources are given up), Metal/GPU being unavailable in the background (CoreGraphics on the CPU is safer), and no Wi-Fi power-save control (Android holds `WIFI_MODE_FULL_HIGH_PERF` + `WIFI_MODE_FULL_LOW_LATENCY` locks, `AndroidAutoService.kt:353-372`, `07-IDEAS-AND-ISSUES.md:16-23`). The spike is the Phase 0 diagnostics build (§15.3a): it tries the VideoToolbox software encoder in the background, measures the background CPU cost and logs whether the process and the Wi-Fi survive. Open: whether the dash decodes an SPS change at an IDR mid-session (never shown before).
 9. **Large canvases** (above Level 3.1, e.g. ≥ 1280×720 at 30 fps) and the dash's maximum accepted frame/bitrate size are unknown; known-good keyframes are 23–33 KB at 2.5 Mbit/s. "Sharp" (4 Mbit/s) and the Map boost (3.375 Mbit/s) ship on Android but their per-dash limits are untested.
 10. **Asymmetric margins y-flip** (§10.4): if real, Android's NK Advanced default (top 22) blanks the bottom instead of the MotoPlay pull-down. Verify on hardware before copying that default's intent.
 11. **Drop-oldest corruption** (§7.4) is real on Android and is avoided on iOS only if the overflow handling or pull pacing of §15.4 is implemented.

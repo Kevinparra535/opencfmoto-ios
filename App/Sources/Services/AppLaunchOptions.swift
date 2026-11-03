@@ -12,14 +12,27 @@
 // | `-e2eDash cfdl16\|cfdl26\|mt800`  | which fake dash model the seeded bike matches (default cfdl16)      |
 // | `-e2eHost <ipv4>`                | fake dash address (default 127.0.0.1)                               |
 // | `-e2eMusic`                      | e2e: a fake Apple Music (3 songs with covers) + the dash music script |
+// | `-e2eBackgroundCycle <s>:<d>`    | e2e: simulated lock `s` s after the first STREAMING, for `d` s (scene inactive → background → inactive → active) |
+// | `-e2eBackgroundEncoder <policy>` | the locked-phone policy: `auto`, `vtsw`, `cpu`, `hold`, `cpu-always` (overrides the build default and any stored value) |
 // | `-uiScreen <name>`               | open that screen after launch (RootLaunchScreen names)              |
 // | `-uiOrientation landscape`       | rotate the interface to landscape after launch                      |
 // | `-uiDashSheet music`             | with `-uiScreen dash`: open the dash's Music sheet once it shows music |
 // | `-uiSettingsAnchor music`        | with `-uiScreen settings`: scroll to "Apple Music on the dash"      |
+//
+// An invalid `-e2eBackgroundCycle` / `-e2eBackgroundEncoder` value is ignored with a warning in the log.
 
 import Foundation
+import OpenCfMotoCore
 
 struct AppLaunchOptions: Equatable {
+    /// `-e2eBackgroundCycle <startSec>:<durationSec>`.
+    struct BackgroundCycle: Equatable {
+        /// Seconds after the session first reaches STREAMING.
+        var start: TimeInterval
+        /// Seconds the phone stays "locked" (from the lock to the unlock).
+        var duration: TimeInterval
+    }
+
     /// `-demo`: fake bike / Wi-Fi / GPS services (the Simulator default).
     var demo = false
     /// `-demoSeed`: seed demo content (bike, trips, places) and skip the onboarding.
@@ -41,6 +54,12 @@ struct AppLaunchOptions: Equatable {
     /// `-uiSettingsAnchor <name>`: the Settings section to scroll to ("music"; the CI screenshot of
     /// the Apple Music section, review fix F10).
     var uiSettingsAnchor: String?
+    /// `-e2eBackgroundCycle <start>:<duration>` (locked iPhone, Phase 0): the e2e harness simulates a lock.
+    var e2eBackgroundCycle: BackgroundCycle?
+    /// `-e2eBackgroundEncoder <policy>` (locked iPhone, Phase 0): the locked-phone policy of this run.
+    var e2eBackgroundEncoder: LockedStreamPolicy?
+    /// Launch arguments that were given but not understood (logged as warnings at launch).
+    var warnings: [String] = []
 
     init() {}
 
@@ -70,11 +89,36 @@ struct AppLaunchOptions: Equatable {
                 if let v = value(after: i) { uiDashSheet = v.lowercased(); i += 1 }
             case "-uiSettingsAnchor":
                 if let v = value(after: i) { uiSettingsAnchor = v.lowercased(); i += 1 }
+            case "-e2eBackgroundCycle":
+                let v = value(after: i)
+                if v != nil { i += 1 }
+                if let cycle = v.flatMap(Self.backgroundCycle) {
+                    e2eBackgroundCycle = cycle
+                } else {
+                    warnings.append("-e2eBackgroundCycle \(v ?? "(no value)") ignored: expected <startSec>:<durationSec>, e.g. 15:30")
+                }
+            case "-e2eBackgroundEncoder":
+                let v = value(after: i)
+                if v != nil { i += 1 }
+                if let policy = v.flatMap({ LockedStreamPolicy(rawValue: $0.lowercased()) }) {
+                    e2eBackgroundEncoder = policy
+                } else {
+                    let allowed = LockedStreamPolicy.allCases.map(\.rawValue).joined(separator: "|")
+                    warnings.append("-e2eBackgroundEncoder \(v ?? "(no value)") ignored: expected \(allowed)")
+                }
             default:
                 break
             }
             i += 1
         }
+    }
+
+    /// `15:30` → start 15 s, duration 30 s; nil unless both are finite, start ≥ 0 and duration > 0.
+    static func backgroundCycle(_ text: String) -> BackgroundCycle? {
+        let parts = text.split(separator: ":", omittingEmptySubsequences: false)
+        guard parts.count == 2, let start = Double(parts[0]), let duration = Double(parts[1]),
+              start.isFinite, duration.isFinite, start >= 0, duration > 0 else { return nil }
+        return BackgroundCycle(start: start, duration: duration)
     }
 
     /// The options this process was launched with.
@@ -87,10 +131,17 @@ struct AppLaunchOptions: Equatable {
         if demoSeed { parts.append("-demoSeed") }
         if e2eFakeDash { parts.append("-e2eFakeDash (\(e2eDash) @ \(e2eHost))") }
         if e2eMusic { parts.append("-e2eMusic") }
+        if let c = e2eBackgroundCycle { parts.append("-e2eBackgroundCycle \(Self.seconds(c.start)):\(Self.seconds(c.duration))") }
+        if let p = e2eBackgroundEncoder { parts.append("-e2eBackgroundEncoder \(p.rawValue)") }
         if let uiScreen { parts.append("-uiScreen \(uiScreen)") }
         if landscape { parts.append("-uiOrientation landscape") }
         if let uiDashSheet { parts.append("-uiDashSheet \(uiDashSheet)") }
         if let uiSettingsAnchor { parts.append("-uiSettingsAnchor \(uiSettingsAnchor)") }
         return parts.joined(separator: " ")
+    }
+
+    /// `15`, `0.5`: whole seconds without a fraction.
+    private static func seconds(_ v: TimeInterval) -> String {
+        v == v.rounded() && abs(v) < 1e9 ? String(Int(v)) : String(v)
     }
 }

@@ -740,6 +740,8 @@ class AuInfo(object):
         self.sps = None
         self.sps_hex = None
         self.pps_hex = None
+        self.sps_nal = None     # the full first SPS / PPS NAL in front of the slices (SPS variants)
+        self.pps_nal = None
         self.avcc = False
 
     @property
@@ -788,13 +790,151 @@ def analyze_au(au):
             if info.sps is None:
                 info.sps = parse_sps(nal)
                 info.sps_hex = nal[:24].hex()
+                info.sps_nal = bytes(nal)
         elif t == 8 and info.vcl == 0:
             info.pps_before_vcl = True
             if not seen_sps:
                 info.pps_before_sps = True
             if info.pps_hex is None:
                 info.pps_hex = nal[:24].hex()
+                info.pps_nal = bytes(nal)
     return info
+
+
+class SpsVariants(object):
+    """Every distinct SPS + PPS pair of one stream, in the order they first appear. A switch between two
+    encoders (the iOS app's hardware VideoToolbox encoder and its background encoder, `locked`
+    scenario) shows as a second variant; the dash has only ever been shown one SPS per session
+    before, so every change is recorded with the frame it happened at and whether that frame was an
+    IDR (a decoder may only take a new SPS at an IDR)."""
+
+    def __init__(self):
+        self.items = []         # summary dicts, first-appearance order
+        self.raw = []           # (sps NAL, pps NAL) per item
+        self.current = None     # index of the variant the stream uses now
+        self.changes = []       # (frame, from index or None, to index, at_idr)
+
+    def observe(self, info, n):
+        """One access unit (`analyze_au` result) at 1-based frame `n`. Returns `(from, to, at_idr, new)`
+        when it changes the variant in use (`from` None for the first one), else None. An AU without
+        parameter sets keeps the current variant; one carrying only an SPS or only a PPS takes the
+        other half from the current variant."""
+        if info.sps_nal is None and info.pps_nal is None:
+            if self.current is not None:
+                self.items[self.current]["frames"] += 1
+            return None
+        cur_sps, cur_pps = self.raw[self.current] if self.current is not None else (None, None)
+        key = (info.sps_nal if info.sps_nal is not None else cur_sps,
+               info.pps_nal if info.pps_nal is not None else cur_pps)
+        new = key not in self.raw
+        if new:
+            self.raw.append(key)
+            self.items.append(self._describe(key, n))
+        idx = self.raw.index(key)
+        change = None
+        if idx != self.current:
+            change = (self.current, idx, bool(info.has_idr), new)
+            self.changes.append((n, self.current, idx, bool(info.has_idr)))
+            self.current = idx
+        self.items[idx]["frames"] += 1
+        return change
+
+    @staticmethod
+    def _describe(key, n):
+        sps_nal, pps_nal = key
+        sps = parse_sps(sps_nal) if sps_nal is not None else None
+        sps = sps or {}
+        return collections.OrderedDict([
+            ("hex", sps_nal.hex() if sps_nal is not None else None),
+            ("pps_hex", pps_nal.hex() if pps_nal is not None else None),
+            ("first_frame", n), ("frames", 0),
+            ("profile", sps.get("profile_idc")), ("level", sps.get("level_idc")),
+            ("constraints", sps.get("constraint_flags")), ("poc_type", sps.get("poc_type")),
+            ("refs", sps.get("max_num_ref_frames")), ("log2_max_frame_num", sps.get("log2_max_frame_num")),
+            ("vui", sps.get("vui")), ("reorder", sps.get("max_num_reorder_frames")),
+            ("width", sps.get("width")), ("height", sps.get("height")),
+        ])
+
+    def summary(self):
+        return [dict(v) for v in self.items]
+
+
+def variant_text(v):
+    """One SPS variant on one line (fakedash log, RUN.md): the fields the iOS app's L1 line summarises."""
+    if v.get("profile") is None:
+        return "SPS unparsable %s | PPS %s" % (v.get("hex"), v.get("pps_hex"))
+    return ("profile %s constraints 0x%02X level %s %sx%s poc %s refs %s frame_num_bits %s vui=%s reorder=%s | SPS %s PPS %s"
+            % (v["profile"], v["constraints"] or 0, v["level"], v["width"], v["height"], v["poc_type"], v["refs"],
+               v["log2_max_frame_num"], "yes" if v["vui"] else "no", "-" if v["reorder"] is None else v["reorder"],
+               v["hex"], v["pps_hex"]))
+
+
+def locked_switch_findings(variant_lists):
+    """`locked` scenario: the simulated lock must have switched the stream to a second encoder, i.e. at
+    least two distinct SPS/PPS variants over the run (`variant_lists`: one `sps_variants` list per
+    session). Returns [(severity, rule, message)]."""
+    seen = set()
+    for variants in variant_lists:
+        for v in variants:
+            seen.add((v.get("hex"), v.get("pps_hex")))
+    if len(seen) >= 2:
+        return []
+    return [("violation", "LOCKED_NO_SWITCH",
+             "the stream kept %d SPS/PPS variant%s: the simulated lock never put a second encoder on the wire (the "
+             "app's log says why: `background → …` and `[bg] try …`; byte-identical SPS/PPS of both encoders "
+             "also look like this)" % (len(seen), "" if len(seen) == 1 else "s"))]
+
+
+_TRACE_PREFIX_RE = re.compile(r"^\[[^\]]*\]\s*")
+
+
+def filter_trace_headers(text, slice_lines=40, fallback_lines=2000):
+    """What tells two encoders apart in an `ffmpeg -bsf:v trace_headers` dump: the parameter sets of the
+    extradata (before the first packet), then every packet whose Sequence / Picture Parameter Set
+    differs from the previous one (the first IDR and each encoder switch), in full, with the first Slice
+    Header of that packet (cut to `slice_lines` lines) and its `Packet:` line numbered like fakedash's
+    frames (#1 = the first access unit). Repeated identical parameter sets are dropped. Falls back to the
+    first `fallback_lines` lines when the dump has no parameter-set block (another ffmpeg format)."""
+    lines = text.splitlines()
+    segments = []                       # [packet line or None, [blocks]]; block = [header, element lines…]
+    cur = [None, []]
+    packet_no = 0
+    for line in lines:
+        msg = _TRACE_PREFIX_RE.sub("", line)
+        if msg.startswith("Packet:"):
+            segments.append(cur)
+            packet_no += 1
+            cur = ["#%d %s" % (packet_no, line), []]
+        elif msg[:1].isdigit():         # a syntax element: "<bit position> <name> <bits> = <value>"
+            if cur[1]:
+                cur[1][-1].append(line)
+        else:
+            cur[1].append([line])
+    segments.append(cur)
+    out = []
+    last = {}                           # "Sequence" / "Picture" → the normalized block last seen
+    for i, (packet, blocks) in enumerate(segments):
+        ps = [b for b in blocks if "Parameter Set" in b[0]]
+        if not ps:
+            continue
+        keys = [("Sequence" if "Sequence" in b[0] else "Picture",
+                 "\n".join(_TRACE_PREFIX_RE.sub("", l) for l in b)) for b in ps]
+        extradata = packet is None and i == 0
+        changed = any(last.get(kind) != body for kind, body in keys)
+        if not extradata:
+            last.update(keys)
+        if not (extradata or changed):
+            continue
+        if packet is not None:
+            out.append(packet)
+        for b in ps:
+            out.extend(b)
+        slices = [b for b in blocks if "Slice Header" in b[0]]
+        if slices:
+            out.extend(slices[0][:slice_lines + 1])
+    if not out:
+        out = lines[:fallback_lines]
+    return "\n".join(out) + ("\n" if out else "")
 
 
 # =============================================================================================
@@ -1334,6 +1474,11 @@ SCENARIOS = {
     # Apple Music on the dash (iOS app run with -e2eMusic): a plain cfdl16 stream long enough for the
     # app's music script (sheet open +9 s, next song +15 s, pause +21 s, close +27 s after the first frame).
     "music": ("cfdl16", 30.0),
+    # Locked iPhone, Phase 0 (iOS app run with -e2eBackgroundCycle 15:30 -e2eBackgroundEncoder vtsw): a
+    # cfdl16 stream long enough for a simulated lock at +15 s for 30 s. Records every SPS/PPS variant,
+    # requires at least two (LOCKED_NO_SWITCH) and every switch on an IDR (SWITCH_NOT_AT_IDR), and
+    # decodes strictly (-err_detect +crccheck+bitstream+buffer+explode -xerror).
+    "locked": ("cfdl16", 60.0),
 }
 
 
@@ -1614,8 +1759,14 @@ class BonjourAdvertiser(object):
             self.proc = None
 
 
-def decode_check(path, expected_size, frames_received):
-    """Runs ffprobe/ffmpeg on the received elementary stream."""
+STRICT_DECODE_FLAGS = ["-xerror", "-err_detect", "+crccheck+bitstream+buffer+explode"]
+
+
+def decode_check(path, expected_size, frames_received, strict=False, headers_path=None):
+    """Runs ffprobe/ffmpeg on the received elementary stream. `strict` (the `locked` scenario) decodes
+    with STRICT_DECODE_FLAGS and decides `decodable` by that run (the lenient run is kept as
+    `lenient_decodable`, telling a strict-only failure apart); `headers_path` also writes the filtered
+    `-bsf:v trace_headers` dump there (`filter_trace_headers`)."""
     res = {"file": path}
     probe = shutil.which("ffprobe")
     ff = shutil.which("ffmpeg")
@@ -1640,6 +1791,27 @@ def decode_check(path, expected_size, frames_received):
         res["decode_returncode"] = dec.returncode
         res["decode_error_lines"] = len(errs)
         res["decode_errors"] = errs[:20]
+        if strict:
+            res["lenient_decodable"] = dec.returncode == 0 and not errs
+            sdec = subprocess.run([ff, "-hide_banner", "-v", "error"] + STRICT_DECODE_FLAGS
+                                  + ["-f", "h264", "-i", path, "-f", "null", "-"], capture_output=True, timeout=300)
+            serrs = [l for l in sdec.stderr.decode("utf-8", "replace").splitlines() if l.strip()]
+            res["strict"] = True
+            res["strict_flags"] = " ".join(STRICT_DECODE_FLAGS)
+            res["decode_returncode"] = sdec.returncode
+            res["decode_error_lines"] = len(serrs)
+            res["decode_errors"] = serrs[:20]
+        if headers_path:
+            trace = subprocess.run([ff, "-hide_banner", "-f", "h264", "-i", path, "-c:v", "copy", "-bsf:v", "trace_headers",
+                                    "-f", "null", "-"], capture_output=True, timeout=300)
+            text = filter_trace_headers(trace.stderr.decode("utf-8", "replace"))
+            d = os.path.dirname(headers_path)
+            if d:
+                os.makedirs(d, exist_ok=True)
+            with open(headers_path, "w", encoding="utf-8") as f:
+                f.write(text)
+            res["headers_file"] = headers_path
+            res["headers_lines"] = text.count("\n")
     except (OSError, subprocess.TimeoutExpired, ValueError) as e:
         res["error"] = "decode check failed: %s" % e
         return res
@@ -1796,6 +1968,7 @@ class Session(object):
         self.sps_info = None
         self.sps_hex = None
         self.pps_hex = None
+        self.variants = SpsVariants()
         self.identical_idr = 0
         self.clock_modes = collections.Counter()
         self.completed = False
@@ -2480,6 +2653,19 @@ class Session(object):
             if info.has_non_idr:
                 rep.warning("FRAME_MIXED", "frame #%d mixes IDR and non-IDR slices (NAL %s)" % (n, info.nal_types),
                             conn=md.name, cycle=c, key="mixed")
+        change = self.variants.observe(info, n)
+        if change is not None:
+            frm, to, at_idr, new = change
+            v = self.variants.items[to]
+            if new:
+                self.log("SPS #%d at frame %d: %s" % (to + 1, n, variant_text(v)))
+            else:
+                self.log("SPS #%d again at frame %d (from SPS #%d)" % (to + 1, n, frm + 1))
+            if frm is not None and not at_idr and self.args.scenario == "locked":
+                rep.violation("SWITCH_NOT_AT_IDR", "frame #%d switches the stream from SPS #%d to SPS #%d without an IDR "
+                              "(NAL %s): a new SPS/PPS may only take effect at an IDR, the dash cannot decode "
+                              "the next P-frames" % (n, frm + 1, to + 1, info.nal_types), conn=md.name, cycle=c,
+                              key="switchnotidr")
         if info.sps is not None:
             self.check_sps(info, n)
         elif info.sps_before_vcl:
@@ -2623,6 +2809,8 @@ class Session(object):
         if self.sps_info:
             s["sps"] = dict(self.sps_info, hex=self.sps_hex)
             s["pps_hex"] = self.pps_hex
+        if self.variants.items:
+            s["sps_variants"] = self.variants.summary()
         s["heartbeats"] = {name: getattr(c, "hb_stats", None) for name, c in self.conns.items() if c.kind == "cmdbase"}
         s["closed"] = {name: {"by": c.closed_by, "t": round(c.closed_at, 3) if c.closed_at else None}
                        for name, c in self.conns.items()}
@@ -2872,7 +3060,8 @@ class Runner(object):
             for s in self.sessions:
                 if s.canvas:
                     canvas = tuple(s.canvas)
-            self.decode = decode_check(self.h264_path, canvas, self.frames_total)
+            self.decode = decode_check(self.h264_path, canvas, self.frames_total, strict=a.scenario == "locked",
+                                       headers_path=a.trace_headers)
             d = self.decode
             if "error" in d:
                 self.report.warning("DECODE", d["error"])
@@ -2886,6 +3075,9 @@ class Runner(object):
                     self.report.violation("DECODE", "decoded size %sx%s != canvas %dx%d" % (d.get("width"), d.get("height"), *canvas))
                 if d.get("decoded_frames") is not None and d.get("decoded_frames") != self.frames_total:
                     self.report.warning("DECODE", "ffprobe counted %s frames, %d received" % (d.get("decoded_frames"), self.frames_total))
+        if a.scenario == "locked":
+            for severity, rule, message in locked_switch_findings([s.variants.summary() for s in self.sessions]):
+                self.report.add(severity, rule, message)
         if self._tmp_h264 and not a.decode_keep:
             try:
                 os.unlink(self._tmp_h264)
@@ -2967,6 +3159,8 @@ class Runner(object):
                 sp = ss["sps"]
                 w("  SPS: profile_idc %d, level %d, %dx%d, poc_type %d, refs %d, vui %s"
                   % (sp["profile_idc"], sp["level_idc"], sp["width"], sp["height"], sp["poc_type"], sp["max_num_ref_frames"], sp["vui"]))
+            for i, v in enumerate(ss.get("sps_variants") or []):
+                w("  SPS #%d from frame %d (%d frames): %s" % (i + 1, v["first_frame"], v["frames"], variant_text(v)))
             for name, hb in (ss.get("heartbeats") or {}).items():
                 if hb:
                     w("  phone heartbeats %s: %d beats in %s s, first %s s after the select, mean interval %s s, max gap %s s"
@@ -2988,9 +3182,11 @@ class Runner(object):
             if "error" in d:
                 w("decode: %s" % d["error"])
             else:
-                w("decode: %s, %s %s level %s, %sx%s, %s/%s frames decoded, %s decoder error line(s)"
-                  % ("DECODABLE" if d.get("decodable") else "NOT CLEAN", d.get("codec"), d.get("profile"), d.get("level"),
-                     d.get("width"), d.get("height"), d.get("decoded_frames"), d.get("frames_received"), d.get("decode_error_lines")))
+                w("decode%s: %s, %s %s level %s, %sx%s, %s/%s frames decoded, %s decoder error line(s)%s"
+                  % (" (strict: %s)" % d.get("strict_flags") if d.get("strict") else "",
+                     "DECODABLE" if d.get("decodable") else "NOT CLEAN", d.get("codec"), d.get("profile"), d.get("level"),
+                     d.get("width"), d.get("height"), d.get("decoded_frames"), d.get("frames_received"), d.get("decode_error_lines"),
+                     "" if not d.get("strict") else "; lenient decode %s" % ("clean" if d.get("lenient_decodable") else "NOT clean")))
         w("-" * 100)
         w("frames per command (conn direction cmd name: count):")
         for k, v in s["counts"].items():
@@ -3021,7 +3217,9 @@ def parse_args(argv=None):
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="Scenarios: cfdl16, cfdl26, mt800 (handshake + streaming), reconnect (dash closes everything after "
                "--seconds, waits for a new probe, --cycles times), stall (stops pulling for --stall-seconds), touch "
-               "(injects cmd 32 frames). Exit codes: 0 done, 1 violations with --strict, 2 setup error, 3 no probe.")
+               "(injects cmd 32 frames), music (a longer cfdl16 stream), locked (a cfdl16 stream across a simulated "
+               "phone lock: at least two SPS/PPS variants, every switch at an IDR, strict decode). Exit codes: 0 done, "
+               "1 violations with --strict, 2 setup error, 3 no probe.")
     p.add_argument("--scenario", choices=sorted(SCENARIOS), default="cfdl16")
     p.add_argument("--dash", choices=sorted(DASH_MODELS), default=None,
                    help="dash model (default per scenario: cfdl16; touch → mt800)")
@@ -3058,7 +3256,11 @@ def parse_args(argv=None):
     p.add_argument("--touch-fuzz", action="store_true", help="touch scenario: add an unknown action and a 7-byte body")
     p.add_argument("--lenient", action="store_true", help="continue after an unanswered gate (real dashes stall)")
     p.add_argument("--out-h264", default=None, help="write the received elementary stream to FILE")
-    p.add_argument("--decode", action="store_true", help="check the received stream with ffprobe/ffmpeg at the end")
+    p.add_argument("--decode", action="store_true", help="check the received stream with ffprobe/ffmpeg at the end "
+                   "(scenario locked: strict, %s)" % " ".join(STRICT_DECODE_FLAGS))
+    p.add_argument("--trace-headers", default=None, metavar="FILE",
+                   help="with --decode: write the SPS/PPS of `ffmpeg -bsf:v trace_headers` to FILE each time "
+                        "they change (the first and every encoder switch), with that frame's first slice header")
     p.add_argument("--decode-keep", action="store_true", help=argparse.SUPPRESS)
     p.add_argument("--ffplay", action="store_true", help="pipe the stream live to ffplay")
     p.add_argument("--transcript", default=None, help="write a JSON-lines transcript of every frame to FILE")

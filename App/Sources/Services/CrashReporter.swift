@@ -3,6 +3,12 @@
 // crash on the next launch (iOS 15+: shortly after launch). Each MXCrashDiagnostic is formatted as
 // text and handed to LogsModel.recordCrashReport, which persists it, shows the "Recovered after a
 // crash" card on the Logs screen and includes it in shared logs and problem reports.
+//
+// Locked iPhone, Phase 0 (P0-11, L18): the same diagnostic payloads also carry CPU exceptions (the
+// background CPU monitor), hangs and disk-write exceptions — each logged as one `W/CRASH: [metrickit] …`
+// line — and the daily metric payloads carry the background exits (CPU limit, memory, watchdog, …),
+// logged as `I/APP: [metrickit] background exits (24h): …`. The texts come from
+// `LockDiagnostics` (Linux-tested). Crash handling itself is unchanged.
 
 import Foundation
 import OpenCfMotoAppModel
@@ -47,12 +53,57 @@ extension CrashReporter: MXMetricManagerSubscriber {
         Task { @MainActor in self.handle(payloads) }
     }
 
+    /// The daily metric payloads (L18 background exits). Logging is thread-safe: no hop needed.
+    nonisolated func didReceive(_ payloads: [MXMetricPayload]) {
+        for payload in payloads {
+            if let line = Self.backgroundExitsLine(payload) { Log.i("APP", line) }
+        }
+    }
+
     fileprivate func handle(_ payloads: [MXDiagnosticPayload]) {
+        for payload in payloads {
+            for line in Self.exceptionLines(payload) { Log.w("CRASH", line) }
+        }
         let reports = payloads.flatMap { payload in
             (payload.crashDiagnostics ?? []).map { Self.format($0, payload: payload) }
         }
         guard !reports.isEmpty else { return }
         deliver(reports.joined(separator: "\n\n"))
+    }
+
+    /// L18 (`W/CRASH`): one line per CPU exception, hang and disk-write exception of the payload.
+    nonisolated static func exceptionLines(_ payload: MXDiagnosticPayload) -> [String] {
+        var lines: [String] = []
+        for d in payload.cpuExceptionDiagnostics ?? [] {
+            lines.append(LockDiagnostics.cpuException(cpuSeconds: d.totalCPUTime.converted(to: .seconds).value,
+                                                      sampledSeconds: d.totalSampledTime.converted(to: .seconds).value,
+                                                      build: d.metaData.applicationBuildVersion,
+                                                      osVersion: d.metaData.osVersion))
+        }
+        for d in payload.hangDiagnostics ?? [] {
+            lines.append(LockDiagnostics.hang(seconds: d.hangDuration.converted(to: .seconds).value,
+                                              build: d.metaData.applicationBuildVersion, osVersion: d.metaData.osVersion))
+        }
+        for d in payload.diskWriteExceptionDiagnostics ?? [] {
+            lines.append(LockDiagnostics.diskWrites(megabytes: d.totalWritesCaused.converted(to: .mebibytes).value,
+                                                    build: d.metaData.applicationBuildVersion,
+                                                    osVersion: d.metaData.osVersion))
+        }
+        return lines
+    }
+
+    /// L18 (`I/APP`): the background exits of a daily metric payload; nil when it has none.
+    nonisolated static func backgroundExitsLine(_ payload: MXMetricPayload) -> String? {
+        guard let exits = payload.applicationExitMetrics?.backgroundExitData else { return nil }
+        return LockDiagnostics.backgroundExits(LockDiagnostics.BackgroundExits(
+            cpuLimit: exits.cumulativeCPUResourceLimitExitCount,
+            memory: exits.cumulativeMemoryResourceLimitExitCount,
+            memoryPressure: exits.cumulativeMemoryPressureExitCount,
+            watchdog: exits.cumulativeAppWatchdogExitCount,
+            lockedFile: exits.cumulativeSuspendedWithLockedFileExitCount,
+            taskTimeout: exits.cumulativeBackgroundTaskAssertionTimeoutExitCount,
+            abnormal: exits.cumulativeAbnormalExitCount,
+            normal: exits.cumulativeNormalAppExitCount))
     }
 
     nonisolated static func format(_ crash: MXCrashDiagnostic, payload: MXDiagnosticPayload) -> String {

@@ -4,6 +4,12 @@
 // hold IDR / software encoder in the background) with ThermalMonitor caps. The same DashRenderer
 // draws the phone preview of the dash (AppPlatform.dashRenderer). Album artwork for the Apple Music
 // tile / sheet (`DashDrawCommand.image`) comes from `images`, filled by `setDashImage(id:data:)`.
+//
+// Locked iPhone, Phase 0 (the diagnostics build): while the phone is locked the engine tries a
+// VideoToolbox software session (`.videoToolboxSoftwareOnly`: vt-sw, then the hold picture; no CPU
+// encoder is bundled, so `engine.cpuEncoderFactory` stays nil), runs the background CPU dry run in hold
+// (`backgroundDryRun`), and logs the battery through `batteryProvider` (BatteryMonitor's cache, never
+// the main-actor port). `-e2eBackgroundEncoder <policy>` overrides the policy for the whole run.
 
 import Foundation
 import OpenCfMotoCore
@@ -20,19 +26,33 @@ final class ProjectionAdapter: DashProjecting, @unchecked Sendable {
     private let thermal: ThermalMonitor
     private let lock = NSLock()
     private var tileLoaded: (@Sendable () -> Void)?
+    /// `-e2eBackgroundEncoder`: wins over the build default and over `setLockedStreamPolicy(_:)`.
+    private let lockedStreamPolicyOverride: LockedStreamPolicy?
 
     /// Corridor prefetch zooms / radius (the bike follow camera sits around z15.4–18.6; the tile
     /// cache caps one prefetch at 400 tiles — OSM tile usage policy).
     private static let corridorZooms = 14 ... 17
     private static let corridorRadiusMeters = 250.0
 
-    init(http: HTTPClient, tileURLTemplate: String, clock: MonotonicClock) {
+    /// The locked-phone policy of the Phase 0 diagnostics build: VideoToolbox software, then hold.
+    static let defaultLockedStreamPolicy = LockedStreamPolicy.videoToolboxSoftwareOnly
+
+    init(http: HTTPClient, tileURLTemplate: String, clock: MonotonicClock,
+         lockedStreamPolicyOverride: LockedStreamPolicy? = nil) {
         tiles = TileImageCache(httpClient: http, configuration: TileImageCache.Configuration(urlTemplate: tileURLTemplate))
         renderer = DashRenderer(tileCache: tiles, imageStore: images)
         engine = DashProjectionEngine(renderer: renderer, clock: clock)
         thermal = ThermalMonitor()
+        self.lockedStreamPolicyOverride = lockedStreamPolicyOverride
         thermal.start()
         engine.attach(thermalMonitor: thermal)
+        engine.lockedStreamPolicy = lockedStreamPolicyOverride ?? Self.defaultLockedStreamPolicy
+        engine.backgroundDryRun = true // Phase 0 only: measure the background CPU path in hold
+        engine.batteryProvider = { BatteryMonitor.shared.status }
+        // engine.cpuEncoderFactory stays nil: no CPU encoder in Phase 0 (no rung 2).
+        if let policy = lockedStreamPolicyOverride {
+            Log.i("VIDEO", "locked-phone policy \(policy.rawValue) (launch argument -e2eBackgroundEncoder)")
+        }
         tiles.onTileLoaded = { [weak self] _ in
             guard let self else { return }
             self.engine.invalidate()
@@ -79,6 +99,20 @@ final class ProjectionAdapter: DashProjecting, @unchecked Sendable {
     func enterForeground() { engine.enterForeground() }
     func stop() { engine.stop() }
 
+    /// Locked iPhone (P0-4): called by RideModel at `.inactive`, right after `prepareHoldPicture`.
+    func prepareBackgroundEncoder() { engine.prepareBackgroundEncoder() }
+
+    /// Locked iPhone: a stored policy (RideModel at start). `-e2eBackgroundEncoder` wins for the whole run.
+    func setLockedStreamPolicy(_ policy: LockedStreamPolicy) {
+        if let override = lockedStreamPolicyOverride {
+            if policy != override {
+                Log.i("VIDEO", "locked-phone policy \(policy.rawValue) not applied: the launch argument says \(override.rawValue)")
+            }
+            return
+        }
+        engine.lockedStreamPolicy = policy
+    }
+
     func requestTiles(_ tiles: [DashMapTile]) {
         for t in tiles { self.tiles.request(z: t.z, x: t.x, y: t.y) }
     }
@@ -120,6 +154,10 @@ final class ProjectionAdapter: DashProjecting, @unchecked Sendable {
         }
         return ProjectionStatsSummary(mode: mode, renderedFrames: s.renderedFrames, encodedFrames: s.outputFrames,
                                       framesPerSecond: s.outputFPS, bitrate: s.effectiveParameters.bitrate,
-                                      lastError: s.encoderErrors > 0 ? "encoder errors: \(s.encoderErrors)" : nil)
+                                      lastError: s.encoderErrors > 0 ? "encoder errors: \(s.encoderErrors)" : nil,
+                                      encoder: s.encoder, pullRate: s.pullRate, pullsServed: s.pullsServed,
+                                      holdFramesServed: s.holdFramesServed, fallbackKeyframesServed: s.fallbackKeyframesServed,
+                                      encoderErrors: s.encoderErrors, cpuPercent: s.cpuPercent,
+                                      backgroundFpsCap: s.backgroundFpsCap)
     }
 }

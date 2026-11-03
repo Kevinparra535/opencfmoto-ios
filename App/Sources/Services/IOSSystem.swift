@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // `SystemControlling` on iOS: UIKit idle timer, thermal / Low Power Mode notifications, the app's
 // Settings page, a light haptic, the Local Network permission (TN3179 probe from OpenCfMotoApple),
-// the phone's own light / dark appearance (dash map AUTO theme) and the device / build identity
-// used in logs and problem reports.
+// the phone's own light / dark appearance (dash map AUTO theme), the battery (BatteryMonitor; the
+// locked-phone diagnostics) and the device / build identity used in logs and problem reports.
 
 import Foundation
 import UIKit
@@ -34,6 +34,7 @@ final class IOSSystem: SystemControlling {
         buildNumber = info["CFBundleVersion"] as? String ?? "0"
         deviceModel = Self.machineIdentifier()
         systemVersion = "\(UIDevice.current.systemName) \(UIDevice.current.systemVersion)"
+        BatteryMonitor.shared.start()
         let center = NotificationCenter.default
         for name in [ProcessInfo.thermalStateDidChangeNotification, Notification.Name.NSProcessInfoPowerStateDidChange] {
             let token = center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
@@ -55,6 +56,9 @@ final class IOSSystem: SystemControlling {
     }
 
     var isLowPowerModeEnabled: Bool { ProcessInfo.processInfo.isLowPowerModeEnabled }
+
+    /// Locked iPhone (Phase 0, P0-12): the cached UIDevice battery reading (`[lock] … batt=63% charging`).
+    var batteryStatus: BatteryStatus? { BatteryMonitor.shared.status }
 
     var thermalLevel: ThermalLevel {
         ThermalLevel.fromProcessInfoThermalState(rawValue: ProcessInfo.processInfo.thermalState.rawValue)
