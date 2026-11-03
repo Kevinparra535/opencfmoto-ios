@@ -13,7 +13,8 @@ import Foundation
 public enum H264StreamIssue: Sendable, Equatable, Hashable, CustomStringConvertible {
     /// `empty-au`: no bytes, or no NAL unit at all.
     case emptyAccessUnit
-    /// `start-code-3`: a 3-byte start code (only 4-byte start codes are allowed).
+    /// `start-code-3`: a 3-byte start code (only 4-byte start codes are allowed); also bytes before the
+    /// first start code (a NAL unit without its `00 00 00 01`).
     case threeByteStartCode
     /// `nal-<type>`: a NAL type outside {1, 5, 7, 8} (SEI 6, AUD 9, filler 12, …).
     case nalType(UInt8)
@@ -116,30 +117,108 @@ public enum H264StreamCheck {
     /// 7. every slice is I or P.
     /// `frameRate`: the rate the encoder was configured for (the background cap by default).
     ///
-    /// step-0 placeholder: K implements rules 1–7 completely. Until then only empty access units,
-    /// `requireKeyframe`, missing SPS / PPS and the SPS size are checked.
+    /// Details:
+    /// - an access unit without any NAL unit (no bytes, no start code, or start codes only) gives
+    ///   `[empty-au]` alone; `start-code-3` also covers bytes before the first start code (a NAL unit
+    ///   not introduced by `00 00 00 01`, e.g. AVCC length prefixes); start codes followed by nothing
+    ///   are skipped, as `AnnexB.nalUnits` does;
+    /// - `nal-<t>` once per distinct type, in order of appearance;
+    /// - an IDR access unit reports `no-sps`, `no-pps`, `repeated-ps` for its parameter sets, and
+    ///   `idr-order` only when it has exactly one SPS and one PPS but does not start SPS, PPS, IDR slice
+    ///   — the order is read over the NAL units of the allowed types (a disallowed one is reported by
+    ///   rule 2 already);
+    /// - rules 5 and 6 read the first SPS / PPS of the access unit (`sps-unparsable` /
+    ///   `pps-unparsable` when it cannot be read), also in an access unit without an IDR slice;
+    /// - rule 7 reads every slice (types 1 and 5); a slice_type above 9 does not exist and is
+    ///   `slice-unparsable`.
     public static func check(accessUnit: Data, canvas: VideoCanvas, requireKeyframe: Bool,
                              frameRate: Int = 8) -> [H264StreamIssue] {
-        _ = frameRate
-        let nals = AnnexB.nalUnits(annexB: accessUnit)
-        guard !accessUnit.isEmpty, !nals.isEmpty else { return [.emptyAccessUnit] }
-        let types = nals.compactMap { AnnexB.nalType($0) }
-        let isIDR = types.contains(H264NALType.idrSlice.rawValue)
+        let bytes = [UInt8](accessUnit)
+        let codes = startCodes(bytes)
+        var nals: [ArraySlice<UInt8>] = []
+        var shortStartCode = false
+        for (n, code) in codes.enumerated() {
+            let end = n + 1 < codes.count ? codes[n + 1].codeStart : bytes.count
+            guard end > code.payloadStart else { continue }
+            nals.append(bytes[code.payloadStart ..< end])
+            if code.payloadStart - code.codeStart != 4 { shortStartCode = true }
+        }
+        guard !nals.isEmpty else { return [.emptyAccessUnit] }
+
         var issues: [H264StreamIssue] = []
-        if requireKeyframe, !isIDR { issues.append(.notIDR) }
-        guard isIDR else { return issues }
-        guard let spsNAL = nals.first(where: { AnnexB.nalType($0) == H264NALType.sps.rawValue }) else {
-            issues.append(.missingSPS)
-            if !types.contains(H264NALType.pps.rawValue) { issues.append(.missingPPS) }
-            return issues
+        func report(_ issue: H264StreamIssue) {
+            if !issues.contains(issue) { issues.append(issue) }
         }
-        if !types.contains(H264NALType.pps.rawValue) { issues.append(.missingPPS) }
-        guard let sps = H264SPS.parse(nal: spsNAL) else {
-            issues.append(.spsUnparsable)
-            return issues
+
+        // 1. Framing.
+        if shortStartCode || (codes.first?.codeStart ?? 0) > 0 { report(.threeByteStartCode) }
+
+        // 2. NAL types.
+        let types = nals.map { $0[$0.startIndex] & 0x1F }
+        for t in types where !allowedNALTypes.contains(t) { report(.nalType(t)) }
+        let hasIDR = types.contains(H264NALType.idrSlice.rawValue)
+        if hasIDR, types.contains(H264NALType.nonIDRSlice.rawValue) { report(.mixedSlices) }
+
+        // 3. Keyframe.
+        if requireKeyframe, !hasIDR { report(.notIDR) }
+
+        // 4. Parameter sets and their place.
+        let spsCount = types.filter { $0 == H264NALType.sps.rawValue }.count
+        let ppsCount = types.filter { $0 == H264NALType.pps.rawValue }.count
+        if hasIDR {
+            if spsCount == 0 { report(.missingSPS) }
+            if ppsCount == 0 { report(.missingPPS) }
+            if spsCount > 1 || ppsCount > 1 { report(.repeatedParameterSet) }
+            if spsCount == 1, ppsCount == 1 {
+                let order = types.filter { allowedNALTypes.contains($0) }
+                if Array(order.prefix(3)) != [H264NALType.sps.rawValue, H264NALType.pps.rawValue, H264NALType.idrSlice.rawValue] {
+                    report(.badIDROrder)
+                }
+            }
+        } else if spsCount > 0 || ppsCount > 0 {
+            report(.parameterSetsWithoutIDR)
         }
-        if sps.width != canvas.width || sps.height != canvas.height {
-            issues.append(.size(width: sps.width, height: sps.height))
+
+        // 5. SPS.
+        if let spsNAL = nals.first(where: { $0[$0.startIndex] & 0x1F == H264NALType.sps.rawValue }) {
+            if let sps = H264SPS.parse(nal: Data(spsNAL)) {
+                if sps.profileIdc != 66 { report(.profile(sps.profileIdc)) }
+                if sps.levelIdc != expectedLevel(canvas: canvas, frameRate: frameRate) { report(.level(sps.levelIdc)) }
+                if sps.width != canvas.width || sps.height != canvas.height {
+                    report(.size(width: sps.width, height: sps.height))
+                }
+                if sps.frameCropping { report(.cropping) }
+                if !sps.frameMbsOnly { report(.fieldCoding) }
+                if sps.pocType != 0, sps.pocType != 2 { report(.pocType(sps.pocType)) }
+                if sps.maxNumRefFrames > maxReferenceFrames { report(.referenceFrames(sps.maxNumRefFrames)) }
+                if let reorder = sps.maxNumReorderFrames, reorder != 0 { report(.reorder(reorder)) }
+                if sps.seqParameterSetId != 0 { report(.spsID(sps.seqParameterSetId)) }
+            } else {
+                report(.spsUnparsable)
+            }
+        }
+
+        // 6. PPS.
+        if let ppsNAL = nals.first(where: { $0[$0.startIndex] & 0x1F == H264NALType.pps.rawValue }) {
+            if let pps = H264PPS.parse(nal: Data(ppsNAL)) {
+                if pps.entropyCodingCABAC { report(.cabac) }
+                if pps.numSliceGroups != 1 { report(.sliceGroups(pps.numSliceGroups)) }
+                if pps.picParameterSetId != 0 { report(.ppsID(pps.picParameterSetId)) }
+                if pps.seqParameterSetId != 0 { report(.ppsSPSID(pps.seqParameterSetId)) }
+            } else {
+                report(.ppsUnparsable)
+            }
+        }
+
+        // 7. Slice types.
+        for nal in nals {
+            let t = nal[nal.startIndex] & 0x1F
+            guard t == H264NALType.nonIDRSlice.rawValue || t == H264NALType.idrSlice.rawValue else { continue }
+            guard let sliceType = readSliceType(slice: nal) else {
+                report(.sliceUnparsable)
+                continue
+            }
+            if sliceType % 5 != 0, sliceType % 5 != 2 { report(.sliceType(sliceType)) } // not P (0) or I (2)
         }
         return issues
     }
@@ -147,8 +226,55 @@ public enum H264StreamCheck {
     /// The level_idc a background stream must carry for `canvas` at `frameRate`: 31 (level 3.1), or —
     /// when the canvas exceeds level 3.1's MaxFS (3,600 macroblocks) or MaxMBPS (108,000 macroblocks/s)
     /// at that rate — the lowest higher Baseline level (Table A-1) whose MaxFS and MaxMBPS fit.
+    /// The frame size in macroblocks rounds partial macroblocks up; a negative rate counts as 0; a canvas
+    /// beyond every level gives the highest level (62).
     public static func expectedLevel(canvas: VideoCanvas, frameRate: Int) -> Int {
-        _ = (canvas, frameRate)
-        return 31 // step-0 placeholder: K implements
+        let widthMbs = (min(max(canvas.width, 0), 1 << 20) + 15) / 16
+        let heightMbs = (min(max(canvas.height, 0), 1 << 20) + 15) / 16
+        let frameMbs = widthMbs * heightMbs
+        let (perSecond, overflow) = frameMbs.multipliedReportingOverflow(by: max(frameRate, 0))
+        for level in levelLimits where frameMbs <= level.maxFrameMbs && !overflow && perSecond <= level.maxMbsPerSecond {
+            return level.idc
+        }
+        return levelLimits[levelLimits.count - 1].idc
+    }
+
+    // MARK: - Private
+
+    /// NAL unit types a dash access unit may carry: non-IDR slice, IDR slice, SPS, PPS.
+    private static let allowedNALTypes: Set<UInt8> = [
+        H264NALType.nonIDRSlice.rawValue, H264NALType.idrSlice.rawValue, H264NALType.sps.rawValue, H264NALType.pps.rawValue,
+    ]
+
+    /// H.264 Table A-1 from level 3.1 up: level_idc, MaxMBPS (macroblocks/s), MaxFS (macroblocks).
+    private static let levelLimits: [(idc: Int, maxMbsPerSecond: Int, maxFrameMbs: Int)] = [
+        (31, 108_000, 3_600), (32, 216_000, 5_120), (40, 245_760, 8_192), (41, 245_760, 8_192),
+        (42, 522_240, 8_704), (50, 589_824, 22_080), (51, 983_040, 36_864), (52, 2_073_600, 36_864),
+        (60, 4_177_920, 139_264), (61, 8_355_840, 139_264), (62, 16_711_680, 139_264),
+    ]
+
+    /// Every `00 00 01` of `bytes`, scanning forward: where its start code begins (one byte earlier
+    /// when a zero precedes it, i.e. a 4-byte `00 00 00 01`) and where the NAL unit after it begins.
+    private static func startCodes(_ bytes: [UInt8]) -> [(codeStart: Int, payloadStart: Int)] {
+        var out: [(codeStart: Int, payloadStart: Int)] = []
+        var i = 0
+        while i + 3 <= bytes.count {
+            if bytes[i] == 0, bytes[i + 1] == 0, bytes[i + 2] == 1 {
+                out.append((i > 0 && bytes[i - 1] == 0 ? i - 1 : i, i + 3))
+                i += 3
+            } else {
+                i += 1
+            }
+        }
+        return out
+    }
+
+    /// slice_type of a slice NAL unit (header byte first): first_mb_in_slice ue(v), then slice_type
+    /// ue(v) (§7.3.3); nil when unreadable or above 9.
+    private static func readSliceType(slice nal: ArraySlice<UInt8>) -> Int? {
+        let header = Array(nal.dropFirst().prefix(24)) // two Exp-Golomb codes fit easily
+        var r = H264BitReader(rbsp: H264SPS.removeEmulationPrevention(header))
+        guard r.ue() != nil, let sliceType = r.ue(), sliceType <= 9 else { return nil }
+        return sliceType
     }
 }

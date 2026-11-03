@@ -77,7 +77,12 @@ final class VideoSPSTests: XCTestCase {
         // LinkFakeFrameSource.sps / TestFrameSource.sps (decoded by hand: 80×36 MBs, no cropping).
         let sps = Data([0x67, 0x42, 0x00, 0x1F, 0xDA, 0x01, 0x40, 0x12, 0x69, 0xA8])
         let info = try XCTUnwrap(H264SPS.parse(nal: sps))
-        XCTAssertEqual(info, H264SPSInfo(profileIdc: 66, levelIdc: 31, width: 1280, height: 576))
+        // Constraint byte 0x00, frame_num 4 bits, POC type 2, 1 reference; the VUI (video signal type,
+        // colour description) is cut off after 3 bits of colour_primaries: kept, reorder unknown.
+        XCTAssertEqual(info, H264SPSInfo(profileIdc: 66, levelIdc: 31, width: 1280, height: 576, seqParameterSetId: 0,
+                                         constraintFlags: 0x00, log2MaxFrameNum: 4, pocType: 2, maxNumRefFrames: 1,
+                                         frameMbsOnly: true, frameCropping: false, vuiPresent: true,
+                                         maxNumReorderFrames: nil, maxDecFrameBuffering: nil))
         let au = AnnexB.join([sps, Data([0x68, 0xCE, 0x0D, 0x88]), Data([0x65, 0x88, 0x84, 0x01])])
         XCTAssertEqual(H264SPS.parse(accessUnit: au), info)
     }
@@ -128,7 +133,10 @@ final class VideoSPSTests: XCTestCase {
         s.ue(4); s.u(1, 0)
         s.ue(79); s.ue(44); s.u(1, 1); s.u(1, 1); s.u(1, 0); s.u(1, 0)
         let info = H264SPS.parse(nal: s.nal())
-        XCTAssertEqual(info, H264SPSInfo(profileIdc: 100, levelIdc: 40, width: 1280, height: 720))
+        XCTAssertEqual(info, H264SPSInfo(profileIdc: 100, levelIdc: 40, width: 1280, height: 720, seqParameterSetId: 0,
+                                         constraintFlags: 0, log2MaxFrameNum: 8, pocType: 0, maxNumRefFrames: 4,
+                                         frameMbsOnly: true, frameCropping: false, vuiPresent: false,
+                                         maxNumReorderFrames: nil, maxDecFrameBuffering: nil))
     }
 
     func testEmulationPreventionIsRemoved() {
@@ -150,5 +158,223 @@ final class VideoSPSTests: XCTestCase {
         XCTAssertNil(H264SPS.parse(nal: Data([0x67, 0x42, 0, 31] + [UInt8](repeating: 0, count: 40))), "runaway Exp-Golomb")
         XCTAssertNil(H264SPS.parse(accessUnit: AnnexB.join([Data([0x65, 0x88])])), "no SPS in the AU")
         XCTAssertNil(H264SPS.parse(accessUnit: Data()))
+    }
+
+    // MARK: - Locked iPhone, Phase 0 (P0-1): every SPS field, the VUI, the PPS
+    // Expected values decoded field by field with lock/encoders/tools/spsdump.py (the design's vectors).
+
+    func testVideoToolboxSimulatorSPSAllFields() throws {
+        // 0xE0, level 31, frame_num 5 bits, POC 0, 2 refs, 800×384; its VUI has a NAL HRD and no
+        // bitstream_restriction, so reorder / buffering are unknown.
+        let info = try XCTUnwrap(H264SPS.parse(nal: H264Fixture.vtSPS))
+        XCTAssertEqual(info, H264SPSInfo(profileIdc: 66, levelIdc: 31, width: 800, height: 384, seqParameterSetId: 0,
+                                         constraintFlags: 0xE0, log2MaxFrameNum: 5, pocType: 0, maxNumRefFrames: 2,
+                                         frameMbsOnly: true, frameCropping: false, vuiPresent: true,
+                                         maxNumReorderFrames: nil, maxDecFrameBuffering: nil))
+        XCTAssertEqual(info.summary, "profile 66 constraints 0xE0 level 31 800x384 poc 0 refs 2 frame_num_bits 5 vui=yes reorder=-")
+        XCTAssertEqual(H264SPS.parse(accessUnit: H264Fixture.validIDR), info)
+    }
+
+    func testReferenceSPSAllFields() throws {
+        // 0xC0, frame_num 4 bits, POC 2, 1 ref; VUI with only bitstream_restriction: reorder 0, buffering 1.
+        let info = try XCTUnwrap(H264SPS.parse(nal: H264Fixture.referenceSPS))
+        XCTAssertEqual(info, H264SPSInfo(profileIdc: 66, levelIdc: 31, width: 800, height: 384, seqParameterSetId: 0,
+                                         constraintFlags: 0xC0, log2MaxFrameNum: 4, pocType: 2, maxNumRefFrames: 1,
+                                         frameMbsOnly: true, frameCropping: false, vuiPresent: true,
+                                         maxNumReorderFrames: 0, maxDecFrameBuffering: 1))
+        XCTAssertEqual(info.summary, "profile 66 constraints 0xC0 level 31 800x384 poc 2 refs 1 frame_num_bits 4 vui=yes reorder=0")
+    }
+
+    func testTruncatedVUIVectorKeeps1280x576() throws {
+        // The repo's fake-source SPS stops 3 bits into colour_primaries: the SPS stays, reorder unknown.
+        let info = try XCTUnwrap(H264SPS.parse(nal: H264Fixture.wrongSizeSPS))
+        XCTAssertEqual([info.width, info.height], [1280, 576])
+        XCTAssertTrue(info.vuiPresent)
+        XCTAssertNil(info.maxNumReorderFrames)
+        XCTAssertNil(info.maxDecFrameBuffering)
+        XCTAssertEqual(info.summary, "profile 66 constraints 0x00 level 31 1280x576 poc 2 refs 1 frame_num_bits 4 vui=yes reorder=-")
+        // The mirror relay test vectors (no VUI) keep their sizes and read as "no VUI".
+        let relay800x384 = Data([0x67, 0x42, 0xC0, 0x1F, 0xDA, 0x03, 0x20, 0xC6, 0x40])
+        XCTAssertEqual(H264SPS.parse(nal: relay800x384),
+                       H264SPSInfo(profileIdc: 66, levelIdc: 31, width: 800, height: 384, constraintFlags: 0xC0,
+                                   log2MaxFrameNum: 4, pocType: 2, maxNumRefFrames: 1))
+    }
+
+    func testFixtureBuildersReproduceTheRealVectors() {
+        // So every synthetic fault below differs from a real, dash-proven stream in exactly one field.
+        XCTAssertEqual(H264Fixture.SPS().nal(), H264Fixture.vtSPS)
+        XCTAssertEqual(H264Fixture.SPS.reference.nal(), H264Fixture.referenceSPS)
+        XCTAssertEqual(H264Fixture.PPS().nal(), H264Fixture.vtPPS)
+        XCTAssertEqual([UInt8](H264Fixture.slice(idr: true, sliceType: 7).prefix(2)), [0x65, 0x88])
+        XCTAssertEqual([UInt8](H264Fixture.slice(idr: false, sliceType: 5).prefix(2)), [0x41, 0x9A])
+    }
+
+    func testEveryNewSPSFieldIsRead() throws {
+        let sps = H264Fixture.SPS(header: 0x67, profile: 77, constraints: 0x40, level: 40, spsId: 5, log2MaxFrameNumMinus4: 12,
+                                  pocType: 1, maxNumRefFrames: 16, gapsInFrameNumAllowed: true, widthMbs: 80, heightMapUnits: 23,
+                                  frameMbsOnly: false, crop: (0, 0, 0, 2), vui: nil)
+        let info = try XCTUnwrap(H264SPS.parse(nal: sps.nal()))
+        // Field coding: 2 × 23 × 16 = 736 lines, minus 2 × 2 × 2 cropped = 728.
+        XCTAssertEqual(info, H264SPSInfo(profileIdc: 77, levelIdc: 40, width: 1280, height: 728, seqParameterSetId: 5,
+                                         constraintFlags: 0x40, log2MaxFrameNum: 16, pocType: 1, maxNumRefFrames: 16,
+                                         frameMbsOnly: false, frameCropping: true, vuiPresent: false,
+                                         maxNumReorderFrames: nil, maxDecFrameBuffering: nil))
+        XCTAssertEqual(info.summary, "profile 77 constraints 0x40 level 40 1280x728 poc 1 refs 16 frame_num_bits 16 vui=no reorder=-")
+        // The older tests' builder: sps id 63, constraint byte 0 (always two hex digits).
+        let old = try XCTUnwrap(H264SPS.parse(nal: SPSBuilder.baseline(constraints: 0, level: 0, spsId: 63, widthMbs: 1, heightMapUnits: 1)))
+        XCTAssertEqual(old.seqParameterSetId, 63)
+        XCTAssertEqual(old.summary, "profile 66 constraints 0x00 level 0 16x16 poc 2 refs 1 frame_num_bits 4 vui=no reorder=-")
+    }
+
+    func testEveryVUIPartIsSkippedExactly() throws {
+        // Every optional VUI part present (Extended_SAR, overscan, video signal with colour, chroma location,
+        // timing, a NAL HRD with 2 and a VCL HRD with 3 CPB specifications, low delay, pic_struct), then
+        // bitstream_restriction: misreading any part would shift the two values read last.
+        let vui = H264Fixture.VUI(aspectRatioIdc: 255, sar: (64, 45), overscanAppropriate: true,
+                                  videoSignal: .init(format: 2, fullRange: true, colour: (1, 1, 1)), chromaLocation: (2, 3),
+                                  timing: (1001, 60000, true), nalHRD: .init(cpbCountMinus1: 1, bitRateValueMinus1: 5000),
+                                  vclHRD: .init(cpbCountMinus1: 2, cbr: true), lowDelayHRD: true, picStructPresent: true,
+                                  restriction: .init(maxBytesPerPicDenom: 2, maxBitsPerMbDenom: 1, log2MaxMvLengthHorizontal: 9,
+                                                     log2MaxMvLengthVertical: 8, maxNumReorderFrames: 2, maxDecFrameBuffering: 3))
+        let info = try XCTUnwrap(H264SPS.parse(nal: H264Fixture.SPS(vui: vui).nal()))
+        XCTAssertTrue(info.vuiPresent)
+        XCTAssertEqual(info.maxNumReorderFrames, 2)
+        XCTAssertEqual(info.maxDecFrameBuffering, 3)
+        XCTAssertEqual([info.width, info.height, info.maxNumRefFrames], [800, 384, 2])
+        XCTAssertEqual(info.summary, "profile 66 constraints 0xE0 level 31 800x384 poc 0 refs 2 frame_num_bits 5 vui=yes reorder=2")
+        // An aspect ratio other than Extended_SAR has no sar_width / sar_height.
+        let plain = H264Fixture.VUI(aspectRatioIdc: 1, restriction: .init(maxNumReorderFrames: 1, maxDecFrameBuffering: 4))
+        XCTAssertEqual(H264SPS.parse(nal: H264Fixture.SPS(vui: plain).nal())?.maxDecFrameBuffering, 4)
+    }
+
+    func testVUIWithoutBitstreamRestrictionHasNoReorder() throws {
+        for vui in [H264Fixture.VUI(), H264Fixture.VUI(timing: (1, 50, false)), H264Fixture.VUI(vclHRD: .init()),
+                    H264Fixture.VUI.videoToolbox] {
+            let info = try XCTUnwrap(H264SPS.parse(nal: H264Fixture.SPS(vui: vui).nal()))
+            XCTAssertTrue(info.vuiPresent)
+            XCTAssertNil(info.maxNumReorderFrames)
+            XCTAssertNil(info.maxDecFrameBuffering)
+        }
+    }
+
+    func testVUICutAtEveryBitKeepsTheSPS() throws {
+        // A full VUI cut after every bit from vui_parameters_present_flag on (zero padding to the byte):
+        // the SPS and its size always survive, and reorder / buffering are either unknown or exact —
+        // never a value made up from missing bits.
+        let sps = H264Fixture.SPS(vui: H264Fixture.VUI(aspectRatioIdc: 255, videoSignal: .init(), timing: (1, 30, true),
+                                                         nalHRD: .init(cpbCountMinus1: 1),
+                                                         restriction: .init(maxNumReorderFrames: 2, maxDecFrameBuffering: 3)))
+        var head = H264BitWriter()
+        sps.writeHead(&head)
+        var full = head
+        full.flag(true)
+        sps.vui?.write(&full)
+        var complete = 0
+        for cut in head.bits.count ... full.bits.count {
+            var w = H264BitWriter()
+            for bit in full.bits.prefix(cut) { w.u(1, Int(bit)) }
+            let info = try XCTUnwrap(H264SPS.parse(nal: w.nal(header: 0x27, trailing: false)), "cut after \(cut) bits")
+            XCTAssertEqual([info.width, info.height, info.maxNumRefFrames, info.log2MaxFrameNum], [800, 384, 2, 5], "cut \(cut)")
+            XCTAssertEqual(info.vuiPresent, cut > head.bits.count, "cut \(cut)")
+            if cut <= full.bits.count - 8 { XCTAssertNil(info.maxNumReorderFrames, "cut \(cut)") }
+            if let reorder = info.maxNumReorderFrames {
+                XCTAssertEqual(reorder, 2, "cut \(cut)")
+                XCTAssertEqual(info.maxDecFrameBuffering, 3, "cut \(cut)")
+                complete += 1
+            } else {
+                XCTAssertNil(info.maxDecFrameBuffering, "cut \(cut)")
+            }
+        }
+        XCTAssertGreaterThanOrEqual(complete, 1, "the uncut SPS reads its bitstream_restriction")
+    }
+
+    func testSPSEndingBeforeTheVUIFlagKeepsItsSize() throws {
+        // Before the VUI was read, an SPS that stops right after the frame cropping gave its size; it
+        // still does (the mirror host's canvas check depends on it), as "no VUI".
+        let sps = H264Fixture.SPS(header: 0x67, constraints: 0xC0, log2MaxFrameNumMinus4: 1, pocType: 2, maxNumRefFrames: 15)
+        var w = H264BitWriter()
+        sps.writeHead(&w)
+        XCTAssertEqual(w.bits.count, 64, "byte-aligned, so nothing follows the cropping flag")
+        let info = try XCTUnwrap(H264SPS.parse(nal: w.nal(header: 0x67, trailing: false)))
+        XCTAssertEqual(info, H264SPSInfo(profileIdc: 66, levelIdc: 31, width: 800, height: 384, constraintFlags: 0xC0,
+                                         log2MaxFrameNum: 5, pocType: 2, maxNumRefFrames: 15))
+    }
+
+    func testMalformedHRDKeepsTheSPSWithoutReorder() throws {
+        // 33 CPB specifications do not exist (cpb_cnt_minus1 ≤ 31): the VUI is unreadable from there on.
+        let bad = H264Fixture.VUI(nalHRD: .init(cpbCountMinus1: 32), restriction: .init(maxNumReorderFrames: 0, maxDecFrameBuffering: 2))
+        let info = try XCTUnwrap(H264SPS.parse(nal: H264Fixture.SPS(vui: bad).nal()))
+        XCTAssertTrue(info.vuiPresent)
+        XCTAssertNil(info.maxNumReorderFrames)
+        XCTAssertEqual([info.width, info.height], [800, 384])
+        // 32 (cpb_cnt_minus1 31) is the maximum and reads.
+        let most = H264Fixture.VUI(vclHRD: .init(cpbCountMinus1: 31), restriction: .init(maxNumReorderFrames: 0, maxDecFrameBuffering: 2))
+        XCTAssertEqual(H264SPS.parse(nal: H264Fixture.SPS(vui: most).nal())?.maxDecFrameBuffering, 2)
+    }
+
+    func testVideoToolboxPPSAllFields() throws {
+        // CAVLC, deblocking control 1, pic_init_qp 28, bottom-field POC present 1.
+        let pps = try XCTUnwrap(H264PPS.parse(nal: H264Fixture.vtPPS))
+        XCTAssertEqual(pps, H264PPSInfo(picParameterSetId: 0, seqParameterSetId: 0, entropyCodingCABAC: false,
+                                        bottomFieldPicOrderInFramePresent: true, numSliceGroups: 1, numRefIdxL0DefaultActive: 1,
+                                        weightedPred: false, weightedBipredIdc: 0, picInitQp: 28,
+                                        deblockingFilterControlPresent: true, constrainedIntraPred: false,
+                                        redundantPicCntPresent: false))
+        XCTAssertEqual(pps.summary, "pps cavlc deblock_ctrl=1 qp=28")
+        // The Android-style fake-source PPS: qp 29, no deblocking control.
+        let fake = try XCTUnwrap(H264PPS.parse(nal: H264Fixture.fakeSourcePPS))
+        XCTAssertEqual(fake, H264PPSInfo(picInitQp: 29))
+        XCTAssertEqual(fake.summary, "pps cavlc deblock_ctrl=0 qp=29")
+        XCTAssertEqual(H264PPS.parse(accessUnit: H264Fixture.validIDR), pps)
+        XCTAssertNil(H264PPS.parse(accessUnit: AnnexB.join([H264Fixture.vtSPS, H264Fixture.idrSlice])), "no PPS in the AU")
+        XCTAssertNil(H264PPS.parse(accessUnit: Data()))
+    }
+
+    func testEveryPPSFieldIsRead() throws {
+        let nal = H264Fixture.PPS(ppsId: 3, spsId: 1, cabac: true, bottomFieldPicOrderInFramePresent: false, l0Minus1: 2,
+                                  l1Minus1: 1, weightedPred: true, weightedBipredIdc: 2, qpMinus26: -6, qsMinus26: 3,
+                                  chromaQpIndexOffset: -2, deblockingFilterControl: false, constrainedIntraPred: true,
+                                  redundantPicCnt: true).nal()
+        let pps = try XCTUnwrap(H264PPS.parse(nal: nal))
+        XCTAssertEqual(pps, H264PPSInfo(picParameterSetId: 3, seqParameterSetId: 1, entropyCodingCABAC: true,
+                                        bottomFieldPicOrderInFramePresent: false, numSliceGroups: 1, numRefIdxL0DefaultActive: 3,
+                                        weightedPred: true, weightedBipredIdc: 2, picInitQp: 20,
+                                        deblockingFilterControlPresent: false, constrainedIntraPred: true,
+                                        redundantPicCntPresent: true))
+        XCTAssertEqual(pps.summary, "pps cabac deblock_ctrl=0 qp=20")
+    }
+
+    func testPPSSliceGroupMapsAreSkipped() {
+        for mapType in 0 ... 6 {
+            for groupsMinus1 in [1, 2, 7] {
+                let nal = H264Fixture.PPS(sliceGroupsMinus1: groupsMinus1, sliceGroupMapType: mapType, mapUnitsMinus1: 299).nal()
+                let pps = H264PPS.parse(nal: nal)
+                XCTAssertEqual(pps?.numSliceGroups, groupsMinus1 + 1, "map type \(mapType), \(groupsMinus1 + 1) groups")
+                // The fields after the map are read in place.
+                XCTAssertEqual(pps?.picInitQp, 28, "map type \(mapType)")
+                XCTAssertEqual(pps?.deblockingFilterControlPresent, true, "map type \(mapType)")
+            }
+        }
+        XCTAssertNil(H264PPS.parse(nal: H264Fixture.PPS(sliceGroupsMinus1: 1, sliceGroupMapType: 7).nal()), "unknown map type")
+        XCTAssertNil(H264PPS.parse(nal: H264Fixture.PPS(sliceGroupsMinus1: 8).nal()), "more than 8 slice groups")
+        XCTAssertNil(H264PPS.parse(nal: H264Fixture.PPS(sliceGroupsMinus1: 1, sliceGroupMapType: 6, mapUnitsMinus1: 139_264).nal()),
+                     "an explicit map larger than any level")
+    }
+
+    func testMalformedPPSYieldsNil() {
+        for n in 0 ..< H264Fixture.vtPPS.count {
+            XCTAssertNil(H264PPS.parse(nal: H264Fixture.vtPPS.prefix(n)), "truncated to \(n) bytes")
+        }
+        XCTAssertNil(H264PPS.parse(nal: H264Fixture.vtSPS), "an SPS is not a PPS")
+        XCTAssertNil(H264PPS.parse(nal: Data([0x28] + [UInt8](repeating: 0, count: 12))), "runaway Exp-Golomb")
+    }
+
+    func testPPSEmulationPreventionIsRemoved() {
+        // A pic_parameter_set_id of 2^22 (out of range, but readable) starts with 22 zero bits, so the
+        // RBSP begins 00 00 02 and the builder inserts an emulation-prevention 0x03.
+        let nal = H264Fixture.PPS(ppsId: 1 << 22).nal()
+        XCTAssertEqual([UInt8](nal)[1 ... 4], [0x00, 0x00, 0x03, 0x02])
+        XCTAssertEqual(H264PPS.parse(nal: nal)?.picParameterSetId, 1 << 22)
+        XCTAssertEqual(H264PPS.parse(nal: nal)?.picInitQp, 28)
     }
 }
