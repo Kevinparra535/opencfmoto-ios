@@ -288,7 +288,12 @@ final class VideoEngineLockSeamTests: XCTestCase {
         XCTAssertEqual(cap, 8)
         XCTAssertLessThanOrEqual(background.count, 2 * cap + 3, "the background stream stays at the cap (8 fps)")
         XCTAssertGreaterThanOrEqual(background.count, cap, "and keeps streaming")
-        XCTAssertLessThanOrEqual(engine.stats.outputFPS, Double(cap) + 1.5)
+        // outputFPS counts the encoder's outputs over the last 2 s at the last stats publish (about once a
+        // second): read right after a 2-s pull, that window can still hold the pull-paced foreground's last
+        // frames (over 1000/s with the fake encoder). Pull on until a publish sees background frames only.
+        _ = await pullFlat(engine, seconds: 2.2)
+        XCTAssertLessThanOrEqual(engine.stats.outputFPS, Double(cap) + 1.5,
+                                 "the encoder itself runs at the cap, not only the wire")
         XCTAssertGreaterThan(foreground.count, 2 * parameters.frameRate,
                              "the foreground stays pull-paced (unchanged): more than its 24-fps timer alone gives")
         XCTAssertTrue(background.first?.isKeyframe ?? false)
