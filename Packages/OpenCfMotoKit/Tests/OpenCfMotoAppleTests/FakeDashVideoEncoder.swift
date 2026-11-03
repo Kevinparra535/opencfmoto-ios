@@ -55,6 +55,8 @@ final class FakeDashVideoEncoder: DashVideoEncoder, @unchecked Sendable {
         var usesHardware: Bool? = false
         /// nil: output synchronously from `encode` (a CPU encoder); else this long after it, on a queue.
         var outputDelay: TimeInterval?
+        /// Per-output delays (output 0, 1, …); outputs past the end use `outputDelay`.
+        var outputDelays: [TimeInterval] = []
         /// Accept frames but never output anything.
         var stall = false
         /// Refuse every encode, reporting this failure first (synchronously, like VideoToolbox).
@@ -62,6 +64,9 @@ final class FakeDashVideoEncoder: DashVideoEncoder, @unchecked Sendable {
         /// The SPS written in front of every IDR (nil: the right one for the configured size).
         var sps: Data?
         var averageEncodeMs = 1.0
+        /// `invalidate()` still lets one P-frame out 50 ms later (a VideoToolbox output racing the
+        /// invalidation): the engine must drop it.
+        var lateFrameAfterInvalidate = false
     }
 
     let kind: DashEncoderKind
@@ -164,7 +169,7 @@ final class FakeDashVideoEncoder: DashVideoEncoder, @unchecked Sendable {
         let au = key ? FakeAU.idr(sps: sps, n) : FakeAU.p(n)
         let frame = EncodedFrame(accessUnit: au, isKeyframe: key, presentationTime: pts, sequence: UInt64(n + 1))
         let handler = _onFrame
-        let delay = behavior.outputDelay
+        let delay = n < behavior.outputDelays.count ? behavior.outputDelays[n] : behavior.outputDelay
         let gen = generation
         if delay != nil { inFlight += 1 }
         lock.unlock()
@@ -198,7 +203,13 @@ final class FakeDashVideoEncoder: DashVideoEncoder, @unchecked Sendable {
         generation += 1
         inFlight = 0
         _invalidateCount += 1
+        let late = behavior.lateFrameAfterInvalidate ? _onFrame : nil
+        let n = outputs
         lock.unlock()
+        if let late {
+            let frame = EncodedFrame(accessUnit: FakeAU.p(n), isKeyframe: false, sequence: UInt64(n + 1))
+            queue.asyncAfter(deadline: .now() + 0.05) { late(frame) }
+        }
     }
 
     var usesHardware: Bool? { lock.lock(); defer { lock.unlock() }; return behavior.usesHardware }

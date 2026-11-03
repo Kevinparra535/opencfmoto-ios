@@ -256,12 +256,20 @@ final class VideoEngineBackgroundTests: XCTestCase {
         let engine = makeEngine(factory)
         let log = LogCapture()
         defer { log.stop() }
-        var served = await streamInForeground(engine, pulls: 8)
+        let foreground = await streamInForeground(engine, pulls: 8)
+        await sleepSeconds(0.2) // P-frames queue up while nobody pulls
         lock(engine)
         XCTAssertEqual(engine.mode, .backgroundSoftware)
-        served += await pull(engine, 8)
+        let background = await pull(engine, 8)
+        await sleepSeconds(0.2)
         unlock(engine)
-        served += await pull(engine, 8)
+        let resumed = await pull(engine, 8)
+        let served = foreground + background + resumed
+        // The switch flushed what the old encoder had queued: right after it, the new encoder's IDR.
+        XCTAssertTrue(background.first?.isKeyframe ?? false)
+        XCTAssertNotEqual(background.first?.encoderTag, foreground.last?.encoderTag)
+        XCTAssertTrue(resumed.first?.isKeyframe ?? false)
+        XCTAssertNotEqual(resumed.first?.encoderTag, background.last?.encoderTag)
 
         assertTagChangesOnlyAtIDRs(served)
         let tags = distinctTags(served)
@@ -278,6 +286,27 @@ final class VideoEngineBackgroundTests: XCTestCase {
         XCTAssertTrue(log.messages.contains("[switch] vt-sw \u{2192} vt-hw: gate closed; next frame on the wire is an IDR"))
         let summary = try XCTUnwrap(log.lines("foreground \u{2192}").first)
         XCTAssertTrue(matches(summary, #"^foreground → hardware encoder, IDR forced \(background \d+s: vt-sw \d+ frames \d+ IDR 0 errors enc 1\.0ms; hold served 0\)$"#), summary)
+    }
+
+    /// An output of the replaced encoder that comes out after the switch (VideoToolbox's output
+    /// thread racing the invalidation) never reaches the wire: its route is dropped first.
+    func testALateOutputOfAReplacedEncoderNeverReachesTheWire() async throws {
+        let factory = FakeEncoderFactory { _ in
+            var b = FakeDashVideoEncoder.Behavior()
+            b.lateFrameAfterInvalidate = true
+            return b
+        }
+        let engine = makeEngine(factory)
+        var served = await streamInForeground(engine, pulls: 4)
+        lock(engine)
+        XCTAssertEqual(engine.mode, .backgroundSoftware)
+        try await Task.sleep(nanoseconds: 150_000_000) // the late P-frame of `own` comes out now
+        served += await pull(engine, 4)
+        unlock(engine)
+        try await Task.sleep(nanoseconds: 150_000_000) // … and the late P-frame of `own-sw`
+        served += await pull(engine, 4)
+        assertTagChangesOnlyAtIDRs(served)
+        XCTAssertEqual(distinctTags(served).count, 3, "\(distinctTags(served))")
     }
 
     /// L7 / L8 name the wire-dump frame (1-based) when a dump is recording.
@@ -437,6 +466,7 @@ final class VideoEngineBackgroundTests: XCTestCase {
         let factory = FakeEncoderFactory()
         let engine = makeEngine(factory, clock: clock)
         engine.backgroundStatusInterval = 0.1
+        engine.backgroundDryRun = true // runs in the demoted hold, ends when the encoder is back
         let log = LogCapture()
         defer { log.stop() }
         _ = await streamInForeground(engine)
@@ -450,6 +480,7 @@ final class VideoEngineBackgroundTests: XCTestCase {
         XCTAssertTrue(waitUntil { engine.mode == .backgroundSoftware })
         XCTAssertEqual(log.lines("[bg] retry ladder"), ["[bg] retry ladder (60s after the demotion, attempt 1/3)"])
         XCTAssertTrue(log.messages.contains("[switch] hold \u{2192} vt-sw: gate closed; next frame on the wire is an IDR"))
+        XCTAssertEqual(log.count("[bg-probe] dry run ended"), 1, "the dry run stops when the hold ends")
         let frames = await pull(engine, 3)
         XCTAssertTrue(frames.first?.isKeyframe ?? false)
         XCTAssertFalse(frames.contains(where: FakeAU.isHoldPicture))
@@ -565,6 +596,9 @@ final class VideoEngineBackgroundTests: XCTestCase {
         XCTAssertEqual(engine.mode, .backgroundSoftware)
         XCTAssertEqual(log.lines("[bg] try ").map(normalized),
                        ["[bg] try vt-sw (fresh): create=noErr hw=? probe=IDR \(idrBytes)b in Nms sps=ok \u{2192} accepted"])
+        let first = await pull(engine, 1).first
+        XCTAssertEqual(first?.isKeyframe, true)
+        XCTAssertEqual(first?.sequence, 1, "the accepted probe IDR is the new encoder's first frame on the wire")
     }
 
     func testUnknownHardwareFlagWithoutAProbeIDRIsRejected() async {
@@ -706,6 +740,31 @@ final class VideoEngineBackgroundTests: XCTestCase {
         XCTAssertTrue(background.first?.isKeyframe ?? false)
     }
 
+    /// The `.inactive` probe's IDR comes out late, while the `.background` probe of the same session
+    /// waits: it is not taken for it (it was encoded in the foreground); the background probe's own
+    /// IDR decides and is the first frame on the wire.
+    func testALateOutputOfThePreWarmProbeIsNotTakenForTheBackgroundProbe() async throws {
+        let factory = FakeEncoderFactory { r in
+            var b = FakeDashVideoEncoder.Behavior()
+            if r.label == "own-sw-pre" { b.outputDelays = [0.45, 0.2] }
+            return b
+        }
+        let engine = makeEngine(factory)
+        let log = LogCapture()
+        defer { log.stop() }
+        _ = await streamInForeground(engine)
+        engine.prepareBackgroundEncoder()
+        XCTAssertTrue(log.wait("[bg] pre-warm"))
+        XCTAssertEqual(log.lines("[bg] pre-warm"), ["[bg] pre-warm vt-sw at inactive: create=noErr hw=false probe=none in 300ms"])
+        lock(engine) // its probe waits up to 500 ms; the first probe's IDR comes out meanwhile
+        XCTAssertEqual(engine.mode, .backgroundSoftware)
+        XCTAssertEqual(log.lines("[bg] try ").first.map(normalized),
+                       "[bg] try vt-sw (pre-warmed): create=noErr hw=false probe=IDR \(idrBytes)b in Nms sps=ok \u{2192} accepted")
+        let first = await pull(engine, 1).first
+        XCTAssertEqual(first?.isKeyframe, true)
+        XCTAssertEqual(first?.sequence, 2, "the IDR of the background probe, not the late .inactive one")
+    }
+
     func testPreWarmedSessionIsDroppedWhenTheAppBecomesActiveFirst() async throws {
         let factory = FakeEncoderFactory()
         let engine = makeEngine(factory)
@@ -774,23 +833,28 @@ final class VideoEngineBackgroundTests: XCTestCase {
         XCTAssertEqual(engine.frameQueue.pendingCount, 0, "nothing of the dry run reached the frame queue")
     }
 
-    func testDryRunNeverRunsWithABackgroundEncoderAndEndsAtUnlock() async {
+    func testDryRunNeverRunsWithABackgroundEncoderAndEndsAtUnlock() async throws {
         let log = LogCapture()
         defer { log.stop() }
         let live = makeEngine(FakeEncoderFactory())
         live.backgroundDryRun = true
+        live.dryRunReportInterval = 0.2
         _ = await streamInForeground(live)
         lock(live)
         XCTAssertEqual(live.mode, .backgroundSoftware)
+        await sleepSeconds(0.6)
+        unlock(live)
+        XCTAssertEqual(log.count("[bg-probe]"), 0, "no dry run while a background encoder feeds the dash")
         let held = makeEngine(FakeEncoderFactory(), policy: .holdOnly)
         held.backgroundDryRun = true
+        held.dryRunReportInterval = 0.2
         _ = await streamInForeground(held)
         lock(held)
         XCTAssertEqual(held.mode, .hold)
-        await sleepSeconds(0.3)
+        XCTAssertTrue(log.wait("[bg-probe] render="), "the hold engine runs it")
         unlock(held)
         XCTAssertTrue(log.wait("[bg-probe] dry run ended"))
-        XCTAssertEqual(log.count("[bg-probe] dry run ended"), 1, "only the hold engine ran it, ended at unlock")
+        XCTAssertEqual(log.count("[bg-probe] dry run ended"), 1, "ended once, at unlock")
         XCTAssertTrue(matches(try XCTUnwrap(log.lines("[bg-probe] dry run ended").first), #"^\[bg-probe\] dry run ended after \d+s$"#))
     }
 
