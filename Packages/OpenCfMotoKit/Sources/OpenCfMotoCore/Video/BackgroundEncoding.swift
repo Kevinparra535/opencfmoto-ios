@@ -346,16 +346,175 @@ public struct BackgroundBudget: Sendable, Equatable {
     /// When every condition became clear (nil while one is not): the input of the retry rule.
     public private(set) var clearSince: TimeInterval?
 
+    /// The caps of the non-CPU rows of the table.
+    static let thermalModerateFps = 5
+    static let thermalSevereFps = 2
+    static let lowPowerModeFps = 5
+    static let lowBatteryFps = 3
+    /// The windows of the two CPU averages: a CPU step needs an average measured entirely after the
+    /// last change of `limit` (see `evaluate`).
+    static let cpuShortWindow: TimeInterval = 15
+    static let cpuLongWindow: TimeInterval = 60
+
+    // Governor state (`evaluate`); nil = not set yet.
+    /// The CPU rule's own cap, one of `cpuSteps` (nil = `startFps`).
+    private var cpuCap: Int?
+    /// Why `cpuCap` is where it is: the reason of its last step.
+    private var cpuReason = ""
+    /// Since when the 15-s average is above `cpuHoldPercent` while the limit is the lowest step.
+    private var cpuHighSince: TimeInterval?
+    /// Set while the CPU rule asks for hold: its reason (`cpu 45% for 30s`).
+    private var cpuHoldReason: String?
+    /// The last change of `limit`, or the first evaluation.
+    private var limitSince: TimeInterval?
+
     public init(startFps: Int = 8) {
         self.startFps = startFps
         limit = .fps(startFps)
     }
 
+    /// The CPU rule's frame rates, highest first: `startFps`, then the `fpsSteps` below it
+    /// (8 → `[8, 5, 3, 2]`).
+    var cpuSteps: [Int] { [startFps] + Self.fpsSteps.filter { $0 < startFps } }
+
     /// Evaluates the rules at `inputs.now`; returns the change of `limit`, or nil when it stayed.
+    ///
+    /// The rules of the table, precisely (all times are `inputs.now`, the engine's monotonic clock):
+    /// - **Limit.** `.hold` while any condition asks for hold (thermal `.critical` or above, an
+    ///   unplugged battery at or below 10 %, the CPU hold below); otherwise the lowest cap of the thermal,
+    ///   Low Power Mode, battery and CPU rules, never above `startFps`. Thermal, Low Power Mode and battery
+    ///   caps apply at once, in both directions.
+    /// - **CPU steps** (hysteresis 1). A step is only taken on an average measured entirely at the
+    ///   current limit: a step down (15-s average > 20 %) needs 15 s since the last change of `limit` (or
+    ///   the first evaluation), a step up (60-s average < 10 %) needs 60 s. Down goes one step below the
+    ///   current limit (e.g. Low Power Mode at 5 → the CPU cap becomes 3; at the lowest step the CPU cap
+    ///   just stays there); up goes one step up, only while the CPU cap is the one limiting, never above
+    ///   `startFps`. Between 10 % and 20 % nothing moves (hysteresis 2). Down is checked first. Nothing
+    ///   steps while the limit is `.hold` (no encoder runs, the load says nothing about it).
+    /// - **CPU hold** (hysteresis 3). The 15-s average above 40 % at every evaluation for 30 s while the
+    ///   limit is the lowest step (2 fps) → hold. Released once the 15-s average is back at or below 20 %.
+    /// - **Clear.** A condition is clear when it does not limit: thermal `.none` / `.light`, Low Power
+    ///   Mode off, the battery charging, full, unknown or above 20 %, the CPU not in hold and its 15-s
+    ///   average at most 20 % (or unmeasured). The CPU cap may stay below `startFps` while clear: it
+    ///   recovers by the step-up rule. `clearSince` = the first evaluation at which every condition was
+    ///   clear, nil while one is not.
+    /// - **Resume** (hysteresis 4). Once at `.hold`, the limit stays `.hold` until every condition has
+    ///   been clear for `BackgroundEncoderLadder.retryDelay` (60 s): then `.fps(CPU cap)` — the time the
+    ///   engine's retry rule (`shouldRetry(after: .budget…)`) runs the ladder again. After a CPU hold the
+    ///   CPU cap is still the lowest step, so the encoder comes back at 2 fps and steps up from there.
+    /// - **Reasons** of the returned change: to `.hold`: `thermal <level>`, `battery <n>% unplugged` or
+    ///   `cpu <n>% for 30s` (in this order when several hold); from `.hold`: `clear`; a CPU step that sets
+    ///   the new limit: `cpu <n>% (15s)` / `cpu <n>% (60s)`; back at `startFps`: `clear`; otherwise the
+    ///   rule whose cap is the new limit, in the order thermal, battery, Low Power Mode, CPU
+    ///   (`thermal <level>`, `battery <n>% unplugged`, `low power mode`, the CPU cap's last reason).
+    ///   Percentages are rounded; non-finite CPU averages count as unmeasured.
     public mutating func evaluate(_ inputs: Inputs) -> Change? {
-        _ = inputs
-        return nil // step-0 placeholder: K implements
+        let now = inputs.now
+        let windowStart = limitSince ?? now
+        if limitSince == nil { limitSince = now }
+        let cpu15 = inputs.cpu15s.flatMap { $0.isFinite ? $0 : nil }
+        let cpu60 = inputs.cpu60s.flatMap { $0.isFinite ? $0 : nil }
+        let steps = cpuSteps
+        let lowest = steps[steps.count - 1]
+        let held = limit == .hold
+        var cap = cpuCap ?? startFps
+        var cpuStepped = false
+
+        // CPU rule: steps and the hold trigger (only while an encoder runs).
+        if case let .fps(current) = limit {
+            if let c = cpu15, c > Self.cpuStepDownPercent, now - windowStart >= Self.cpuShortWindow {
+                let target = min(cap, current)
+                let lower = steps.first { $0 < target } ?? target
+                if lower != cap {
+                    cap = lower
+                    cpuReason = "cpu \(Self.percent(c))% (15s)"
+                    cpuStepped = true
+                }
+            } else if let c = cpu60, c < Self.cpuStepUpPercent, cap < startFps, cap == current,
+                      now - windowStart >= Self.cpuLongWindow {
+                cap = steps.last { $0 > cap } ?? startFps
+                cpuReason = "cpu \(Self.percent(c))% (60s)"
+                cpuStepped = true
+            }
+            if current == lowest, let c = cpu15, c > Self.cpuHoldPercent {
+                let since = cpuHighSince ?? now
+                cpuHighSince = since
+                if now - since >= Self.cpuHoldSeconds {
+                    cpuHoldReason = "cpu \(Self.percent(c))% for \(Int(Self.cpuHoldSeconds))s"
+                }
+            } else {
+                cpuHighSince = nil
+            }
+        }
+        if cpuHoldReason != nil, (cpu15 ?? 0) <= Self.cpuStepDownPercent { cpuHoldReason = nil }
+        cpuCap = cap
+
+        // The other rules.
+        let thermalHold = inputs.thermal >= .critical
+        let thermalCap: Int? = thermalHold ? nil
+            : inputs.thermal >= .severe ? Self.thermalSevereFps
+            : inputs.thermal >= .moderate ? Self.thermalModerateFps : nil
+        let lowPowerCap: Int? = inputs.lowPowerMode ? Self.lowPowerModeFps : nil
+        var batteryHold = false
+        var batteryCap: Int?
+        var batteryReason = ""
+        if let battery = inputs.battery, battery.state == .unplugged, let p = battery.percent {
+            batteryReason = "battery \(p)% unplugged"
+            if p <= Self.criticalBatteryPercent {
+                batteryHold = true
+            } else if p <= Self.lowBatteryPercent {
+                batteryCap = Self.lowBatteryFps
+            }
+        }
+
+        let cpuClear = cpuHoldReason == nil && (cpu15 ?? 0) <= Self.cpuStepDownPercent
+        let allClear = !thermalHold && thermalCap == nil && lowPowerCap == nil && !batteryHold && batteryCap == nil && cpuClear
+        clearSince = allClear ? (clearSince ?? now) : nil
+
+        let next: Limit
+        if thermalHold || batteryHold || cpuHoldReason != nil {
+            next = .hold
+        } else if held {
+            if let since = clearSince, now - since >= BackgroundEncoderLadder.retryDelay {
+                next = .fps(min(startFps, cap))
+            } else {
+                next = .hold
+            }
+        } else {
+            next = .fps([startFps, cap, thermalCap, lowPowerCap, batteryCap].compactMap { $0 }.min() ?? startFps)
+        }
+        guard next != limit else { return nil }
+
+        let reason: String
+        switch next {
+        case .hold:
+            reason = thermalHold ? "thermal \(inputs.thermal)" : batteryHold ? batteryReason : (cpuHoldReason ?? "")
+        case let .fps(fps):
+            if held {
+                reason = "clear"
+            } else if cpuStepped, cap == fps {
+                reason = cpuReason
+            } else if fps >= startFps {
+                reason = "clear"
+            } else if thermalCap == fps {
+                reason = "thermal \(inputs.thermal)"
+            } else if batteryCap == fps {
+                reason = batteryReason
+            } else if lowPowerCap == fps {
+                reason = "low power mode"
+            } else {
+                reason = cpuReason
+            }
+        }
+        let change = Change(from: limit, to: next, reason: reason, inputs: inputs)
+        limit = next
+        limitSince = now
+        if next == .hold { cpuHighSince = nil }
+        return change
     }
+
+    /// A CPU percentage for a reason text: rounded, clamped to ±1,000,000.
+    private static func percent(_ v: Double) -> Int { Int(min(max(v, -1e6), 1e6).rounded()) }
 }
 
 // MARK: - Background parameters (Phase 1; implemented and tested in Phase 0)
@@ -371,8 +530,14 @@ public enum BackgroundEncoderPlan {
     /// bitsPerMacroblockPerFrame))`; the other fields are `base`'s. At 800×384 (1,200 MBs): 1,536,000 at
     /// 8 fps, 960,000 at 5 fps, 600,000 at 2 fps; 1280×576 at 8 fps keeps a 3,375,000 base.
     /// The Phase 0 engine does NOT apply it (vt-sw keeps today's parameters); Phase 1 does.
+    /// Degenerate input stays usable: the frame rate is at least 1, a negative macroblock count counts
+    /// as 0, and an overflowing product counts as unbounded (so `base.bitrate` is kept).
     public static func parameters(base: EncoderParameters, canvasMacroblocks: Int, fpsCap: Int) -> EncoderParameters {
-        _ = (canvasMacroblocks, fpsCap)
-        return base // step-0 placeholder: K implements
+        var p = base
+        p.frameRate = max(1, min(base.frameRate, fpsCap))
+        let (perFrame, overflow1) = max(canvasMacroblocks, 0).multipliedReportingOverflow(by: bitsPerMacroblockPerFrame)
+        let (perSecond, overflow2) = perFrame.multipliedReportingOverflow(by: p.frameRate)
+        p.bitrate = min(base.bitrate, max(minimumBitrate, overflow1 || overflow2 ? Int.max : perSecond))
+        return p
     }
 }
