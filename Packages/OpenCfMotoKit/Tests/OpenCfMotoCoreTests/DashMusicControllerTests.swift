@@ -154,15 +154,99 @@ final class DashMusicControllerTests: XCTestCase {
         XCTAssertEqual(ui.handle(.key(.back), now: t0 + 7), [.closeSheets])
         XCTAssertEqual(ui.state.sheet, .none)
         XCTAssertEqual(ui.state.focusedId, "music.tile")
-        // ★ on the tile again, then ▶▶ (HOME) swaps the sheet for the menu
+        // ★ on the tile again, then ▶▶ (HOME) swaps the sheet for the menu, on "Music" (R3-FOCUS-3), not End
         XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 8), [.openMusic])
         XCTAssertEqual(ui.handle(.key(.home), now: t0 + 9), [.openMenu])
         XCTAssertEqual(ui.state.sheet, .menu)
+        XCTAssertEqual(ui.state.focusedId, "menu.music")
         // phone-side activation works too (the app's `performDashIntent`)
         _ = ui.perform(.closeSheets, now: t0 + 10)
         XCTAssertEqual(ui.perform(.openMusic, now: t0 + 11), [.openMusic])
         XCTAssertEqual(ui.state.sheet, .music)
         XCTAssertEqual(ui.state.focusedId, "music.playPause")
+    }
+
+    /// R3-FOCUS-3: on the iOS default maps (and back_set) ▶▶ is HOME, and two quick ▶ are also the rider's way
+    /// from ⏯ to ✕. HOME from the Music sheet opens the menu on "Music": the ★ meant for ✕ re-opens the sheet
+    /// instead of ending navigation. Through the real gesture engine, inside the double-tap window and past it,
+    /// with and without a frame between the presses.
+    func testQuickRightRightFromPlayPauseThenStarNeverEndsNavigation() {
+        for preset in ButtonClusterPreset.allCases {
+            for frames in [true, false] {
+                for gap in [0.05, 0.15, 0.25, 0.299, 0.3, 0.6] {
+                    let ui = controller(music(DashFixtures.navigating(), DashFixtures.song(.paused)))
+                    _ = ui.handle(.knob(-1), now: t0)
+                    XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 0.5), [.openMusic])
+                    let engine = HandlebarGestureEngine(configuration: .init(buttonMap: HandlebarPresets.iosMapping(for: preset)))
+                    var out: [DashIntent] = []
+                    let presses: [(HandlebarGestureEngine.Channel, TimeInterval)] =
+                        [(.forward, t0 + 2), (.forward, t0 + 2 + gap), (.select, t0 + 3.5)]
+                    for (channel, t) in presses {
+                        for c in engine.tap(channel, atMs: Int64((t * 1000).rounded())) {
+                            if let input = c.input { out += ui.handle(input, now: Double(c.timeMs) / 1000) }
+                        }
+                        if frames { _ = ui.displayList(now: t + 0.05) }
+                    }
+                    let label = "\(preset.rawValue), \(gap) s apart, frames \(frames)"
+                    XCTAssertFalse(out.contains(.endNavigation), label)
+                    // ▶▶ = HOME: the menu on "Music", whose ★ re-opens the sheet; slower, ▶ ▶ reach ✕
+                    XCTAssertEqual(out, gap < 0.3 ? [.openMenu, .openMusic] : [.closeSheets], label)
+                }
+            }
+        }
+    }
+
+    func testHomeFromTheSheetOpensTheMenuOnMusicAndClosingItReturnsToTheTile() {
+        for navigating in [true, false] {
+            for step in [-1, 0, 1, 2] { // ⏮ ⏯ ⏭ ✕
+                let ui = controller(music(navigating ? DashFixtures.navigating() : DashFixtures.freeRide()))
+                _ = ui.perform(.openMusic, now: t0)
+                if step != 0 { _ = ui.handle(.knob(step), now: t0 + 0.1) }
+                XCTAssertEqual(ui.handle(.key(.home), now: t0 + 1), [.openMenu])
+                XCTAssertEqual(ui.state.focusedId, "menu.music", "step \(step), navigating \(navigating)")
+                XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 2), [.openMusic])
+            }
+        }
+        // BACK or a second HOME closes that menu onto the tile — also before any frame (the scene is built first)
+        for key in [HandlebarKey.back, .home] {
+            for frame in [false, true] {
+                let ui = controller(music(DashFixtures.navigating()))
+                _ = ui.perform(.openMusic, now: t0)
+                _ = ui.handle(.key(.home), now: t0 + 1)
+                if frame { _ = ui.displayList(now: t0 + 1.1) }
+                XCTAssertEqual(ui.handle(.key(key), now: t0 + 2), [.closeSheets])
+                XCTAssertEqual(ui.state.focusedId, "music.tile", "\(key), frame \(frame)")
+            }
+        }
+        // HOME from the map keeps Android's menu focus: End while navigating
+        let map = controller(music(DashFixtures.navigating()))
+        XCTAssertEqual(map.handle(.key(.home), now: t0), [.openMenu])
+        XCTAssertEqual(map.state.focusedId, "menu.end")
+    }
+
+    func testHomeFromTheSheetWhileTheSongGoesAwayInTheSameFrameParksOnCircuit() {
+        let base = DashFixtures.navigating()
+        for presses in [[HandlebarKey.enter], [.enter, .enter], [.back, .enter], [.enter, .back, .enter]] {
+            let ui = controller(music(base))
+            _ = ui.perform(.openMusic, now: t0)
+            _ = ui.handle(.key(.home), now: t0 + 1)
+            ui.update(base) // gone before the menu's first frame: "Music" is not listed
+            XCTAssertEqual(ui.state.focusedId, "menu.circuit", "Music's stand-in")
+            var out: [DashIntent] = []
+            for (i, k) in presses.enumerated() {
+                out += ui.handle(.key(k), now: t0 + 2 + Double(i) * 0.5)
+                _ = ui.displayList(now: t0 + 2.1 + Double(i) * 0.5)
+            }
+            XCTAssertFalse(out.contains(.endNavigation), "\(presses): \(out)")
+        }
+        // the song back before any input: the focus returns to "Music"
+        let ui = controller(music(base))
+        _ = ui.perform(.openMusic, now: t0)
+        _ = ui.handle(.key(.home), now: t0 + 1)
+        ui.update(base)
+        _ = ui.displayList(now: t0 + 1.1)
+        ui.update(music(base))
+        XCTAssertEqual(ui.state.focusedId, "menu.music")
     }
 
     func testSheetKeepsGuidanceOnTopWhileNavigating() {

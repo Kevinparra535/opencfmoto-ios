@@ -1401,7 +1401,9 @@ the transport intents. Sheet focus order: ⏮ ⏯ ⏭ ✕, initial focus ⏯; BA
 tile (not listed: see below); BACK on the tile keeps it (R2-DASH-2: after the sheet closed by itself —
 idle, near a turn, R2 — the rider's BACK was meant for that sheet, and Android's idle BACK → End would
 turn the next ★ into an unconfirmed end of navigation; the scene is built first, so a timed close that
-no frame has applied yet counts too); HOME opens the menu.
+no frame has applied yet counts too); HOME opens the menu on "Music", not End (R3-FOCUS-3: on the iOS
+default map HOME is ▶▶, and two quick ▶ are also the rider's way from ⏯ to ✕ — on End, the ★ meant for ✕
+ended navigation; "Music" not listed in that frame → its stand-in Circuit, parked).
 
 **Focus when a Music control vanishes** (fixes F2, R2-DASH-1). The song can go away for a moment (a
 paused song while another app plays, a stale "other audio" reading right after a pause, no item between
@@ -1440,7 +1442,8 @@ hit-tested after the gap could land on Go. Pinned by `testNoMusicSheetOverAPrevi
 
 **Blind input** (iOS addition, review round 2). While the Music app holds the bars, or with the eyes on
 the road, the rider presses ★ and BACK for the Music control the focus was left on without looking.
-Closing the menu from "Music" (BACK, HOME) lands on the tile (`.musicTile`), not on End — Android's own
+HOME from the sheet opens the menu on "Music" (`.menuMusic`), and closing the menu from "Music"
+(BACK, HOME) lands on the tile (`.musicTile`), not on End — Android's own
 items keep Android's rule. While the focus rests on the stand-in a vanish parked it on (`fab.recenter`
 for the tile, `menu.circuit` for the menu's "Music"), BACK there and any sheet close under it (★ on the
 parked Circuit closes the menu) go to `.musicTile` too: the tile, else parked again until it is back.

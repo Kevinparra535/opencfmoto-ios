@@ -27,6 +27,11 @@ public enum DashFocusPreference: String, Sendable, Equatable {
     /// meant for the tile, ⏯ or the menu's "Music", would end navigation without confirmation. →
     /// the first listed of `musicGoneIds` (harmless neighbours), else like `.default`.
     case musicGone
+    /// Focus the menu's "Music" when listed (iOS addition, R3-FOCUS-3): the menu opened by HOME from the Music
+    /// sheet. Never its first item: while navigating that is End, and on the iOS default map HOME is ▶▶ —
+    /// two quick ▶ are also the rider's way from ⏯ to ✕, so the ★ meant for ✕ would end navigation without
+    /// confirmation. When "Music" is not listed (the song went away in the same frame) → like `.musicGone`.
+    case menuMusic
 }
 
 public struct DashFocusEngine: Sendable, Equatable {
@@ -34,6 +39,7 @@ public struct DashFocusEngine: Sendable, Equatable {
     public static let endId = "metrics.end"
     public static let musicPlayPauseId = "music.playPause"
     public static let musicTileId = "music.tile"
+    public static let menuMusicId = "menu.music"
     /// Where the focus goes when a Music control vanishes (F2, R2-DASH-1): the map's Recenter FAB (★ only
     /// recenters and the focus stays on the map, so repeated ★ meant for the tile or ⏯ are harmless), in the
     /// menu its "Circuit" (★ without a previewed place only shows a hint). Neither ends anything.
@@ -44,14 +50,15 @@ public struct DashFocusEngine: Sendable, Equatable {
     public init(focusedId: String? = nil) { self.focusedId = focusedId }
 
     /// A control of the Apple Music feature: the tile, the sheet's controls, the menu's "Music".
-    public static func isMusicControl(_ id: String) -> Bool { id.hasPrefix("music.") || id == "menu.music" }
+    public static func isMusicControl(_ id: String) -> Bool { id.hasPrefix("music.") || id == menuMusicId }
 
     private static func musicGoneTarget(in list: [String]) -> String? { musicGoneIds.first { list.contains($0) } }
 
     /// `ensureFocus(prefer)`: empty list → clear; `.go` / `.end` / `.musicPlayPause` → that control
-    /// when listed (otherwise behaves like `.default`); `.musicTile` → the tile when listed, else like
-    /// `.musicGone`; `.musicGone` → the first listed of `musicGoneIds`, else like `.default`;
-    /// `.default` → keep the focused control when still listed, else the first item.
+    /// when listed (otherwise behaves like `.default`); `.musicTile` / `.menuMusic` → the tile / the
+    /// menu's "Music" when listed, else like `.musicGone`; `.musicGone` → the first listed of
+    /// `musicGoneIds`, else like `.default`; `.default` → keep the focused control when still listed,
+    /// else the first item.
     public mutating func ensure(_ list: [String], prefer: DashFocusPreference = .default) {
         guard let first = list.first else { focusedId = nil; return }
         let preferred: String?
@@ -62,6 +69,7 @@ public struct DashFocusEngine: Sendable, Equatable {
         // F2: the sheet closed but the tile is not listed (no room for it, or the song went away in
         // the same frame): a harmless neighbour, never the first item (End while navigating).
         case .musicTile: preferred = list.contains(Self.musicTileId) ? Self.musicTileId : Self.musicGoneTarget(in: list)
+        case .menuMusic: preferred = list.contains(Self.menuMusicId) ? Self.menuMusicId : Self.musicGoneTarget(in: list)
         case .musicGone: preferred = Self.musicGoneTarget(in: list)
         case .default: preferred = nil
         }

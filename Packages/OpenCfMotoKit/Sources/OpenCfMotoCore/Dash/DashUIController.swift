@@ -750,6 +750,8 @@ public final class DashUIController: @unchecked Sendable {
             if pref == .musicGone || (pref == .musicTile && !s.focusOrder.contains(DashFocusEngine.musicTileId)),
                let parked = focus.focusedId {
                 parkMusicFocus(returnTo: DashFocusEngine.musicTileId, parkedOn: parked)
+            } else if pref == .menuMusic, !s.focusOrder.contains(DashFocusEngine.menuMusicId), let parked = focus.focusedId {
+                parkMusicFocus(returnTo: DashFocusEngine.menuMusicId, parkedOn: parked) // gone in the same frame
             }
         } else if focus.focusedId.map({ !s.focusOrder.contains($0) }) ?? true {
             // F2: a Music control that vanished under the focus (the tile or the menu's "Music" while
@@ -759,7 +761,8 @@ public final class DashUIController: @unchecked Sendable {
             let musicGone = gone.map(DashFocusEngine.isMusicControl) ?? false
             focus.ensure(s.focusOrder, prefer: musicGone ? .musicGone : defaultPref)
             if musicGone, let gone, let parked = focus.focusedId {
-                parkMusicFocus(returnTo: gone == "menu.music" ? gone : DashFocusEngine.musicTileId, parkedOn: parked)
+                parkMusicFocus(returnTo: gone == DashFocusEngine.menuMusicId ? gone : DashFocusEngine.musicTileId,
+                               parkedOn: parked)
             }
         } else if let r = musicFocusReturn {
             if focus.focusedId != r.parkedOn {
@@ -797,7 +800,7 @@ public final class DashUIController: @unchecked Sendable {
     /// keeps Android's rule).
     private var focusStandsForMusic: Bool {
         guard let id = focus.focusedId else { return false }
-        return id == "menu.music" || id == musicFocusParkedOn
+        return id == DashFocusEngine.menuMusicId || id == musicFocusParkedOn
     }
 
     private func clampScrolls(_ s: DashScene) {
@@ -957,7 +960,16 @@ public final class DashUIController: @unchecked Sendable {
             scene = nil
             return out
         case .home:
-            return activate(sheet == .menu ? .closeSheets : .openMenu, now: now)
+            // R3-FOCUS-3: HOME from the Music sheet opens the menu on its "Music", not on End (the first item
+            // while navigating). On the iOS default map HOME is ▶▶, and two quick ▶ are also the rider's way
+            // from ⏯ to ✕: the ★ meant for ✕ would end navigation without confirmation. The mirror of the
+            // blind-input rule (closing the menu from "Music" lands on the tile); Android has no Music sheet.
+            // The scene first, as for BACK: a second HOME before any frame closes that menu from "Music".
+            _ = ensureScene()
+            let fromMusic = sheet == .music
+            let out = activate(sheet == .menu ? .closeSheets : .openMenu, now: now)
+            if fromMusic { pendingPreference = .menuMusic }
+            return out
         case .assistant:
             return activate(sheet == .search ? .closeSheets : .openSearch, now: now)
         case .left, .up:

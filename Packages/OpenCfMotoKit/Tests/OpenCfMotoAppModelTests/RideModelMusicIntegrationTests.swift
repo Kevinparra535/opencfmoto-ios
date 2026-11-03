@@ -7,8 +7,9 @@
 // ride the review repros end to end while navigating: no stale or vanished Music control ever hands
 // the rider's ★ to End (F1 + F2 together, through the real focus engine), the focus returns to the
 // tile with the song, so the tile's ★★ stays the tile's (R2-DASH-1), one reading without a song never
-// reaches the dash and hands nothing over (R3-FOCUS-1, MusicModel), and an open Music sheet outlasts a
-// longer vanish, so its ▶ ★ stays the sheet's (R3-FOCUS-1, the dash).
+// reaches the dash and hands nothing over (R3-FOCUS-1, MusicModel), an open Music sheet outlasts a
+// longer vanish, so its ▶ ★ stays the sheet's (R3-FOCUS-1, the dash), and a quick ▶▶ (HOME) from the
+// sheet opens the menu on "Music", never on End (R3-FOCUS-3).
 // NOTE (Linux): main-actor tests must be `async` (swift-corelibs-xctest).
 
 import Foundation
@@ -945,6 +946,46 @@ extension RideModelMusicIntegrationTests {
             await settle(0.1)
             XCTAssertTrue(h.core.navigation.snapshot.mode.isNavigating, "\(name): ▶ ★ never ends navigation")
             XCTAssertEqual(fake.commands, ["beginning", "previous", "pause"], "\(name): ▶ ★ paused the song")
+        }
+    }
+
+    /// R3-FOCUS-3, the physical presses (PreviewHandlebar → ControlsModel's gesture engine → RideModel →
+    /// NavigationModel): capture on, a paused song, navigating, the sheet open on ⏯ (◀ ★). On every shipped
+    /// map ▶▶ inside the 300-ms window is HOME (the first ▶ already moved the knob to ⏭), and two quick ▶
+    /// are also the rider's way to ✕. The menu now opens on "Music", so the ★ meant for ✕ re-opens the sheet;
+    /// slower, ▶ ▶ reach ✕ and ★ closes the sheet onto the tile. On bfa6c93 the menu opened on End and that
+    /// ★ ended navigation, with nothing sent to the Music app.
+    @MainActor
+    func testCaptureOnQuickRightRightFromTheSheetThenStarNeverEndsNavigation() async {
+        for gap in [0.25, 0.6] {
+            let name = "▶ ▶ \(gap) s apart"
+            let (h, fake, clock, _) = await navigatingHarness(capture: true, playing: false)
+            func press(_ e: HandlebarRawEvent) {
+                h.handlebar.emit(HandlebarSignal(event: e, time: clock.now(), steps: 1))
+                _ = list(h)
+            }
+            press(.backward)
+            clock.advance(0.8)
+            press(.select)
+            XCTAssertEqual(h.ride.dashUIState.sheet, .music, name)
+            XCTAssertEqual(h.ride.dashUIState.focusedId, DashFocusEngine.musicPlayPauseId, name)
+            clock.advance(1.2)
+            press(.forward)
+            clock.advance(gap)
+            press(.forward)
+            if gap < 0.3 {
+                XCTAssertEqual(h.ride.dashUIState.sheet, .menu, "\(name): HOME")
+                XCTAssertEqual(h.ride.dashUIState.focusedId, "menu.music", "\(name): on \"Music\", not End")
+            } else {
+                XCTAssertEqual(h.ride.dashUIState.focusedId, "music.close", "\(name): ✕")
+            }
+            clock.advance(1)
+            press(.select) // the ★ meant for ✕
+            XCTAssertEqual(h.ride.dashUIState.sheet, gap < 0.3 ? .music : .none, name)
+            if gap >= 0.3 { XCTAssertEqual(h.ride.dashUIState.focusedId, DashFocusEngine.musicTileId, name) }
+            await settle(0.2)
+            XCTAssertTrue(h.core.navigation.snapshot.mode.isNavigating, "\(name): navigation goes on")
+            XCTAssertEqual(fake.commands, [], "\(name): nothing sent to the Music app")
         }
     }
 }
