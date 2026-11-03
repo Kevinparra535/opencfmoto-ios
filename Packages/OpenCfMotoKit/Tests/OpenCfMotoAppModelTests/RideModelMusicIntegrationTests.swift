@@ -40,8 +40,10 @@ final class RideModelMusicIntegrationTests: XCTestCase {
     /// `harness` with the iOS model of `isOtherAudioPlaying` (F1): the Music app's own audio counts
     /// while it plays and `lag` seconds after a pause. The grace waits end when the test says so,
     /// and the test reads the player itself (no command re-reads at wall-clock times).
+    /// `quietRideLoop`: the ride loop's UI tick waits a minute, so its slow tick (every 10th tick
+    /// rebuilds the dash model) never runs during the test — only model changes redraw the dash.
     @MainActor
-    private func iosHarness(playing: Bool = true, lag: TimeInterval = 0.5) async
+    private func iosHarness(playing: Bool = true, lag: TimeInterval = 0.5, quietRideLoop: Bool = false) async
         -> (AppTestHarness, PreviewMusic, MusicTestClock, ManualSleeper) {
         let clock = MusicTestClock()
         let fake = PreviewMusic(clock: clock, queue: MusicFixtures.queue, playing: playing, position: 133,
@@ -58,6 +60,7 @@ final class RideModelMusicIntegrationTests: XCTestCase {
         h.model.music.artworkAttemptDelays = [0]
         h.model.music.imageCleanupDelay = 0
         h.model.music.refreshDelaysAfterCommand = []
+        if quietRideLoop { h.ride.tuning.uiTickInterval = 60 }
         h.ride.startLocationPreview()
         let shown = await eventually { h.ride.lastModel?.music?.artworkId == "music.art.p1a" }
         XCTAssertTrue(shown, "the song (with its artwork) is on the dash")
@@ -191,6 +194,57 @@ final class RideModelMusicIntegrationTests: XCTestCase {
         let back = await eventually { h.ride.lastModel?.music?.state == .paused }
         XCTAssertTrue(back)
         XCTAssertTrue(has(h, "music.tile"))
+    }
+
+    /// F1's one re-evaluation at the end of the grace must redraw the dash by itself: parked (a fix,
+    /// standing still, not navigating), the Music sheet closed, the paused tile on the map, and a
+    /// podcast in another app that simply goes on, so the port reports nothing new. The ride loop's
+    /// slow tick rebuilds the dash model too (every 10th UI tick: 1 s on the phone, 5 s in the
+    /// pocket, 0.2 s in these tests, with the sheet open or closed), which hides a grace end that
+    /// forgets `onDashChange` from every other test here; it is held off, so the stale tile would
+    /// stay. Nothing pulls a frame before the checks: the model and the frame are what the app has.
+    @MainActor
+    func testParkedWithTheSheetClosedTheGraceEndItselfDropsTheStaleTile() async {
+        let (h, fake, clock, grace) = await iosHarness(quietRideLoop: true)
+        defer { h.ride.stopLocationPreview() } // ends the held-off tick's wait
+        h.location.emit(LocationFix(lat: 4.65, lon: -74.05, speedMps: 0, courseDeg: 0, accuracyM: 5,
+                                    timeMs: Int64(Date().timeIntervalSince1970 * 1000)))
+        let parked = await eventually { h.ride.lastModel?.fix?.isMoving == false }
+        XCTAssertTrue(parked, "parked: a fix, standing still")
+        XCTAssertFalse(h.core.navigation.snapshot.mode.isNavigating)
+        XCTAssertEqual(h.ride.dashUIState.sheet, .none, "the Music sheet is closed: the tile is on the map")
+        clock.advance(1)
+        fake.simulate(playing: false) // paused on the phone while iOS still counts the fade
+        let paused = await eventually { h.ride.lastModel?.music?.state == .paused }
+        XCTAssertTrue(paused, "the paused song stays on the dash")
+        clock.advance(0.6)
+        fake.refresh() // the adapter's settle read: the fade is over
+        XCTAssertFalse(h.model.music.snapshot.otherAudioPlaying)
+        let idle = await eventually { grace.pendingCount == 0 }
+        XCTAssertTrue(idle, "a paused song and no other audio: nothing to wait for")
+        clock.advance(1)
+        fake.simulate(otherAudioPlaying: true) // the rider starts a podcast in another app
+        let waiting = await eventually { grace.requests.count == 2 && grace.pendingCount == 1 }
+        XCTAssertTrue(waiting, "one re-evaluation waits for the end of the grace")
+        await settle(0.1) // the model update that reading asked for
+        XCTAssertEqual(h.ride.lastModel?.music?.state, .paused, "inside the grace: still on the dash")
+        let refreshes = fake.refreshes
+        let invalidations = h.projection.invalidations
+        clock.advance(3)
+        await settle(0.1)
+        XCTAssertEqual(h.ride.lastModel?.music?.state, .paused, "nothing else rebuilds the dash model here")
+        grace.endWaits()
+        let hidden = await eventually { h.ride.lastModel?.music == nil }
+        XCTAssertTrue(hidden, "the grace end drops the stale paused song (D7) at once")
+        XCTAssertEqual(fake.refreshes, refreshes + 1, "the player is read again at the end of the grace")
+        XCTAssertGreaterThan(h.projection.invalidations, invalidations, "the dash frame is redrawn")
+        XCTAssertFalse(h.ride.displayList(now: clock.now()).hitRegions.contains { $0.id == "music.tile" },
+                       "the dash draws no tile")
+        XCTAssertEqual(grace.requests, [3, 3], "one wait after the pause, one after the podcast started")
+        fake.simulate(otherAudioPlaying: false) // the podcast stopped
+        let back = await eventually { h.ride.lastModel?.music?.state == .paused }
+        XCTAssertTrue(back, "the paused song comes back")
+        XCTAssertTrue(h.ride.displayList(now: clock.now()).hitRegions.contains { $0.id == "music.tile" })
     }
 
     @MainActor
