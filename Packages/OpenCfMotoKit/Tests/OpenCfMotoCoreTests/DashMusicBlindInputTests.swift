@@ -10,8 +10,10 @@
 // End is a stop of the map's list, and from where a vanish parked the focus a knob step lands on other
 // neighbours than from the vanished control. The shortest sequences to End are documented here (a vanish
 // adds only the Recenter FAB's trade-off), and so are the other actions a knob step reaches (review
-// round 3): the pill's Lap / Stop in free ride and Record in the menu. From End or the Menu FAB nothing
-// parks or returns: the tile must be listed at the knob step (`testFromEndTheTileMustBeListed`).
+// round 3): the pill's Lap / Stop in free ride and Record in the menu. From a control that is not a Music
+// control nothing parks or returns: a knob step meant for the tile or "Music" lands on its neighbour while
+// it is not listed, and the dash is then one without music (`testFromEndTheTileMustBeListed`,
+// `testFromAControlThatIsNotAMusicControlAVanishIsADashWithoutMusic`).
 import Foundation
 import XCTest
 @testable import OpenCfMotoCore
@@ -412,6 +414,107 @@ final class DashMusicBlindInputTests: XCTestCase {
             if gone { ui.update(base) }
             _ = ui.handle(.knob(1), now: Self.t0 + 1)
             XCTAssertEqual(ui.handle(.key(.enter), now: Self.t0 + 1.5), gone ? [.endNavigation] : [.openMusic], "gone=\(gone)")
+        }
+    }
+
+    // MARK: From any control that is not a Music control (review round 4)
+
+    /// A vanish under a focus that is not a Music control parks nothing and returns nothing: the map's list
+    /// only loses the tile (between the Menu FAB and End) and the menu its "Music" (between Circuit and
+    /// Follow), so a knob step meant for them lands on that neighbour, where ★ and BACK keep Android's rules
+    /// (while navigating BACK at idle or in the menu → End, and ★ on Circuit closes the menu onto End). These
+    /// are the shortest sequences that reach an action of consequence with the song gone but not with it
+    /// shown; all are knob paths, and every other start has none within three presses. Longer ones first
+    /// reach one of these starts (B◀★★ and ★◀B★: BACK in the menu and ★ on Circuit close it onto End; ◀◀B★
+    /// from Recenter) or add knob steps (◀★▶★ Park here from End or the free-ride pill, ▶▶▶★ Lap from the
+    /// free-ride Menu FAB).
+    private static let notMusicOther: [Mode: [String: [String: String]]] = [
+        .navigating: [
+            "metrics.end": ["◀★★": "End", "◀B★": "End"],
+            "fab.compass": ["▶▶★": "End"],
+            "fab.menu": ["▶★": "End", "▶B★": "End"],
+            "menu.circuit": ["▶B★": "End"],
+            "menu.follow": ["◀B★": "End", "◀★★": "End", "◀◀★": "Record"],
+        ],
+        .freeRide: ["menu.follow": ["◀◀★": "Record"]],
+    ]
+
+    /// From every map and menu control that is not a Music control (navigating and in free ride), the song
+    /// gone for good is a dash without music (Android): every 1–3 presses give the same intents, focus and
+    /// sheet. What that changes against the song shown is `notMusicOther`; a song gone only at the knob step
+    /// onto its slot and back before the ★ gives the same (nothing returns to a control the knob left).
+    func testFromAControlThatIsNotAMusicControlAVanishIsADashWithoutMusic() {
+        struct Start: CustomStringConvertible {
+            let mode: Mode, menu: Bool, id: String
+            var description: String { "\(mode.rawValue) \(menu ? "menu" : "map") \(id)" }
+        }
+        enum Song { case shown, gone, goneAtFirstPress, none }
+        var found: [Start] = []
+        for mode in Mode.allCases {
+            for menu in [false, true] {
+                let ui = DashUIController()
+                ui.update(DashFixtures.withMusic(Self.base(mode)))
+                _ = ui.displayList(now: Self.t0)
+                if menu { _ = ui.handle(.key(.home), now: Self.t0) }
+                found += ui.state.focusOrder.filter { !DashFocusEngine.isMusicControl($0) }
+                    .map { Start(mode: mode, menu: menu, id: $0) }
+            }
+        }
+        let starts = found
+        let threes = Self.keys.indices.flatMap { a in Self.keys.indices.flatMap { b in Self.keys.indices.map { [a, b, $0] } } }
+        /// The rider moved the knob to the start with the song shown (or no music at all), then the presses,
+        /// one every 0.4 s, until the first action of consequence: per press its intents, focus and sheet.
+        @Sendable func run(_ s: Start, _ presses: [Int], _ song: Song) -> (trace: [String], action: (at: Int, name: String)?) {
+            let base = Self.base(s.mode), with = DashFixtures.withMusic(base, DashFixtures.song(.paused))
+            let ui = DashUIController()
+            ui.update(song == .none ? base : with)
+            if s.menu { _ = ui.handle(.key(.home), now: Self.t0) }
+            let order = ui.state.focusOrder
+            if let to = order.firstIndex(of: s.id), let from = ui.state.focusedId.flatMap({ order.firstIndex(of: $0) }) {
+                _ = ui.handle(.knob(to - from), now: Self.t0 + 0.1)
+            }
+            if song == .gone || song == .goneAtFirstPress { ui.update(base) }
+            var trace = ["start \(ui.state.focusedId ?? "-")"] // nothing parks: still the start
+            for (i, k) in presses.enumerated() {
+                let now = Self.pressStart + Double(i) * 0.4
+                let intents = ui.handle(Self.keys[k].input, now: now)
+                if song == .goneAtFirstPress && i == 0 { ui.update(with) }
+                trace.append("\(intents) \(ui.state.focusedId ?? "-") \(ui.state.sheet)")
+                if s.mode == .navigating, intents.contains(.endNavigation) { return (trace, (i, "End")) }
+                if let a = Self.otherAction(intents) { return (trace, (i, a)) }
+            }
+            return (trace, nil)
+        }
+        final class Box: @unchecked Sendable {
+            let lock = NSLock()
+            var added: [Int: [String: String]] = [:], notAndroid: [String] = []
+        }
+        let box = Box()
+        DispatchQueue.concurrentPerform(iterations: starts.count) { n in
+            let s = starts[n]
+            var added: [String: String] = [:], notAndroid: [String] = []
+            for p in threes { // every 1–2 press sequence is a prefix of these (a trace stops at an action)
+                let gone = run(s, p, .gone), none = run(s, p, .none)
+                if gone.trace != none.trace || gone.trace.first != "start \(s.id)" {
+                    notAndroid.append("\(s) \(p): \(gone.trace) vs \(none.trace)")
+                }
+                guard let a = gone.action else { continue }
+                if let b = run(s, p, .shown).action, b.at < a.at || b.name == a.name { continue }
+                added[String(p[...a.at].map { Self.keys[$0].name })] = a.name
+            }
+            box.lock.lock(); box.added[n] = added; box.notAndroid += notAndroid; box.lock.unlock()
+        }
+        XCTAssertEqual(starts.count, 82)
+        XCTAssertEqual(box.notAndroid, [], "the song gone is a dash without music")
+        for (n, s) in starts.enumerated() {
+            let added = box.added[n] ?? [:]
+            XCTAssertEqual(added, Self.notMusicOther[s.mode]?[s.id] ?? [:], "\(s)")
+            XCTAssertEqual(added.keys.filter { !$0.contains("◀") && !$0.contains("▶") }, [], "\(s): ★ / BACK alone")
+            for (seq, action) in added where !seq.hasPrefix("▶▶") { // the first press is the knob step onto the slot
+                let p = seq.map { c in Self.keys.firstIndex { $0.name == c }! }
+                let r = run(s, p, .goneAtFirstPress).action
+                XCTAssertTrue(r?.at == p.count - 1 && r?.name == action, "\(s) \(seq): gone at the knob step, \(String(describing: r))")
+            }
         }
     }
 }

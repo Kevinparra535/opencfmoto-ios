@@ -1475,9 +1475,16 @@ consequence (Lap / Stop, Record, Park here, Set home here, Go home, Go, the voic
 pill's Lap precedes `fab.recenter`, so the same sequences and ◀B★ press Lap / Stop (★ stops a running lap
 timer and clears its laps, or arms one); in the menu ◀★ from the parked Circuit is Record / Stop
 recording (◀◀★ from "Music"). From a control that is not a Music control nothing parks or returns: the
-field guide's ◀★★ from End (◀ wraps to the tile) and ▶★ from the Menu FAB reach the tile only while it
-is listed; without it — the song gone, or gone at the very knob step and back before the ★ (a gap that
-outlasted the app's 2-s hold) — they are Android's paths to End (`testFromEndTheTileMustBeListed`).
+list only loses the tile (between the Menu FAB and End) or the menu's "Music" (between Circuit and
+Follow), and a knob step meant for them lands on that neighbour, where ★ and BACK keep Android's rules.
+With the song gone, or gone at the very knob step and back before the ★ (a gap that outlasted the app's
+2-s hold), these are a dash without music: while navigating the field guide's ◀★★ from End (◀ wraps to
+the tile) and ◀B★ from End, ▶★ / ▶B★ from the Menu FAB (▶▶★ from Compass), ▶B★ from Circuit and
+◀B★ / ◀★★ from Follow end navigation (BACK at idle or in the menu, and ★ on Circuit, land on End), and
+◀◀★ from Follow, also in free ride, is Record / Stop recording. Longer ones first reach one of these
+starts (B◀★★, ★◀B★; ◀◀B★ from Recenter) or add knob steps (◀★▶★ Park here from End or the free-ride
+pill, ▶▶▶★ Lap from the free-ride Menu FAB) (`testFromEndTheTileMustBeListed`,
+`testFromAControlThatIsNotAMusicControlAVanishIsADashWithoutMusic`).
 
 **Safety rules** (`DashUIController`): the sheet never opens by itself and closes on ✕ / BACK; 2 s after
 its song went away (`Options.musicSheetVanishGrace`, drawn with that song meanwhile); after
