@@ -91,6 +91,13 @@ public enum H264EncoderStatus {
     }
 
     public static func describe(_ status: Int32) -> String {
+        knownName(status) ?? "OSStatus \(status)"
+    }
+
+    /// ADDITION (locked iPhone, Phase 0): the constant name of a status this encoder knows
+    /// (`kVTCouldNotFindVideoEncoderErr`, `noErr` for 0), nil for any other status — the `name` of
+    /// `BackgroundLog.osStatus(_:name:)` in the `create=` field of the `[bg]` lines.
+    public static func knownName(_ status: Int32) -> String? {
         switch status {
         case 0: return "noErr"
         case propertyNotSupported: return "kVTPropertyNotSupportedErr"
@@ -101,8 +108,15 @@ public enum H264EncoderStatus {
         case encoderMalfunction: return "kVTVideoEncoderMalfunctionErr"
         case encoderNotAvailableNow: return "kVTVideoEncoderNotAvailableNowErr"
         case sessionMalfunction: return "kVTSessionMalfunctionErr"
-        default: return "OSStatus \(status)"
+        default: return nil
         }
+    }
+
+    /// ADDITION (locked iPhone, Phase 0): the `DashEncoderFailure` an encoder error is reported as
+    /// through `DashVideoEncoder.onFailure`: the status, whether the session must be re-created
+    /// (`requiresSessionRecreation`), and the error text.
+    public static func failure(status: Int32?, message: String) -> DashEncoderFailure {
+        DashEncoderFailure(status: status, requiresRecreation: status.map(requiresSessionRecreation) ?? false, message: message)
     }
 }
 
@@ -157,14 +171,21 @@ public enum H264EncoderError: Error, CustomStringConvertible {
         case let .outputFailed(s): return "VT output error: \(H264EncoderStatus.describe(s))"
         }
     }
+
+    /// ADDITION (locked iPhone, Phase 0): this error as reported through `DashVideoEncoder.onFailure`.
+    public var dashFailure: DashEncoderFailure { H264EncoderStatus.failure(status: status, message: description) }
 }
 
 /// VideoToolbox H.264 encoder producing dash-ready `EncodedFrame`s (Annex-B, SPS + PPS before
-/// every IDR). Thread-safe: every method may be called from any thread; `onFrame` / `onError`
-/// are invoked on a VideoToolbox thread (never while an internal lock is held).
+/// every IDR). Thread-safe: every method may be called from any thread; `onFrame` / `onError` /
+/// `onFailure` are invoked on a VideoToolbox thread (never while an internal lock is held), except
+/// that an encode refused by VideoToolbox reports its error synchronously from `encode`.
+/// It is the engine's `DashVideoEncoder` for the foreground (`own`, hardware) and for the background
+/// software rung (`own-sw-pre`, `own-sw`, `own-sw-id`).
 public final class H264Encoder: @unchecked Sendable {
     public typealias FrameHandler = @Sendable (EncodedFrame) -> Void
     public typealias ErrorHandler = @Sendable (H264EncoderError) -> Void
+    public typealias FailureHandler = @Sendable (DashEncoderFailure) -> Void
 
     private struct Config {
         var width: Int
@@ -177,6 +198,11 @@ public final class H264Encoder: @unchecked Sendable {
     public var minimumRecreateInterval: TimeInterval = 1.0
 
     public let label: String
+    /// ADDITION (locked iPhone, Phase 0): `kVTVideoEncoderSpecification_EncoderID` of every session
+    /// (nil = let VideoToolbox choose), from `init`.
+    public let encoderID: String?
+    /// `allowSoftware` of `init`: what the three-argument `configure` (the `DashVideoEncoder` one) uses.
+    private let initialAllowSoftware: Bool
     private let lock = NSLock()
     private var config: Config?
     private var session: VTCompressionSession?
@@ -194,9 +220,18 @@ public final class H264Encoder: @unchecked Sendable {
     private var _stats = H264EncoderStats()
     private var _onFrame: FrameHandler?
     private var _onError: ErrorHandler?
+    private var _onFailure: FailureHandler?
 
-    public init(label: String = "video") {
+    /// - Parameters:
+    ///   - allowSoftware: ADDITION (locked iPhone, Phase 0): what `configure(width:height:parameters:)`
+    ///     requests — `EnableHardwareAcceleratedVideoEncoder = false` (iOS 17.4+), the background
+    ///     software rung. The four-argument `configure` still takes its own value.
+    ///   - encoderID: ADDITION (locked iPhone, Phase 0): a `VTCopyVideoEncoderList` `EncoderID` to
+    ///     request (`kVTVideoEncoderSpecification_EncoderID`); nil = VideoToolbox chooses.
+    public init(label: String = "video", allowSoftware: Bool = false, encoderID: String? = nil) {
         self.label = label
+        initialAllowSoftware = allowSoftware
+        self.encoderID = encoderID
     }
 
     deinit {
@@ -213,6 +248,21 @@ public final class H264Encoder: @unchecked Sendable {
     public var onError: ErrorHandler? {
         get { lock.lock(); defer { lock.unlock() }; return _onError }
         set { lock.lock(); _onError = newValue; lock.unlock() }
+    }
+
+    /// ADDITION (locked iPhone, Phase 0, `DashVideoEncoder`): called with every error `onError` gets
+    /// (encode refused, output error, session creation failure), as `H264EncoderError.dashFailure`.
+    public var onFailure: FailureHandler? {
+        get { lock.lock(); defer { lock.unlock() }; return _onFailure }
+        set { lock.lock(); _onFailure = newValue; lock.unlock() }
+    }
+
+    /// ADDITION (locked iPhone, Phase 0, `DashVideoEncoder`): `.videoToolboxSoftware` when the
+    /// session is requested with `allowSoftware` (the configured value, else the `init` value),
+    /// otherwise `.videoToolboxHardware`.
+    public var kind: DashEncoderKind {
+        lock.lock(); defer { lock.unlock() }
+        return (config?.allowSoftware ?? initialAllowSoftware) ? .videoToolboxSoftware : .videoToolboxHardware
     }
 
     public var stats: H264EncoderStats { lock.lock(); defer { lock.unlock() }; return _stats }
@@ -243,7 +293,33 @@ public final class H264Encoder: @unchecked Sendable {
         return false
     }
 
+    /// ADDITION (locked iPhone, Phase 0, P0-2): the H.264 (`avc1`) entries of `VTCopyVideoEncoderList`,
+    /// in list order: `EncoderID`, `EncoderName` and `IsHardwareAccelerated` (nil when the entry has no
+    /// such key — one report saw none even for the hardware encoder, so the list alone settles
+    /// nothing). Empty when VideoToolbox returns an error. Logged once per run (L2) and used for the
+    /// background `EncoderID` tries.
+    public static func listAvailableEncoders() -> [BackgroundLog.EncoderListEntry] {
+        var listOut: CFArray?
+        let status = VTCopyVideoEncoderList(nil, &listOut)
+        guard status == 0, let list = listOut as? [[String: Any]] else { return [] }
+        return list.compactMap { entry -> BackgroundLog.EncoderListEntry? in
+            guard let codec = entry[kVTVideoEncoderList_CodecType as String] as? NSNumber,
+                  codec.uint32Value == kCMVideoCodecType_H264 else { return nil }
+            let id = entry[kVTVideoEncoderList_EncoderID as String] as? String ?? "?"
+            let name = entry[kVTVideoEncoderList_EncoderName as String] as? String ?? "?"
+            let hardware = (entry[kVTVideoEncoderList_IsHardwareAccelerated as String] as? NSNumber)?.boolValue
+            return BackgroundLog.EncoderListEntry(id: id, name: name, isHardwareAccelerated: hardware)
+        }
+    }
+
     // MARK: configuration
+
+    /// ADDITION (locked iPhone, Phase 0, `DashVideoEncoder`): `configure(width:height:parameters:
+    /// allowSoftware:)` with the `allowSoftware` given at `init` (false by default, so the existing
+    /// three-argument calls — `own`, `mirror`, `hold` — keep requesting hardware).
+    public func configure(width: Int, height: Int, parameters: EncoderParameters) throws {
+        try configure(width: width, height: height, parameters: parameters, allowSoftware: initialAllowSoftware)
+    }
 
     /// Creates (or recreates) the session at exactly `width × height`.
     /// - Parameter allowSoftware: disable hardware acceleration (iOS 17.4+): the background path.
@@ -392,10 +468,13 @@ public final class H264Encoder: @unchecked Sendable {
             _stats.errors += 1
             _stats.lastError = status
             let handler = _onError
+            let failureHandler = _onFailure
             lock.unlock()
             Log.shared.throttled("vt-encode-\(label)", interval: 2, .warn, "VIDEO",
                                  "[\(label)] encode failed: \(H264EncoderStatus.describe(status))")
-            handler?(.encodeFailed(status))
+            let error = H264EncoderError.encodeFailed(status)
+            handler?(error)
+            failureHandler?(error.dashFailure)
             return false
         }
         return true
@@ -423,16 +502,21 @@ public final class H264Encoder: @unchecked Sendable {
         let settings = H264EncoderSettings(width: cfg.width, height: cfg.height, parameters: cfg.parameters)
         let created: VTCompressionSession
         do {
-            created = try Self.makeSession(settings: settings, allowSoftware: cfg.allowSoftware, label: label)
+            created = try Self.makeSession(settings: settings, allowSoftware: cfg.allowSoftware, encoderID: encoderID,
+                                           label: label)
         } catch {
             lock.lock()
             needsRecreate = true
             _stats.errors += 1
             if let e = error as? H264EncoderError, let st = e.status { _stats.lastError = st }
             let handler = _onError
+            let failureHandler = _onFailure
             lock.unlock()
             Log.w("VIDEO", "[\(label)] \(error)")
-            if let e = error as? H264EncoderError { handler?(e) }
+            if let e = error as? H264EncoderError {
+                handler?(e)
+                failureHandler?(e.dashFailure)
+            }
             throw error
         }
         let hw = Self.readUsingHardware(created)
@@ -448,11 +532,16 @@ public final class H264Encoder: @unchecked Sendable {
         Log.i("VIDEO", "[\(label)] VT session \(cfg.width)x\(cfg.height) \(settings.profileLevel.rawValue) "
             + "\(settings.averageBitRate / 1000)kbps \(settings.expectedFrameRate)fps "
             + "IDR \(settings.maxKeyFrameIntervalDuration)s/\(settings.maxKeyFrameInterval)f "
-            + "software=\(cfg.allowSoftware) hw=\(hw.map { String($0) } ?? "?")")
+            + "software=\(cfg.allowSoftware) hw=\(hw.map { String($0) } ?? "?")"
+            + (encoderID.map { " id=\($0)" } ?? ""))
     }
 
-    private static func makeSession(settings st: H264EncoderSettings, allowSoftware: Bool, label: String) throws -> VTCompressionSession {
+    private static func makeSession(settings st: H264EncoderSettings, allowSoftware: Bool, encoderID: String?,
+                                    label: String) throws -> VTCompressionSession {
         var spec: [CFString: Any] = [:]
+        if let encoderID {
+            spec[kVTVideoEncoderSpecification_EncoderID] = encoderID
+        }
         if allowSoftware {
             if #available(iOS 17.4, *) {
                 spec[kVTVideoEncoderSpecification_EnableHardwareAcceleratedVideoEncoder] = false
@@ -543,10 +632,13 @@ public final class H264Encoder: @unchecked Sendable {
                 forceNextKeyframe = true
             }
             let handler = _onError
+            let failureHandler = _onFailure
             lock.unlock()
             Log.shared.throttled("vt-output-\(label)", interval: 2, .warn, "VIDEO",
                                  "[\(label)] output error: \(H264EncoderStatus.describe(status))")
-            handler?(.outputFailed(status))
+            let error = H264EncoderError.outputFailed(status)
+            handler?(error)
+            failureHandler?(error.dashFailure)
             return
         }
         if flags.contains(.frameDropped) {
@@ -605,9 +697,10 @@ public final class H264Encoder: @unchecked Sendable {
         let handler = _onFrame
         lock.unlock()
 
-        if isFirstKeyframe, let first = sps.first {
-            // media-video.md §15.8: log SPS/PPS on session creation (compare with §7.6).
-            Log.i("VIDEO", "[\(label)] first IDR \(au.data.count)b SPS \(first.hexDump(limit: 16)) PPS \(pps.first?.hexDump(limit: 8) ?? "-")")
+        if isFirstKeyframe {
+            // media-video.md §15.8: log SPS/PPS on session creation (compare with §7.6). L1 (locked
+            // iPhone, Phase 0): the FULL SPS / PPS hex and their decoded summary, every label.
+            Log.i("VIDEO", BackgroundLog.firstIDR(label: label, bytes: au.data.count, sps: sps.first, pps: pps.first))
         }
         handler?(EncodedFrame(accessUnit: au.data, isKeyframe: au.isKeyframe,
                               presentationTime: pts.isValid ? pts.seconds : 0, sequence: seq))
@@ -650,6 +743,15 @@ public final class H264Encoder: @unchecked Sendable {
         }
         return (sps, pps, length)
     }
+}
+
+/// ADDITION (locked iPhone, Phase 0, P0-3): the engine's encoder seam. `kind`, `onFailure` and the
+/// three-argument `configure` live in the class; `usesHardware` and `averageEncodeMs` read `stats`.
+extension H264Encoder: DashVideoEncoder {
+    /// `stats.usingHardware`: what `UsingHardwareAcceleratedVideoEncoder` said (nil = unknown).
+    public var usesHardware: Bool? { stats.usingHardware }
+    /// `stats.averageEncodeMs`.
+    public var averageEncodeMs: Double { stats.averageEncodeMs }
 }
 
 public extension H264Encoder {

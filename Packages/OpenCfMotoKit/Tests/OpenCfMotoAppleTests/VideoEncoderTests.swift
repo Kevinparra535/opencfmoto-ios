@@ -173,6 +173,108 @@ final class VideoEncoderTests: XCTestCase {
         XCTAssertTrue(enc.stats.softwareRequested)
         XCTAssertTrue(H264Encoder.isSoftwareEncodingSupported)
     }
+
+    // MARK: locked iPhone, Phase 0 — H264Encoder as the engine's DashVideoEncoder
+
+    func testKindFollowsTheRequestedSession() throws {
+        XCTAssertEqual(H264Encoder(label: "own").kind, .videoToolboxHardware)
+        XCTAssertEqual(H264Encoder(label: "own-sw", allowSoftware: true).kind, .videoToolboxSoftware, "the init value before configure")
+        try requireEncoder()
+        let hardware = H264Encoder(label: "own")
+        defer { hardware.invalidate() }
+        try hardware.configure(width: 320, height: 240, parameters: .default)
+        XCTAssertEqual(hardware.kind, .videoToolboxHardware)
+        XCTAssertFalse(hardware.stats.softwareRequested, "a three-argument configure (own, mirror, hold) keeps hardware")
+        let seam: any DashVideoEncoder = hardware
+        XCTAssertEqual(seam.label, "own")
+        XCTAssertTrue(seam.isConfigured)
+        XCTAssertTrue(seam.isSessionValid)
+        XCTAssertEqual(seam.usesHardware, hardware.stats.usingHardware)
+        XCTAssertEqual(seam.parameters, hardware.parameters)
+        // The four-argument form still takes its own value; the configured value wins.
+        let explicit = H264Encoder(label: "x")
+        defer { explicit.invalidate() }
+        do {
+            try explicit.configure(width: 320, height: 240, parameters: .default, allowSoftware: true)
+        } catch {
+            throw XCTSkip("no software H.264 encoder: \(error)")
+        }
+        XCTAssertEqual(explicit.kind, .videoToolboxSoftware)
+    }
+
+    func testThreeArgumentConfigureKeepsTheInitAllowSoftware() throws {
+        try requireEncoder()
+        let software = H264Encoder(label: "own-sw", allowSoftware: true)
+        defer { software.invalidate() }
+        let seam: any DashVideoEncoder = software
+        do {
+            try seam.configure(width: 320, height: 240, parameters: .default)
+        } catch {
+            throw XCTSkip("no software H.264 encoder: \(error)")
+        }
+        XCTAssertTrue(software.stats.softwareRequested)
+        XCTAssertEqual(seam.kind, .videoToolboxSoftware)
+    }
+
+    func testOnFailureFiresWithOnError() throws {
+        try requireEncoder()
+        // An EncoderID that does not exist: VideoToolbox cannot create the session.
+        let enc = H264Encoder(label: "id", encoderID: "org.opencfmoto.test.no-such-encoder")
+        defer { enc.invalidate() }
+        let errors = Locked<[H264EncoderError]>([])
+        let failures = Locked<[DashEncoderFailure]>([])
+        enc.onError = { e in errors.withLock { $0.append(e) } }
+        enc.onFailure = { f in failures.withLock { $0.append(f) } }
+        var thrown: Error?
+        do {
+            try enc.configure(width: 320, height: 240, parameters: .default)
+        } catch {
+            thrown = error
+        }
+        guard thrown != nil else { throw XCTSkip("VideoToolbox accepted an unknown EncoderID") }
+        XCTAssertEqual(errors.current.count, 1)
+        XCTAssertEqual(failures.current.count, 1)
+        let e = try XCTUnwrap(errors.current.first)
+        let f = try XCTUnwrap(failures.current.first)
+        XCTAssertNotNil(f.status)
+        XCTAssertEqual(f.status, e.status)
+        XCTAssertEqual(f.message, e.description)
+        XCTAssertEqual(f.requiresRecreation, e.status.map(H264EncoderStatus.requiresSessionRecreation) ?? false)
+        XCTAssertEqual(f, e.dashFailure)
+        XCTAssertEqual(enc.encoderID, "org.opencfmoto.test.no-such-encoder")
+    }
+
+    /// L1: the first IDR of every encoder logs its FULL SPS / PPS and their summary.
+    func testFirstIDRLogLineCarriesTheFullParameterSets() throws {
+        try requireEncoder()
+        let lines = Locked<[String]>([])
+        let token = Log.shared.subscribe { line in
+            if line.tag == "VIDEO", line.message.hasPrefix("[l1-test] first IDR") { lines.withLock { $0.append(line.message) } }
+        }
+        defer { Log.shared.unsubscribe(token) }
+        let frames = Locked<[EncodedFrame]>([])
+        let enc = H264Encoder(label: "l1-test")
+        defer { enc.invalidate() }
+        enc.onFrame = { f in frames.withLock { $0.append(f) } }
+        try enc.configure(width: 320, height: 240, parameters: .default)
+        for i in 0 ..< 3 { enc.encode(pixelBuffer: try XCTUnwrap(picture(320, 240, step: i)), pts: Double(i) / 24) }
+        enc.completeFrames()
+        XCTAssertTrue(pollUntil { frames.current.count >= 3 && lines.current.count == 1 })
+        let first = try XCTUnwrap(frames.current.first)
+        let sets = enc.lastParameterSets
+        let sps = try XCTUnwrap(sets.sps.first)
+        XCTAssertEqual(lines.current, [BackgroundLog.firstIDR(label: "l1-test", bytes: first.accessUnit.count, sps: sps, pps: sets.pps.first)])
+        XCTAssertTrue(lines.current.first?.contains(" SPS \(sps.hexDump(limit: Int.max)) PPS ") ?? false, "the whole SPS, not 16 bytes")
+    }
+
+    /// L2: the `avc1` entries of VTCopyVideoEncoderList.
+    func testEncoderListHasTheH264Encoders() throws {
+        try requireEncoder()
+        let list = H264Encoder.listAvailableEncoders()
+        XCTAssertFalse(list.isEmpty, "an H.264 session exists, so the list has an avc1 encoder")
+        XCTAssertTrue(list.allSatisfy { !$0.id.isEmpty && $0.id != "?" })
+        XCTAssertTrue(BackgroundLog.encoderList(list).hasPrefix("[vt-list] avc1 encoders: "))
+    }
 }
 
 final class VideoEngineTests: XCTestCase {

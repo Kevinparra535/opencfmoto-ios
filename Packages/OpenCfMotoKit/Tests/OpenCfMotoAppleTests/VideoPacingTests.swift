@@ -135,6 +135,43 @@ final class VideoPacingTests: XCTestCase {
         XCTAssertEqual(ProjectionFallback.keyframe(foreground: false, hold: { nil }, live: { live })?.sequence, 9)
     }
 
+    /// P0-5 (locked iPhone): a timed-out pull while a background encoder feeds the dash is answered
+    /// with THAT encoder's last IDR, then the hold picture, then any live IDR; in hold: hold, then
+    /// live; in the foreground: live only. A source is asked only when the previous one had nothing.
+    func testFallbackOrderInTheForegroundWithABackgroundEncoderAndInHold() {
+        let background = frame(3, key: true), hold = frame(7, key: true), live = frame(9, key: true)
+        let asked = Locked<[String]>([])
+        func pick(_ name: String, _ f: EncodedFrame?) -> () -> EncodedFrame? {
+            { asked.withLock { $0.append(name) }; return f }
+        }
+        func run(_ context: ProjectionFallback.Context, background b: EncodedFrame?, hold h: EncodedFrame?,
+                 live l: EncodedFrame?) -> (sequence: UInt64?, asked: [String]) {
+            asked.set([])
+            let r = ProjectionFallback.keyframe(context, backgroundEncoder: pick("bg", b), hold: pick("hold", h),
+                                                live: pick("live", l))
+            return (r?.sequence, asked.current)
+        }
+        // A background encoder feeds the dash: its own IDR first; nothing else is asked (so the hold
+        // round-robin does not advance), then the hold picture, then the live IDR.
+        XCTAssertEqual(run(.backgroundEncoder, background: background, hold: hold, live: live).sequence, 3)
+        XCTAssertEqual(run(.backgroundEncoder, background: background, hold: hold, live: live).asked, ["bg"])
+        XCTAssertEqual(run(.backgroundEncoder, background: nil, hold: hold, live: live).sequence, 7)
+        XCTAssertEqual(run(.backgroundEncoder, background: nil, hold: hold, live: live).asked, ["bg", "hold"])
+        XCTAssertEqual(run(.backgroundEncoder, background: nil, hold: nil, live: live).sequence, 9)
+        XCTAssertEqual(run(.backgroundEncoder, background: nil, hold: nil, live: live).asked, ["bg", "hold", "live"])
+        XCTAssertNil(run(.backgroundEncoder, background: nil, hold: nil, live: nil).sequence)
+        // Hold: the hold picture, then the live IDR; a background IDR is never asked for.
+        XCTAssertEqual(run(.hold, background: background, hold: hold, live: live).sequence, 7)
+        XCTAssertEqual(run(.hold, background: background, hold: hold, live: live).asked, ["hold"])
+        XCTAssertEqual(run(.hold, background: background, hold: nil, live: live).sequence, 9)
+        XCTAssertEqual(run(.hold, background: background, hold: nil, live: live).asked, ["hold", "live"])
+        // Foreground: the live IDR only (CL-5) — neither the hold picture nor a background IDR.
+        XCTAssertEqual(run(.foreground, background: background, hold: hold, live: live).sequence, 9)
+        XCTAssertEqual(run(.foreground, background: background, hold: hold, live: live).asked, ["live"])
+        XCTAssertNil(run(.foreground, background: background, hold: hold, live: nil).sequence)
+        XCTAssertEqual(run(.foreground, background: background, hold: hold, live: nil).asked, ["live"])
+    }
+
     // MARK: keyframe coalescing (E2E: 3–4 IDRs in the first 200 ms of a session)
 
     func testKeyframeRequestsAreCoalescedIntoTheIDRInFlight() {
