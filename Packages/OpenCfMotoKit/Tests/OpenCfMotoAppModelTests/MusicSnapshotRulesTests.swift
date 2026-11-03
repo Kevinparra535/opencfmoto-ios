@@ -135,6 +135,10 @@ final class MusicSnapshotRulesTests: XCTestCase {
         XCTAssertTrue(match(songID: "100000002", store: "100000002"))
         XCTAssertFalse(match(songID: "100000003", store: "100000002"), "same title and artist, another catalog song")
         XCTAssertTrue(match(songID: "i.AbCdEf123", store: "100000002"), "added from Apple Music: a library id in MusicKit")
+        // A device-local id (the persistent id as a signed 64-bit decimal) is a library id too, whatever its sign.
+        XCTAssertTrue(match(songID: "3829357512844419763", store: "100000002"), "persistent id < 2^63: all digits")
+        XCTAssertTrue(match(songID: "-8844948490994709711", store: "100000002"), "persistent id >= 2^63")
+        XCTAssertFalse(match(songID: "100000000003", store: "100000000002"), "12 digits: still a catalog id")
         XCTAssertTrue(match(songID: "100000003", store: "0"), "a library-only item has no catalog id to compare")
         XCTAssertTrue(match(songID: "100000003", store: nil))
         XCTAssertTrue(match(songID: nil, store: "100000002"))

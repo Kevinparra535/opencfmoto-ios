@@ -178,9 +178,15 @@ public enum MusicEntryMatch {
             .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
     }
 
-    /// A MusicKit catalog id: ASCII digits only (library ids look like "i.…").
+    /// Longest all-digit MusicKit id still read as a catalog id. Catalog ids have ~10 digits; a
+    /// library item's device-local id is its media-library persistent id as a signed 64-bit decimal
+    /// ("-8844948490994709711"; when positive, 13+ digits but about once in 10^7), another id space (F5).
+    static let maxCatalogIDDigits = 12
+
+    /// A MusicKit catalog id: 1–12 ASCII digits. Not a library id ("i.…") nor a device-local one,
+    /// which must never be compared with MediaPlayer's catalog `playbackStoreID` (F5).
     static func isCatalogID(_ id: String) -> Bool {
-        !id.isEmpty && id.unicodeScalars.allSatisfy { $0 >= "0" && $0 <= "9" }
+        !id.isEmpty && id.utf8.count <= maxCatalogIDDigits && id.unicodeScalars.allSatisfy { $0 >= "0" && $0 <= "9" }
     }
 }
 
