@@ -186,6 +186,9 @@ final class RideModelMusicIntegrationTests: XCTestCase {
         XCTAssertTrue(waiting)
         let refreshes = fake.refreshes
         clock.advance(3)
+        // The render loop's frame at the new time before the song goes: the dash's 2-s sheet hold counts
+        // from the last time it saw (without it, a 3-s jump of this clock would make the hold look over).
+        _ = h.ride.displayList(now: clock.now())
         grace.endWaits()
         let reread = await eventually { fake.refreshes == refreshes + 1 }
         XCTAssertTrue(reread, "the player is read again at the end of the grace")
