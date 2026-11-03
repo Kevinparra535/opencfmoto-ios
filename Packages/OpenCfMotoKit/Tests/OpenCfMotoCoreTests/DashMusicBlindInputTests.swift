@@ -4,9 +4,14 @@
 // the focus was left on, without looking at the dash. Exhaustively, from every Music starting state
 // (the tile with a playing or a paused song, the open sheet on each of ⏮ ⏯ ⏭ ✕, the menu on "Music"),
 // navigating and in free ride, with the song staying, gone for one built frame, or gone for good (F2):
-// no sequence of 1–3 ★ / BACK presses returns `.endNavigation`. Knob steps (◀ ▶) do reach End on
-// purpose — End is a stop of the map's list — and the shortest such sequences are documented here,
-// with what a vanish changes about them: nothing, except the Recenter FAB's documented trade-off.
+// no sequence of 1–3 ★ / BACK presses returns `.endNavigation`. (The vanishes are what the dash model
+// sees: one reading without a song never gets there — MusicModel holds the song 2 s — and an open sheet
+// outlasts a short vanish, review round 3.) Knob steps (◀ ▶) are not blind-safe:
+// End is a stop of the map's list, and from where a vanish parked the focus a knob step lands on other
+// neighbours than from the vanished control. The shortest sequences to End are documented here (a vanish
+// adds only the Recenter FAB's trade-off), and so are the other actions a knob step reaches (review
+// round 3): the pill's Lap / Stop in free ride and Record in the menu. From End or the Menu FAB nothing
+// parks or returns: the tile must be listed at the knob step (`testFromEndTheTileMustBeListed`).
 import Foundation
 import XCTest
 @testable import OpenCfMotoCore
@@ -54,11 +59,29 @@ final class DashMusicBlindInputTests: XCTestCase {
         return (mode, ui.state.focusOrder.firstIndex(of: "menu.music") ?? -1)
     })
 
+    /// When the presses start: after the setup and the vanish (a song gone for good closes an open sheet
+    /// only at the end of its 2-s grace, R3-FOCUS-1).
+    private static let pressStart = t0 + 3
+
     /// A fresh controller in state `c`, then `presses` (indices into `keys`), one every 0.4 s; `frames`:
     /// a frame after every press, as the render loop usually builds (without, as when the gesture engine
     /// hands over two presses at once). Returns, per press, whether it ended navigation (none past the
     /// first that did), and the focus when the presses start.
     private static func replay(_ c: Config, _ presses: [Int], frames: Bool) -> (ends: [Bool], focus: String?) {
+        let ui = controller(c)
+        let focus = presses.isEmpty ? ui.state.focusedId : nil
+        var ends: [Bool] = []
+        for (i, k) in presses.enumerated() {
+            let now = pressStart + Double(i) * 0.4
+            ends.append(ui.handle(keys[k].input, now: now).contains(.endNavigation))
+            if ends.last == true { break }
+            if frames { _ = ui.displayList(now: now + 0.1) }
+        }
+        return (ends, focus)
+    }
+
+    /// A fresh controller in state `c`: the setup, then the vanish.
+    private static func controller(_ c: Config) -> DashUIController {
         let base = base(c.mode)
         let with = DashFixtures.withMusic(base, DashFixtures.song(c.start == .tilePaused ? .paused : .playing))
         let ui = DashUIController()
@@ -84,15 +107,7 @@ final class DashMusicBlindInputTests: XCTestCase {
             ui.update(base); _ = ui.displayList(now: t0 + 0.5)
             _ = ui.tick(now: t0 + 2.6); _ = ui.displayList(now: t0 + 2.7)
         }
-        let focus = presses.isEmpty ? ui.state.focusedId : nil
-        var ends: [Bool] = []
-        for (i, k) in presses.enumerated() {
-            let now = t0 + 3 + Double(i) * 0.4
-            ends.append(ui.handle(keys[k].input, now: now).contains(.endNavigation))
-            if ends.last == true { break }
-            if frames { _ = ui.displayList(now: now + 0.1) }
-        }
-        return (ends, focus)
+        return ui
     }
 
     private final class Results: @unchecked Sendable {
@@ -274,6 +289,129 @@ final class DashMusicBlindInputTests: XCTestCase {
             }
             // the song back after one frame gives the knob back exactly: the same paths as without a vanish
             if c.vanish == .oneFrame { XCTAssertEqual(o.shortestEnds, reference.shortestEnds, "\(c)") }
+        }
+    }
+
+    // MARK: Other actions a knob step reaches (review round 3)
+
+    /// Actions of consequence besides End: the pill's Lap / Stop (stops a running lap timer and clears its
+    /// laps, or arms one where the bike is), Record / Stop recording (stops and saves the trip log; a log that
+    /// started by itself then stays off for the session), Park here, Set home here, Go home, Go, the voice.
+    private static func otherAction(_ intents: [DashIntent]) -> String? {
+        for i in intents {
+            switch i {
+            case .toggleLapTimer: return "Lap"
+            case .toggleRecording: return "Record"
+            case .parkHere: return "Park here"
+            case .setHomeHere: return "Set home"
+            case .goHome: return "Go home"
+            case .go: return "Go"
+            case .toggleVoice: return "Voice"
+            default: continue
+            }
+        }
+        return nil
+    }
+
+    /// Every config × every sequence of 1–3 presses: the shortest ones whose last press returns one of
+    /// `otherAction` and no earlier press any action (End included), with that action.
+    private static func otherOutcomes(frames: Bool) -> [Config: [String: String]] {
+        final class Box: @unchecked Sendable {
+            let lock = NSLock()
+            var all: [Config: [String: String]] = [:]
+        }
+        let box = Box()
+        let all = configs
+        DispatchQueue.concurrentPerform(iterations: all.count) { item in
+            let c = all[item]
+            var found: [String: String] = [:]
+            func run(_ p: [Int]) -> String?? { // nil: nothing; .some(nil): End; .some(a): action a
+                let ui = controller(c)
+                for (i, k) in p.enumerated() {
+                    let now = pressStart + Double(i) * 0.4
+                    let intents = ui.handle(keys[k].input, now: now)
+                    if intents.contains(.endNavigation) { return .some(nil) }
+                    if let a = otherAction(intents) { return i == p.count - 1 ? .some(a) : .some(nil) }
+                    if frames { _ = ui.displayList(now: now + 0.1) }
+                }
+                return nil
+            }
+            func name(_ p: [Int]) -> String { String(p.map { keys[$0].name }) }
+            for a in keys.indices {
+                if let r = run([a]) { if let x = r { found[name([a])] = x }; continue }
+                for b in keys.indices {
+                    if let r = run([a, b]) { if let x = r { found[name([a, b])] = x }; continue }
+                    for d in keys.indices { if let x = run([a, b, d]) ?? nil { found[name([a, b, d])] = x } }
+                }
+            }
+            box.lock.lock(); box.all[c] = found; box.lock.unlock()
+        }
+        return box.all
+    }
+
+    /// Navigating: from the menu's Music, ◀◀★ is Record (two items up); where a vanish parked the menu's
+    /// focus (Circuit, the item above Music), ◀★. Nothing else within three presses.
+    private static let navigatingOther: [String: [String: String]] = [
+        "tile": [:], "sheet": [:], "sheet ✕": [:],
+        "menu Music": ["◀◀★": "Record"],
+        "parked Recenter": [:],
+        "parked Circuit": ["◀★": "Record"],
+    ]
+
+    /// Free ride: the map's list is the pill, its Circuit, its Lap / Stop, then Recenter … Menu and the tile.
+    /// Where a vanish parked the focus, Recenter's ◀ neighbour is the pill's Lap (End while navigating): ◀★,
+    /// B◀★ / ★◀★ (BACK and ★ keep the focus parked), ◀B★ (BACK at idle in free ride keeps Lap) press Lap /
+    /// Stop — the free-ride side of the Recenter trade-off. In the menu as navigating, plus Circuit's B◀★ /
+    /// ★◀★ (BACK or ★ there close the menu onto Recenter, parked again).
+    private static let freeRideOther: [String: [String: String]] = [
+        "tile": [:], "sheet": [:], "sheet ✕": [:],
+        "menu Music": ["◀◀★": "Record"],
+        "parked Recenter": ["◀★": "Lap", "B◀★": "Lap", "★◀★": "Lap", "◀B★": "Lap"],
+        "parked Circuit": ["◀★": "Record", "B◀★": "Lap", "★◀★": "Lap"],
+    ]
+
+    func testOtherActionsAKnobStepReachesAreDocumented() {
+        let all = Self.otherOutcomes(frames: false)
+        XCTAssertEqual(all.count, Self.configs.count)
+        for (c, found) in all {
+            let row = Self.expected(c).row
+            let table = c.mode == .navigating ? Self.navigatingOther : Self.freeRideOther
+            XCTAssertEqual(found, table[row], "\(c) (\(row))")
+            // ★ and BACK alone reach none of them either
+            XCTAssertEqual(found.keys.filter { !$0.contains("◀") && !$0.contains("▶") }, [], "\(c)")
+        }
+        XCTAssertEqual(Self.otherOutcomes(frames: true), all, "a frame between the presses changes nothing")
+    }
+
+    // MARK: From End or the Menu FAB (the field guide's ◀ ★ ★), the tile must be listed
+
+    /// The tile closes the map's list, one knob step back from End (the field guide: ◀ to the tile, ★ the
+    /// sheet, ★ play / pause). From a control that is not a Music control nothing parks or returns: while
+    /// the tile is not listed — gone, or gone at the very knob step and back before the ★ (a gap that
+    /// outlasted MusicModel's 2-s hold) — ◀ is the Menu FAB and ◀★★ Android's path to End (the menu opens
+    /// on End); ▶★ from the Menu FAB too.
+    func testFromEndTheTileMustBeListed() {
+        let base = DashFixtures.navigating()
+        let with = DashFixtures.withMusic(base, DashFixtures.song(.paused))
+        for gap in ["tile shown", "no music", "gone", "blink at the knob step"] {
+            let ui = DashUIController()
+            ui.update(gap == "no music" ? base : with)
+            _ = ui.displayList(now: Self.t0)
+            XCTAssertEqual(ui.state.focusedId, DashFocusEngine.endId)
+            if gap == "gone" || gap == "blink at the knob step" { ui.update(base) }
+            _ = ui.handle(.knob(-1), now: Self.t0 + 1)
+            if gap == "blink at the knob step" { ui.update(with); _ = ui.displayList(now: Self.t0 + 1.2) }
+            let a = ui.handle(.key(.enter), now: Self.t0 + 1.5)
+            let b = ui.handle(.key(.enter), now: Self.t0 + 2)
+            XCTAssertEqual(a + b, gap == "tile shown" ? [.openMusic, .musicPlayPause] : [.openMenu, .endNavigation], gap)
+        }
+        for gone in [false, true] {
+            let ui = DashUIController()
+            ui.update(with)
+            _ = ui.handle(.knob(-2), now: Self.t0) // End → the tile → the Menu FAB
+            if gone { ui.update(base) }
+            _ = ui.handle(.knob(1), now: Self.t0 + 1)
+            XCTAssertEqual(ui.handle(.key(.enter), now: Self.t0 + 1.5), gone ? [.endNavigation] : [.openMusic], "gone=\(gone)")
         }
     }
 }

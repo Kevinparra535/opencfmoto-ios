@@ -1453,11 +1453,20 @@ addition, and a stand-in only exists after a Music control vanished — a Recent
 rider moved to keeps Android's rule. `DashMusicBlindInputTests` pins it
 exhaustively — from the tile (playing, paused), the sheet on each of ⏮ ⏯ ⏭ ✕ and the menu on "Music",
 navigating and in free ride, with the song staying, gone for one built frame or gone for good, with or
-without a frame between the presses, no sequence of 1–3 ★ / BACK returns `.endNavigation`. Knob steps
-reach End on purpose (End is a stop of the map's list); that test lists the shortest such sequences from
-every state. A vanish for one frame adds none, compared with the same start without a vanish (the sheet
-stays open through it); a song gone for good adds only the Recenter trade-off above (◀★, and B◀★ / ★◀★
-since BACK and ★ keep the stand-in) to what any close of the sheet leaves (the tile's paths).
+without a frame between the presses, no sequence of 1–3 ★ / BACK returns `.endNavigation` or any other
+action of consequence. Knob steps are not blind-safe: End is a stop of the map's list, and from where a
+vanish parked the focus a knob step lands on other neighbours than from the vanished control. That test
+lists, from every one of those states, the shortest knob sequences to End — a vanish for one frame adds
+none, compared with the same start without a vanish (an open sheet stays open through it), and a song
+gone for good adds only the Recenter trade-off above (◀★, and B◀★ / ★◀★ since BACK and ★ keep the
+stand-in) to what any close of the sheet leaves (the tile's paths) — and to the other actions of
+consequence (Lap / Stop, Record, Park here, Set home here, Go home, Go, the voice): in free ride the
+pill's Lap precedes `fab.recenter`, so the same sequences and ◀B★ press Lap / Stop (★ stops a running lap
+timer and clears its laps, or arms one); in the menu ◀★ from the parked Circuit is Record / Stop
+recording (◀◀★ from "Music"). From a control that is not a Music control nothing parks or returns: the
+field guide's ◀★★ from End (◀ wraps to the tile) and ▶★ from the Menu FAB reach the tile only while it
+is listed; without it — the song gone, or gone at the very knob step and back before the ★ (a gap that
+outlasted the app's 2-s hold) — they are Android's paths to End (`testFromEndTheTileMustBeListed`).
 
 **Safety rules** (`DashUIController`): the sheet never opens by itself and closes on ✕ / BACK; 2 s after
 its song went away (`Options.musicSheetVanishGrace`, drawn with that song meanwhile); after

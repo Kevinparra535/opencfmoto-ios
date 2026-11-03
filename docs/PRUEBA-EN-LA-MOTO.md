@@ -75,11 +75,13 @@ canción justo tras una pausa).
 5. **Música en primer plano y OpenCfMoto en segundo plano**: al pasar de canción en Música, el
    tablero cambia en unos 2 s; el ⏯ del tablero funciona.
 6. **Tablero sin táctil** (Ajustes ▸ «Desactivar pantalla táctil») **con el mando multimedia del
-   teléfono activado** (Controles): ◀ lleva al recuadro, ★ abre la hoja, ★ pone la música → aviso
-   «Los botones del manillar controlan ahora Apple Music» y la hoja se cierra; los botones pasan de
-   canción. ★ en el manillar pausa la música → aviso «Los botones del manillar vuelven a controlar
-   el tablero» (registro `handlebar buttons back on the dash`). Un aviso de voz con música baja la
-   música sin pararla.
+   teléfono activado** (Controles): ◀ lleva al recuadro (antes de pulsar ★, mira que el aro naranja
+   esté en el recuadro: sin recuadro, ◀ ★ ★ abre el menú y termina la navegación), ★ abre la hoja,
+   ★ pone la música → aviso «Los botones del manillar controlan ahora Apple Music» y la hoja se
+   cierra; los botones pasan de canción. ★ en el manillar pausa la música → aviso «Los botones del
+   manillar vuelven a controlar el tablero» (registro `handlebar buttons back on the dash`). Con la
+   hoja abierta y la música en pausa, dos ▶ rápidos abren el menú en «Música», no en «Finalizar
+   navegación» (★ vuelve a la hoja). Un aviso de voz con música baja la música sin pararla.
 7. **Spotify con Música en pausa**: si Spotify ya sonaba al abrir el tablero, no aparece el recuadro;
    si empieza después, el recuadro se va a los 3 s (registro `other audio for 3 s: song hidden`). Un
    sonido corto de otra app no lo quita.
