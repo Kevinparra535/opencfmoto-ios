@@ -4,7 +4,8 @@
 #
 #   build (macOS)   the FREE flavour (no Hotspot / Access Wi-Fi Information: riders join the bike
 #                   Wi-Fi in Settings) as an unsigned Release archive, linted
-#                   (tools/release/build_ipa.sh); the IPA, signed ad hoc with only the App Group
+#                   (tools/release/build_ipa.sh, which also refuses any XcodeGen but the version in
+#                   tools/release/xcodegen-version); the IPA, signed ad hoc with only the App Group
 #                   entitlement, and SHA256SUMS.txt (tools/release/package_ipa.sh); the AltStore /
 #                   SideStore source and the release notes, read from that IPA
 #                   (tools/release/altsource.py); LICENSE.txt, NOTICE.txt and LICENSE-Apache-2.0.txt
@@ -100,6 +101,7 @@ jobs:
             exit 1
           fi
 
+      # build_ipa.sh checks the version against tools/release/xcodegen-version (no other download).
       - name: Install XcodeGen
         run: brew install xcodegen
 

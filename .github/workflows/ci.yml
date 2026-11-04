@@ -424,6 +424,7 @@ jobs:
             echo "::error title=Xcode 26 required::the runner only has Xcode ${version:-?} (the release workflow needs 26 or newer)"
             exit 1
           fi
+      # build_ipa.sh checks the version against tools/release/xcodegen-version, as in release.yml.
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Archive the free flavour (Release, iPhone, unsigned) and lint it

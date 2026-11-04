@@ -18,13 +18,17 @@
 #
 # Writes Config/Local.xcconfig for the build and deletes it on exit (refuses to run when one exists:
 # a developer's own); the generated Xcode project keeps these settings until the next
-# `xcodegen generate`. Every failure ends with a ::error annotation. Written for bash 3.2.
+# `xcodegen generate`. XcodeGen writes the project the IPA is archived from, so on GitHub Actions
+# (release.yml, ci.yml's sideload dry run) any version but the one in tools/release/xcodegen-version
+# stops the build; on a Mac a different version only warns. Every failure ends with a ::error
+# annotation. Written for bash 3.2.
 
 set -Eeuo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LOCAL_XCCONFIG="$ROOT/Config/Local.xcconfig"
 ANNOTATE="$ROOT/tools/ci/annotate.py"
+XCODEGEN_VERSION_FILE="$ROOT/tools/release/xcodegen-version"
 MIN_SDK_MAJOR=26 # the newest Xcode, as for TestFlight: it supports the newest iOS on riders' iPhones
 
 esc() { local s=${1//'%'/%25}; s=${s//$'\r'/%0D}; s=${s//$'\n'/%0A}; printf '%s' "$s"; }
@@ -72,6 +76,26 @@ DEVELOPMENT_TEAM =
 OCM_FLAVOR = free
 EOF
 note "free flavour, bundle id prefix $PREFIX, no team, unsigned"
+
+# The XcodeGen that writes the project: the version this build was checked with, or nothing.
+expected_xcodegen=$(tr -d '[:space:]' < "$XCODEGEN_VERSION_FILE" 2> /dev/null || true)
+if ! [[ "$expected_xcodegen" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  die "tools/release/xcodegen-version must hold one version like 2.46.0 (it holds «$expected_xcodegen»)."
+fi
+xcodegen_path=$(command -v xcodegen || true)
+[ -n "$xcodegen_path" ] || die "XcodeGen is not installed (brew install xcodegen); this build expects $expected_xcodegen."
+installed_xcodegen=$({ xcodegen --version 2>&1 || xcodegen version 2>&1 || true; } | grep -o -E '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || true)
+if [ "$installed_xcodegen" != "$expected_xcodegen" ]; then
+  if [ "${GITHUB_ACTIONS:-}" = true ]; then
+    die "XcodeGen ${installed_xcodegen:-of an unknown version} is installed ($xcodegen_path), but the sideload build expects $expected_xcodegen (tools/release/xcodegen-version). Homebrew serves another XcodeGen now: read its release notes, then put the new version in tools/release/xcodegen-version (a reviewed commit) and start a new run."
+  fi
+  note "warning: XcodeGen ${installed_xcodegen:-?} ($xcodegen_path); the release builds use $expected_xcodegen"
+else
+  note "XcodeGen $installed_xcodegen ($xcodegen_path), the version tools/release/xcodegen-version expects"
+  if [ "${GITHUB_ACTIONS:-}" = true ]; then
+    printf '::notice title=XcodeGen::%s\n' "$(esc "XcodeGen $installed_xcodegen, as tools/release/xcodegen-version expects ($xcodegen_path)")"
+  fi
+fi
 (cd "$ROOT" && xcodegen generate) || die "xcodegen generate failed."
 
 project="$ROOT/OpenCfMoto.xcodeproj"
