@@ -989,8 +989,9 @@ doubt it picks the OSMF side.
     from the top chrome down: with one-line texts they stay clear of it in every map state on the supported
     canvases (DashMapAttributionTests); a long two-line toast may cover it while it shows (2.5 s).
 * Pictures of the dash with real OSM tiles (README, social posts) also caption them "Map © OpenStreetMap
-  contributors". The snapshot images in `docs/screenshots/dash/` use placeholder tiles and show the credit
-  where the dash draws it.
+  contributors": the README strip and `docs/media/social-preview.png` use frames from the CI E2E run, with
+  real tiles, and carry that caption. The snapshot images in `docs/screenshots/dash/` use placeholder tiles
+  and show the credit where the dash draws it.
 
 ---
 

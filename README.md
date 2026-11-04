@@ -19,14 +19,14 @@ la moto. Una **alternativa a CarPlay para motos**.
 [![Swift 5.9+ · SwiftUI](https://img.shields.io/badge/Swift-5.9%2B%20%C2%B7%20SwiftUI-F05138?logo=swift&logoColor=white)](https://www.swift.org)
 [![iOS port of OpenCfMoto (Android)](https://img.shields.io/badge/iOS%20port%20of-OpenCfMoto%20%28Android%29-2ea44f)](https://github.com/zanderp/open-cfmoto)
 
-<img src="docs/screenshots/readme/dash-navigation.png" width="400" alt="CFMOTO dash navigation from an iPhone: turn card, speed, speed limit and arrival time on an 800×384 MotoPlay dash (demo data)"/>
-<img src="docs/screenshots/readme/dash-apple-music.png" width="400" alt="Apple Music on the motorcycle dash next to the turn card (demo song)"/>
+<img src="docs/screenshots/readme/dash-map.png" width="400" alt="The OpenCfMoto map streamed from an iPhone to an 800×384 CFMOTO MotoPlay dash: OpenStreetMap night map, speed, clock and the Apple Music tile with the demo song's cover (demo route)"/>
+<img src="docs/screenshots/readme/dash-apple-music.png" width="400" alt="The Apple Music sheet on the motorcycle dash: demo song, cover, progress and previous / pause / next buttons (demo song)"/>
 <br/>
 <img src="docs/screenshots/readme/phone-home.png" width="170" alt="OpenCfMoto home screen on the iPhone in demo mode"/>
 <img src="docs/screenshots/readme/phone-dash-view.png" width="170" alt="iPhone Dash view with the Apple Music sheet and the handlebar keypad (demo)"/>
-<img src="docs/screenshots/readme/dash-route-preview.png" width="400" alt="Route preview on the dash with Fast and Fun alternatives (demo data)"/>
+<img src="docs/screenshots/readme/dash-portrait.png" width="312" alt="The same map on the 800×944 portrait dash of a 1000 MT-X, with speed and speed limit (demo route)"/>
 
-<sub>Simulator and dash snapshot-test images, demo data only · Capturas del simulador y de las pruebas del tablero, solo datos de demostración</sub>
+<sub>What the app streamed to a simulated dash in CI, and iOS simulator screenshots; demo data only · Map © OpenStreetMap contributors<br/>Lo que la app envió a un tablero simulado en la CI y capturas del simulador de iOS; solo datos de demostración · Mapa © colaboradores de OpenStreetMap</sub>
 
 ### [Try it](#try-it) · [Pruébala](#pruebala) · [Credits / Créditos](CREDITS.md) · [English](#opencfmoto-for-ios-english) · [Español](#opencfmoto-para-ios)
 

@@ -2,13 +2,16 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Draw docs/media/social-preview.png (1280 x 640), the repository's social preview image.
 
-Layout (docs/media/README.md): the 800 x 384 dash snapshot (demo data, placeholder tiles) in a TFT
-bezel on the left; the app icon, the name, a one-line pitch, model chips and the licence on the
-right. Colours are the app's Theme. Everything important stays 40 px inside the edges, so LinkedIn's
-1.91:1 crop (about 1222 x 640, centred) keeps it.
+Layout (docs/media/README.md): the 800 x 384 dash frame docs/screenshots/readme/dash-map.png (what the
+app streamed to the simulated dash in the CI E2E run: OpenStreetMap tiles along the demo route, the
+demo song's cover) in a TFT bezel on the left, with the map credit "Map © OpenStreetMap contributors"
+under it; the app icon, the name, a one-line pitch, model chips and the licence on the right. Colours
+are the app's Theme. Everything important stays 40 px inside the edges, so LinkedIn's 1.91:1 crop
+(about 1222 x 640, centred) keeps it.
 
 Needs Pillow and the Inter typeface (OFL; Debian/Ubuntu package fonts-inter). Only images from this
-repository are used: no logos, no photos, no real map data.
+repository are used: no logos, no photos; the only map data is the credited OpenStreetMap map of the
+demo route.
 
 usage: python3 docs/media/make_social_preview.py [--fonts DIR] [--out PATH]
 """
@@ -19,7 +22,7 @@ import sys
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DASH = os.path.join(ROOT, "docs", "screenshots", "readme", "dash-navigation.png")
+DASH = os.path.join(ROOT, "docs", "screenshots", "readme", "dash-map.png")
 ICON = os.path.join(ROOT, "App", "Resources", "Assets.xcassets", "AppIcon.appiconset", "AppIcon-1024.png")
 OUT = os.path.join(ROOT, "docs", "media", "social-preview.png")
 
@@ -31,6 +34,7 @@ BRAND, CHIP_FILL = (0xFF, 0x6A, 0x2C), (0x1F, 0x24, 0x2E)
 
 BEZEL = (40, 139, 40 + 728, 139 + 362)  # 728 x 362, vertically centred
 SCREEN = (52, 151, 52 + 704, 151 + 338)  # the dash picture, 704 x 338 (0.88 of 800 x 384)
+MAP_CREDIT = "Map © OpenStreetMap contributors"  # required on any picture with OSM tiles
 COLUMN_X, COLUMN_RIGHT = 800, W - 40
 
 
@@ -63,6 +67,14 @@ def bezel(canvas):
     sx0, sy0, sx1, sy1 = SCREEN
     dash = Image.open(DASH).convert("RGBA").resize((sx1 - sx0, sy1 - sy0), Image.LANCZOS)
     canvas.paste(dash, (sx0, sy0), rounded_mask(dash.size, 10))
+
+
+def map_credit(canvas, fonts):
+    """The OpenStreetMap credit under the bezel, inside the 40 px safe margin."""
+    credit = font(fonts, "Inter-Medium.otf", 18)
+    draw = ImageDraw.Draw(canvas)
+    draw.text((BEZEL[0] + 12, BEZEL[3] + 34), MAP_CREDIT, font=credit, fill=TEXT_DIM, anchor="ls")
+    return draw.textbbox((BEZEL[0] + 12, BEZEL[3] + 34), MAP_CREDIT, font=credit, anchor="ls")
 
 
 def right_column(canvas, fonts):
@@ -114,10 +126,16 @@ def main():
 
     canvas = gradient().convert("RGBA")
     bezel(canvas)
+    credit_box = map_credit(canvas, args.fonts)
+    if credit_box[3] > H - 40 or credit_box[2] > COLUMN_X - 16:
+        sys.exit("the map credit does not fit under the dash (40 px safe margin)")
     content_right = right_column(canvas, args.fonts)
     if content_right > COLUMN_RIGHT:
         sys.exit("the text does not fit the right column (40 px safe margin)")
-    canvas.convert("RGB").save(args.out, "PNG", optimize=True)
+    # A 256-colour palette (median cut, no dithering) keeps the card small: the map frame is a palette
+    # PNG already and the background gradient has only a few colours.
+    card = canvas.convert("RGB").quantize(colors=256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+    card.save(args.out, "PNG", optimize=True)
     size = os.path.getsize(args.out)
     print(f"{os.path.relpath(args.out, ROOT)}: {W} x {H}, {size // 1024} KB")
     if size >= 1024 * 1024:
