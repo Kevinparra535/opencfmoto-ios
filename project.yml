@@ -29,6 +29,15 @@ targets:
       - path: App/Resources
         excludes:
           - "Localization/**"
+      # The licence texts travel inside the app, at the bundle root: AltStore / SideStore riders get
+      # only the IPA (AGPL-3.0, and Apache-2.0 §4(a) for the AOSP / Material Icons parts).
+      # tools/release/package_ipa.sh checks that the sideload IPA carries them.
+      - path: LICENSE
+        buildPhase: resources
+      - path: NOTICE
+        buildPhase: resources
+      - path: LICENSES/Apache-2.0.txt
+        buildPhase: resources
     dependencies:
       - package: OpenCfMotoKit
         product: OpenCfMotoCore

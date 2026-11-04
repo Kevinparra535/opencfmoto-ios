@@ -9,7 +9,9 @@
 # off). So it is signed ad hoc, with no certificate and no team, and exactly one entitlement: the
 # App Group the app declares (OCMAppGroupIdentifier). The extension first, then the app. The script
 # fails when anything else shows up: a team ID, another entitlement, an embedded provisioning
-# profile, or a signature that does not verify again after zipping.
+# profile, or a signature that does not verify again after zipping. It also fails when the IPA lacks
+# the licence texts (LICENSE, NOTICE, Apache-2.0.txt at the app's root, as project.yml bundles them):
+# riders who add the AltStore / SideStore source receive only the IPA.
 #
 #   usage: package_ipa.sh <unsigned .xcarchive> <out dir> <vX.Y.Z>
 #
@@ -19,7 +21,10 @@
 
 set -Eeuo pipefail
 
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ENT_APP_GROUPS=com.apple.security.application-groups
+# The licence texts inside the app: <name in the bundle>=<file in the repository>.
+LICENCE_FILES=(LICENSE=LICENSE NOTICE=NOTICE Apache-2.0.txt=LICENSES/Apache-2.0.txt)
 
 esc() { local s=${1//'%'/%25}; s=${s//$'\r'/%0D}; s=${s//$'\n'/%0A}; printf '%s' "$s"; }
 die() {
@@ -134,6 +139,16 @@ mkdir "$WORK/unzipped"
 (cd "$WORK/unzipped" && unzip -q "$OUT/$IPA_NAME")
 codesign --verify --deep --strict "$WORK/unzipped/Payload/OpenCfMoto.app" 2>&1 \
   || die "The signature does not verify in the zipped IPA (a file changed while zipping?)."
+# The licence texts, byte for byte the repository's (project.yml copies them into the app).
+found=""
+for pair in "${LICENCE_FILES[@]}"; do
+  name=${pair%%=*} src=${pair#*=}
+  inside="$WORK/unzipped/Payload/OpenCfMoto.app/$name"
+  [ -f "$inside" ] || die "The IPA lacks Payload/OpenCfMoto.app/$name (the $src text): check project.yml's resources."
+  cmp -s "$inside" "$ROOT/$src" || die "Payload/OpenCfMoto.app/$name differs from the repository's $src."
+  found="$found $name ($(wc -c < "$inside" | tr -d ' ') bytes)"
+done
+note "licence texts in the IPA, identical to the repository's:$found"
 
 # 6. SHA256SUMS.txt (the format of `shasum -a 256` and `sha256sum`) and the step outputs.
 (cd "$OUT" && shasum -a 256 "$IPA_NAME" > SHA256SUMS.txt)

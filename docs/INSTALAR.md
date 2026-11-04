@@ -182,8 +182,9 @@ Alexandru Popa (zanderp) y la comunidad open-cfmoto.
 
 Cada IPA se publica junto a su código fuente correspondiente: la etiqueta `vX.Y.Z` de la release es
 exactamente el commit con el que se compiló, y GitHub ofrece su «Source code» (zip y tar.gz) en la
-misma página, con `LICENSE.txt` y `NOTICE.txt`. Ese código sigue disponible mientras se ofrezca el
-IPA. Si modificas la app y la distribuyes, tienes que ofrecer tu código fuente bajo la misma licencia.
+misma página, con `LICENSE.txt`, `NOTICE.txt` y `LICENSE-Apache-2.0.txt` (la licencia Apache 2.0 de
+las partes del Android Open Source Project y de los iconos Material). Los tres textos van también
+dentro del IPA. Ese código sigue disponible mientras se ofrezca el IPA. Si modificas la app y la distribuyes, tienes que ofrecer tu código fuente bajo la misma licencia.
 
 ## Avisos
 
@@ -375,8 +376,9 @@ Alexandru Popa (zanderp) and the open-cfmoto community.
 
 Every IPA is published next to its Corresponding Source: the release's `vX.Y.Z` tag is exactly the
 commit it was built from, and GitHub offers its "Source code" (zip and tar.gz) on the same page,
-together with `LICENSE.txt` and `NOTICE.txt`. That source stays available for as long as the IPA is
-offered. If you modify the app and distribute it, you must offer your source code under the same
+together with `LICENSE.txt`, `NOTICE.txt` and `LICENSE-Apache-2.0.txt` (the Apache License 2.0 of the
+Android Open Source Project and Material Icons parts). The three texts are inside the IPA too. That
+source stays available for as long as the IPA is offered. If you modify the app and distribute it, you must offer your source code under the same
 license.
 
 ### Disclaimers

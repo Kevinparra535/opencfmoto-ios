@@ -16,7 +16,9 @@ WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
 PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
 
 The full list of the people, projects and services this app builds on is in
-CREDITS.md. The Apache License 2.0 text is in LICENSES/Apache-2.0.txt.
+CREDITS.md. The Apache License 2.0 text is in LICENSES/Apache-2.0.txt (in a
+release: LICENSE-Apache-2.0.txt next to the IPA, and Apache-2.0.txt inside the
+app, next to this NOTICE and the LICENSE).
 
 --------------------------------------------------------------------------------
 Derived work
@@ -99,7 +101,8 @@ For this iOS port:
     Michael Reid (mikereidis): https://github.com/mikereidis/headunit
 
 --------------------------------------------------------------------------------
-Apache License 2.0 components (see LICENSES/Apache-2.0.txt)
+Apache License 2.0 components (see LICENSES/Apache-2.0.txt; in a release,
+LICENSE-Apache-2.0.txt next to the IPA and Apache-2.0.txt inside the app)
 --------------------------------------------------------------------------------
 
 These parts are licensed under the Apache License, Version 2.0, and are combined

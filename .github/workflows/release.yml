@@ -7,8 +7,9 @@
 #                   (tools/release/build_ipa.sh); the IPA, signed ad hoc with only the App Group
 #                   entitlement, and SHA256SUMS.txt (tools/release/package_ipa.sh); the AltStore /
 #                   SideStore source and the release notes, read from that IPA
-#                   (tools/release/altsource.py); LICENSE.txt and NOTICE.txt. All of it is this
-#                   run's artifact (14 days): a dry run by default.
+#                   (tools/release/altsource.py); LICENSE.txt, NOTICE.txt and LICENSE-Apache-2.0.txt
+#                   (the IPA carries the same three texts: package_ipa.sh checks them). All of it is
+#                   this run's artifact (14 days): a dry run by default.
 #   draft (Linux)   only from main and with «draft_release» ticked: a DRAFT GitHub Release of this
 #                   commit with those files. Nothing is published here: check the draft (files,
 #                   SHA-256, notes), then publish it by hand. Publishing creates the tag at this
@@ -120,6 +121,8 @@ jobs:
             --source-out "$out/altstore-source.json" --notes-out "$out/RELEASE_NOTES.md"
           cp LICENSE "$out/LICENSE.txt"
           cp NOTICE "$out/NOTICE.txt"
+          # Apache-2.0 §4(a): the AOSP / Material Icons parts of the app ship with their licence.
+          cp LICENSES/Apache-2.0.txt "$out/LICENSE-Apache-2.0.txt"
           (cd "$out" && shasum -a 256 -c SHA256SUMS.txt)
           ls -l "$out"
 
@@ -175,7 +178,7 @@ jobs:
         run: |
           set -euo pipefail
           cd out
-          for f in "$IPA" SHA256SUMS.txt altstore-source.json RELEASE_NOTES.md LICENSE.txt NOTICE.txt; do
+          for f in "$IPA" SHA256SUMS.txt altstore-source.json RELEASE_NOTES.md LICENSE.txt NOTICE.txt LICENSE-Apache-2.0.txt; do
             [ -s "$f" ] || { echo "::error title=Release::falta / missing: $f"; exit 1; }
           done
           [ "$IPA" = "OpenCfMoto-$VERSION-sideload.ipa" ] || { echo "::error title=Release::unexpected IPA name: $IPA"; exit 1; }
@@ -203,7 +206,8 @@ jobs:
           fi
           gh release create "$VERSION" -R "$GITHUB_REPOSITORY" --draft --target "$GITHUB_SHA" \
             --title "OpenCfMoto for iOS $VERSION (sideload)" --notes-file out/RELEASE_NOTES.md \
-            "out/$IPA" out/SHA256SUMS.txt out/altstore-source.json out/LICENSE.txt out/NOTICE.txt
+            "out/$IPA" out/SHA256SUMS.txt out/altstore-source.json out/LICENSE.txt out/NOTICE.txt \
+            out/LICENSE-Apache-2.0.txt
           {
             echo "## Borrador de release / Draft release $VERSION"
             echo

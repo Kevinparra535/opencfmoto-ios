@@ -376,9 +376,13 @@ def release_notes(ipa: dict, args, version: str) -> str:
         "",
         "### Licencia / License",
         "Software libre bajo la GNU AGPL v3 o posterior (`LICENSE.txt`, `NOTICE.txt`), port para iOS de "
-        f"[OpenCfMoto]({UPSTREAM}) (Android) de Alexandru Popa (zanderp) y la comunidad open-cfmoto. / Free "
+        f"[OpenCfMoto]({UPSTREAM}) (Android) de Alexandru Popa (zanderp) y la comunidad open-cfmoto; partes "
+        "© The Android Open Source Project e iconos Material de Google, bajo la licencia Apache 2.0 "
+        "(`LICENSE-Apache-2.0.txt`). Los tres textos van también dentro del IPA. / Free "
         f"software under the GNU AGPL v3 or later (`LICENSE.txt`, `NOTICE.txt`): an iOS port of "
-        f"[OpenCfMoto]({UPSTREAM}) (Android) by Alexandru Popa (zanderp) and the open-cfmoto community.",
+        f"[OpenCfMoto]({UPSTREAM}) (Android) by Alexandru Popa (zanderp) and the open-cfmoto community; "
+        "portions © The Android Open Source Project and Material Icons by Google, under the Apache License "
+        "2.0 (`LICENSE-Apache-2.0.txt`). The three texts are inside the IPA too.",
         "",
         "### Avisos / Disclaimers",
         "- **ES:** proyecto comunitario independiente, sin afiliación con CFMOTO, Carbit, Apple ni ninguna marca de "

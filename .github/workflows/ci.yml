@@ -397,8 +397,8 @@ jobs:
   # the runner): the FREE flavour (no Hotspot / Access Wi-Fi Information entitlements: what a free
   # Apple ID can sign, also the README's Personal Team build) as an unsigned Release archive for
   # iPhone with the newest Xcode, linted (tools/release/build_ipa.sh); the IPA signed ad hoc with
-  # only the App Group, no team (tools/release/package_ipa.sh checks both); the AltStore /
-  # SideStore source read from that IPA (tools/release/altsource.py).
+  # only the App Group, no team, carrying the licence texts (tools/release/package_ipa.sh checks
+  # all three); the AltStore / SideStore source read from that IPA (tools/release/altsource.py).
   sideload:
     name: Sideload IPA dry run (free flavour, newest Xcode)
     runs-on: macos-15
