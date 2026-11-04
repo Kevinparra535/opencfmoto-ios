@@ -1478,7 +1478,8 @@ class PrepareTest(AscTest):
         title, message = self.annotation(proc, "notice")
         self.assertIn("Restos", title)
         self.assertIn(f"OpenCfMoto CI r{REPO_ID}-77-1 mirror", message)
-        self.assertIn(f"certificado «Apple Distribution» que caduca el 2027-11-01 (id {cert})", message)
+        self.assertIn("certificado «Apple Distribution» que caduca el 2027-11-01, perfil", message)
+        self.assertNotIn(cert, proc.stdout)
         self.assertEqual(self.outputs()["ready"], "false")
         self.assertEqual(self.annotations(proc, "error"), [])
 
@@ -1606,10 +1607,13 @@ class JanitorTest(AscTest):
         self.assertTrue(all("limit" not in c.query for c in links))
         title, message = self.annotation(proc, "notice")
         self.assertIn("Restos borrados", title)
-        for needle in (f"{self.OURS}-41-1 app", f"«Apple Distribution» que caduca el 2027-11-01 (id {ci_cert})",
+        for needle in (f"{self.OURS}-41-1 app", "«Apple Distribution» que caduca el 2027-11-01, perfil",
                        "No tienes que hacer nada", "Nothing to do"):
             self.assertIn(needle, message)
         self.assertEqual(self.annotations(proc, "warning"), [])
+        # What went is named by type, date and name; no id reaches the public log.
+        for resource_id in (ci_cert, app, mirror):
+            self.assertNotIn(resource_id, proc.stdout)
 
     def test_nothing_left_is_quiet(self):
         self.fake.add_profile("My App Store profile", [self.fake.add_cert(KEYS.cert_der)])
@@ -1658,7 +1662,7 @@ class JanitorTest(AscTest):
         self.assertEqual(set(f.profiles), {app, mirror})
         title, message = self.annotation(proc, "warning")
         self.assertEqual(title, "Limpieza incompleta / Cleanup incomplete")
-        for needle in (f"(id {cert}): DELETE /v1/certificates/{cert} → HTTP 409",
+        for needle in (f"(id {cert}): DELETE /v1/certificates/… → HTTP 409",
                        f"se conservan sus perfiles «{self.OURS}-112-1 app» y «{self.OURS}-112-1 mirror» para que "
                        "la próxima ejecución lo encuentre",
                        f"its profiles «{self.OURS}-112-1 app» and «{self.OURS}-112-1 mirror» are kept so that "
@@ -1671,7 +1675,8 @@ class JanitorTest(AscTest):
         self.assertEqual((f.profiles, f.certificates), ({}, {}))
         title, message = self.annotation(proc, "notice")
         self.assertIn("Restos borrados", title)
-        self.assertIn(f"(id {cert})", message)
+        self.assertIn("«Apple Distribution» que caduca el", message)
+        self.assertNotIn(cert, proc.stdout)                              # gone: no id to look for
         self.assertEqual(self.annotations(proc, "warning"), [])
 
     def test_missing_secrets_warn_and_exit_0(self):
@@ -1959,13 +1964,16 @@ class CreateSigningTest(AscTest):
         self.assertEqual(self.alive(), [first, second])
         title, message = self.annotation(proc, "warning")
         self.assertEqual(title, "Limpieza incompleta / Cleanup incomplete")
-        for needle in (f"No se pudo revocar un certificado duplicado de esta ejecución (DELETE /v1/certificates/{first} → "
+        for needle in ("No se pudo revocar un certificado duplicado de esta ejecución (DELETE /v1/certificates/… → "
                        "HTTP 500", "El paso «Clean up» lo intenta otra vez", asc.AFTER_FINISH_ES,
-                       f"Could not revoke a duplicate certificate of this run (DELETE /v1/certificates/{first}",
+                       "Could not revoke a duplicate certificate of this run (DELETE /v1/certificates/…",
                        asc.AFTER_FINISH_EN):
             self.assertIn(needle, message)
-        for wrong in ("Revoca a mano lo que quede", f"/{second}", f"id {second}"):
+        # No id at all: the request line and the API error show «…» instead (the log is public).
+        for wrong in ("Revoca a mano lo que quede", first, second):
             self.assertNotIn(wrong, message)
+        self.assertNotIn(first, proc.stdout)
+        self.assertNotIn(second, proc.stdout)
         self.assertEqual(self.annotations(proc, "error"), [])
 
     def test_a_failing_list_after_the_second_request_leaves_the_duplicate_to_the_teardown(self):
@@ -2936,6 +2944,102 @@ class CleanupTest(AscTest):
 
 
 # ---------------------------------------------------------------- build_and_sign.sh steps
+
+class RedactApiPathTest(unittest.TestCase):
+    def test_ids_and_query_values_are_never_shown(self):
+        for path, shown in (
+                ("/v1/certificates/CERTID12345", "/v1/certificates/…"),
+                ("/v1/profiles/PROFID67890", "/v1/profiles/…"),
+                ("/v1/bundleIds/B0001/bundleIdCapabilities", "/v1/bundleIds/…/bundleIdCapabilities"),
+                ("/v1/profiles/P1/relationships/certificates?limit=200",
+                 "/v1/profiles/…/relationships/certificates?limit=…"),
+                ("/v1/apps/1234567890/buildUploads?filter[cfBundleVersion]=7&limit=200",
+                 "/v1/apps/…/buildUploads?filter[cfBundleVersion]=…&limit=…"),
+                ("/v1/apps?filter[bundleId]=com.t.opencfmoto", "/v1/apps?filter[bundleId]=…"),
+                ("/v1/profiles?filter[name]=OpenCfMoto%20CI%20r123-1-1%20app&include=certificates",
+                 "/v1/profiles?filter[name]=…&include=…"),
+                ("/v2/appStoreVersionExperiments/X1", "/v2/appStoreVersionExperiments/…"),
+                ("/v1/apps", "/v1/apps"),
+                ("/v1/certificates", "/v1/certificates"),
+                ("/v1/buildUploads?", "/v1/buildUploads?")):
+            self.assertEqual(asc.redact_api_path(path), shown, path)
+
+
+class PublicLogIdsTest(AscTest):
+    """The log and the step summary are public: request lines and API errors show no resource id
+    and no query value, and the summaries name what was made by type and name. Ids show only where
+    the owner may have to revoke or delete something by hand (manual_revoke and the cleanup
+    warnings), never the team ID."""
+
+    def seed(self):
+        f = self.fake
+        app, mirror = f.add_bundle(APP_BID), f.add_bundle(MIRROR_BID)
+        f.capabilities[app["id"]] = ["APP_GROUPS", "HOT_SPOT", "ACCESS_WIFI_INFORMATION"]
+        f.capabilities[mirror["id"]] = ["APP_GROUPS"]
+        f.assigned_groups = {APP_BID: [GROUP], MIRROR_BID: [GROUP]}
+        f.add_app(APP_BID, APP_ID)
+        return app["id"], mirror["id"]
+
+    def public_text(self, proc):
+        summary = self.summary() if os.path.exists(self.step_summary) else ""
+        return proc.stdout + proc.stderr + summary
+
+    def assert_no_ids(self, proc, ids):
+        text = self.public_text(proc)
+        for resource_id in ids:
+            self.assertTrue(resource_id)
+            self.assertNotIn(resource_id, text, f"id {resource_id!r} printed:\n{self.transcript(proc)}")
+
+    def test_prepare_names_the_app_record_without_its_id(self):
+        app, mirror = self.seed()
+        proc = self.run_asc("prepare", "--prefix", PREFIX, "--project-yml", self.project_yml)
+        self.assertEqual(self.outputs()["app_id"], APP_ID)            # the next jobs still get it
+        self.assert_no_ids(proc, [APP_ID, app, mirror, TEAM])
+        self.assertIn("| App en App Store Connect / app record | encontrada / found |", self.summary())
+        self.assertIn("  GET /v1/bundleIds/…/bundleIdCapabilities -> 200", proc.stdout)
+
+    def test_signing_upload_and_cleanup_print_no_ids(self):
+        app, mirror = self.seed()
+        out_dir = os.path.join(self.tmp, "signing")
+        proc = self.run_asc("create-signing", "--app-bundle-resource-id", app, "--mirror-bundle-resource-id", mirror,
+                            "--app-bundle-id", APP_BID, "--mirror-bundle-id", MIRROR_BID, "--app-group", GROUP,
+                            "--out", out_dir, "--suffix", "4242-1")
+        out = self.outputs()
+        made = [out["cert_id"], out["profile_app_id"], out["profile_mirror_id"], out["profile_app_uuid"],
+                out["profile_mirror_uuid"]]
+        self.assert_no_ids(proc, [app, mirror, TEAM] + made)
+        summary = self.summary()
+        self.assertIn("| Certificado / certificate | Apple Distribution (temporal, de esta ejecución / "
+                      "temporary, this run's) |", summary)
+        self.assertIn("| Perfil / profile (app) | OpenCfMoto CI 4242-1 app — App Group: sí / yes", summary)
+
+        ipa = os.path.join(self.tmp, "OpenCfMoto.ipa")
+        with open(ipa, "wb") as fh:
+            fh.write(bytes(range(256)) * 4)
+        proc = self.run_asc("upload", "--ipa", ipa, "--app-id", APP_ID, "--version", "2.3.4", "--build", "7")
+        self.assertEqual(self.outputs()["uploaded"], "true")
+        self.assert_no_ids(proc, [APP_ID, self.outputs()["upload_id"], *self.fake.upload_files] + made)
+
+        proc = self.run_asc("cleanup", "--state", os.path.join(out_dir, "state.json"))
+        self.assertEqual(self.annotations(proc, "warning"), [])
+        self.assert_no_ids(proc, made)
+        self.assertIn("revocado o borrado / revoked or deleted: profile, profile, certificate.", self.summary())
+        self.assertIn("  DELETE /v1/certificates/… -> 204", proc.stdout)
+
+    def test_ids_only_in_what_the_owner_revokes_by_hand(self):
+        self.fake.certificates = {"C1": {}}
+        self.fake.profiles = {"P1": {}}
+        self.fake.fail("DELETE", "/v1/certificates/C1", 500, error_doc(500, "UNEXPECTED_ERROR", "boom"), times=99)
+        proc = self.run_asc("cleanup", "--cert-id", "C1", "--profile-ids", "P1")
+        title, message = self.annotation(proc, "warning")
+        self.assertEqual(title, "Limpieza incompleta / Cleanup incomplete")
+        self.assertIn("certificate C1: DELETE /v1/certificates/… → HTTP 500", message)
+        self.assertIn("(id C1)", message)                              # how to find it by hand
+        self.assertNotIn("/v1/certificates/C1", proc.stdout)
+        self.assertNotIn("P1", message)                                # deleted: nothing to look for
+        self.assertNotIn("/v1/profiles/P1", proc.stdout)
+        self.assertIn("revocado o borrado / revoked or deleted: profile.", self.summary())
+
 
 class ScriptTest(AscTest):
     """Runs shell code with /bin/bash (3.2 on macOS, as on the TestFlight runner) and a python3 on

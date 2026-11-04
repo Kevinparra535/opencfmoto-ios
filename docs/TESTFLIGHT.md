@@ -185,8 +185,16 @@ Lo que el workflow resuelve solo:
   repositorio lo es. No se publica ningún archivo de la app como artefacto.
 - Tampoco aparece quién firma: el certificado de Apple lleva el nombre legal del titular de la cuenta
   y el Team ID, así que el workflow solo cuenta la identidad de firma y tapa ese nombre y el Team ID
-  en los mensajes de Xcode que muestra. `asc.py` tampoco repite en el registro el valor de sus
-  salidas (equipo, identificadores, certificado, perfiles): solo su nombre.
+  en los mensajes de Xcode que muestra. El Team ID y el nombre del titular no se imprimen nunca.
+- Lo que sí se ve en el registro: los identificadores de la app y de la extensión (bundle ids), el App
+  Group, los nombres de los perfiles «OpenCfMoto CI …», la versión y el número de compilación. Cada
+  petición a la API aparece con su ruta, pero con cada id de recurso y cada valor de la consulta
+  cambiados por «…», y los resúmenes nombran lo creado o borrado por su tipo, nombre y fecha. Los ids
+  de App Store Connect (certificado, perfiles) solo aparecen cuando quizá tengas que revocar o borrar
+  algo a mano, y dentro de los propios mensajes de error de Apple. Además, GitHub muestra en la
+  cabecera de cada paso las variables de entorno que el workflow pasa entre trabajos: ahí se ven los
+  ids de la app en App Store Connect, de los identificadores de paquete, del certificado y de los
+  perfiles. No son secretos: sin tu clave de API no sirven de nada.
 - Si crees que la clave se filtró, revócala en App Store Connect (paso 1) y crea otra.
 - **Solo pruebas internas, para ti.** La licencia AGPL del proyecto original es difícil de
   compatibilizar con las condiciones de la App Store. Distribuir la app a otras personas, ya sea con
@@ -253,9 +261,16 @@ table under [Si algo falla](#si-algo-falla) lists the usual titles.
 Builds expire after 90 days: start a new run to keep using the app.
 
 The logs are public, so they show neither the key nor who signs: the signing identity (the account
-holder's legal name and team ID) is only counted, Xcode's messages are shown with that name and the
-team ID blanked out, and `asc.py` logs only the names of its outputs (team, identifiers, certificate,
-profiles), not their values.
+holder's legal name and team ID) is only counted, and Xcode's messages are shown with that name and
+the team ID blanked out. The team ID and the account holder's name are never printed. What the logs
+do show: the app's and the extension's bundle identifiers, the App Group, the «OpenCfMoto CI …»
+profile names, the version and the build number. Each API request is shown with its path, but with
+every resource id and query value replaced by «…», and the summaries name what was created or removed
+by type, name and date. App Store Connect ids (certificate, profiles) appear only where you may have to
+revoke or delete something by hand, and inside Apple's own error messages. GitHub also lists, in each
+step's header, the environment variables the workflow passes between jobs: the ids of the App Store
+Connect app record, of the bundle identifiers, of the certificate and of the profiles show there. They
+are not secrets: they are useless without your API key.
 
 Internal testing only: distributing the app to anyone else needs permission from the upstream AGPL
 copyright holders. To let others try it, there is the sideload IPA on Releases, which each rider signs

@@ -25,7 +25,7 @@ spaces, a one-line paste or literal "\\n" sequences are tolerated) or ASC_PRIVAT
 Optional: ASC_API_BASE (tests), ASC_POLL_SCALE (tests: multiplies every wait and timeout),
 ASC_OPENSSL (openssl binary). GITHUB_OUTPUT / GITHUB_STEP_SUMMARY receive key=value outputs and a
 Markdown summary when set. Outputs are echoed to stdout too: states and numbers as key=value
-lines, identifiers (team, ids, profiles...) by name only, as the log is public.
+lines, identifiers (team, App Store Connect ids, profiles...) by name only, as the log is public.
 GITHUB_REPOSITORY_ID, GITHUB_RUN_ID and GITHUB_RUN_ATTEMPT (set by GitHub Actions) name the CI
 profiles and tell the janitor which of them belong to this repository.
 
@@ -33,8 +33,19 @@ Exit codes: 0 ok, 1 failed (reason in an ::error annotation, Spanish then Englis
 3 upload refused before the file was committed (the workflow falls back to `xcrun altool`),
 4 the new provisioning profiles lack the App Group (owner action on developer.apple.com).
 
-The repository is public, so logs and summaries are too: request bodies (CSR) and responses
-(certificate / profile content, user e-mails) are never printed, and the JWT is masked.
+The repository is public, so logs and summaries are too. What this script prints:
+- never: the team ID, the account holder's name (build_and_sign.sh only counts the signing
+  identity), the key, the JWT (masked), request bodies (the CSR) and responses (certificate and
+  profile content, user e-mails), presigned upload URLs;
+- request lines and API errors: the method, the path with every resource id and every query value
+  replaced by «…» (redact_api_path) and the status; summaries name what was made or removed by
+  type, name and date;
+- App Store Connect ids (certificates, profiles) only where the owner may have to revoke or delete
+  something by hand (manual_revoke and the cleanup warnings), and inside Apple's own error texts,
+  which can quote one;
+- as they are: bundle identifiers, the App Group, profile names, the version, build numbers, states.
+The workflow passes ids between its jobs as outputs; GitHub lists them in the env of the steps that
+use them (docs/TESTFLIGHT.md says so).
 """
 from __future__ import annotations
 
@@ -139,6 +150,22 @@ def _esc_prop(text) -> str:
 
 def log(message: str = "") -> None:
     print(message, flush=True)
+
+
+# The resource id after an API collection: /v1/certificates/<id>, /v1/bundleIds/<id>/bundleIdCapabilities…
+_API_PATH_ID_RE = re.compile(r"^(/v[0-9]+/[A-Za-z]+/)[^/?]+")
+
+
+def redact_api_path(path: str) -> str:
+    """An API path as the public log shows it (request lines, API errors): the resource id after the
+    collection becomes «…», and so does every query value (filters name bundle ids, ids, versions;
+    links.next carries cursors). "/v1/profiles/ABC/relationships/certificates?limit=200" →
+    "/v1/profiles/…/relationships/certificates?limit=…"."""
+    head, sep, query = path.partition("?")
+    head = _API_PATH_ID_RE.sub("\\1…", head)
+    if not sep:
+        return head
+    return head + "?" + "&".join(f"{part.split('=', 1)[0]}=…" for part in query.split("&") if part)
 
 
 def annotate(level: str, title: str, message: str) -> None:
@@ -542,7 +569,7 @@ class Client:
         if idempotent is None:
             idempotent = method in ("GET", "DELETE")
         url = self.url(path, params)
-        shown = url[len(self.base):]
+        shown = redact_api_path(url[len(self.base):])   # the log is public: no ids, no query values
         data = json.dumps(body).encode("utf-8") if body is not None else None
         attempt, refreshed = 0, False
         while True:
@@ -989,7 +1016,7 @@ def cmd_prepare(args) -> int:
                        ((app_bid, app_added), (mirror_bid, mirror_added)) if caps) or "—"),
             ("App Group", f"`{group}` (la API no puede comprobarlo / the API cannot check it)"),
             ("App en App Store Connect / app record",
-             f"`{app_id}`" if app else "falta / missing"),
+             "encontrada / found" if app else "falta / missing"),
             ("Versión / version", marketing)]
     summary = "### TestFlight · preparar / prepare\n\n" + md_table(rows)
 
@@ -1119,11 +1146,13 @@ def sweep_leftovers(client: Client, run_id: str = ""):
     removed, problems, unrevoked = [], [], set()
     for cert_id in _unique(c for p in ci for c in links[p["id"]]):
         if cert_id in in_use:
-            log(f"Certificate {cert_id} is also in another profile: not revoked")
+            log("A certificate is also in another profile: not revoked")
             continue
         when = expiry.get(cert_id)
-        es = f"certificado «Apple Distribution»{f' que caduca el {when}' if when else ''}{_ids([cert_id])}"
-        en = f"«Apple Distribution» certificate{f' expiring {when}' if when else ''}{_ids([cert_id])}"
+        # The id only in the problem texts, which say how to do it by hand (the portal's list shows
+        # the type and the expiry date; the id tells two of a day apart).
+        es = f"certificado «Apple Distribution»{f' que caduca el {when}' if when else ''}"
+        en = f"«Apple Distribution» certificate{f' expiring {when}' if when else ''}"
         try:
             client.request("DELETE", f"/v1/certificates/{cert_id}")
             removed.append((es, en))
@@ -1132,6 +1161,7 @@ def sweep_leftovers(client: Client, run_id: str = ""):
                 unrevoked.add(cert_id)
                 kept = [f"«{names[p['id']]}»" for p in ci if cert_id in links[p["id"]]]
                 one = len(kept) == 1
+                es, en = es + _ids([cert_id]), en + _ids([cert_id])
                 problems.append((
                     f"{es}: {err.describe()}; se {'conserva su perfil' if one else 'conservan sus perfiles'} "
                     f"{_joined(kept, 'y')} para que la próxima ejecución lo encuentre",
@@ -1346,7 +1376,7 @@ def adopt_certificate(client: Client, mine: list, chosen: dict = None) -> dict:
             continue
         try:
             client.request("DELETE", f"/v1/certificates/{extra['id']}")
-            log(f"Revoked the duplicate certificate {extra['id']}")
+            log("Revoked a duplicate certificate of this run")
         except ApiError as err:
             if err.status != 404:
                 report("warning", "Limpieza incompleta / Cleanup incomplete",
@@ -1615,7 +1645,7 @@ def cmd_create_signing(args) -> int:
     # 4. The entitlements Apple put in the profiles. App Groups cannot be created or assigned to
     #    an App ID through the API, so a missing group is the owner's one-time web step.
     rows, missing_group, missing_other = [], [], []
-    for role, bundle_id, name, uuid, plist in created:
+    for role, bundle_id, name, _uuid, plist in created:   # the UUID stays out of the summary
         ents = plist.get("Entitlements") or {}
         groups = ents.get(ENT_APP_GROUPS) or []
         groups = [groups] if isinstance(groups, str) else list(groups)
@@ -1629,10 +1659,11 @@ def cmd_create_signing(args) -> int:
                 flags.append(f"{label}: {'sí / yes' if present else 'NO'}")
                 if not present:
                     missing_other.append(f"`{bundle_id}`: {key}")
-        rows.append((f"Perfil / profile ({role})", f"{name} (`{uuid}`) — {', '.join(flags)}"))
+        rows.append((f"Perfil / profile ({role})", f"{name} — {', '.join(flags)}"))
 
     summary = "### TestFlight · firma / signing\n\n" + md_table(
-        [("Certificado / certificate", f"`{cert_id}` (Apple Distribution)")] + rows)
+        [("Certificado / certificate", "Apple Distribution (temporal, de esta ejecución / temporary, this run's)")]
+        + rows)
     if missing_group or missing_other:
         es_parts, en_parts = [], []
         if missing_group:
@@ -1777,9 +1808,9 @@ def upload_refused(client: Client, upload_id: str, reason: str, err: ApiError = 
     if upload_id:
         try:
             client.request("DELETE", f"/v1/buildUploads/{upload_id}")
-            log(f"Deleted the unfinished build upload {upload_id}")
+            log("Deleted the unfinished build upload")
         except (ApiError, Failure) as exc:
-            log(f"(could not delete the build upload {upload_id}: {exc})")
+            log(f"(could not delete the unfinished build upload: {exc})")
     es = (f"La API de subida de builds de Apple rechazó la subida antes de completarla: {reason}. "
           "El workflow lo intenta ahora con «xcrun altool».")
     en = (f"Apple's Build Upload API refused the upload before it was committed: {reason}. The "
@@ -1983,7 +2014,7 @@ def wait_for_upload(client: Client, upload_id: str, args, marker: str = "") -> i
             log(f"  (status check failed, trying again: {err.describe()})")
         if state in ("COMPLETE", "FAILED") or time.monotonic() >= deadline:
             break
-        log(f"  build upload {upload_id}: {state or '?'}")
+        log(f"  build upload: {state or '?'}")
         pause(UPLOAD_POLL_SEC)
     for info in details.get("infos") or []:
         log(f"  info: {_state_detail(info)}")
@@ -2321,10 +2352,10 @@ def _cleanup(args, known: dict, suffix: str = "") -> int:
                 tried.add((kind, resource_id))
                 try:
                     client.request("DELETE", template.format(resource_id))
-                    done.append(f"{kind} `{resource_id}`")
+                    done.append(kind)       # no id: nothing is left to look for by hand
                 except ApiError as err:
                     if err.status == 404:
-                        done.append(f"{kind} `{resource_id}` (ya no existía / already gone)")
+                        done.append(f"{kind} (ya no existía / already gone)")
                     else:
                         failed.append((kind, resource_id, f"{kind} {resource_id}: {err.describe()}"))
 
@@ -2358,7 +2389,7 @@ def _cleanup(args, known: dict, suffix: str = "") -> int:
                 break
             for cert in listed:
                 if cert["id"] not in cert_ids:
-                    log(f"Certificate {cert['id']} was made from this run's key: revoking it too")
+                    log("Another certificate was made from this run's key: revoking it too")
                     cert_ids.append(cert["id"])
             revoke_known()
     revoke_known()      # no CSR, or a listing that failed: the recorded ids go all the same
@@ -2434,7 +2465,7 @@ def cleanup_duplicates(args) -> int:
         try:
             client.request("DELETE", f"/v1/certificates/{cert_id}")
             revoked.append(cert_id)
-            log(f"Revoked the duplicate certificate {cert_id} (the build's {keep} stays)")
+            log("Revoked a duplicate certificate of this run (the build's own stays)")
         except ApiError as err:
             if err.status == 404:
                 revoked.append(cert_id)
