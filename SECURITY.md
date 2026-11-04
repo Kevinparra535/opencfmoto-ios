@@ -4,13 +4,21 @@
 
 Please report it **privately** with GitHub's
 [Report a vulnerability](https://github.com/Kevinparra535/opencfmoto-ios/security/advisories/new) form
-(the repository's **Security** tab ▸ **Report a vulnerability**). Do not open a public issue, pull
-request or discussion about it.
+(the repository's **Security** tab ▸ **Report a vulnerability**). Do not post any details in a public
+issue, pull request or discussion.
+
+If the **Report a vulnerability** button or form is unavailable, open an issue titled
+"Security contact request" (the **Bug or idea** form) with no details, and we will reply with a private
+channel.
 
 Repórtala **en privado** con el formulario
 [Report a vulnerability](https://github.com/Kevinparra535/opencfmoto-ios/security/advisories/new) de
-GitHub (pestaña **Security** del repositorio ▸ **Report a vulnerability**). No abras una incidencia, una
-pull request ni una discusión públicas sobre ella.
+GitHub (pestaña **Security** del repositorio ▸ **Report a vulnerability**). No publiques ningún detalle
+en una incidencia, una pull request ni una discusión públicas.
+
+Si no ves el botón o el formulario **Report a vulnerability**, abre una incidencia titulada
+«Security contact request» (formulario **Error o idea**) sin detalles y te responderemos con un canal
+privado.
 
 Include what you can: the app version and build (About screen), the iPhone model and iOS version, the
 bike or dash model, the steps to reproduce and what an attacker could do. Attach logs only **after

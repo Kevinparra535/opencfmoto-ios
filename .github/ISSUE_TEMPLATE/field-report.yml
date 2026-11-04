@@ -12,7 +12,7 @@ body:
 
         El registro que comparte la app (Registros ▸ Compartir) oculta las contraseñas Wi-Fi y los números de serie, pero **sigue conteniendo nombres de redes Wi-Fi (SSID), direcciones MAC y posiciones GPS**. Antes de adjuntarlo, borra o reemplaza el nombre del Wi-Fi de tu casa, el del Wi-Fi de tu moto, cualquier dirección como `AA:BB:CC:DD:EE:FF` y las coordenadas cercanas a tu casa o trabajo. Nunca publiques una foto del QR de emparejamiento del tablero: lleva la contraseña del Wi-Fi de la moto.
 
-        Security problems go to the private [vulnerability report](https://github.com/Kevinparra535/opencfmoto-ios/security/advisories/new), not here. / Los problemas de seguridad van al [reporte privado](https://github.com/Kevinparra535/opencfmoto-ios/security/advisories/new), no aquí.
+        Security problems go to the private [vulnerability report](https://github.com/Kevinparra535/opencfmoto-ios/security/advisories/new), not here (if that form is unavailable, see [SECURITY.md](https://github.com/Kevinparra535/opencfmoto-ios/blob/main/SECURITY.md)). / Los problemas de seguridad van al [reporte privado](https://github.com/Kevinparra535/opencfmoto-ios/security/advisories/new), no aquí (si no está disponible, mira [SECURITY.md](https://github.com/Kevinparra535/opencfmoto-ios/blob/main/SECURITY.md)).
   - type: input
     id: bike
     attributes:

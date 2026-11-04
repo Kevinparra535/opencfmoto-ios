@@ -2,7 +2,7 @@ blank_issues_enabled: false
 contact_links:
   - name: Security vulnerability (private) / Vulnerabilidad de seguridad (privado)
     url: https://github.com/Kevinparra535/opencfmoto-ios/security/advisories/new
-    about: Report it privately, never as a public issue. / Repórtala en privado, nunca como incidencia pública.
+    about: Report it privately; never post details in a public issue (if the form is unavailable, see SECURITY.md). / Repórtala en privado; nunca publiques detalles en una incidencia pública (si el formulario no está disponible, mira SECURITY.md).
   - name: OpenCfMoto for Android (the original app) / La app Android original
     url: https://github.com/zanderp/open-cfmoto/issues
     about: Problems with the Android app belong to the upstream project. / Los problemas de la app Android van al proyecto original.
