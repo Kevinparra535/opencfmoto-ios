@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // `-demoSeed` (with the demo services): realistic content for screenshots and manual testing — one
 // paired bike, three saved trips along DemoRoutePlayer.defaultRoute (the Bogotá loop the demo GPS
-// replays), a home place, favourites and search history, and the onboarding marked done.
+// replays), a "Demo home" inside the park the loop circles (DemoPlaces: a public spot, never anyone's
+// address), favourites (public landmarks) and search history, and the onboarding marked done.
 // Auto-connect is turned off so the Home screen is not caught in a demo "Linking…" attempt.
 // Everything goes to the in-memory stores / temp folders of `AppServices.preview`, so nothing
 // survives the process. Apple Music on the dash: `music(clock:store:)` is the fake Music app of the
@@ -27,7 +28,7 @@ enum DemoSeed {
         SettingsStore(store: store).update(forBike: nil) { $0.autoConnect = false }
 
         let places = PlacesStore(store: store)
-        places.setHome(Place(name: "Home", lat: 4.65120, lon: -74.08360), subtitle: "Teusaquillo, Bogotá")
+        places.setHome(DemoPlaces.home(), subtitle: DemoPlaces.homeSubtitle) // "Demo home" / "Casa (demo)"
         let favorites = [
             Place(name: "Parque Simón Bolívar", lat: 4.65845, lon: -74.09380, category: "park", subtitle: "Bogotá"),
             Place(name: "Monserrate", lat: 4.60574, lon: -74.05622, category: "viewpoint", subtitle: "Cerros Orientales"),

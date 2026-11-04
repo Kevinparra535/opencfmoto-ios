@@ -75,9 +75,13 @@ final class VideoTileCacheAppleTests: XCTestCase {
         return dir
     }
 
-    private func makeCache(_ server: FakeTileServer, dir: URL,
+    /// A tile server the rider configured (corridor prefetch allowed, navigation-dash.md §10.4).
+    static let customTemplate = "https://tiles.example.com/{z}/{x}/{y}.png"
+
+    private func makeCache(_ server: FakeTileServer, dir: URL, template: String = BikeSettings().tileURLTemplate,
                            nightStyle: TileNightStyle = .lightnessInvert) -> (TileImageCache, Locked<[TileCacheKey]>) {
-        let cache = TileImageCache(httpClient: server, configuration: .init(directory: dir, nightStyle: nightStyle))
+        let cache = TileImageCache(httpClient: server, configuration: .init(urlTemplate: template, directory: dir,
+                                                                            nightStyle: nightStyle))
         let loaded = Locked<[TileCacheKey]>([])
         cache.onTileLoaded = { k in loaded.withLock { $0.append(k) } }
         return (cache, loaded)
@@ -254,15 +258,51 @@ final class VideoTileCacheAppleTests: XCTestCase {
         XCTAssertEqual(renderer.stats.tilesFromParent, 2)
     }
 
-    func testPrefetchDownloadsTheCorridor() throws {
+    func testPrefetchDownloadsTheCorridorFromACustomServer() throws {
         let server = FakeTileServer()
-        let (cache, _) = makeCache(server, dir: tempDir())
+        let (cache, _) = makeCache(server, dir: tempDir(), template: Self.customTemplate)
         let n = cache.prefetch(corridor: [GeoPoint(lat: 45.0, lon: 25.0), GeoPoint(lat: 45.01, lon: 25.02)],
                                zooms: 14 ... 15, radiusMeters: 150)
         XCTAssertGreaterThan(n, 0)
         XCTAssertLessThanOrEqual(n, cache.configuration.maxPrefetchTiles)
         XCTAssertTrue(pollUntil(10) { server.requests.count == n }, "\(server.requests.count) of \(n)")
         XCTAssertTrue(pollUntil { cache.stats.downloads == n })
+        XCTAssertTrue(server.requests.allSatisfy { $0.url.host == "tiles.example.com" })
+    }
+
+    /// OSMF tile usage policy: no prefetch from the OpenStreetMap Foundation servers (the default template
+    /// and its aliases) — not one request, while a visible tile still loads.
+    func testNoPrefetchFromTheOSMFServers() throws {
+        for template in [BikeSettings().tileURLTemplate, "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png"] {
+            let server = FakeTileServer()
+            let (cache, loaded) = makeCache(server, dir: tempDir(), template: template)
+            let n = cache.prefetch(corridor: [GeoPoint(lat: 45.0, lon: 25.0), GeoPoint(lat: 45.01, lon: 25.02)],
+                                   zooms: 14 ... 17, radiusMeters: 250)
+            XCTAssertEqual(n, 0, template)
+            cache.request(z: 14, x: 1, y: 2)
+            XCTAssertTrue(pollUntil { loaded.current.contains(TileCacheKey(z: 14, x: 1, y: 2)) }, template)
+            Thread.sleep(forTimeInterval: 0.3)
+            XCTAssertEqual(server.requests.map(\.url.path), ["/14/1/2.png"], "\(template): only the visible tile")
+            XCTAssertEqual(cache.stats.prefetchQueued, 0, template)
+        }
+    }
+
+    /// A corridor queued for a custom server is dropped when the template becomes an OSMF one: none of it
+    /// is ever fetched from the new server.
+    func testAQueuedCorridorNeverMovesToTheOSMFServer() throws {
+        let server = FakeTileServer()
+        server.delay = 0.2 // two downloads at a time: the rest of the corridor waits in the queue
+        let (cache, _) = makeCache(server, dir: tempDir(), template: Self.customTemplate)
+        let n = cache.prefetch(corridor: [GeoPoint(lat: 45.0, lon: 25.0), GeoPoint(lat: 45.05, lon: 25.08)],
+                               zooms: 14 ... 16, radiusMeters: 250)
+        XCTAssertGreaterThan(n, 4)
+        XCTAssertTrue(pollUntil { !server.requests.isEmpty })
+        cache.urlTemplate = BikeSettings().tileURLTemplate
+        Thread.sleep(forTimeInterval: 1)
+        XCTAssertFalse(server.requests.contains { $0.url.host == "tile.openstreetmap.org" }, "\(server.requests.map(\.url))")
+        XCTAssertLessThan(server.requests.count, n, "the rest of the corridor was dropped")
+        XCTAssertEqual(cache.prefetch(corridor: [GeoPoint(lat: 45.0, lon: 25.0), GeoPoint(lat: 45.01, lon: 25.02)],
+                                      zooms: 14 ... 15, radiusMeters: 150), 0, "and the OSMF server gets no new one")
     }
 
     func testTemplateChangeDropsMemory() throws {

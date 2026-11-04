@@ -144,11 +144,22 @@ public struct DashSVGExporter: Sendable {
         }
         return lines.compactMap { line in
             guard !line.text.isEmpty else { return nil }
-            var a = "<text x=\"\(Self.n(line.origin.x))\" y=\"\(Self.n(line.origin.y))\" \(common) xml:space=\"preserve\""
+            let body = runs(line.text)
+            // Centred / right-aligned lines are anchored at their centre / end: a rasteriser that ignores
+            // `textLength` (cairosvg) draws the font's natural width, which then stays centred / inside the
+            // rect instead of running off its right side; with `textLength` the result is the same. A line
+            // with fallback-font runs keeps its start (cairosvg would anchor each run on its own).
+            let anchor: String
+            switch body.contains("<tspan") ? .left : style.alignment {
+            case .left: anchor = "x=\"\(Self.n(line.origin.x))\""
+            case .center: anchor = "x=\"\(Self.n(line.origin.x + line.width / 2))\" text-anchor=\"middle\""
+            case .right: anchor = "x=\"\(Self.n(line.origin.x + line.width))\" text-anchor=\"end\""
+            }
+            var a = "<text \(anchor) y=\"\(Self.n(line.origin.y))\" \(common) xml:space=\"preserve\""
             if fitTextToMeasuredWidth, line.width > 0 {
                 a += " textLength=\"\(Self.n(line.width))\" lengthAdjust=\"spacingAndGlyphs\""
             }
-            return a + ">\(runs(line.text))</text>"
+            return a + ">\(body)</text>"
         }
     }
 

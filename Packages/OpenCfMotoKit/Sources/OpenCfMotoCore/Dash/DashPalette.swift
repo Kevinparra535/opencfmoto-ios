@@ -194,6 +194,14 @@ public enum DashPalette {
     /// Night: artwork dimmed (never inverted).
     public static let musicNightDim = DashColor(argb: 0x2600_0000)
 
+    // MARK: Map credit (iOS addition): "© OpenStreetMap" on OSMF tiles (navigation-dash.md §10.4)
+
+    /// Plate behind the credit: 75 % of the card colour, so the small text reads on day and night tiles.
+    public static let attributionFill = DashColor(argb: 0xBF1A_2332)
+    public static let attributionText = DashColor(argb: 0xFFE8_EEF5)
+    /// Plate corner radius (dp).
+    public static let attributionRadius: Double = 6
+
     // MARK: iOS additions (toast, link banner, clock, hold card)
 
     public static let toastFill = DashColor(argb: 0xF020_2124)

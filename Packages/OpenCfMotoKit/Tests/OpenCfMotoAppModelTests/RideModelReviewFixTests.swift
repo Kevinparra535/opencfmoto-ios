@@ -69,6 +69,8 @@ final class RideModelReviewFixTests: XCTestCase {
     func testCorruptGpxRouteNeverReachesTheTileMathsUnfiltered() async throws {
         let spy = RideSpyProjection()
         let h = AppTestHarness { $0.projection = spy }
+        // The corridor prefetch only runs for a tile server the rider set (never the OSMF default, §10.4).
+        h.model.settings.setTileURLTemplate(RideModelTilePolicyTests.customServer)
         let gpx = """
         <?xml version="1.0" encoding="UTF-8"?>
         <gpx version="1.1" creator="evil"><trk><name>Evil</name><trkseg>

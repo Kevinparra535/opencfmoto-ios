@@ -84,6 +84,7 @@ final class DashSnapshotTests: XCTestCase {
         XCTAssertTrue(svg.contains(">Circuit<"))
         XCTAssertTrue(svg.contains(">50<")) // limit sign
         XCTAssertTrue(svg.contains(">42<")) // speed
+        XCTAssertTrue(svg.contains(">© OpenStreetMap<")) // the map credit (default OSM tiles, §10.4)
     }
 
     func testLandscapePreviewWithTwoChips() {
@@ -101,6 +102,7 @@ final class DashSnapshotTests: XCTestCase {
         XCTAssertTrue(svg.contains(">350 m<"))
         XCTAssertTrue(svg.contains(">TIME<"))
         XCTAssertTrue(svg.contains(">End<"))
+        XCTAssertTrue(svg.contains(">© OpenStreetMap<")) // above the metrics card
     }
 
     func testLandscapeOffRoute() {
@@ -288,6 +290,7 @@ final class DashSnapshotTests: XCTestCase {
         for s in ["Ruta del Sol (Remastered 2012)", "Los Pistones", "Ruta Sessions", "2:13", "-3:51"] {
             XCTAssertTrue(svg.contains(">\(s)<"), s)
         }
+        XCTAssertFalse(svg.contains("OpenStreetMap"), "no map under the opaque sheet, so no map credit")
     }
 
     func testLandscapeMusicSheetNavigating() {

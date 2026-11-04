@@ -2157,7 +2157,9 @@ The Android app shows these in English in every locale. The ES column is **my pr
    the raw QR (it contains the password) in the Keychain** (`kSecAttrAccessibleAfterFirstUnlock`, so background
    reconnects work) and keep only non-secret metadata in UserDefaults/files.
 8. Map tiles / geocoding requests go to third parties (OSM etc.) — disclose in the iOS privacy policy and App Store
-   privacy label.
+   privacy label. iOS follows the OSMF tile policy on the default tile.openstreetmap.org: no route-corridor
+   prefetch from the OSMF servers (only from a tile server the rider sets) and a "© OpenStreetMap" credit on the
+   dash map (navigation-dash.md §10.4).
 9. Telemetry: Android sends a random UUID, version, OS level, locale, redacted crash/error text, default ON. For iOS
    recommend **no telemetry** (simplest App Store privacy label); if ever added, make it opt-in.
 
@@ -2254,6 +2256,10 @@ notification channels (use Live Activities / local notifications instead).
     §9, and keep log lines English.
 17. **Units**: Android trips are metric-only; iOS can honour the map units setting (`METRIC`/`IMPERIAL`) — but keep the
     stored data in SI units exactly as §5.1.
+18. **Demo content** (`-demo` / `-demoSeed`, simulator screenshots): public places only. The demo GPS loop
+    (`DemoRoutePlayer.defaultRoute`) runs on the public roads around Parque Simón Bolívar (Bogotá); the demo home
+    (`DemoPlaces.home`) is "Demo home" / "Casa (demo)", a spot well inside that park, and the favourites are public
+    landmarks. Never seed a real address, and post only demo or simulator pictures.
 
 ---
 

@@ -625,9 +625,10 @@ public final class RideModel {
             lastRouteKey = key
             if let route = snap.route {
                 // Route points come from untrusted GPX files / imports: never hand NaN, ±∞ or
-                // out-of-range coordinates to the tile maths (SEC-1).
+                // out-of-range coordinates to the tile maths (SEC-1). The OSMF tile servers (the default
+                // tile.openstreetmap.org) forbid prefetching: only a tile server the rider set gets the corridor.
                 let corridor = Self.corridorPoints(route)
-                if corridor.count >= 2 {
+                if corridor.count >= 2, MapTileSource.allowsCorridorPrefetch(template: cachedSettings.tileURLTemplate) {
                     core.services.projection.prefetchCorridor(Self.sampled(corridor, max: 400))
                 }
             }
@@ -726,7 +727,8 @@ public final class RideModel {
                          preferences: s.map, isNight: night, date: minute, timeZone: .current, language: dashLanguage,
                          places: places, search: dashSearch, recording: core.tripRecorder.isRecording, lapTimer: lap,
                          toastText: nil, linkBanner: linkBanner, holdMessage: nil, showClock: true,
-                         handlebarFocus: s.handlebarControl, music: nowPlayingProvider?())
+                         handlebarFocus: s.handlebarControl, music: nowPlayingProvider?(),
+                         mapAttribution: MapTileSource.attribution(template: s.tileURLTemplate)) // OSMF tiles: "© OpenStreetMap"
     }
 
     /// The dash picture changed: re-render, warm the visible tiles, redraw the phone preview.

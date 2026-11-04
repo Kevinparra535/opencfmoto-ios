@@ -56,6 +56,8 @@ public enum DashDimens {
     public static let musicTile = 64.0, musicTileGap = 8.0, musicTileRadius = 10.0
     public static let musicSheetMargin = 16.0, musicSheetGap = 12.0, musicSheetTextMin = 300.0
     public static let musicArtMin = 96.0, musicArtRadius = 12.0, musicClose = 48.0
+    // Map credit (iOS addition): the "© OpenStreetMap" plate — 11 sp, padding 8 × 2, 6 clear of chrome.
+    public static let attributionFont = 11.0, attributionPadX = 8.0, attributionPadY = 2.0, attributionGap = 6.0
 }
 
 /// Text measurement + scale + safe area for one frame's layout.
@@ -298,6 +300,18 @@ public struct DashMusicSheetLayout: Sendable, Equatable {
     public var nextRect: DashRect
     /// 0 full · 1 no album · 2 title 1 line · 3 compact transport · 4 no artist · 5 no times.
     public var compressionStep: Int
+}
+
+/// The map's tile credit (iOS addition, navigation-dash.md §10.4): a small plate on the map, not a
+/// control (no hit region: touches on it reach the map).
+public struct DashMapAttributionLayout: Sendable, Equatable {
+    /// The plate; the text is centred in it (its width = text + 2 × 8 dp).
+    public var frame: DashRect
+    /// The text as drawn (ellipsised to 45 % of the safe width).
+    public var text: String
+    public var font: DashFont
+    /// 6 dp.
+    public var cornerRadius: Double
 }
 
 public struct DashSearchRowLayout: Sendable, Equatable {
@@ -1094,6 +1108,45 @@ public enum DashLayout {
             return DashRect(x: x, y: c.safe.maxY - c.dp(DashDimens.edge) - h, width: w, height: h)
         }
         return DashRect(x: c.safe.maxX - c.dp(8) - w, y: last.maxY + c.dp(10), width: w, height: h)
+    }
+
+    // MARK: Map credit (iOS addition)
+
+    /// The tile credit (`DashModel.mapAttribution`, "© OpenStreetMap" on the OSMF tiles, navigation-dash.md
+    /// §10.4): a plate of 11 sp medium text, padding 8 × 2 dp, in the map's bottom-left corner — 8 dp from
+    /// the safe area's left and bottom edges — raised, when it would come within 6 dp of a rect of
+    /// `avoiding` (the visible chrome: the bottom-left cards, the speed chip, …), to end 6 dp above it, as
+    /// often as needed (the lap card over the metrics card). The text is ellipsised to 45 % of the safe
+    /// width. nil — no credit rather than one on the chrome — when the plate would then start less than
+    /// 6 dp under `topLimit` (the bottom of the top chrome) or above the safe area: never on the supported
+    /// canvases (DashMapAttributionTests).
+    public static func mapAttribution(_ c: DashLayoutContext, text: String, avoiding: [DashRect],
+                                      topLimit: Double) -> DashMapAttributionLayout? {
+        let font = c.font(DashDimens.attributionFont, .medium)
+        let padX = c.dp(DashDimens.attributionPadX), gap = c.dp(DashDimens.attributionGap)
+        // One line (line breaks / tabs → spaces), ellipsised.
+        let shown = c.truncate(musicText(text), max(c.dp(24), c.safe.width * 0.45 - 2 * padX), font)
+        guard !shown.isEmpty else { return nil }
+        let w = c.width(shown, font) + 2 * padX
+        let h = c.lineHeight(font) + 2 * c.dp(DashDimens.attributionPadY)
+        let x = c.safe.minX + c.dp(DashDimens.edge)
+        let obstacles = avoiding.filter { !$0.isEmpty }
+        /// The plate ending at `b`, grown by the 6-dp clearance.
+        func clearance(_ b: Double) -> DashRect { DashRect(x: x - gap, y: b - h - gap, width: w + 2 * gap, height: h + 2 * gap) }
+        var bottom = c.safe.maxY - c.dp(DashDimens.edge)
+        // A touched rect moves the plate up, to end 6 dp above it. Only a strict move counts (a rect just
+        // cleared may still graze the clearance by a rounding error), so each rect moves it at most once.
+        var moved = true
+        while moved {
+            moved = false
+            for r in obstacles where clearance(bottom).intersects(r) && r.minY - gap < bottom {
+                bottom = r.minY - gap
+                moved = true
+            }
+        }
+        let frame = DashRect(x: x, y: bottom - h, width: w, height: h)
+        guard frame.minY >= max(topLimit + gap, c.safe.minY) else { return nil }
+        return DashMapAttributionLayout(frame: frame, text: shown, font: font, cornerRadius: c.dp(DashPalette.attributionRadius))
     }
 
     // MARK: Apple Music (iOS addition)
