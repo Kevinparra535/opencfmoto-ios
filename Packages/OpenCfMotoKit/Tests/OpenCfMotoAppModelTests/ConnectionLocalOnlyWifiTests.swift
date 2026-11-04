@@ -23,6 +23,12 @@ enum FieldWifi {
     nonisolated static let home = WifiNetworkInfo(isWifiAvailable: true, ssid: "HomeWiFi", interfaceName: "en0",
                                                   phoneIPv4: "10.0.0.5", gateway: "10.0.0.1",
                                                   dashHostCandidates: ["10.0.0.1"])
+
+    /// A home Wi-Fi on the dash's address plan (192.168.0.x, a common router default) as the free
+    /// flavor sees it: SSID unreadable, internet, so the path is satisfied (review NEWCOMER-1).
+    nonisolated static let homeOnDashPlan = WifiNetworkInfo(isWifiAvailable: true, interfaceName: "en0",
+                                                            phoneIPv4: "192.168.0.23", gateway: "192.168.0.1",
+                                                            dashHostCandidates: ["192.168.0.1"])
 }
 
 /// `WifiJoining` fake whose join leaves the phone on a scripted network (PreviewWifi's join always

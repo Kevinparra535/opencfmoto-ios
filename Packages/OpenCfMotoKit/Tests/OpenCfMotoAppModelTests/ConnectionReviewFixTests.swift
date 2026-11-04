@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // ConnectionModel regressions from the wave-3 review (uids in each test's comment): stale link
 // events, the manual-join baseline race, Stop / Local Network issue in a re-arming error, parking,
-// the bike-network fingerprint (SSID unknown), auto-connect gating and retry, phone-hotspot QRs,
-// mirror location / fit / margins, dash serial redaction.
+// the bike-network fingerprint (SSID unknown), a home Wi-Fi on the dash's address plan, auto-connect
+// gating and retry, phone-hotspot QRs, mirror location / fit / margins, dash serial redaction.
 import Foundation
 import XCTest
 @testable import OpenCfMotoAppModel
@@ -329,7 +329,8 @@ final class ConnectionReviewFixTests: XCTestCase {
     func testFreeFlavorAutoConnectStartsWhenIOSAlreadyJoinedTheBike() async {
         let h = AppTestHarness(flavor: .free)
         h.wifi.nextJoinResult = .success(.manualJoinRequired)
-        h.wifi.setNetwork(AppTestHarness.bikeNetwork(ssid: nil)) // SSID never known in the free flavor
+        // SSID never known in the free flavor; the bike Wi-Fi has no internet (path unsatisfied).
+        h.wifi.setNetwork(FieldWifi.bike(ssid: nil))
         h.addBike()
         h.connection.maybeAutoConnect()
         let linked = await eventually { h.connection.link != nil }
@@ -343,7 +344,7 @@ final class ConnectionReviewFixTests: XCTestCase {
     func testFreeFlavorConnectAndModeSwitchSkipTheManualJoinOnTheBikeWifi() async {
         let h = AppTestHarness(flavor: .free)
         h.wifi.nextJoinResult = .success(.manualJoinRequired)
-        h.wifi.setNetwork(AppTestHarness.bikeNetwork(ssid: nil))
+        h.wifi.setNetwork(FieldWifi.bike(ssid: nil))
         h.addBike()
         h.connection.connect()
         let linked = await eventually { h.connection.link != nil }
@@ -368,6 +369,108 @@ final class ConnectionReviewFixTests: XCTestCase {
         XCTAssertTrue(prompted)
         XCTAssertNil(h.connection.link)
         h.connection.cancelManualJoin()
+    }
+
+    // MARK: NEWCOMER-1 — a home Wi-Fi on the dash's address plan (SSID unknown, internet)
+
+    func testAnSSIDLessHomeWifiOnTheDashPlanIsNotTheBike() {
+        let ssid = "CFMOTO-f46457"
+        let home = FieldWifi.homeOnDashPlan
+        XCTAssertTrue(ConnectionModel.isOnDashSubnet(home))
+        XCTAssertFalse(home.isLocalOnly)
+        XCTAssertFalse(ConnectionModel.isAlreadyOnBikeNetwork(home, ssid: ssid))
+        XCTAssertFalse(ConnectionModel.isAlreadyOnBikeNetwork(AppTestHarness.bikeNetwork(ssid: nil), ssid: ssid))
+        // The bike's own Wi-Fi (no internet) still is, and a readable matching SSID decides by itself.
+        XCTAssertTrue(ConnectionModel.isAlreadyOnBikeNetwork(FieldWifi.bike(ssid: nil), ssid: ssid))
+        var named = home
+        named.ssid = ssid
+        XCTAssertTrue(ConnectionModel.isAlreadyOnBikeNetwork(named, ssid: ssid))
+        // Switching from it to the bike in Settings is a manual join; staying on it is not.
+        XCTAssertTrue(ConnectionModel.matchesManualJoin(FieldWifi.bike(ssid: nil), ssid: ssid, baseline: home))
+        XCTAssertFalse(ConnectionModel.matchesManualJoin(home, ssid: ssid, baseline: home))
+    }
+
+    @MainActor
+    func testFreeFlavorConnectOnAHomeWifiOnTheDashPlanShowsTheManualJoinThenLinksOnTheBike() async {
+        let net = LinkMemoryNetwork(phoneHost: "192.168.0.50")
+        let h = AppTestHarness(flavor: .free, network: net)
+        h.wifi.nextJoinResult = .success(.manualJoinRequired)
+        h.wifi.setNetwork(FieldWifi.homeOnDashPlan)
+        let (_, qr) = h.addBike()
+        h.connection.connect()
+        let prompted = await eventually { h.connection.manualJoin != nil }
+        XCTAssertTrue(prompted)
+        XCTAssertEqual(h.connection.manualJoin?.ssid, qr.ssid)
+        XCTAssertEqual(h.connection.manualJoin?.password, qr.password)
+        await settle(0.3)
+        // No link, no listener and no probe on the home LAN.
+        XCTAssertNotNil(h.connection.manualJoin)
+        XCTAssertNil(h.connection.link)
+        XCTAssertTrue(net.connectLog.isEmpty, "\(net.connectLog)")
+        XCTAssertTrue(net.openListenerPorts.isEmpty)
+        XCTAssertEqual(h.connection.phase, .joiningWifi)
+
+        // The rider joins the bike in Settings ▸ Wi-Fi: the app goes on without a tap.
+        h.wifi.setNetwork(FieldWifi.bike(ssid: nil))
+        let linked = await eventually { h.connection.link != nil }
+        XCTAssertTrue(linked)
+        XCTAssertNil(h.connection.manualJoin)
+        XCTAssertEqual(h.connection.sessionNetwork, FieldWifi.bike(ssid: nil))
+        h.connection.stop()
+    }
+
+    @MainActor
+    func testFreeFlavorAutoConnectOnAHomeWifiOnTheDashPlanStartsNothing() async {
+        let net = LinkMemoryNetwork(phoneHost: "192.168.0.23")
+        let h = AppTestHarness(flavor: .free, network: net)
+        h.wifi.nextJoinResult = .success(.manualJoinRequired)
+        h.wifi.setNetwork(FieldWifi.homeOnDashPlan)
+        h.addBike()
+        h.connection.maybeAutoConnect()
+        XCTAssertTrue(h.connection.autoConnectLatched)
+        let checked = await eventually { !h.connection.autoConnectLatched }
+        XCTAssertTrue(checked) // idle, unlatched for the next foreground
+        await settle(0.3)
+        XCTAssertNil(h.connection.session)
+        XCTAssertNil(h.connection.link)
+        XCTAssertNil(h.connection.manualJoin)
+        XCTAssertNil(h.connection.issue)
+        XCTAssertEqual(h.connection.phase, .idle)
+        XCTAssertTrue(h.wifi.joinedSSIDs.isEmpty)
+        XCTAssertTrue(net.connectLog.isEmpty, "\(net.connectLog)")
+    }
+
+    /// "I've joined" tapped while the phone is still on the home Wi-Fi (the free flavor cannot read
+    /// the SSID to refuse it): no dash answers there, and neither the status nor the dialog may claim
+    /// the bike Wi-Fi is up.
+    @MainActor
+    func testNoDashOnAnUnconfirmedWifiSaysToCheckTheWifiNotThatTheBikeWifiIsUp() async {
+        let h = AppTestHarness(flavor: .free) // PreviewNetwork: no dash ever answers
+        h.wifi.nextJoinResult = .success(.manualJoinRequired)
+        h.wifi.setNetwork(FieldWifi.homeOnDashPlan)
+        let (bike, qr) = h.addBike()
+        let text = SessionText.noDashOnThisWifi(ssid: qr.ssid, h.language)
+        h.connection.connect()
+        _ = await eventually { h.connection.manualJoin != nil }
+        h.connection.confirmManualJoin()
+        let armed = await eventually { h.connection.phase == .error }
+        XCTAssertTrue(armed)
+        XCTAssertEqual(h.connection.detail, text)
+        XCTAssertNotEqual(h.connection.detail, SessionText.easyConnOffline(h.language))
+        XCTAssertTrue(h.connection.isSessionActive) // auto-recovery (default): the link re-arms
+        XCTAssertNil(h.connection.issue)
+        h.connection.stop()
+
+        // Auto-recovery off: the session ends with the dialog that names the bike's network.
+        h.core.settings.update(forBike: bike.id) { $0.autoRecovery = false }
+        h.connection.connect()
+        _ = await eventually { h.connection.manualJoin != nil }
+        h.connection.confirmManualJoin()
+        let ended = await eventually { h.connection.issue == .dashNotFoundOnUnconfirmedWifi(ssid: qr.ssid) }
+        XCTAssertTrue(ended)
+        XCTAssertEqual(h.connection.phase, .error)
+        XCTAssertEqual(h.connection.detail, text)
+        XCTAssertNil(h.connection.session)
     }
 
     // MARK: SPEC:CL-2 — a failed auto-connect stays idle and retries after the next background
@@ -434,8 +537,8 @@ final class ConnectionReviewFixTests: XCTestCase {
     func testAFreeFlavorAutoConnectWithoutADashEndsQuietlyInsteadOfReArming() async {
         let h = AppTestHarness(flavor: .free) // PreviewNetwork: no dash ever answers
         h.wifi.nextJoinResult = .success(.manualJoinRequired)
-        h.wifi.setNetwork(AppTestHarness.bikeNetwork(ssid: nil)) // or a home LAN on the dash's plan
-        h.addBike()
+        h.wifi.setNetwork(FieldWifi.bike(ssid: nil))
+        let (_, qr) = h.addBike()
         h.connection.maybeAutoConnect()
         _ = await eventually { h.connection.link != nil }
         let ended = await eventually { h.connection.session == nil }
@@ -444,11 +547,13 @@ final class ConnectionReviewFixTests: XCTestCase {
         XCTAssertNil(h.connection.issue)
         XCTAssertTrue(h.connection.retryAutoConnectAfterBackground)
         XCTAssertNil(h.connection.link)
-        // A user Connect on the same network keeps re-arming (the rider asked for it).
+        // A user Connect on the same network keeps re-arming (the rider asked for it). The SSID is
+        // unknown and nothing streamed: the status asks to check the Wi-Fi, never "Bike Wi-Fi is up".
         h.connection.connect()
         let armed = await eventually { h.connection.phase == .error }
         XCTAssertTrue(armed)
         XCTAssertTrue(h.connection.isSessionActive)
+        XCTAssertEqual(h.connection.detail, SessionText.noDashOnThisWifi(ssid: qr.ssid, h.language))
         h.connection.stop()
     }
 
@@ -480,7 +585,7 @@ final class ConnectionReviewFixTests: XCTestCase {
     @MainActor
     func testAPhoneHotspotBikeNeverAutoConnects() async {
         let h = AppTestHarness(flavor: .free)
-        h.wifi.setNetwork(AppTestHarness.bikeNetwork(ssid: nil))
+        h.wifi.setNetwork(FieldWifi.bike(ssid: nil))
         h.addBike(raw: Self.zontesHotspotQR)
         h.connection.maybeAutoConnect()
         await settle(0.3)

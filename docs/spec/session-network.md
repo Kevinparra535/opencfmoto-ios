@@ -1481,6 +1481,12 @@ platform knowledge, not from the Android repo. Verify each platform claim on a d
   launch can surface "Unable to join the network" alerts when the bike is off. Suggested rule: auto-start the session
   if the phone is **already** on the bike SSID (iOS auto-joined it), otherwise only when the rider taps Connect
   (or offer "try anyway" as an opt-in). Delay 1200 ms after launch like Android.
+- SSID unreadable (the free flavor has no Access Wi-Fi Information entitlement): "already on the bike Wi-Fi" means
+  an address on a dash subnet (§4.3) **and** a Wi-Fi path iOS keeps unsatisfied (no internet, §11.1). A home Wi-Fi
+  on the same plan (192.168.0.x is a common router default) has internet: auto-connect stays idle there and Connect
+  shows the manual-join sheet instead of probing the home router. A dash that answers nothing on an unconfirmed
+  network is reported as "no dash answered on this Wi-Fi — check that the iPhone is on the bike's", never as
+  "Bike Wi-Fi is up but EasyConn is offline".
 - The big button turns Connect → Stop when auto-connect starts the session: a tap within 2 s of that start keeps the
   session (the rider meant Connect; first field test: a tap 0.44 s after the check) and makes it the rider's own
   Connect; a later tap stops.

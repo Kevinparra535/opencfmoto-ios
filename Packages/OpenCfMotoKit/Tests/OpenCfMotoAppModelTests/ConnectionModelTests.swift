@@ -85,6 +85,8 @@ final class ConnectionModelTests: XCTestCase {
         let failed = await eventually { h.connection.issue == .dashNotFound }
         XCTAssertTrue(failed)
         XCTAssertEqual(h.connection.phase, .error)
+        // The SSID was read and matched: the bike Wi-Fi is up, EasyConn is not.
+        XCTAssertEqual(h.connection.detail, SessionText.easyConnOffline(h.language))
         XCTAssertNil(h.connection.session)
         XCTAssertNil(h.connection.link)
         XCTAssertEqual(h.connection.mode, .none)

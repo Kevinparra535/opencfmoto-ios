@@ -80,7 +80,7 @@ private struct ConnectionIssueAlertModifier: ViewModifier {
     @ViewBuilder
     private func actions(for issue: ConnectionIssue) -> some View {
         switch issue {
-        case .portsInUse, .wifiJoinFailed, .dashNotFound:
+        case .portsInUse, .wifiJoinFailed, .dashNotFound, .dashNotFoundOnUnconfirmedWifi:
             Button("Retry") { retry() }
             Button("Dismiss", role: .cancel) { model.connection.dismissIssue() }
         case .lostLink:
@@ -117,7 +117,7 @@ private struct ConnectionIssueAlertModifier: ViewModifier {
         case .localNetworkDenied: return Text("Local Network access is off")
         case .wifiUnavailable: return Text("Turn on Wi-Fi")
         case .wifiJoinFailed: return Text("Couldn't join the bike Wi-Fi")
-        case .dashNotFound: return Text("Dash not found")
+        case .dashNotFound, .dashNotFoundOnUnconfirmedWifi: return Text("Dash not found")
         case .lostLink: return Text("Lost the bike link")
         case .other: return Text("Connection problem")
         }
@@ -135,6 +135,9 @@ private struct ConnectionIssueAlertModifier: ViewModifier {
             return Text(verbatim: message)
         case .dashNotFound:
             return Text("Bike Wi-Fi is up but EasyConn is offline — keep the pairing QR open on the dash, then tap Connect again.")
+        case .dashNotFoundOnUnconfirmedWifi(let ssid):
+            // SSID unknown (free flavor): the phone may still be on the home Wi-Fi (review NEWCOMER-1).
+            return Text("No dash answered on this Wi-Fi — if your iPhone is not on “\(ssid)”, join it in Settings ▸ Wi-Fi; otherwise keep the pairing QR open on the dash. Then tap Connect again.")
         case .lostLink:
             return Text("The dash stopped answering after 20 reconnect attempts. Check that the bike is on and the dash shows MotoPlay, then tap Connect.")
         case .other(let message):

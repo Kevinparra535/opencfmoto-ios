@@ -56,6 +56,10 @@ public enum ConnectionIssue: Sendable, Equatable {
     case wifiJoinFailed(message: String)
     /// The dash never answered the probe.
     case dashNotFound
+    /// The dash never answered on a Wi-Fi the app could not confirm as the bike's (SSID unknown,
+    /// nothing streamed yet: the free flavor): the phone may still be on another Wi-Fi. `ssid` is the
+    /// bike's network, for the dialog.
+    case dashNotFoundOnUnconfirmedWifi(ssid: String)
     /// Gave up after the reconnect budget.
     case lostLink
     /// No bike paired: the UI should open the scanner.

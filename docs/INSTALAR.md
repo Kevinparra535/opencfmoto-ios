@@ -90,7 +90,9 @@ espejo: la extensión «OpenCfMoto Mirror» es la que duplica la pantalla.
 2. Empareja tu moto: **Inicio ▸ Escanear** y apunta al QR del tablero.
 3. Pulsa **Conectar**. Esta versión no puede unirse sola al Wi-Fi de la moto, así que te muestra el
    nombre de la red y copia la contraseña. Abre **Ajustes ▸ Wi-Fi**, elige la red de la moto, pega la
-   contraseña y vuelve a OpenCfMoto: sigue sola, o toca **«Ya me he conectado»**.
+   contraseña y vuelve a OpenCfMoto: sigue sola, o toca **«Ya me he conectado»**. Si el iPhone
+   sigue en el Wi-Fi de casa y la app no te muestra la red de la moto, únete tú primero: la
+   contraseña está en **Garaje ▸ tu moto**.
 
 Para la primera salida sigue [PRUEBA-EN-LA-MOTO.md](PRUEBA-EN-LA-MOTO.md) (sáltate la parte de Xcode:
 la app ya está instalada). Fija la ruta antes de salir.
@@ -281,7 +283,9 @@ If a tool offers to remove the app's extensions, say no if you want to try mirro
 2. Pair your bike: **Home ▸ Scan** and point the camera at the dash QR.
 3. Tap **Connect**. This build cannot join the bike Wi-Fi by itself, so it shows the network name and
    copies the password. Open **Settings ▸ Wi-Fi**, pick the bike's network, paste the password and
-   come back to OpenCfMoto: it carries on by itself, or tap **"I've joined"**.
+   come back to OpenCfMoto: it carries on by itself, or tap **"I've joined"**. If your iPhone is
+   still on your home Wi-Fi and the app does not show the bike's network, join it yourself first:
+   the password is in **Garage ▸ your bike**.
 
 For the first ride, follow [PRUEBA-EN-LA-MOTO.md](PRUEBA-EN-LA-MOTO.md) (in Spanish; skip the Xcode
 part: the app is already installed). Set the route before you ride.

@@ -625,9 +625,10 @@ public final class ConnectionModel {
                 let current = await wifi.currentNetwork()
                 guard gen == generation else { return nil }
                 if Self.isAlreadyOnBikeNetwork(current, ssid: s.qr.ssid) {
-                    // The free flavor never knows the SSID: an address on a known dash subnet means
-                    // iOS already joined the bike (a mode switch, a retry, an auto-join at ignition).
-                    // Discovery confirms it (and fails fast when this is not the dash).
+                    // The free flavor never knows the SSID: an address on a known dash subnet, on a
+                    // Wi-Fi without internet, means iOS already joined the bike (a mode switch, a retry,
+                    // an auto-join at ignition); a home Wi-Fi on that plan has internet and gets the
+                    // sheet. Discovery confirms it (and fails fast when this is not the dash).
                     Log.i("WIFI", current.ssid == nil
                           ? "Wi-Fi already on a dash network (\(Self.describe(current)), SSID unknown) \u{2014} skipping the manual join"
                           : "Wi-Fi already joined: \(s.qr.ssid) \u{2014} skipping re-join")
@@ -1037,7 +1038,8 @@ public final class ConnectionModel {
             resetBlockEpisode()
             sessionEverStreamed = true
             switch issue {
-            case .dashNotFound?, .lostLink?, .localNetworkDenied?, .wifiUnavailable?: issue = nil
+            case .dashNotFound?, .dashNotFoundOnUnconfirmedWifi?, .lostLink?, .localNetworkDenied?, .wifiUnavailable?:
+                issue = nil
             default: break
             }
         case let .reconnecting(n):
@@ -1068,15 +1070,19 @@ public final class ConnectionModel {
         case .noWifiAddress:
             endSession(.error, detail: SessionText.noWifiAddress(l), issue: .wifiUnavailable)
         case .dashNotFound:
-            let d = SessionText.easyConnOffline(l)
-            if s.trigger == .auto, !sessionEverStreamed, sessionNetwork?.ssid == nil {
+            // SSID unknown and nothing streamed yet: this Wi-Fi was recognised only by its address plan,
+            // or the rider confirmed the manual join on it, so it may not be the bike's. Never say "Bike
+            // Wi-Fi is up" then: ask the rider to check the Wi-Fi first (review NEWCOMER-1).
+            let unconfirmed = !sessionEverStreamed && sessionNetwork?.ssid == nil
+            let d = unconfirmed ? SessionText.noDashOnThisWifi(ssid: s.qr.ssid, l) : SessionText.easyConnOffline(l)
+            if s.trigger == .auto, unconfirmed {
                 // An auto-connect on a network recognised only by its address plan (SSID unknown) may
-                // be a home LAN on the dash's plan: never re-arm there unattended (§13.12, SEC-3).
+                // be another LAN on the dash's plan: never re-arm there unattended (§13.12, SEC-3).
                 endAutoConnectQuietly("no dash answered on this Wi-Fi (SSID unknown)")
             } else if recovery {
                 setPhase(.error, detail: d)
             } else {
-                endSession(.error, detail: d, issue: .dashNotFound)
+                endSession(.error, detail: d, issue: unconfirmed ? .dashNotFoundOnUnconfirmedWifi(ssid: s.qr.ssid) : .dashNotFound)
             }
         case .lostLink:
             let d = SessionText.lostLink(l)
@@ -1256,13 +1262,18 @@ public final class ConnectionModel {
     }
 
     /// iOS already joined the bike Wi-Fi: the SSID is known and matches, or (SSID unknown: free flavor,
-    /// no precise location) the phone has an address on a known dash subnet. Auto-connect starts only
-    /// then (§11.8), and a Connect skips the manual-join sheet (review CON:CL-4, SPEC:CL-4). Known
-    /// limitation: an SSID-less home LAN on the dash's address plan looks the same — discovery then
-    /// finds no dash, and an auto-connect ends quietly instead of re-arming there.
+    /// no precise location) the phone has an address on a known dash subnet on a Wi-Fi without
+    /// internet. The dash's access point has none, so iOS keeps its path unsatisfied (`isLocalOnly`);
+    /// a home Wi-Fi on the same address plan (192.168.0.x is a common router default) has internet and
+    /// gets the manual-join sheet — the rule of `WifiJoinPolicy.isUnchangedLocalOnlyDashNetwork`.
+    /// Auto-connect starts only then (§11.8), and a Connect skips the manual-join sheet (review
+    /// CON:CL-4, SPEC:CL-4, NEWCOMER-1). Known limitation: an SSID-less LAN on the dash's address plan
+    /// that has no internet either still looks the same — discovery then finds no dash, the status
+    /// asks the rider to check the Wi-Fi, and an auto-connect ends quietly instead of re-arming there.
     nonisolated static func isAlreadyOnBikeNetwork(_ info: WifiNetworkInfo, ssid: String) -> Bool {
         if isConfirmedBikeNetwork(info, ssid: ssid) { return true }
-        return info.ssid == nil && info.isWifiAvailable && info.phoneIPv4 != nil && isOnDashSubnet(info)
+        return info.ssid == nil && info.isWifiAvailable && info.isLocalOnly
+            && info.phoneIPv4 != nil && isOnDashSubnet(info)
     }
 
     /// The rider joined the bike network in Settings: the SSID matches, or (SSID unknown) a NEW

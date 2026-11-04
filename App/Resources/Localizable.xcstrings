@@ -3201,6 +3201,16 @@
         }
       }
     },
+    "No dash answered on this Wi-Fi — if your iPhone is not on “%@”, join it in Settings ▸ Wi-Fi; otherwise keep the pairing QR open on the dash. Then tap Connect again.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ningún tablero respondió en este Wi-Fi: si el iPhone no está en «%@», únete en Ajustes ▸ Wi-Fi; si lo está, mantén abierto el QR de emparejamiento en el tablero. Luego vuelve a tocar Conectar."
+          }
+        }
+      }
+    },
     "No log lines yet.": {
       "localizations": {
         "es": {

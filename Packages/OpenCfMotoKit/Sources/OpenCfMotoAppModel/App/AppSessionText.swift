@@ -76,6 +76,13 @@ enum SessionText {
              "El Wi-Fi de la moto está activo pero EasyConn está desconectado: mantén abierto el QR de emparejamiento en el tablero")
     }
 
+    /// No dash answered on a Wi-Fi the app could not confirm as the bike's (SSID unknown, nothing
+    /// streamed yet): the phone may still be on the home Wi-Fi, so never claim the bike Wi-Fi is up.
+    static func noDashOnThisWifi(ssid: String, _ l: NavLanguage) -> String {
+        pick(l, "No dash answered on this Wi-Fi \u{2014} if your iPhone is not on \u{201C}\(ssid)\u{201D}, join it in Settings \u{25B8} Wi-Fi; otherwise keep the pairing QR open on the dash",
+             "Ningún tablero respondió en este Wi-Fi: si el iPhone no está en «\(ssid)», únete en Ajustes \u{25B8} Wi-Fi; si lo está, mantén abierto el QR de emparejamiento en el tablero")
+    }
+
     static func lostLink(_ l: NavLanguage) -> String {
         pick(l, "lost bike link", "se perdió el enlace con la moto")
     }
