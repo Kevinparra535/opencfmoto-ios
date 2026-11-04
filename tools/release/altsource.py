@@ -268,14 +268,16 @@ def source_document(ipa: dict, args, version: str) -> dict:
     download = f"{site}/releases/download/{args.tag}/{ipa_name}"
     build = str(info.get("CFBundleVersion"))
     version_notes = (f"Sideload build {version} ({build}): join the bike Wi-Fi in Settings ▸ Wi-Fi (the app "
-                     f"copies the password). Release notes: {site}/releases/tag/{args.tag} · Versión para "
-                     "instalar con tu Apple ID: te unes al Wi-Fi de la moto en Ajustes ▸ Wi-Fi.")
+                     f"shows the password with a copy button; the copy lasts 2 minutes). Release notes: "
+                     f"{site}/releases/tag/{args.tag} · Versión para instalar con tu Apple ID: te unes al Wi-Fi de "
+                     "la moto en Ajustes ▸ Wi-Fi.")
     description = (
         "Your own map, turn-by-turn guidance and Apple Music on CFMOTO MotoPlay and other Carbit / "
         "EasyConnect motorcycle dashboards, streamed from the iPhone over the bike's Wi-Fi.\n\n"
         "Sideload build: join the bike Wi-Fi yourself in Settings ▸ Wi-Fi when the app asks (it shows the "
-        "network and copies the password); it cannot join or read Wi-Fi networks by itself. Screen "
-        "mirroring is best effort. Set the route before you ride: never handle the phone while riding.\n\n"
+        "network and the password, with a copy button; the copy lasts 2 minutes); it cannot join or read "
+        "Wi-Fi networks by itself. Screen mirroring is best effort. Set the route before you ride: never "
+        "handle the phone while riding.\n\n"
         "Tu propio mapa, navegación giro a giro y Apple Music en el tablero de tu moto CFMOTO, por el Wi-Fi "
         "de la moto. Te unes al Wi-Fi de la moto en Ajustes ▸ Wi-Fi cuando la app te lo pide. Fija la ruta "
         "antes de salir: nunca manipules el teléfono mientras conduces.\n\n"
@@ -355,16 +357,18 @@ def release_notes(ipa: dict, args, version: str) -> str:
         "Apple certificate; ad-hoc signature carrying only the App Group |",
         "",
         "### ES: qué funciona en esta versión",
-        "- Te unes al Wi-Fi de la moto a mano, en Ajustes ▸ Wi-Fi: la app muestra la red y copia la contraseña, "
-        "y sigue sola al volver (o toca «Ya me he conectado»). No puede unirse sola ni leer el nombre de la red.",
+        "- Te unes al Wi-Fi de la moto a mano, en Ajustes ▸ Wi-Fi: la app muestra la red y la contraseña, con un "
+        "botón para copiarla (la copia dura 2 minutos), y sigue sola al volver (o toca «Ya me he conectado»). No "
+        "puede unirse sola ni leer el nombre de la red.",
         "- El modo espejo (duplicar la pantalla) puede no estar disponible: depende de la herramienta de instalación.",
         "- La app caduca a los 7 días si no la renuevas, y con un Apple ID gratuito caben como máximo 3 apps instaladas "
         "así en el iPhone (SideStore o AltStore cuentan como una).",
         "- Descárgala solo de esta página y comprueba el SHA-256 antes de instalarla.",
         "",
         "### EN: what works in this build",
-        "- You join the bike Wi-Fi by hand in Settings ▸ Wi-Fi: the app shows the network, copies the password and "
-        "carries on when you come back (or tap \"I've joined\"). It cannot join or read Wi-Fi networks by itself.",
+        "- You join the bike Wi-Fi by hand in Settings ▸ Wi-Fi: the app shows the network and the password, with a "
+        "copy button (the copy lasts 2 minutes), and carries on when you come back (or tap \"I've joined\"). It "
+        "cannot join or read Wi-Fi networks by itself.",
         "- Screen mirroring may be unavailable: it depends on the install tool.",
         "- The app expires after 7 days unless refreshed; with a free Apple ID at most 3 such apps fit on the iPhone "
         "(SideStore or AltStore counts as one).",

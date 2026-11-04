@@ -32,7 +32,7 @@ struct ManualJoinPromptSheet: View {
                         Divider().overlay(Theme.outline)
                         if let password = prompt.password, !password.isEmpty {
                             MainCopyableValueRow(title: "Password", value: password, isSecret: true) {
-                                copiedNote = "Password copied — paste it in Settings"
+                                copiedNote = "Password copied — paste it in Settings within 2 minutes"
                             }
                         } else {
                             Text("Open network — no password needed")

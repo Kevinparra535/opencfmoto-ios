@@ -953,8 +953,9 @@ also isn't needed (see c).
 
 **Consequence for free builds:**
 
-- There's no programmatic join. The rider joins the dash Wi-Fi in Settings, and we copy the password to the
-  clipboard. Apps can only open their own Settings page, not the Wi-Fi page.
+- There's no programmatic join. The rider joins the dash Wi-Fi in Settings, and we show the password with a
+  copy button (a local-only copy that expires after 2 minutes). Apps can only open their own Settings page, not
+  the Wi-Fi page.
 - There's no SSID read.
 - Detect the join through the `NWPath` gateway and a successful probe.
 
@@ -1219,8 +1220,8 @@ performance level, which avoids changes in thermal headroom over time. It is not
     - (b) *Free / sideload*: an xcconfig switch selects an entitlements file without those two and sets a
       Swift flag, such as `OCM_NO_HOTSPOT`.
 
-    The free flavor uses a manual-join flow (copy the password, then the rider joins in Settings) with path
-    and gateway detection. Document the 7-day re-sign, 3 apps / 3 devices, the extension's extra App ID, and
+    The free flavor uses a manual-join flow (the app shows the password with a copy button, then the rider
+    joins in Settings) with path and gateway detection. Document the 7-day re-sign, 3 apps / 3 devices, the extension's extra App ID, and
     the lack of MapKit routing.
 17. **Settle licensing before any store or TestFlight build.**
     - Ask the upstream `open-cfmoto` copyright holders for a GPLv3 §7 App Store / TestFlight additional

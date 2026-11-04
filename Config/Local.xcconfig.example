@@ -17,5 +17,6 @@ BUNDLE_ID_PREFIX = com.yourname
 // full — paid Apple Developer Program: the app joins the bike Wi-Fi itself (Hotspot Configuration)
 //        and can read the current SSID (Access WiFi Information).
 // free — free Personal Team: no Hotspot / Wi-Fi Information entitlements; you join the bike Wi-Fi
-//        in iOS Settings when the app asks (it shows the network name and copies the password).
+//        in iOS Settings when the app asks (it shows the network name and the password, with a copy
+//        button; the copy lasts 2 minutes).
 OCM_FLAVOR = full

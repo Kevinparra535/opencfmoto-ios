@@ -109,9 +109,9 @@ public enum WifiJoinMessages {
     /// Instructions for the manual join path (free flavor, or after a failure).
     public static func manualJoin(ssid: String, language: String) -> String {
         if isSpanish(language) {
-            return "Abre Ajustes › Wi-Fi y únete a “\(ssid)” (la contraseña está copiada). Luego vuelve a OpenCfMoto."
+            return "Abre Ajustes › Wi-Fi y únete a “\(ssid)” con la contraseña que te muestra la app. Luego vuelve a OpenCfMoto."
         }
-        return "Open Settings › Wi-Fi and join “\(ssid)” (the password is copied). Then come back to OpenCfMoto."
+        return "Open Settings › Wi-Fi and join “\(ssid)” with the password the app shows. Then come back to OpenCfMoto."
     }
 
     static func text(for e: WifiJoinError, spanish es: Bool) -> String {

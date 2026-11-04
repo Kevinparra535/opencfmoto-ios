@@ -89,10 +89,11 @@ espejo: la extensión «OpenCfMoto Mirror» es la que duplica la pantalla.
    dibujar el mapa.
 2. Empareja tu moto: **Inicio ▸ Escanear** y apunta al QR del tablero.
 3. Pulsa **Conectar**. Esta versión no puede unirse sola al Wi-Fi de la moto, así que te muestra el
-   nombre de la red y copia la contraseña. Abre **Ajustes ▸ Wi-Fi**, elige la red de la moto, pega la
-   contraseña y vuelve a OpenCfMoto: sigue sola, o toca **«Ya me he conectado»**. Si el iPhone
-   sigue en el Wi-Fi de casa y la app no te muestra la red de la moto, únete tú primero: la
-   contraseña está en **Garaje ▸ tu moto**.
+   nombre de la red y la contraseña. Toca el botón de copiar junto a la contraseña (la copia dura
+   2 minutos), abre **Ajustes ▸ Wi-Fi**, elige la red de la moto, pega la contraseña y vuelve a
+   OpenCfMoto: sigue sola, o toca **«Ya me he conectado»**. Si el iPhone sigue en el Wi-Fi de casa
+   y la app no te muestra la red de la moto, únete tú primero: la contraseña está en **Garaje ▸ tu
+   moto**.
 
 Para la primera salida sigue [PRUEBA-EN-LA-MOTO.md](PRUEBA-EN-LA-MOTO.md) (sáltate el paso 1 de
 «Antes de salir»: la app ya está instalada; en la tabla, usa la fila de la versión sideload). Fija la
@@ -283,10 +284,11 @@ If a tool offers to remove the app's extensions, say no if you want to try mirro
    or draw the map.
 2. Pair your bike: **Home ▸ Scan** and point the camera at the dash QR.
 3. Tap **Connect**. This build cannot join the bike Wi-Fi by itself, so it shows the network name and
-   copies the password. Open **Settings ▸ Wi-Fi**, pick the bike's network, paste the password and
-   come back to OpenCfMoto: it carries on by itself, or tap **"I've joined"**. If your iPhone is
-   still on your home Wi-Fi and the app does not show the bike's network, join it yourself first:
-   the password is in **Garage ▸ your bike**.
+   the password. Tap the copy button next to the password (the copy lasts 2 minutes), open
+   **Settings ▸ Wi-Fi**, pick the bike's network, paste the password and come back to OpenCfMoto: it
+   carries on by itself, or tap **"I've joined"**. If your iPhone is still on your home Wi-Fi and the
+   app does not show the bike's network, join it yourself first: the password is in **Garage ▸ your
+   bike**.
 
 For the first ride, follow [PRUEBA-EN-LA-MOTO.md](PRUEBA-EN-LA-MOTO.md) (in Spanish, with a short
 English summary at the top; skip step 1 of «Antes de salir»: the app is already installed; in the

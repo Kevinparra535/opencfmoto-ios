@@ -184,6 +184,11 @@ class AltSourceTest(unittest.TestCase):
             "localizedDescription": version["localizedDescription"], "downloadURL": download,
             "size": len(data), "sha256": hashlib.sha256(data).hexdigest(), "minOSVersion": "17.0"})
         self.assertIn("Settings ▸ Wi-Fi", version["localizedDescription"])
+        # The app never copies the password by itself: it shows it with a copy button (2-minute copy).
+        for text in (version["localizedDescription"], app["localizedDescription"]):
+            self.assertIn("with a copy button", text)
+            self.assertIn("the copy lasts 2 minutes", text)
+            self.assertNotIn("copies the password", text)
         # The single-version fields older AltStore / SideStore releases read: the same version.
         self.assertEqual((app["version"], app["versionDate"], app["downloadURL"], app["size"]),
                          ("0.1.0", "2026-11-04", download, len(data)))
@@ -346,8 +351,12 @@ class AltSourceTest(unittest.TestCase):
                        "0.1.0 (42)", "iOS 17.0", "LICENSE.txt", "NOTICE.txt", "zanderp", "AGPL",
                        "sin ninguna garantía", "no warranty", "Nunca manipules el teléfono mientras conduces",
                        "Never handle the phone while riding", "Ajustes ▸ Wi-Fi", "Settings ▸ Wi-Fi",
-                       "«Ya me he conectado»", "\"I've joined\"", "solo de esta página", "Only download it from this page"):
+                       "«Ya me he conectado»", "\"I've joined\"", "solo de esta página", "Only download it from this page",
+                       "con un botón para copiarla (la copia dura 2 minutos)",
+                       "with a copy button (the copy lasts 2 minutes)"):
             self.assertIn(needle, notes)
+        for claim in ("copia la contraseña", "copies the password"):
+            self.assertNotIn(claim, notes)
         self.assertLess(notes.index("**ES:**"), notes.index("**EN:**"), "Spanish first")
         self.assertLess(notes.index("### ES:"), notes.index("### EN:"))
 

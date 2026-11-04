@@ -56,8 +56,8 @@ usando el protocolo **PXC** obtenido por ingeniería inversa. Es un port a Swift
 - **En tu iPhone, sin Mac y gratis**: instala la versión para sideload
   (`OpenCfMoto-vX.Y.Z-sideload.ipa`, en [Releases](https://github.com/Kevinparra535/opencfmoto-ios/releases))
   con SideStore, AltStore Classic o Sideloadly y un Apple ID gratuito. Te unes tú al Wi-Fi de la moto
-  desde Ajustes (la app te da el nombre y copia la contraseña) y hay que renovarla cada 7 días. Paso a
-  paso: [docs/INSTALAR.md](docs/INSTALAR.md).
+  desde Ajustes (la app te da el nombre y la contraseña, con un botón para copiarla; la copia dura 2
+  minutos) y hay que renovarla cada 7 días. Paso a paso: [docs/INSTALAR.md](docs/INSTALAR.md).
 - **Todo, también sin Mac**: haz un fork de este repositorio y compila tu propia copia en TestFlight con
   GitHub Actions (cuenta de pago de Apple Developer, 99 USD al año) →
   [docs/TESTFLIGHT.md](docs/TESTFLIGHT.md).
@@ -144,9 +144,10 @@ duplicadas, la pantalla debe estar encendida y la emisión se detiene al bloquea
   - **De pago** (Apple Developer Program) para la variante `full`: la app se une sola al Wi-Fi de
     la moto (*Hotspot Configuration*) y lee el SSID actual (*Access WiFi Information*).
   - **Gratuita** (Personal Team) para la variante `free`: sin esos permisos, te unes al Wi-Fi de
-    la moto desde Ajustes de iOS cuando la app te lo pide (muestra el nombre y copia la
-    contraseña). Con una cuenta gratuita la app caduca a los 7 días (vuelve a instalarla desde
-    Xcode), hay un máximo de 3 apps por dispositivo y la extensión de espejo usa otro App ID.
+    la moto desde Ajustes de iOS cuando la app te lo pide (muestra el nombre y la contraseña, con
+    un botón para copiarla; la copia dura 2 minutos). Con una cuenta gratuita la app caduca a los 7
+    días (vuelve a instalarla desde Xcode), hay un máximo de 3 apps por dispositivo y la extensión de
+    espejo usa otro App ID.
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen) para generar el proyecto de Xcode.
 
 ## Compilar e instalar
@@ -217,9 +218,9 @@ Sigue la guía paso a paso [docs/PRUEBA-EN-LA-MOTO.md](docs/PRUEBA-EN-LA-MOTO.md
   Mientras suena, los botones ◀ ▶ ★ de la moto controlan la música; con el mando multimedia del
   teléfono activado, pausa la canción con ★ para devolvérselos al tablero.
 - **Versión para sideload** (gratuita, de Releases): te unes al Wi-Fi de la moto a mano en Ajustes
-  (la app muestra la red y copia la contraseña), caduca a los 7 días si no la renuevas, entra en el
-  máximo de 3 apps instaladas así y el modo espejo puede no estar disponible
-  ([docs/INSTALAR.md](docs/INSTALAR.md)).
+  (la app muestra la red y la contraseña, con un botón para copiarla; la copia dura 2 minutos),
+  caduca a los 7 días si no la renuevas, entra en el máximo de 3 apps instaladas así y el modo
+  espejo puede no estar disponible ([docs/INSTALAR.md](docs/INSTALAR.md)).
 - **App Store**: el audio silencioso para los botones y la lectura del volumen podrían no ser
   aceptados en la revisión de Apple. Además, la licencia **AGPL** es difícil de compatibilizar con
   las condiciones de la App Store: distribuir esta app (o un derivado) a otras personas, ya sea en
@@ -340,8 +341,9 @@ the reverse-engineered **PXC** protocol. It is a Swift port of the Android app
 - **On your iPhone, no Mac, free**: install the sideload build
   (`OpenCfMoto-vX.Y.Z-sideload.ipa`, on [Releases](https://github.com/Kevinparra535/opencfmoto-ios/releases))
   with SideStore, AltStore Classic or Sideloadly and a free Apple ID. You join the bike Wi-Fi yourself
-  in Settings (the app shows the network and copies the password), and the app must be refreshed
-  every 7 days. Step by step: [docs/INSTALAR.md](docs/INSTALAR.md#english).
+  in Settings (the app shows the network and the password, with a copy button; the copy lasts 2
+  minutes), and the app must be refreshed every 7 days. Step by step:
+  [docs/INSTALAR.md](docs/INSTALAR.md#english).
 - **Everything, still without a Mac**: fork this repository and build your own TestFlight copy with
   GitHub Actions (paid Apple Developer account, 99 USD a year) →
   [docs/TESTFLIGHT.md](docs/TESTFLIGHT.md#english).
@@ -428,9 +430,9 @@ on and the broadcast stops when the phone locks.
   - **Paid** (Apple Developer Program) for the `full` flavor: the app joins the bike Wi-Fi by itself
     (*Hotspot Configuration*) and reads the current SSID (*Access WiFi Information*).
   - **Free** (Personal Team) for the `free` flavor: without those entitlements you join the bike
-    Wi-Fi in iOS Settings when the app asks (it shows the network name and copies the password).
-    With a free account the app expires after 7 days (reinstall it from Xcode), there is a limit of
-    3 apps per device and the mirror extension uses one more App ID.
+    Wi-Fi in iOS Settings when the app asks (it shows the network name and the password, with a copy
+    button; the copy lasts 2 minutes). With a free account the app expires after 7 days (reinstall it
+    from Xcode), there is a limit of 3 apps per device and the mirror extension uses one more App ID.
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen) to generate the Xcode project.
 
 ## Build and install
@@ -495,9 +497,9 @@ no Wi-Fi or dash, and a demo GPS route so you can watch the dash UI on the phone
   While it plays, the bike's ◀ ▶ ★ buttons control the music; with the phone media remote on, pause
   the song with ★ to give them back to the dash.
 - **Sideload build** (free, from Releases): you join the bike Wi-Fi by hand in Settings (the app
-  shows the network and copies the password), it expires after 7 days unless refreshed, it counts
-  toward the limit of 3 apps installed that way and mirror mode may be unavailable
-  ([docs/INSTALAR.md](docs/INSTALAR.md#english)).
+  shows the network and the password, with a copy button; the copy lasts 2 minutes), it expires
+  after 7 days unless refreshed, it counts toward the limit of 3 apps installed that way and mirror
+  mode may be unavailable ([docs/INSTALAR.md](docs/INSTALAR.md#english)).
 - **App Store**: the silent audio for the buttons and the volume observation may not pass Apple's
   review. The **AGPL** is also hard to reconcile with the App Store terms: distributing this app (or
   a derivative) to other people — on the App Store, or through TestFlight external testing or a

@@ -3741,12 +3741,12 @@
         }
       }
     },
-    "Password copied — paste it in Settings": {
+    "Password copied — paste it in Settings within 2 minutes": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contraseña copiada: pégala en Ajustes"
+            "value": "Contraseña copiada: pégala en Ajustes antes de 2 minutos"
           }
         }
       }
@@ -6107,6 +6107,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "• Conectar: se une al Wi-Fi de la moto y muestra el mapa de OpenCfMoto en el tablero (se convierte en Detener mientras está vinculado).\n• Mapa: busca lugares, planifica rutas y carga tracks GPX; el tablero lo sigue.\n• Espejo: muestra toda la pantalla del iPhone en el tablero (sin control táctil).\n• Vista de tablero y Controles: la imagen del tablero en directo en el teléfono y el mando del manillar.\n• Modo ruta: una pantalla negra que mantiene la transmisión al tablero con el iPhone desbloqueado."
+          }
+        }
+      }
+    },
+    "• Connect — shows the bike Wi-Fi name and password to join in Settings ▸ Wi-Fi, then the OpenCfMoto map on the dash (becomes Stop while linked).\n• Map — search places, plan routes and load GPX tracks; the dash follows.\n• Mirror — shows the whole iPhone screen on the dash (no touch back).\n• Dash view & Controls — the live dash picture on the phone and the handlebar pad.\n• Ride Mode — a black screen that keeps the dash streaming with the iPhone unlocked.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• Conectar: te muestra el nombre y la contraseña del Wi-Fi de la moto para unirte en Ajustes ▸ Wi-Fi y luego el mapa de OpenCfMoto en el tablero (se convierte en Detener mientras está vinculado).\n• Mapa: busca lugares, planifica rutas y carga tracks GPX; el tablero lo sigue.\n• Espejo: muestra toda la pantalla del iPhone en el tablero (sin control táctil).\n• Vista de tablero y Controles: la imagen del tablero en directo en el teléfono y el mando del manillar.\n• Modo ruta: una pantalla negra que mantiene la transmisión al tablero con el iPhone desbloqueado."
           }
         }
       }

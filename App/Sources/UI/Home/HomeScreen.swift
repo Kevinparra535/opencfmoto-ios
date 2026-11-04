@@ -355,10 +355,12 @@ private struct HomeFooter: View {
 // MARK: - Tips card (§7.1 item 8, rewritten for iOS)
 
 private struct HomeTipsCard: View {
+    @Environment(AppModel.self) private var model
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             MainSectionCaption(text: "Rider tips")
-            Text("• Connect — joins the bike Wi-Fi and shows the OpenCfMoto map on the dash (becomes Stop while linked).\n• Map — search places, plan routes and load GPX tracks; the dash follows.\n• Mirror — shows the whole iPhone screen on the dash (no touch back).\n• Dash view & Controls — the live dash picture on the phone and the handlebar pad.\n• Ride Mode — a black screen that keeps the dash streaming with the iPhone unlocked.")
+            tips
                 .font(.footnote)
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -370,6 +372,15 @@ private struct HomeTipsCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .cardStyle()
+    }
+
+    /// The free build cannot join Wi-Fi networks by itself: its Connect line says the rider joins the
+    /// bike Wi-Fi in Settings (review NEWCOMER-3). Two whole strings, so each is translated as a unit.
+    private var tips: Text {
+        if model.flavor == .free {
+            return Text("• Connect — shows the bike Wi-Fi name and password to join in Settings ▸ Wi-Fi, then the OpenCfMoto map on the dash (becomes Stop while linked).\n• Map — search places, plan routes and load GPX tracks; the dash follows.\n• Mirror — shows the whole iPhone screen on the dash (no touch back).\n• Dash view & Controls — the live dash picture on the phone and the handlebar pad.\n• Ride Mode — a black screen that keeps the dash streaming with the iPhone unlocked.")
+        }
+        return Text("• Connect — joins the bike Wi-Fi and shows the OpenCfMoto map on the dash (becomes Stop while linked).\n• Map — search places, plan routes and load GPX tracks; the dash follows.\n• Mirror — shows the whole iPhone screen on the dash (no touch back).\n• Dash view & Controls — the live dash picture on the phone and the handlebar pad.\n• Ride Mode — a black screen that keeps the dash streaming with the iPhone unlocked.")
     }
 }
 
