@@ -2256,6 +2256,10 @@ notification channels (use Live Activities / local notifications instead).
     §9, and keep log lines English.
 17. **Units**: Android trips are metric-only; iOS can honour the map units setting (`METRIC`/`IMPERIAL`) — but keep the
     stored data in SI units exactly as §5.1.
+18. **Demo content** (`-demo` / `-demoSeed`, simulator screenshots): public places only. The demo GPS loop
+    (`DemoRoutePlayer.defaultRoute`) runs on the public roads around Parque Simón Bolívar (Bogotá); the demo home
+    (`DemoPlaces.home`) is "Demo home" / "Casa (demo)", a spot well inside that park, and the favourites are public
+    landmarks. Never seed a real address, and post only demo or simulator pictures.
 
 ---
 
