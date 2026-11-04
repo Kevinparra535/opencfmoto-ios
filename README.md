@@ -264,14 +264,19 @@ CREDITS.md, NOTICE, LICENSES/   Créditos, avisos de copyright y licencias de te
 swift test --package-path Packages/OpenCfMotoKit
 ```
 
-El núcleo y los modelos de la app (unas mil pruebas) se ejecutan en Linux y macOS. En cada push,
-GitHub Actions (`.github/workflows/ci.yml`) ejecuta las pruebas en Linux, las vuelve a ejecutar en
-macOS compilando los adaptadores de Apple, genera el proyecto con XcodeGen y compila la app para
-el Simulador de iOS y para iPhone (también con el Xcode más reciente). Además ensaya el flujo de
+El núcleo y los modelos de la app se prueban en Linux y macOS: unas 1700 pruebas en Linux y unas
+1900 en macOS, que además prueba los adaptadores de Apple. En cada push, GitHub Actions
+(`.github/workflows/ci.yml`) ejecuta las pruebas en Linux, las vuelve a ejecutar en macOS
+compilando los adaptadores de Apple, genera el proyecto con XcodeGen y compila la app para el
+Simulador de iOS y para iPhone (también con el Xcode más reciente). Además ensaya el flujo de
 TestFlight sin credenciales: pruebas de `asc.py`, de los pasos de `build_and_sign.sh` y de los
 mensajes del workflow contra un App Store Connect simulado, ajustes de firma, archivo sin firmar
-revisado por `lint_bundle.py`, el llavero temporal y la limpieza tras una cancelación. Las
-traducciones se reúnen con `python3 tools/l10n/build_strings.py`.
+revisado por `lint_bundle.py`, el llavero temporal y la limpieza tras una cancelación. Y ensaya la
+versión para sideload tal como la publica `release.yml`, sin publicar nada: la variante gratuita
+archivada sin firmar con la versión de XcodeGen esperada y revisada por `lint_bundle.py`, el IPA
+firmado ad hoc solo con el App Group y con los textos de las licencias dentro, y la fuente de
+AltStore / SideStore leída de ese IPA. Las traducciones se reúnen con
+`python3 tools/l10n/build_strings.py`.
 
 ## Privacidad
 
@@ -541,14 +546,18 @@ CREDITS.md, NOTICE, LICENSES/   Credits, copyright notices and third-party licen
 swift test --package-path Packages/OpenCfMotoKit
 ```
 
-The core and the app models (about a thousand tests) run on Linux and macOS. On every push GitHub
-Actions (`.github/workflows/ci.yml`) runs the tests on Linux, runs them again on macOS while
-compiling the Apple adapters, generates the project with XcodeGen and builds the app for the iOS
-Simulator and for iPhone (also with the newest Xcode). It also rehearses the TestFlight pipeline
-without credentials: tests of `asc.py`, of the `build_and_sign.sh` steps and of the workflow's
-messages against a fake App Store Connect, the signing settings, an unsigned archive checked by
-`lint_bundle.py`, the temporary keychain and the clean-up after a cancel. Translations are merged
-with `python3 tools/l10n/build_strings.py`.
+The core and the app models are tested on Linux and macOS: about 1,700 tests on Linux and about
+1,900 on macOS, which also tests the Apple adapters. On every push GitHub Actions
+(`.github/workflows/ci.yml`) runs the tests on Linux, runs them again on macOS while compiling the
+Apple adapters, generates the project with XcodeGen and builds the app for the iOS Simulator and for
+iPhone (also with the newest Xcode). It also rehearses the TestFlight pipeline without credentials:
+tests of `asc.py`, of the `build_and_sign.sh` steps and of the workflow's messages against a fake
+App Store Connect, the signing settings, an unsigned archive checked by `lint_bundle.py`, the
+temporary keychain and the clean-up after a cancel. And it rehearses the sideload build the way
+`release.yml` publishes it, without publishing anything: the free flavour archived unsigned with the
+expected XcodeGen version and checked by `lint_bundle.py`, the IPA signed ad hoc with only the App
+Group and with the licence texts inside, and the AltStore / SideStore source read from that IPA.
+Translations are merged with `python3 tools/l10n/build_strings.py`.
 
 ## Privacy
 
