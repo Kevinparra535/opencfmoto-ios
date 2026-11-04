@@ -41,6 +41,10 @@ defaults:
 jobs:
   prepare:
     name: Prepare (App Store Connect)
+    # The App Store Connect key lives in the protected environment "testflight" (docs/TESTFLIGHT.md,
+    # "Proteger la clave"): only runs from main get it. Without that environment GitHub creates an
+    # unprotected one and the repository secrets keep working.
+    environment: testflight
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
@@ -157,6 +161,7 @@ jobs:
     name: Build, sign and upload (macOS)
     needs: prepare
     if: needs.prepare.outputs.ready == 'true'
+    environment: testflight
     runs-on: macos-15
     timeout-minutes: 60
     outputs:
@@ -312,6 +317,7 @@ jobs:
     # Whenever the build job ran, also after a failure, a cancel or a lost runner: the revoke step
     # makes sure no temporary certificate stays behind.
     if: always() && needs.prepare.outputs.ready == 'true' && needs.build.result != 'skipped'
+    environment: testflight
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:

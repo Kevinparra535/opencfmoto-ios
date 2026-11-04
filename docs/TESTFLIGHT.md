@@ -59,6 +59,33 @@ Store Connect.
 *Opcional:* en la pestaña **Variables** puedes crear `BUNDLE_ID_PREFIX` con otro prefijo. Si no
 existe, se usa `com.` + el dueño del repositorio en minúsculas (aquí, `com.kevinparra535`).
 
+### Recomendado: protege la clave con un «Environment»
+
+Así la clave solo llega a ejecuciones lanzadas desde `main`: ni otra rama ni un workflow modificado en
+otra rama pueden leerla. El workflow ya usa el environment `testflight`; si no lo creas, GitHub crea
+uno sin protección y los secretos del repositorio siguen funcionando.
+
+1. **Settings** ▸ **Environments** ▸ **New environment** ▸ nombre exacto `testflight` ▸ **Configure
+   environment**.
+2. **Deployment branches and tags** ▸ **Selected branches and tags** ▸ **Add deployment branch or tag
+   rule** ▸ *Ref type* **Branch**, *Name pattern* `main` ▸ **Add rule**.
+3. *Opcional:* **Required reviewers** ▸ tú mismo ▸ **Save protection rules**. Cada ejecución esperará
+   tu aprobación en cada uno de sus tres trabajos (botón **Review deployments**); si no la quieres,
+   no lo marques: la regla de la rama ya protege la clave.
+4. **Environment secrets** ▸ **Add environment secret**: crea `ASC_KEY_ID`, `ASC_ISSUER_ID` y
+   `ASC_PRIVATE_KEY` con los mismos valores del paso 2. GitHub no deja ver los secretos guardados: si
+   ya no tienes el `.p8`, crea una clave nueva (paso 1), usa sus valores aquí y revoca la antigua en
+   App Store Connect cuando el paso 5 funcione.
+5. Comprueba: **Actions** ▸ **TestFlight** ▸ **Run workflow** desde `main` con **Solo preparar**. El
+   trabajo «Prepare» debe terminar en verde y la ejecución muestra el environment `testflight`.
+6. Borra los secretos del repositorio: **Settings** ▸ **Secrets and variables** ▸ **Actions** ▸ en
+   **Repository secrets** borra `ASC_KEY_ID`, `ASC_ISSUER_ID` y `ASC_PRIVATE_KEY` (los de
+   **Environment secrets** se quedan). Repite el paso 5: si sigue en verde, terminaste.
+
+La variable `BUNDLE_ID_PREFIX`, si la usas, puede quedarse en el repositorio: no es secreta. Con la
+regla de la rama, lanzar el workflow desde otra rama falla con «… is not allowed to deploy to
+testflight»: lánzalo desde `main`.
+
 ## 3. Prepara (registra los identificadores)
 
 En GitHub: **Actions** ▸ **TestFlight** ▸ **Run workflow** ▸ marca **Solo preparar** ▸ **Run
@@ -223,6 +250,15 @@ GitHub builds the app on a cloud Mac, signs it with your Apple Developer account
    `ASC_PRIVATE_KEY` (the whole `.p8` text). Optional variable `BUNDLE_ID_PREFIX`; the default prefix
    is `com.` + the repository owner in lower case (here `com.kevinparra535`). In a fork it is `com.` +
    your user name in lower case (enable workflows in the fork's **Actions** tab first, see above).
+   **Recommended: a protected environment.** The workflow's jobs use the environment `testflight`, so
+   the key can live there and reach only runs from `main`: Settings ▸ Environments ▸ New environment
+   `testflight` ▸ Deployment branches and tags ▸ Selected branches and tags ▸ add the branch rule
+   `main` (optionally Required reviewers: you, then each of the run's three jobs waits for your
+   approval) ▸ Environment secrets: `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_PRIVATE_KEY` with the same
+   values (GitHub never shows stored secrets: if you no longer have the `.p8`, create a new key and
+   revoke the old one once it works). Check with a *Solo preparar* run from `main`, then delete the
+   three **Repository secrets** and run it again. Without the environment, GitHub creates an
+   unprotected one and repository secrets keep working.
 3. Actions ▸ **TestFlight** ▸ Run workflow with **Solo preparar** (setup only). This checks the key and
    registers `<prefix>.opencfmoto` and `<prefix>.opencfmoto.mirror` (its summary shows the exact
    identifiers).
