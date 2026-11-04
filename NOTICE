@@ -15,6 +15,9 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY
 WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
 PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
 
+The full list of the people, projects and services this app builds on is in
+CREDITS.md. The Apache License 2.0 text is in LICENSES/Apache-2.0.txt.
+
 --------------------------------------------------------------------------------
 Derived work
 --------------------------------------------------------------------------------
@@ -26,13 +29,107 @@ This project is a derivative of OpenCfMoto (Android), licensed AGPL-3.0:
 
 The PXC / EasyConnect protocol implementation, bike profiles, navigation logic,
 GPX handling, trip logging and settings formats were ported from that project's
-Kotlin sources and reverse-engineering documentation. Because it is a derived
-work, it is distributed under the same license (AGPL-3.0-or-later), and anyone
-who redistributes it must make the complete corresponding source available
-under the same terms and keep this notice.
+Kotlin sources and reverse-engineering documentation (OpenCfMoto 2.0.18, commit
+0abbe2a). Part of the Spanish user-interface text comes from its Spanish locale.
+Because it is a derived work, it is distributed under the same license
+(AGPL-3.0-or-later), and anyone who redistributes it must make the complete
+corresponding source available under the same terms and keep this notice.
 
 No code from the Android Auto receiver (headunit-revived lineage) is included:
 the iOS app does not implement Android Auto.
+
+--------------------------------------------------------------------------------
+Upstream notices (preserved from OpenCfMoto's NOTICE)
+--------------------------------------------------------------------------------
+
+OpenCfMoto's NOTICE asks everyone who redistributes it to preserve its copyright
+and attribution notices. They are quoted below from OpenCfMoto 2.0.18. Its other
+sections list its Android build dependencies (AndroidX, Material Components,
+osmdroid, MapLibre, jmDNS, Conscrypt, ML Kit, protobuf, JUnit / Espresso), none
+of which this port contains.
+
+  Copyright is held by the respective authors of each contribution:
+
+    * OpenCfMoto original code (UI, connection orchestration, bike Wi-Fi
+      handling, reconnect/park/resume supervisor, trip computer & logging,
+      compositor glue, documentation): Copyright (C) 2026 Alexandru
+      <https://alexandru.rocks> and the OpenCfMoto contributors.
+
+    * Android Auto Projection receiver (the `dev.zanderp.opencfmoto.aa`
+      package): portions Copyright (C) their original authors, ported from
+      headunit-revived (see below). These files retain their original AGPLv3
+      attribution headers.
+
+  headunit-revived — AGPL-3.0
+    The `dev.zanderp.opencfmoto.aa` package (AAP transport, SSL handshake,
+    message handling, video decoder, protobuf message definitions, and related
+    helpers) is ported and adapted from the headunit-revived project.
+    Original work Copyright (C) the headunit lineage authors — including the
+    original "headunit" (mikereidis), "headunit-reloaded", and
+    "headunit-revived" (andreknieriem) — and their respective contributors.
+    Licensed under AGPL-3.0.
+    Upstream: https://github.com/andreknieriem/headunit-revived
+
+  OpenCfMoto builds on research and code from the following open-cfmoto forks.
+  At the time of writing these repositories did not ship an explicit LICENSE
+  file; this project treats the shared AGPLv3 heritage of the Android Auto code
+  as governing and credits the prior authors here:
+
+    * coletz / dcoletto  — dcoletto/open-cfmoto  (base app, QR/EasyConn work)
+    * richardbizik        — richardbizik/open-cfmoto  (1000MT-X support)
+    * BojanJ              — BojanJ/open-cfmoto  (Android Auto receiver
+                            integration)
+    * ionutradu252        — ionutradu252/open-cfmoto  (CFDL16/450SR
+                            handlebar-button control, on-screen D-pad/knob,
+                            navigate-to, Assistant mic)
+
+  OpenStreetMap data used for Map / GPX (and via OpenFreeMap / OSRM / Overpass /
+  Nominatim / Valhalla when online) is © OpenStreetMap contributors, available
+  under the Open Database License (ODbL). OpenFreeMap styles/tiles: see
+  openfreemap.org terms. Valhalla routing (avoid highways/tolls fallback):
+  public instance at valhalla1.openstreetmap.de — please be polite with request
+  volume.
+
+For this iOS port:
+  * The Android Auto receiver and the headunit-revived code are not included,
+    and the app does not use OpenFreeMap.
+  * ionutradu252/open-cfmoto is now https://github.com/ionutradu252/open-cflink
+  * headunit-revived is now Open Headunit, by Andre Rinas (andreknieriem):
+    https://github.com/andreknieriem/open-headunit. It revives headunit, by
+    Michael Reid (mikereidis): https://github.com/mikereidis/headunit
+
+--------------------------------------------------------------------------------
+Apache License 2.0 components (see LICENSES/Apache-2.0.txt)
+--------------------------------------------------------------------------------
+
+These parts are licensed under the Apache License, Version 2.0, and are combined
+with the AGPL-3.0-or-later code of this app. Their notices are kept in the files.
+
+  * Packages/OpenCfMotoKit/Sources/OpenCfMotoCore/Trips/TripGeodesy.swift:
+    Swift translation of android.location.Location.computeDistanceAndBearing.
+    Copyright (C) 2007 The Android Open Source Project. Modified (translated to
+    Swift) by the OpenCfMoto for iOS contributors.
+
+  * Packages/OpenCfMotoKit/Sources/OpenCfMotoCore/Settings/AndroidOrgJSON.swift,
+    Packages/OpenCfMotoKit/Sources/OpenCfMotoCore/Protocol/PxcOrgJSON.swift and
+    Packages/OpenCfMotoKit/Sources/OpenCfMotoCore/Util/OrderedJSON.swift: the
+    tokenizer, coercions and writer of Android libcore org.json (JSONTokener,
+    JSONObject, JSONStringer). Copyright (C) 2010 The Android Open Source
+    Project. Re-implemented in Swift and modified by the OpenCfMoto for iOS
+    contributors.
+
+  * tools/android-prober-harness/aosp-json/org/json/*.java: unmodified AOSP
+    libcore org.json (from Robolectric android-all 14), used only by a test
+    tool and not part of the app. Copyright (C) 2010 The Android Open Source
+    Project.
+
+  * Material Icons by Google, through OpenCfMoto's Android vector drawables:
+    two_wheeler, the app glyph
+    (App/Resources/Assets.xcassets/RideGlyph.imageset/ride.svg), and gps_fixed,
+    add, remove, explore, more_vert, crop_free, volume_up, search and place, the
+    dash buttons and the arrival icon
+    (Packages/OpenCfMotoKit/Sources/OpenCfMotoCore/Dash/DashIcons.swift).
+    explore and place are slightly modified; the file headers say how.
 
 --------------------------------------------------------------------------------
 Not affiliated
@@ -46,7 +143,18 @@ owners. Do not rely on it for critical navigation; use at your own risk.
 Map data and services
 --------------------------------------------------------------------------------
 
-Map tiles and geodata (c) OpenStreetMap contributors, ODbL
-(https://www.openstreetmap.org/copyright). Routing and search may use public
-OpenStreetMap-based services (Valhalla/FOSSGIS, OSRM, Photon, Nominatim,
-Overpass) subject to their usage policies.
+Map data © OpenStreetMap contributors, available under the Open Database License
+(ODbL 1.0): https://www.openstreetmap.org/copyright
+
+The app calls these public services, each under its operator's usage policy. For
+heavy use, set your own tile server or an openrouteservice key in Settings.
+
+  * Map tiles: tile.openstreetmap.org (OpenStreetMap Foundation), the default
+    tile server, which you can change in Settings.
+  * Place search: Photon (photon.komoot.io, by komoot), with Nominatim
+    (nominatim.openstreetmap.org, OpenStreetMap Foundation) as the fallback.
+  * Nearby places and speed limits: Overpass API (overpass-api.de, FOSSGIS e.V.).
+  * Routing: Valhalla (valhalla1.openstreetmap.de, FOSSGIS e.V.) and OSRM
+    (router.project-osrm.org, the Project OSRM demo server). With your own key:
+    openrouteservice (api.openrouteservice.org), © openrouteservice.org by
+    HeiGIT | Map data © OpenStreetMap contributors.

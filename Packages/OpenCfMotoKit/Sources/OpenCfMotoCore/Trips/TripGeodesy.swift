@@ -1,4 +1,8 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later AND Apache-2.0
+// Portions Copyright (C) 2007 The Android Open Source Project, licensed under the Apache License,
+// Version 2.0 (LICENSES/Apache-2.0.txt). Translated to Swift and modified by the OpenCfMoto for iOS
+// contributors; this file as a whole is distributed under the AGPL-3.0-or-later (see NOTICE).
+//
 // Distance between two fixes as Android computes it for trips (`Location.distanceTo`): the WGS84
 // ellipsoid inverse formula (Vincenty, NOAA "Inverse Formula" §4, 20 iterations max), returned as a
 // 32-bit float. Port of AOSP `android.location.Location.computeDistanceAndBearing` (Apache-2.0).

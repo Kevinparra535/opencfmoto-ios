@@ -1,4 +1,8 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later AND Apache-2.0
+// Portions Copyright (C) 2010 The Android Open Source Project (libcore `org.json`), licensed under
+// the Apache License, Version 2.0 (LICENSES/Apache-2.0.txt). Translated to Swift and modified by the
+// OpenCfMoto for iOS contributors; this file as a whole is distributed under the AGPL-3.0-or-later.
+//
 // Re-implements the parsing behaviour of Android's libcore `org.json` (`JSONTokener`,
 // `JSONObject(String)`, `JSONObject.opt*` coercions) — the parser OpenCfMoto (Android) uses for every
 // JSON the dash sends (docs/spec/control-plane.md §7, §18.6).

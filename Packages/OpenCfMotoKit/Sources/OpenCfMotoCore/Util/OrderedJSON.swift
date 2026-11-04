@@ -1,4 +1,9 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later AND Apache-2.0
+// Output rules of Android libcore `org.json` (`JSONStringer`, `JSONObject.quote`, number
+// formatting), Portions Copyright (C) 2010 The Android Open Source Project, licensed under the
+// Apache License, Version 2.0 (LICENSES/Apache-2.0.txt). Re-implemented in Swift and modified by the
+// OpenCfMoto for iOS contributors; this file as a whole is distributed under the AGPL-3.0-or-later.
+//
 // Deterministic JSON writer that preserves key insertion order and mimics Android's org.json
 // `JSONObject.toString()` output byte-for-byte (no whitespace, "/" escaped as "\/", control
 // characters as \b \t \n \f \r or \u00XX, numbers without trailing ".0" for integral values).
