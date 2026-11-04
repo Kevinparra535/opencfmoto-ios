@@ -94,8 +94,9 @@ espejo: la extensión «OpenCfMoto Mirror» es la que duplica la pantalla.
    sigue en el Wi-Fi de casa y la app no te muestra la red de la moto, únete tú primero: la
    contraseña está en **Garaje ▸ tu moto**.
 
-Para la primera salida sigue [PRUEBA-EN-LA-MOTO.md](PRUEBA-EN-LA-MOTO.md) (sáltate la parte de Xcode:
-la app ya está instalada). Fija la ruta antes de salir.
+Para la primera salida sigue [PRUEBA-EN-LA-MOTO.md](PRUEBA-EN-LA-MOTO.md) (sáltate el paso 1 de
+«Antes de salir»: la app ya está instalada; en la tabla, usa la fila de la versión sideload). Fija la
+ruta antes de salir.
 
 ### Qué no funciona en esta versión
 
@@ -287,8 +288,9 @@ If a tool offers to remove the app's extensions, say no if you want to try mirro
    still on your home Wi-Fi and the app does not show the bike's network, join it yourself first:
    the password is in **Garage ▸ your bike**.
 
-For the first ride, follow [PRUEBA-EN-LA-MOTO.md](PRUEBA-EN-LA-MOTO.md) (in Spanish; skip the Xcode
-part: the app is already installed). Set the route before you ride.
+For the first ride, follow [PRUEBA-EN-LA-MOTO.md](PRUEBA-EN-LA-MOTO.md) (in Spanish, with a short
+English summary at the top; skip step 1 of «Antes de salir»: the app is already installed; in the
+table the sideload row applies: you join the Wi-Fi yourself, as above). Set the route before you ride.
 
 #### What does not work in this build
 

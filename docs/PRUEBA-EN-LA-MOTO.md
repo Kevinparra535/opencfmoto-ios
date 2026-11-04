@@ -1,9 +1,16 @@
 # Prueba en la moto — guía paso a paso
 
+> **In English, in short:** this is the checklist for a first ride. Install the app (the free
+> sideload IPA from Releases: [INSTALAR.md](INSTALAR.md#english)), pair the bike by scanning the
+> dash QR, tap **Connect** with the engine off and compare what you see with the table in «En la
+> moto». With the sideload build you join the bike Wi-Fi yourself: the app shows the **"Join the
+> bike Wi-Fi"** sheet (use the sideload row of the table). Then share the logs (Logs ▸ Share) in a
+> [field report](https://github.com/Kevinparra535/opencfmoto-ios/issues/new?template=field-report.yml).
+
 Esta guía es para la **primera prueba real** de OpenCfMoto para iOS con tu tablero CFMoto / Carbit.
 Todo lo que se pudo probar sin moto ya pasó:
 
-- **Más de 1400 pruebas automáticas.**
+- **Más de 1700 pruebas automáticas.**
 - **Comparación byte a byte del protocolo con la app Android**: en 6 escenarios se comporta igual
   (ver `docs/verification/pxc-differential.md`).
 - **La app real en el simulador de iOS conectada a un tablero simulado**, sin violaciones del
@@ -14,17 +21,22 @@ permiso de red local, el codificador de video del teléfono y el comportamiento 
 
 ## Antes de salir
 
-1. **Instala la app** en tu iPhone. **Sin Mac**: con TestFlight ([TESTFLIGHT.md](TESTFLIGHT.md)); esa
-   build ya es Release y la variante completa. **Con Mac**: desde Xcode (README → *Compilar e
-   instalar*), con `OCM_FLAVOR = full`, que permite que la app se una sola al Wi-Fi de la moto; para
-   la moto compílala en **Release** (va más fluida) y ábrela desde la pantalla de inicio, sin el Mac.
+1. **Instala la app** en tu iPhone. **Sin Mac y gratis**: la versión sideload de Releases con tu
+   Apple ID ([INSTALAR.md](INSTALAR.md)); es Release, pero la variante «free»: al Wi-Fi de la moto te
+   unes tú en Ajustes (ver la tabla). **Sin Mac, con cuenta de pago**: tu propio TestFlight
+   ([TESTFLIGHT.md](TESTFLIGHT.md)); esa build ya es Release y la variante completa. **Con Mac**:
+   desde Xcode (README → *Compilar e instalar*), con `OCM_FLAVOR = full`, que permite que la app se
+   una sola al Wi-Fi de la moto; para la moto compílala en **Release** (va más fluida) y ábrela desde
+   la pantalla de inicio, sin el Mac.
 2. **Abre la app una vez en casa** y completa la bienvenida: permiso de ubicación *Al usar la app* y
    precisa.
 3. **Opcional, para probar sin moto**: en una computadora conectada a la misma Wi-Fi que el iPhone
    (Mac; Linux con `avahi-utils`; Windows con Python 3 y el servicio Bonjour de Apple) ejecuta
    `python3 tools/fakedash/fakedash.py --bonjour --ffplay --scenario cfdl16 --seconds 120`
    (`--ffplay` necesita ffmpeg: `brew install ffmpeg` en Mac, `sudo apt install ffmpeg` en Linux), empareja a mano tu Wi-Fi de casa en Garaje ▸
-   *Ingresar Wi-Fi manualmente* y pulsa **Conectar** antes de 90 s. Si en una ventana de la computadora ves
+   *Ingresar Wi-Fi manualmente* y pulsa **Conectar** antes de 90 s (versión sideload u
+   `OCM_FLAVOR = free`: si aparece «Conéctate al Wi-Fi de la moto», ya estás en tu Wi-Fi: toca
+   **«Ya me he conectado»**). Si en una ventana de la computadora ves
    el mapa durante 2 minutos, toda la cadena funciona en tu iPhone (ver `tools/fakedash/README.md`).
 
 ## En la moto (con el motor parado y la moto segura)
@@ -36,7 +48,8 @@ permiso de red local, el codificador de video del teléfono y el comportamiento 
 
    | Paso | Qué verás en el iPhone | Tiempo típico |
    |---|---|---|
-   | Unirse al Wi-Fi | iOS pregunta «¿Conectarse a la red CFMOTO…?» → **Conectar** | 2–10 s |
+   | Unirse al Wi-Fi (TestFlight, o Xcode con `OCM_FLAVOR = full`) | iOS pregunta «¿Conectarse a la red CFMOTO…?» → **Conectar** | 2–10 s |
+   | Unirse al Wi-Fi (versión sideload, o Xcode con `OCM_FLAVOR = free`) | La hoja **«Conéctate al Wi-Fi de la moto»**: copia la contraseña con su botón (la copia dura 2 minutos), ve a Ajustes ▸ Wi-Fi, elige la red de la moto, pégala y vuelve a OpenCfMoto; sigue sola o toca **«Ya me he conectado»**. Si el iPhone ya estaba en la red de la moto, la hoja no aparece | a tu ritmo |
    | Red local | La primera vez, iOS pide **permiso de red local** → **Permitir** (imprescindible) | — |
    | Vinculando | «Vinculando al panel…» | 1–5 s |
    | En vivo | «Conectado: proyectando al tablero» (verde) y **el mapa aparece en el tablero** | < 1 s |
@@ -101,7 +114,8 @@ siguen vivos, cuánto gasta y si llegan el GPS y la brújula.
 
 Antes de salir:
 
-1. Instala la última build desde TestFlight.
+1. Instala la última versión: con TestFlight o, si usas la versión sideload, el IPA nuevo de
+   Releases con la misma herramienta y el mismo Apple ID ([INSTALAR.md](INSTALAR.md#actualizar)).
 2. En Ajustes de iOS ▸ OpenCfMoto:
    - Ubicación: «Mientras se usa la app», con «Ubicación exacta» activada;
    - «Red local» activada;
@@ -173,6 +187,15 @@ Qué significa cada resultado (con el iPhone bloqueado):
   Wi-Fi para OpenCfMoto, y vuelve a conectar. La app lo reintenta sola cada 20 s.
 - **«El teléfono bloqueó la conexión con el tablero»**: iOS no dijo por qué. Revisa las dos cosas de
   arriba (red local activada, ninguna VPN ni restricción) y comparte los registros.
+- **Versión sideload: la hoja «Conéctate al Wi-Fi de la moto» no se cierra al volver de Ajustes**:
+  esta versión no lee el nombre de la red y reconoce la de la moto solo por su dirección. Comprueba
+  en Ajustes ▸ Wi-Fi que el iPhone está en la red de la moto (no en la de casa) y toca **«Ya me he
+  conectado»**.
+- **Versión sideload: «Ningún tablero respondió en este Wi-Fi…»**: lo más probable es que el iPhone
+  siga en el Wi-Fi de casa (por ejemplo, tocaste «Ya me he conectado» sin cambiar de red): la app no
+  puede distinguirlas. Únete a la red de la moto en Ajustes ▸ Wi-Fi (la contraseña está en
+  **Garaje ▸ tu moto**), vuelve, toca **Detener** y luego **Conectar**. Si el iPhone ya estaba en la
+  red de la moto, abre en el tablero su pantalla de conexión / QR.
 - **Pulsaste Conectar justo cuando la app ya conectaba sola**: ese toque no la detiene (cuenta como
   Conectar). Para detenerla, vuelve a pulsar.
 - **El tablero muestra «Teléfono bloqueado»**: lo esperado si bloqueas el iPhone, salvo que iOS le
@@ -182,7 +205,8 @@ Qué significa cada resultado (con el iPhone bloqueado):
 ## Qué me ayuda saber de tu prueba
 
 1. Modelo de moto y año, y el texto que aparece en el tablero en la pantalla de conexión.
-2. Hasta qué paso de la tabla llegaste y cuánto tardó cada uno.
+2. Cómo la instalaste (versión sideload, TestFlight o Xcode), hasta qué paso de la tabla llegaste y
+   cuánto tardó cada uno.
 3. Si el mapa se ve completo, nítido y fluido, y si los toques responden en el lugar correcto.
 4. **Espejo con el iPhone en horizontal** (por ejemplo, un vídeo de YouTube a pantalla completa): si
    la imagen se ve derecha en el tablero girando el iPhone hacia un lado y hacia el otro. Y con los
