@@ -5,6 +5,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Read-only by default; only the e2e job (it pushes the ci-artifacts branch) asks for more.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -16,6 +20,8 @@ jobs:
     container: swift:6.0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: swift test (OpenCfMotoKit)
         shell: bash
         run: |
@@ -31,16 +37,21 @@ jobs:
   # tools/testflight/asc.py (App Store Connect helper of the TestFlight workflow), the
   # build_and_sign.sh steps that need no Mac and the TestFlight workflow's own shell blocks, against
   # an in-process fake App Store Connect: no secrets, no network. Failing tests become annotations.
+  # Also tools/release/altsource.py (the release workflow's AltStore / SideStore source) on
+  # synthetic IPAs.
   testflight-helper:
     name: testflight-helper (Linux)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: TestFlight helper tests
         run: |
           python3 --version && openssl version
           python3 tools/testflight/test_asc.py
+          python3 tools/release/test_altsource.py
 
   # The same tests with what signs the build in the TestFlight workflow on a macOS runner when
   # /usr/bin comes first: Apple's python3 (3.9), /usr/bin/openssl (LibreSSL) and /bin/bash (3.2).
@@ -50,17 +61,22 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: TestFlight helper tests (LibreSSL)
         run: |
           export PATH="/usr/bin:$PATH"
           python3 --version && openssl version
           python3 tools/testflight/test_asc.py
+          python3 tools/release/test_altsource.py
 
   apple:
     name: Package tests (macOS) + iOS app build
     runs-on: macos-15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Show Xcode
         run: xcodebuild -version && swift --version
       - name: swift test (macOS — also compiles the Apple adapters)
@@ -122,6 +138,7 @@ jobs:
             build-device-Debug.log
             build-device-Release.log
             swift-test.log
+          retention-days: 14
           if-no-files-found: ignore
 
   # Riders install with the newest Xcode (it is the one that supports the newest iOS on their iPhone),
@@ -131,9 +148,11 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       # Every workflow file: syntax, expressions, contexts, job outputs (shellcheck off there: the
-      # older jobs predate it). The TestFlight workflow and its script also go through shellcheck
-      # (warnings and errors). Findings become annotations.
+      # older jobs predate it). The TestFlight and release workflows and their scripts also go
+      # through shellcheck (warnings and errors). Findings become annotations.
       - name: actionlint (workflow files)
         run: |
           set -uo pipefail
@@ -145,8 +164,10 @@ jobs:
           fmt='{{range $err := .}}::error file={{$err.Filepath}},line={{$err.Line}},col={{$err.Column}},title=actionlint {{$err.Kind}}::{{$err.Message}}\n{{end}}'
           status=0
           actionlint -shellcheck= -pyflakes= -format "$fmt" .github/workflows/*.yml || status=1
-          SHELLCHECK_OPTS="--severity=warning" actionlint -pyflakes= -format "$fmt" .github/workflows/testflight.yml || status=1
-          if ! shellcheck --severity=warning --format=gcc tools/testflight/build_and_sign.sh > shellcheck.log 2>&1; then
+          SHELLCHECK_OPTS="--severity=warning" actionlint -pyflakes= -format "$fmt" .github/workflows/testflight.yml \
+            .github/workflows/release.yml || status=1
+          if ! shellcheck --severity=warning --format=gcc tools/testflight/build_and_sign.sh tools/release/build_ipa.sh \
+               tools/release/package_ipa.sh > shellcheck.log 2>&1; then
             cat shellcheck.log
             sed -n -E 's/^([^:]+):([0-9]+):([0-9]+): [a-z]+: (.*)$/::error file=\1,line=\2,col=\3,title=shellcheck::\4/p' shellcheck.log | head -n 9
             status=1
@@ -277,13 +298,19 @@ jobs:
           done
           export TF_WORK="$d" TF_SIGNING_DIR="$d/signing" TF_ALLOW_UNTRUSTED_IDENTITY=1
           # macOS's own /bin/bash (3.2) here; the settings step above used the bash on PATH.
-          /bin/bash tools/testflight/build_and_sign.sh setup-keychain
+          /bin/bash tools/testflight/build_and_sign.sh setup-keychain 2>&1 | tee "$d/setup-keychain.log"
           kc="$d/testflight.keychain-db"
           fail() {
             echo "::error title=TestFlight dry run (keychain)::$1"
             /bin/bash tools/testflight/build_and_sign.sh teardown > /dev/null 2>&1 || true
             exit 1
           }
+          # The log is public and an identity is named after the account holder: counted, never shown.
+          if grep -q -E "CI Dry Run|ABCDE12345" "$d/setup-keychain.log"; then
+            fail "setup-keychain printed the signing identity's name or team ID"
+          fi
+          grep -q -F "(1 Apple Distribution identity; name and team not shown)" "$d/setup-keychain.log" \
+            || fail "setup-keychain did not report the identity count: $(tr '\n' ' ' < "$d/setup-keychain.log")"
           # (Outputs go through variables: `cmd | grep -q` can fail on SIGPIPE under pipefail.)
           search=$(security list-keychains -d user)
           grep -q -F "$kc" <<< "$search" || fail "the temporary keychain is not in the user search list: $search"
@@ -366,6 +393,83 @@ jobs:
           grep -q '^uploaded=true$' "$d/outputs2" || fail "with the committed marker teardown wrote: $(tr '\n' ' ' < "$d/outputs2")"
           echo "::notice title=TestFlight dry run (teardown)::waited for the running create-signing (teardown took ${took} s), stopped the leftover step, asc.py, altool and xcodebuild with SIGTERM, left the teardown and another checkout alone; the committed marker gives uploaded=true (/bin/bash $(/bin/bash -c 'echo $BASH_VERSION'))"
 
+  # The sideload build of .github/workflows/release.yml, as a dry run on every push (nothing leaves
+  # the runner): the FREE flavour (no Hotspot / Access Wi-Fi Information entitlements: what a free
+  # Apple ID can sign, also the README's Personal Team build) as an unsigned Release archive for
+  # iPhone with the newest Xcode, linted (tools/release/build_ipa.sh); the IPA signed ad hoc with
+  # only the App Group, no team (tools/release/package_ipa.sh checks both); the AltStore /
+  # SideStore source read from that IPA (tools/release/altsource.py).
+  sideload:
+    name: Sideload IPA dry run (free flavour, newest Xcode)
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+      HOMEBREW_NO_ENV_HINTS: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select the newest stable Xcode (26 or newer)
+        run: |
+          newest=$(find /Applications -maxdepth 1 -name 'Xcode_*.app' | grep -v -i -E 'beta|_rc|release_candidate' | sort -V | tail -n 1 || true)
+          if [ -n "$newest" ]; then sudo xcode-select -s "$newest/Contents/Developer"; fi
+          about=$(xcodebuild -version 2>&1 || true)
+          version=$(printf '%s\n' "$about" | awk 'NR == 1 { print $2 }')
+          echo "::notice title=Xcode (sideload dry run)::$(printf '%s' "$about" | tr '\n' ' ')"
+          major=${version%%.*}
+          case "$major" in '' | *[!0-9]*) major=0 ;; esac
+          if [ "$major" -lt 26 ]; then
+            echo "::error title=Xcode 26 required::the runner only has Xcode ${version:-?} (the release workflow needs 26 or newer)"
+            exit 1
+          fi
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Archive the free flavour (Release, iPhone, unsigned) and lint it
+        run: |
+          set -euo pipefail
+          version="v$(sed -n -E 's/^[[:space:]]*MARKETING_VERSION:[[:space:]]*"?([0-9.]+)"?[[:space:]]*$/\1/p' project.yml | awk 'NR == 1')"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          bash tools/release/build_ipa.sh "$RUNNER_TEMP/sideload/OpenCfMoto.xcarchive" "$version" 1
+      - name: Package the IPA (ad-hoc signature, App Group only, no team)
+        run: bash tools/release/package_ipa.sh "$RUNNER_TEMP/sideload/OpenCfMoto.xcarchive" "$RUNNER_TEMP/sideload/out" "$VERSION"
+      - name: AltStore / SideStore source and release notes from the IPA
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/sideload/out"
+          python3 -I tools/release/altsource.py --ipa "$out/OpenCfMoto-$VERSION-sideload.ipa" --repo "$GITHUB_REPOSITORY" \
+            --tag "$VERSION" --commit "$GITHUB_SHA" --source-out "$out/altstore-source.json" --notes-out "$out/RELEASE_NOTES.md"
+          owner=$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-')
+          python3 -I -c 'import json, sys
+          (app,) = json.load(open(sys.argv[1], encoding="utf-8"))["apps"]
+          problems = []
+          if app["bundleIdentifier"] != sys.argv[2]:
+              problems.append("bundle id %s, expected %s" % (app["bundleIdentifier"], sys.argv[2]))
+          if app["appPermissions"]["entitlements"] != ["com.apple.security.application-groups"]:
+              problems.append("entitlements %s" % app["appPermissions"]["entitlements"])
+          wanted = {"NSCameraUsageDescription", "NSLocationWhenInUseUsageDescription", "NSLocalNetworkUsageDescription",
+                    "NSAppleMusicUsageDescription"}
+          missing = wanted - set(app["appPermissions"]["privacy"])
+          if missing:
+              problems.append("privacy keys missing: %s" % sorted(missing))
+          if problems:
+              print("::error title=Sideload dry run::" + "; ".join(problems))
+              sys.exit(1)
+          version = app["versions"][0]
+          print("::notice title=Sideload dry run::%s %s (%s), %d bytes, entitlements %s, privacy keys %s" % (
+              app["bundleIdentifier"], version["version"], version["buildVersion"], version["size"],
+              ", ".join(app["appPermissions"]["entitlements"]), ", ".join(sorted(app["appPermissions"]["privacy"]))))' \
+            "$out/altstore-source.json" "io.github.$owner.opencfmoto"
+      - name: Upload the archive log
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sideload-logs
+          path: ${{ runner.temp }}/sideload/archive.log
+          retention-days: 14
+          if-no-files-found: ignore
+
   # The REAL app in the iOS Simulator: screenshots of every screen (demo services + demo content)
   # and end-to-end runs against tools/fakedash/fakedash.py on 127.0.0.1 (real sockets, link,
   # renderer, VideoToolbox encoder). Evidence is force-pushed to the orphan branch `ci-artifacts`
@@ -387,6 +491,8 @@ jobs:
       HOMEBREW_NO_ENV_HINTS: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Prepare (XcodeGen; ffmpeg + pngquant in the background; pick + boot an iPhone simulator)
         id: sim
         run: |

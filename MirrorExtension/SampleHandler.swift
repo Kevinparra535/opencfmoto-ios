@@ -44,6 +44,8 @@ final class SampleHandler: RPBroadcastSampleHandler {
 
     override func broadcastStarted(withSetupInfo setupInfo: [String: NSObject]?) {
         Log.shared.capacity = Self.logCapacity
+        // The App Group the app uses too: the declared one or, in a build AltStore / SideStore
+        // re-signed, the one listed in this extension's ALTAppGroups (AppGroupResolution).
         guard let path = MirrorRelaySocket.defaultPath() ?? AppGroup.socketPath() else {
             Log.e("MIRROR", "extension: App Group container unavailable")
             finish(with: MirrorMessage.appGroupMissing)
@@ -63,7 +65,8 @@ final class SampleHandler: RPBroadcastSampleHandler {
             s.client = client
             s.source = source
         }
-        Log.i("MIRROR", "extension: broadcast started")
+        // Forwarded to the host's log: says which App Group this process ended up with (no id).
+        Log.i("MIRROR", "extension: broadcast started (App Group: \(AppGroup.entitled?.source.rawValue ?? "?"))")
         client.start()
         armGraceTimer()
     }
@@ -199,8 +202,8 @@ private enum MirrorMessage: CustomStringConvertible {
         switch self {
         case .appGroupMissing:
             return spanish
-                ? "La duplicación no está configurada en esta compilación de OpenCfMoto (falta el App Group). Vuelve a compilar la app con la capacidad App Group."
-                : "Mirroring is not set up in this OpenCfMoto build (the App Group is missing). Rebuild the app with the App Group capability."
+                ? "La duplicación no está disponible en esta instalación de OpenCfMoto (falta el App Group). Si la compilaste con Xcode, añade la capacidad App Group a la app y a la extensión. Si la instalaste con otra herramienta, prueba con SideStore o AltStore sin quitar la extensión."
+                : "Mirroring is not available in this OpenCfMoto install (the App Group is missing). If you built it with Xcode, add the App Group capability to the app and the extension. If you installed it with another tool, try SideStore or AltStore and keep the extension."
         case .hostUnreachable:
             return spanish
                 ? "OpenCfMoto no está listo para duplicar. Abre OpenCfMoto, toca Espejo y vuelve a iniciar la transmisión."

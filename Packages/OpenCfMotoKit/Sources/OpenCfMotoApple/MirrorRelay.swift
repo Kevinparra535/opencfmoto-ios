@@ -22,8 +22,8 @@ import Glibc
 public enum MirrorRelaySocket {
     /// Longest accepted socket path in bytes (Darwin sun_path = 104 incl. NUL; keep a margin).
     public static let maxPathBytes = 100
-    /// Info.plist key holding the App Group identifier (app and extension, see project.yml).
-    public static let appGroupInfoKey = "OCMAppGroupIdentifier"
+    /// Info.plist key holding the declared App Group identifier (app and extension, see project.yml).
+    public static let appGroupInfoKey = AppGroupResolution.declaredInfoKey
 
     /// `<directory>/<fileName>` if it fits in a sockaddr_un, else nil.
     public static func path(inDirectory directory: URL, fileName: String = MirrorRelayProtocol.socketFileName) -> String? {
@@ -43,10 +43,11 @@ public enum MirrorRelaySocket {
         return path(inDirectory: dir, fileName: fileName)
     }
 
-    /// Socket path for the App Group named by `OCMAppGroupIdentifier` in `bundle`'s Info.plist.
+    /// Socket path in the App Group container `bundle`'s process is entitled to: the group
+    /// `OCMAppGroupIdentifier` declares or, in a build AltStore / SideStore re-signed, the one they
+    /// list in `ALTAppGroups` (AppGroupResolution). The app and the extension resolve the same one.
     public static func defaultPath(bundle: Bundle = .main) -> String? {
-        guard let group = bundle.object(forInfoDictionaryKey: appGroupInfoKey) as? String, !group.isEmpty,
-              !group.contains("$(") else { return nil }
+        guard let group = AppGroup.entitledIdentifier(in: bundle) else { return nil }
         return path(appGroupIdentifier: group)
     }
 #endif

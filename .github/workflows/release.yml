@@ -1,0 +1,213 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Release: the sideload IPA, for riders without a paid Apple account (guide: docs/INSTALAR.md).
+# Run it by hand: Actions ▸ Release (sideload IPA) ▸ Run workflow.
+#
+#   build (macOS)   the FREE flavour (no Hotspot / Access Wi-Fi Information: riders join the bike
+#                   Wi-Fi in Settings) as an unsigned Release archive, linted
+#                   (tools/release/build_ipa.sh); the IPA, signed ad hoc with only the App Group
+#                   entitlement, and SHA256SUMS.txt (tools/release/package_ipa.sh); the AltStore /
+#                   SideStore source and the release notes, read from that IPA
+#                   (tools/release/altsource.py); LICENSE.txt and NOTICE.txt. All of it is this
+#                   run's artifact (14 days): a dry run by default.
+#   draft (Linux)   only from main and with «draft_release» ticked: a DRAFT GitHub Release of this
+#                   commit with those files. Nothing is published here: check the draft (files,
+#                   SHA-256, notes), then publish it by hand. Publishing creates the tag at this
+#                   commit; its «Source code» archives are the Corresponding Source (AGPL-3.0 §6),
+#                   so never delete a tag while its IPA is online. Publish it as a normal release,
+#                   not a pre-release: releases/latest/download/altstore-source.json (the source URL
+#                   in docs/INSTALAR.md) only follows normal releases.
+#
+# No Apple secret, team, certificate or profile anywhere: riders re-sign the IPA with their own
+# Apple ID (SideStore, AltStore Classic, Sideloadly). This repository is public, and so are its
+# logs. Actions are pinned to commit SHAs (the same as ci.yml); only the draft job may write.
+name: Release (sideload IPA)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Etiqueta / tag: «v» + MARKETING_VERSION de project.yml (p. ej. v0.1.0)"
+        required: true
+        type: string
+      draft_release:
+        description: "Crear un BORRADOR de release (solo desde main); sin marcar, solo el artefacto / create a DRAFT release (main only); unticked, artifact only"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Build the sideload IPA (macOS, no Apple account)
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      VERSION: ${{ inputs.version }}
+      DRAFT: ${{ inputs.draft_release }}
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+      HOMEBREW_NO_ENV_HINTS: "1"
+    outputs:
+      ipa_name: ${{ steps.package.outputs.ipa_name }}
+      sha256: ${{ steps.package.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check the inputs
+        run: |
+          set -euo pipefail
+          # Never echo the raw input: it could hold a workflow command.
+          shown=$(printf '%s' "$VERSION" | tr -cd 'A-Za-z0-9._-' | cut -c 1-40)
+          if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error title=Versión / Version::«${shown}» no es vX.Y.Z (p. ej. v0.1.0). Lanza una ejecución nueva con la etiqueta correcta.%0A«${shown}» is not vX.Y.Z (e.g. v0.1.0). Start a new run with the right tag."
+            exit 1
+          fi
+          declared=$(sed -n -E 's/^[[:space:]]*MARKETING_VERSION:[[:space:]]*"?([0-9.]+)"?[[:space:]]*$/\1/p' project.yml | awk 'NR == 1')
+          if [ "${VERSION#v}" != "$declared" ]; then
+            echo "::error title=Versión / Version::project.yml dice MARKETING_VERSION ${declared:-?}: usa v${declared:-?}, o sube antes la versión en project.yml.%0Aproject.yml says MARKETING_VERSION ${declared:-?}: use v${declared:-?}, or raise the version in project.yml first."
+            exit 1
+          fi
+          if [ "$DRAFT" = true ] && [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error title=Solo desde main / main only::Los borradores de release se crean solo desde main (esta ejecución es de ${GITHUB_REF_NAME}). Lanza el workflow en main, o sin «draft_release» para tener solo el artefacto.%0ADraft releases are made from main only (this run is on ${GITHUB_REF_NAME}). Run the workflow on main, or without «draft_release» to get the artifact only."
+            exit 1
+          fi
+          echo "Version $VERSION, build $GITHUB_RUN_NUMBER, commit $GITHUB_SHA, draft release: $DRAFT"
+
+      # The newest Xcode, as for TestFlight: it supports the newest iOS on riders' iPhones.
+      - name: Select the newest stable Xcode (26 or newer)
+        run: |
+          newest=$(find /Applications -maxdepth 1 -name 'Xcode_*.app' | grep -v -i -E 'beta|_rc|release_candidate' | sort -V | tail -n 1 || true)
+          if [ -n "$newest" ]; then sudo xcode-select -s "$newest/Contents/Developer"; fi
+          about=$(xcodebuild -version 2>&1 || true)
+          version=$(printf '%s\n' "$about" | awk 'NR == 1 { print $2 }')
+          echo "::notice title=Xcode::$(printf '%s' "$about" | tr '\n' ' ')"
+          major=${version%%.*}
+          case "$major" in '' | *[!0-9]*) major=0 ;; esac
+          if [ "$major" -lt 26 ]; then
+            echo "::error title=Xcode 26 necesario / Xcode 26 required::El runner solo tiene Xcode ${version:-?}. Cuando GitHub actualice la imagen macos-15, lanza una ejecución nueva.%0AThe runner only has Xcode ${version:-?}. Once GitHub updates the macos-15 image, start a new run."
+            exit 1
+          fi
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Archive the free flavour (Release, iPhone, unsigned) and lint it
+        run: bash tools/release/build_ipa.sh "$RUNNER_TEMP/release/OpenCfMoto.xcarchive" "$VERSION" "$GITHUB_RUN_NUMBER"
+
+      - name: Package the IPA (ad-hoc signature, App Group only) and SHA256SUMS.txt
+        id: package
+        run: bash tools/release/package_ipa.sh "$RUNNER_TEMP/release/OpenCfMoto.xcarchive" "$RUNNER_TEMP/release/out" "$VERSION"
+
+      - name: AltStore / SideStore source, release notes, licence files
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/release/out"
+          python3 -I tools/release/altsource.py --ipa "$out/OpenCfMoto-$VERSION-sideload.ipa" \
+            --repo "$GITHUB_REPOSITORY" --tag "$VERSION" --commit "$GITHUB_SHA" --run-url "$RUN_URL" \
+            --source-out "$out/altstore-source.json" --notes-out "$out/RELEASE_NOTES.md"
+          cp LICENSE "$out/LICENSE.txt"
+          cp NOTICE "$out/NOTICE.txt"
+          (cd "$out" && shasum -a 256 -c SHA256SUMS.txt)
+          ls -l "$out"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: opencfmoto-${{ inputs.version }}-sideload
+          path: ${{ runner.temp }}/release/out/
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Summary
+        if: always()
+        env:
+          IPA: ${{ steps.package.outputs.ipa_name }}
+          SHA: ${{ steps.package.outputs.sha256 }}
+          OUTCOME: ${{ job.status }}
+        run: |
+          {
+            echo "## Sideload IPA"
+            echo
+            if [ "$OUTCOME" = success ]; then
+              echo "\`${IPA}\` · SHA-256 \`${SHA}\` · build $GITHUB_RUN_NUMBER of \`$GITHUB_SHA\`"
+              echo
+              if [ "$DRAFT" = true ]; then
+                echo "El trabajo «Draft GitHub Release» crea ahora el borrador: revísalo en Releases y publícalo a mano (versión normal, no *pre-release*). / The «Draft GitHub Release» job now makes the draft: check it under Releases and publish it by hand (a normal release, not a pre-release)."
+              else
+                echo "Ensayo: los archivos están en el artefacto de esta ejecución (14 días). Para el borrador de release, lanza una ejecución nueva en main con «draft_release». / Dry run: the files are this run's artifact (14 days). For the draft release, start a new run on main with «draft_release»."
+              fi
+            else
+              echo "No se generó el IPA: lee las anotaciones de error. / No IPA was made: read the error annotations."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  draft:
+    name: Draft GitHub Release (publish it by hand after checking)
+    needs: build
+    if: github.ref == 'refs/heads/main' && inputs.draft_release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # the draft release and its files
+      actions: read # this run's artifact
+    env:
+      VERSION: ${{ inputs.version }}
+      GH_TOKEN: ${{ github.token }}
+      IPA: ${{ needs.build.outputs.ipa_name }}
+      SHA: ${{ needs.build.outputs.sha256 }}
+    steps:
+      - name: Download this run's files
+        run: gh run download "$GITHUB_RUN_ID" -R "$GITHUB_REPOSITORY" -n "opencfmoto-$VERSION-sideload" -D out
+
+      - name: Check the files
+        run: |
+          set -euo pipefail
+          cd out
+          for f in "$IPA" SHA256SUMS.txt altstore-source.json RELEASE_NOTES.md LICENSE.txt NOTICE.txt; do
+            [ -s "$f" ] || { echo "::error title=Release::falta / missing: $f"; exit 1; }
+          done
+          [ "$IPA" = "OpenCfMoto-$VERSION-sideload.ipa" ] || { echo "::error title=Release::unexpected IPA name: $IPA"; exit 1; }
+          sha256sum -c SHA256SUMS.txt
+          [ "$(awk 'NR == 1 { print $1 }' SHA256SUMS.txt)" = "$SHA" ] || { echo "::error title=Release::the SHA-256 differs from the build job's"; exit 1; }
+          python3 -I -c 'import json, sys
+          doc = json.load(open("altstore-source.json", encoding="utf-8"))
+          (version,) = doc["apps"][0]["versions"]
+          assert version["sha256"] == sys.argv[1], "altstore-source.json names another SHA-256"
+          assert version["downloadURL"].endswith("/releases/download/%s/%s" % (sys.argv[2], sys.argv[3])), version["downloadURL"]' "$SHA" "$VERSION" "$IPA"
+
+      - name: Create the draft release (the tag is made only when you publish it)
+        run: |
+          set -euo pipefail
+          # Fail closed: an API error stops here. Drafts count too (they can share a tag name).
+          existing=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq ".[] | select(.tag_name == \"$VERSION\") | .id")
+          if [ -n "$existing" ]; then
+            echo "::error title=Release::Ya hay una release (o un borrador) $VERSION: bórrala antes o sube la versión. / A release (or a draft) $VERSION exists: delete it first or raise the version."
+            exit 1
+          fi
+          tags=$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$VERSION" --jq '.[].ref')
+          if grep -q -x "refs/tags/$VERSION" <<< "$tags"; then
+            echo "::error title=Tag::La etiqueta $VERSION ya existe (quizá en otro commit): sube la versión. / The tag $VERSION exists (maybe on another commit): raise the version."
+            exit 1
+          fi
+          gh release create "$VERSION" -R "$GITHUB_REPOSITORY" --draft --target "$GITHUB_SHA" \
+            --title "OpenCfMoto for iOS $VERSION (sideload)" --notes-file out/RELEASE_NOTES.md \
+            "out/$IPA" out/SHA256SUMS.txt out/altstore-source.json out/LICENSE.txt out/NOTICE.txt
+          {
+            echo "## Borrador de release / Draft release $VERSION"
+            echo
+            echo "Revisa el borrador en **Releases** (archivos, SHA-256 \`$SHA\`, notas) y publícalo a mano como versión normal (no *pre-release*): eso crea la etiqueta en \`$GITHUB_SHA\`."
+            echo
+            echo "Check the draft under **Releases** (files, SHA-256 \`$SHA\`, notes) and publish it by hand as a normal release (not a pre-release): that creates the tag at \`$GITHUB_SHA\`."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -44,7 +44,10 @@
 # stops) a subcommand a cancelled step left running.
 #
 # Secrets never reach the log: passwords are random, masked (::add-mask::) and passed in the
-# environment or in mode-600 files; teardown deletes every key file, also after a failure.
+# environment or in mode-600 files; teardown deletes every key file, also after a failure. Neither
+# does who signs: the log is public, and a signing identity is named after the account holder
+# ("Apple Distribution: <legal name> (<team id>)"). Identities are only counted, the team ID is
+# never printed, and every line of a tool's log shown here goes through redact() first.
 # Every failure ends with a ::error annotation (raw CI logs are not always readable). Written for
 # bash 3.2 (/bin/bash on macOS) as well as newer versions.
 
@@ -130,6 +133,27 @@ random_secret() { "$OPENSSL" rand -hex 24; }
 # key=value lines a tool appended to its GITHUB_OUTPUT file (multi-line values are not used).
 output_value() { sed -n "s/^$2=//p" "$1" | tail -n 1; }
 
+# stdin to stdout without who signs: in "<kind>: <legal name> (<team id>)", quoted or not, the name
+# and the team ID become placeholders, and so does this run's team ID (S_TEAM_ID) anywhere else.
+# Every line of xcodebuild, altool, lint_bundle.py or Xcode distribution logs that this script
+# prints or turns into annotations goes through it.
+redact() {
+  local team=${S_TEAM_ID:-}
+  if ! [[ "$team" =~ ^[A-Z0-9]{10}$ ]]; then team="__no_team_id__"; fi
+  LC_ALL=C sed -E \
+    -e 's/(Apple|iPhone|iOS|Mac) (Distribution|Development|Developer)( ID)?: [^"()]*\([A-Z0-9]{10}\)/\1 \2: <name> (<team id>)/g' \
+    -e 's/"(Apple|iPhone|iOS|Mac) (Distribution|Development|Developer)( ID)?: [^"]*"/"\1 \2: <name>"/g' \
+    -e "s/$team/<team id>/g"
+}
+
+# How many distinct identities (SHA-1 hashes) `security find-identity` output ($1) lists: the
+# "Apple Distribution" ones, or all of them with a second argument `any`. Never their names.
+identity_count() {
+  printf '%s\n' "$1" | awk -v any="${2:-}" '
+    $1 ~ /^[0-9]+\)$/ && length($2) == 40 && (any != "" || index($0, "\"Apple Distribution") > 0) { seen[$2] = 1 }
+    END { n = 0; for (k in seen) n++; print n }'
+}
+
 # A value of create-signing's state.json: a list joined with commas; only App Store Connect id
 # characters; nothing when there is no such file or value.
 state_json() {
@@ -208,7 +232,7 @@ cmd_create_signing() {
   if [ -z "$app_name" ]; then app_name="OpenCfMoto CI $suffix app"; fi
   if [ -z "$mirror_name" ]; then mirror_name="OpenCfMoto CI $suffix mirror"; fi
   if ! [[ "$team" =~ ^[A-Z0-9]{10}$ ]]; then
-    die "No se pudo leer el Team ID del certificado ('$team')." "Could not read the team id from the certificate ('$team')."
+    die "No se pudo leer el Team ID del certificado." "Could not read the team id from the certificate."
   fi
   # The names end up in Config/Local.xcconfig and ExportOptions.plist: keep them plain.
   for v in "$app_name" "$mirror_name"; do
@@ -222,7 +246,7 @@ cmd_create_signing() {
   state_set S_TEAM_ID "$team"
   state_set S_PROFILE_APP_NAME "$app_name"
   state_set S_PROFILE_MIRROR_NAME "$mirror_name"
-  note "team $team; profiles '$app_name' and '$mirror_name'; certificate $(output_value "$outputs" cert_id)"
+  note "certificate and profiles '$app_name' and '$mirror_name' ready (team ID read from the certificate; not shown)"
 }
 
 # ------------------------------------------------------------------ setup-keychain
@@ -279,21 +303,21 @@ cmd_setup_keychain() {
   done < "$WORK/keychains.orig"
   security list-keychains -d user -s "$KEYCHAIN" ${list[@]+"${list[@]}"}
 
-  # 6. Check what Xcode will see.
-  local ids
+  # 6. Check what Xcode will see. Only counted: an identity's name is the account holder's legal
+  #    name plus the team ID, and this log is public.
+  local ids count total
   if [ "${TF_ALLOW_UNTRUSTED_IDENTITY:-}" = 1 ]; then
     ids=$(security find-identity -p codesigning "$KEYCHAIN")
   else
     ids=$(security find-identity -v -p codesigning "$KEYCHAIN")
   fi
-  printf '%s\n' "$ids"
-  if ! grep -q '"Apple Distribution' <<< "$ids"; then
-    local all
-    all=$(security find-identity -p codesigning "$KEYCHAIN" 2>&1 | tr '\n' ' ')
-    die "El llavero no tiene una identidad «Apple Distribution» válida: $all" \
-      "The keychain has no valid \"Apple Distribution\" identity: $all"
+  count=$(identity_count "$ids")
+  if [ "$count" -lt 1 ]; then
+    total=$(identity_count "$(security find-identity -p codesigning "$KEYCHAIN" 2>&1 || true)" any)
+    die "El llavero no tiene una identidad «Apple Distribution» válida (identidades de firma en el llavero, válidas o no: $total; sus nombres no se muestran porque el registro es público)." \
+      "The keychain has no valid \"Apple Distribution\" identity (code-signing identities in the keychain, valid or not: $total; their names are not shown, as the log is public)."
   fi
-  note "keychain ready: $KEYCHAIN"
+  note "keychain ready: $KEYCHAIN ($count Apple Distribution identity; name and team not shown)"
 }
 
 import_wwdr() {
@@ -376,7 +400,7 @@ OCM_PROFILE_APP = $S_PROFILE_APP_NAME
 OCM_PROFILE_MIRROR = $S_PROFILE_MIRROR_NAME
 EOF
   touch "$WORK/wrote-local-xcconfig"
-  note "wrote Config/Local.xcconfig (team $S_TEAM_ID, prefix $BUNDLE_ID_PREFIX, manual signing)"
+  note "wrote Config/Local.xcconfig (prefix $BUNDLE_ID_PREFIX, manual signing; team ID not shown)"
   (cd "$ROOT" && xcodegen generate) || die "xcodegen generate falló." "xcodegen generate failed."
 }
 
@@ -387,10 +411,11 @@ run_xcodebuild() {
   shift 3
   note "xcodebuild $*"
   xcodebuild "$@" > "$log" 2>&1 || status=$?
-  grep -E "error:|warning: .*([Ss]ign|[Pp]rovision)|\*\* [A-Z ]+ (SUCCEEDED|FAILED) \*\*" "$log" | head -n 200 || true
+  grep -E "error:|warning: .*([Ss]ign|[Pp]rovision)|\*\* [A-Z ]+ (SUCCEEDED|FAILED) \*\*" "$log" | redact | head -n 200 || true
   if [ "$status" -ne 0 ] || ! grep -q "$success" "$log"; then
-    tail -n 40 "$log" || true
-    python3 "$ANNOTATE" "$log" "$title" || true
+    tail -n 40 "$log" | redact || true
+    redact < "$log" > "$log.public" || true
+    python3 "$ANNOTATE" "$log.public" "$title" || true
     return 1
   fi
   return 0
@@ -439,7 +464,7 @@ cmd_archive() {
   local -a lint=()
   local a
   while IFS= read -r a; do lint+=("$a"); done < <(lint_args)
-  python3 "$LINT" --archive "$ARCHIVE" "${lint[@]}" || { reported; exit 1; }
+  python3 "$LINT" --archive "$ARCHIVE" "${lint[@]}" 2>&1 | redact || { reported; exit 1; }
 }
 
 cmd_export() {
@@ -482,7 +507,7 @@ PY
   local -a lint=()
   local a
   while IFS= read -r a; do lint+=("$a"); done < <(lint_args)
-  python3 "$LINT" --ipa "$ipa" "${lint[@]}" || { reported; exit 1; }
+  python3 "$LINT" --ipa "$ipa" "${lint[@]}" 2>&1 | redact || { reported; exit 1; }
 }
 
 # The export's own log (IDEDistribution*.log) names the real reason when exportArchive fails.
@@ -490,7 +515,7 @@ distribution_log_errors() {
   local dir lines
   dir=$(grep -o -E '/[^ ]+\.xcdistributionlogs' "$WORK/export.log" | head -n 1 || true)
   if [ -z "$dir" ] || [ ! -d "$dir" ]; then return 0; fi
-  lines=$(grep -h -i -E "error|failed" "$dir"/*.log 2> /dev/null | tail -n 25 || true)
+  lines=$(grep -h -i -E "error|failed" "$dir"/*.log 2> /dev/null | redact | tail -n 25 || true)
   if [ -n "$lines" ]; then annotate error "TestFlight export (IDEDistribution log)" "$lines"; fi
   return 0
 }
@@ -545,7 +570,7 @@ altool_upload() {
   write_p8 "$key" || die "ASC_PRIVATE_KEY no parece el contenido de un archivo .p8." "ASC_PRIVATE_KEY does not look like the content of a .p8 file."
   xcrun altool --upload-app -f "$ipa" -t ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" > "$log" 2>&1 || status=$?
   rm -f "$key"
-  cat "$log"
+  redact < "$log" || true
   # altool can exit 0 although the upload failed, and print harmless "ERROR" lines when it
   # worked: go by its verdict lines (and its exit status).
   if [ "$status" -eq 0 ] && grep -q -E "UPLOAD SUCCEEDED|No errors uploading" "$log" && ! grep -q "UPLOAD FAILED" "$log"; then
@@ -555,7 +580,7 @@ altool_upload() {
     note "uploaded with xcrun altool"
     return 0
   fi
-  errors=$(grep -E "ERROR|[Ee]rror" "$log" | head -n 20 || true)
+  errors=$(grep -E "ERROR|[Ee]rror" "$log" | redact | head -n 20 || true)
   if grep -q -E "ENTITY_ERROR\.ATTRIBUTE\.INVALID\.DUPLICATE|must be higher than the previously uploaded|ITMS-90189|ITMS-4238|Redundant Binary Upload" "$log"; then
     die "La build $BUILD_NUMBER ya existe en App Store Connect: $NEW_RUN_ES; la ejecución nueva elige el número siguiente." \
       "Build $BUILD_NUMBER already exists in App Store Connect: $NEW_RUN_EN; the new run picks the next number."

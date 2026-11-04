@@ -1338,6 +1338,21 @@ class PrepareTest(AscTest):
         self.assertEqual(self.calls("GET", "/v1/builds"), [])
         self.assertIn("ready=false", proc.stdout)                 # outputs echoed to stdout too
 
+    def test_identifier_outputs_are_logged_by_name_only(self):
+        # The log is public: the team ID and the identifiers go to GITHUB_OUTPUT only; states and
+        # the version keep their name=value echo.
+        proc = self.prepare("--setup-only")
+        out, lines = self.outputs(), proc.stdout.splitlines()
+        self.assertEqual(out["team_id"], TEAM)
+        for name in ("team_id", "app_bundle_id", "mirror_bundle_id", "app_bundle_resource_id",
+                     "mirror_bundle_resource_id", "app_group"):
+            self.assertEqual([line for line in lines if line.startswith(name + "=")], [], name)
+            self.assertIn(f"{name}: set (value not shown: the log is public)", lines)
+        self.assertIn("app_id: empty (value not shown: the log is public)", lines)
+        self.assertIn("ready=false", lines)
+        self.assertIn("marketing_version=2.3.4", lines)
+        self.assertNotIn(TEAM, proc.stdout + proc.stderr + self.summary())
+
     def test_new_account_full_run_fails_with_the_steps(self):
         proc = self.prepare(expect=1)
         title, message = self.annotation(proc, "error")
@@ -1826,6 +1841,24 @@ class CreateSigningTest(AscTest):
             self.assertNotIn(secret, public)
         self.assertIn("OpenCfMoto CI 4242-1 mirror", self.summary())
         self.assertEqual(self.annotations(proc, "error"), [])
+
+    def test_the_team_id_and_the_ids_stay_out_of_the_log(self):
+        proc = self.create()
+        out, lines = self.outputs(), proc.stdout.splitlines()
+        self.assertEqual(out["cert_team_id"], TEAM)               # the build job still gets it
+        for name in ("cert_id", "cert_team_id", "profile_app_id", "profile_mirror_id", "profile_ids",
+                     "profile_app_name", "profile_mirror_name", "profile_app_uuid", "profile_mirror_uuid"):
+            self.assertEqual([line for line in lines if line.startswith(name + "=")], [], name)
+            self.assertIn(f"{name}: set (value not shown: the log is public)", lines)
+        self.assertNotIn(TEAM, proc.stdout + proc.stderr + self.summary())
+
+    def test_a_team_mismatch_warning_names_no_team(self):
+        self.fake.seed_id = "QWERT67890"                         # the profiles' TeamIdentifier
+        proc = self.create()
+        title, message = self.annotation(proc, "warning")
+        self.assertEqual(title, "Team ID distinto / Team ID mismatch")
+        for team in (TEAM, "QWERT67890"):
+            self.assertNotIn(team, proc.stdout + proc.stderr + self.summary())
 
     def test_certificate_made_but_the_answer_was_an_error(self):
         self.fake.add_cert(KEYS.cert_der)                  # someone else's: never adopted
@@ -3103,6 +3136,111 @@ class BuildScriptTest(ScriptTest):
         for name in names:
             self.assertRegex(name, r"^OpenCfMoto CI local[0-9]{14}-1 (app|mirror)$")
             self.assertTrue(asc.CI_PROFILE_RE.fullmatch(name))
+
+
+class SigningLogPrivacyTest(ScriptTest):
+    """build_and_sign.sh setup-keychain and archive with fake macOS tools (uname, security, curl,
+    openssl, xcodebuild): the log is public, and a signing identity is named after the account
+    holder, so identities are only counted and tool output never shows a name or the team ID."""
+
+    NAME, OTHER_TEAM = "Jane Q Pérez", "ZYXWV98765"
+    SHA1, SHA2 = "0123456789ABCDEF0123456789ABCDEF01234567", "89ABCDEF0123456789ABCDEF0123456789ABCDEF"
+
+    def setUp(self):
+        super().setUp()
+        self.work = os.path.join(self.tmp, "work")
+        self.signing = os.path.join(self.work, "signing")
+        self.fakes = os.path.join(self.tmp, "fakes")
+        os.makedirs(self.signing)
+        os.makedirs(self.fakes)
+        for name in ("key.pem", "cert.pem"):
+            with open(os.path.join(self.signing, name), "w", encoding="ascii") as fh:
+                fh.write("not a real key or certificate\n")
+        tools = {
+            "uname": "#!/bin/sh\necho Darwin\n",
+            "curl": '#!/bin/bash\nout=""; prev=""\nfor a in "$@"; do [ "$prev" = -o ] && out=$a; prev=$a; done\n'
+                    'printf der > "$out"\n',
+            "security": '#!/bin/bash\ncase "$1" in\n'
+                        '  find-identity) if [ "$2" = -v ]; then cat "$FAKES/valid.txt"; else cat "$FAKES/all.txt"; fi ;;\n'
+                        '  list-keychains) [ "$3" = -s ] || echo \'    "/fake/login.keychain-db"\' ;;\n'
+                        'esac\nexit 0\n',
+            "xcodebuild": '#!/bin/bash\ncat "$FAKES/xcodebuild.txt"\nexit 65\n',
+            "openssl": '#!/bin/bash\n'
+                       'wwdr="CN = Apple Worldwide Developer Relations Certification Authority, OU = G3, '
+                       'O = Apple Inc., C = US"\n'
+                       'case "$1" in\n'
+                       '  version) echo "LibreSSL 3.3.6" ;;\n'
+                       '  rand) echo 0123456789abcdef0123456789abcdef0123456789abcdef ;;\n'
+                       '  pkcs12) prev=""; for a in "$@"; do [ "$prev" = -out ] && printf p12 > "$a"; prev=$a; done ;;\n'
+                       '  x509) case "$*" in *-issuer*) echo "issuer=$wwdr" ;; *) echo "subject=$wwdr" ;; esac ;;\n'
+                       'esac\n',
+        }
+        for name, text in tools.items():
+            path = os.path.join(self.bindir if name != "openssl" else self.fakes, name)
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(text)
+            os.chmod(path, 0o755)
+
+    def identities(self, valid, everything):
+        for name, text in (("valid.txt", valid), ("all.txt", everything)):
+            with open(os.path.join(self.fakes, name), "w", encoding="utf-8") as fh:
+                fh.write(text)
+
+    def run_step(self, name, env=None, expect=0):
+        base = {"TF_WORK": self.work, "TF_SIGNING_DIR": self.signing, "OPENSSL": os.path.join(self.fakes, "openssl"),
+                "FAKES": self.fakes}
+        base.update(env or {})
+        return self.bash([SCRIPT_PATH, name], base, expect=expect)
+
+    def assert_nobody_named(self, proc):
+        public = proc.stdout + proc.stderr + self.summary()
+        for private in (self.NAME, "Jane", "Pérez", TEAM, self.OTHER_TEAM):
+            self.assertNotIn(private, public)
+
+    def test_setup_keychain_counts_the_identity_and_never_prints_it(self):
+        line = f'  1) {self.SHA1} "Apple Distribution: {self.NAME} ({TEAM})"'
+        self.identities(f"{line}\n     1 valid identities found\n",
+                        f"Policy: Code Signing\n  Matching identities\n{line}\n     1 identities found\n\n"
+                        f"  Valid identities only\n{line}\n     1 valid identities found\n")
+        proc = self.run_step("setup-keychain")
+        self.assertIn("(1 Apple Distribution identity; name and team not shown)", proc.stdout)
+        self.assert_nobody_named(proc)
+        self.assertEqual(self.annotations(proc, "error"), [])
+
+    def test_no_valid_distribution_identity_fails_without_naming_any(self):
+        development = f'  1) {self.SHA2} "Apple Development: {self.NAME} ({self.OTHER_TEAM})"'
+        untrusted = f'  2) {self.SHA1} "Apple Distribution: {self.NAME} ({TEAM})" (CSSMERR_TP_NOT_TRUSTED)'
+        self.identities("     0 valid identities found\n",
+                        f"Policy: Code Signing\n  Matching identities\n{development}\n{untrusted}\n"
+                        "     2 identities found\n\n  Valid identities only\n     0 valid identities found\n")
+        proc = self.run_step("setup-keychain", expect=1)
+        title, message = self.annotation(proc, "error")
+        self.assertEqual(title, "TestFlight (setup-keychain)")
+        self.assertIn("identidades de firma en el llavero, válidas o no: 2", message)
+        self.assertIn("code-signing identities in the keychain, valid or not: 2", message)
+        self.assert_nobody_named(proc)
+
+    def test_a_failed_archive_shows_and_annotates_no_name_and_no_team_id(self):
+        with open(os.path.join(self.work, "state.env"), "w", encoding="utf-8") as fh:
+            fh.write(f"S_TEAM_ID={TEAM}\n")
+        with open(os.path.join(self.work, "keychain-password"), "w", encoding="ascii") as fh:
+            fh.write("x")
+        with open(os.path.join(self.fakes, "xcodebuild.txt"), "w", encoding="utf-8") as fh:
+            fh.write(f'Signing Identity:     "Apple Distribution: {self.NAME} ({TEAM})"\n'
+                     f"    DEVELOPMENT_TEAM = {TEAM}\n"
+                     f"/w/App/Sources/A.swift:3:1: error: No signing certificate for team {TEAM}\n"
+                     f'error: Provisioning profile "OpenCfMoto CI app" doesn\'t include signing certificate '
+                     f'"Apple Development: {self.NAME} ({self.OTHER_TEAM})".\n'
+                     f"error: CN = iPhone Distribution: {self.NAME} ({self.OTHER_TEAM})\n"
+                     "** ARCHIVE FAILED **\n")
+        proc = self.run_step("archive", env={"BUILD_NUMBER": "7", "APP_GROUP": GROUP}, expect=1)
+        self.assert_nobody_named(proc)
+        self.assertIn('"Apple Development: <name>"', proc.stdout)                 # what failed stays readable
+        self.assertIn("DEVELOPMENT_TEAM = <team id>", proc.stdout)
+        self.assertIn("No signing certificate for team <team id>", proc.stdout)    # the annotation too
+        self.assertIn("** ARCHIVE FAILED **", proc.stdout)
+        title, _message = self.annotation(proc, "error")
+        self.assertEqual(title, "TestFlight (archive)")
 
 
 # ---------------------------------------------------------------- workflow shell blocks

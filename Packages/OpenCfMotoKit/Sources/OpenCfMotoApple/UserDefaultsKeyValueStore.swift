@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // `KeyValueStore` (OpenCfMotoCore Storage/KeyValueStore.swift) backed by UserDefaults.
-// Production uses the App Group suite (`OCMAppGroupIdentifier` in Info.plist) so the ReplayKit
-// extension sees the same settings; it falls back to `.standard` when the group is not configured
-// or not entitled. Secrets (QR strings with the Wi-Fi password) belong in `KeychainSecretStore`.
+// Production uses the App Group suite (`OCMAppGroupIdentifier` in Info.plist, or the group a
+// sideloading tool re-signed the app with: AppGroup / AppGroupResolution) so the ReplayKit
+// extension sees the same settings; it falls back to `.standard` when no group is configured and
+// entitled. Secrets (QR strings with the Wi-Fi password) belong in `KeychainSecretStore`.
 
 #if canImport(Foundation)
 import Foundation
@@ -36,17 +37,24 @@ public final class UserDefaultsKeyValueStore: KeyValueStore, @unchecked Sendable
         self.domainName = domainName
     }
 
-    /// The App Group suite from Info.plist (`OCMAppGroupIdentifier`), else `.standard`.
+    /// The App Group suite (the group `AppGroup` resolves: the one `OCMAppGroupIdentifier` declares,
+    /// or the one AltStore / SideStore re-signed the app with), else `.standard`.
     public static func appGroup(bundle: Bundle = .main) -> UserDefaultsKeyValueStore {
-        guard let id = AppGroup.identifier(in: bundle) else { return UserDefaultsKeyValueStore(suiteName: nil) }
         #if canImport(Darwin)
-        // Without the entitlement the suite would silently be app-private: prefer .standard then.
-        if FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: id) == nil {
-            Log.w("STORE", "App Group \(id) not entitled — using standard UserDefaults")
+        // Only an entitled group: without the entitlement the suite would silently be app-private,
+        // so .standard then. (No group id in the log: a re-signed one carries the rider's team id.)
+        guard let id = AppGroup.entitledIdentifier(in: bundle) else {
+            if AppGroup.identifier(in: bundle) != nil {
+                Log.w("STORE", "App Group not entitled \u{2014} using standard UserDefaults")
+            }
             return UserDefaultsKeyValueStore(suiteName: nil)
         }
-        #endif
         return UserDefaultsKeyValueStore(suiteName: id)
+        #else
+        // No App Group containers off Apple platforms: the declared group's suite.
+        guard let id = AppGroup.identifier(in: bundle) else { return UserDefaultsKeyValueStore(suiteName: nil) }
+        return UserDefaultsKeyValueStore(suiteName: id)
+        #endif
     }
 
     public func string(forKey key: String) -> String? { defaults.object(forKey: key) as? String }

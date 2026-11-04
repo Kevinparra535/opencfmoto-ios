@@ -9,6 +9,13 @@ desde el navegador. La primera vez lleva unos 30–45 minutos, casi todo de espe
 Es solo para ti (pruebas internas de TestFlight). Distribuirla a otras personas requiere el permiso de
 los autores originales (ver [Seguridad y licencia](#seguridad-y-licencia)).
 
+> **Tu propia copia (fork).** Necesitas una cuenta **de pago** de Apple Developer (99 USD al año; la
+> inscripción, en developer.apple.com o en la app Apple Developer, suele tardar de 1 a 2 días) y cerca
+> de una hora la primera vez. Antes del paso 1: entra en GitHub, pulsa **Fork** en este repositorio y,
+> en tu fork, abre la pestaña **Actions** y activa los workflows. Cada compilación dura 90 días en
+> TestFlight: después lanzas otra. ¿Sin cuenta de pago? Instala el IPA de prueba con un Apple ID
+> gratuito: [INSTALAR.md](INSTALAR.md).
+
 ## Qué necesitas
 
 - Tu cuenta **de pago** de Apple Developer (como titular de la cuenta).
@@ -17,9 +24,9 @@ los autores originales (ver [Seguridad y licencia](#seguridad-y-licencia)).
 
 En los pasos siguientes, `com.kevinparra535` es el prefijo de los identificadores: por defecto es
 `com.` seguido del dueño del repositorio en GitHub, en minúsculas. En tu propia copia (*fork*) es
-`com.` + tu usuario en minúsculas, y antes hay que habilitar los workflows en su pestaña **Actions**.
-Si creas la variable `BUNDLE_ID_PREFIX` (paso 2, opcional), se usa el prefijo que pongas ahí. El
-resumen del paso 3 muestra los identificadores exactos.
+`com.` + tu usuario en minúsculas (por ejemplo `com.tunombre.opencfmoto`). Si creas la variable
+`BUNDLE_ID_PREFIX` (paso 2, opcional), se usa el prefijo que pongas ahí. El resumen del paso 3 muestra
+los identificadores exactos.
 
 ## 1. Crea una clave de la API de App Store Connect
 
@@ -176,11 +183,17 @@ Lo que el workflow resuelve solo:
 - La clave queda cifrada en los secretos de GitHub. Solo quien puede escribir en el repositorio
   puede lanzar el workflow, y la clave nunca aparece en los registros, que son públicos porque el
   repositorio lo es. No se publica ningún archivo de la app como artefacto.
+- Tampoco aparece quién firma: el certificado de Apple lleva el nombre legal del titular de la cuenta
+  y el Team ID, así que el workflow solo cuenta la identidad de firma y tapa ese nombre y el Team ID
+  en los mensajes de Xcode que muestra. `asc.py` tampoco repite en el registro el valor de sus
+  salidas (equipo, identificadores, certificado, perfiles): solo su nombre.
 - Si crees que la clave se filtró, revócala en App Store Connect (paso 1) y crea otra.
 - **Solo pruebas internas, para ti.** La licencia AGPL del proyecto original es difícil de
   compatibilizar con las condiciones de la App Store. Distribuir la app a otras personas, ya sea con
   pruebas externas, un enlace público de TestFlight o la App Store, requiere el permiso de sus
-  titulares.
+  titulares. Para que otras personas la prueben está el IPA de Releases, que cada una firma con su
+  propio Apple ID ([INSTALAR.md](INSTALAR.md)): eso sí es distribución AGPL normal, con el código
+  fuente en la misma página.
 
 ---
 
@@ -189,13 +202,19 @@ Lo que el workflow resuelve solo:
 GitHub builds the app on a cloud Mac, signs it with your Apple Developer account and uploads it to
 **TestFlight**. You install it with the TestFlight app. No Mac needed: everything happens in a browser.
 
+> **Your own copy (fork).** You need a **paid** Apple Developer account (99 USD a year; enrolment, on
+> developer.apple.com or in the Apple Developer app, usually takes 1 to 2 days) and about an hour the
+> first time. Before step 1: on GitHub, press **Fork** on this repository, then open your fork's
+> **Actions** tab and enable workflows. Each build lasts 90 days in TestFlight: then start another.
+> No paid account? Install the sideload IPA with a free Apple ID: [INSTALAR.md](INSTALAR.md#english).
+
 1. **API key**: App Store Connect ▸ Users and Access ▸ Integrations ▸ App Store Connect API ▸ (Request
    Access) ▸ Team Keys ▸ **+**, access **Admin**. Note the Issuer ID and the Key ID, then download the
    `.p8` (one download only).
 2. **GitHub secrets** (Settings ▸ Secrets and variables ▸ Actions): `ASC_KEY_ID`, `ASC_ISSUER_ID`,
    `ASC_PRIVATE_KEY` (the whole `.p8` text). Optional variable `BUNDLE_ID_PREFIX`; the default prefix
    is `com.` + the repository owner in lower case (here `com.kevinparra535`). In a fork it is `com.` +
-   your user name in lower case, and you must first enable workflows in the fork's **Actions** tab.
+   your user name in lower case (enable workflows in the fork's **Actions** tab first, see above).
 3. Actions ▸ **TestFlight** ▸ Run workflow with **Solo preparar** (setup only). This checks the key and
    registers `<prefix>.opencfmoto` and `<prefix>.opencfmoto.mirror` (its summary shows the exact
    identifiers).
@@ -233,5 +252,12 @@ table under [Si algo falla](#si-algo-falla) lists the usual titles.
 
 Builds expire after 90 days: start a new run to keep using the app.
 
+The logs are public, so they show neither the key nor who signs: the signing identity (the account
+holder's legal name and team ID) is only counted, Xcode's messages are shown with that name and the
+team ID blanked out, and `asc.py` logs only the names of its outputs (team, identifiers, certificate,
+profiles), not their values.
+
 Internal testing only: distributing the app to anyone else needs permission from the upstream AGPL
-copyright holders.
+copyright holders. To let others try it, there is the sideload IPA on Releases, which each rider signs
+with their own Apple ID ([INSTALAR.md](INSTALAR.md#english)): that is ordinary AGPL distribution, with
+the source on the same page.
