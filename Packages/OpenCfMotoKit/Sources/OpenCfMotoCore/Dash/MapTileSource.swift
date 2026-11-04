@@ -31,10 +31,10 @@ public enum MapTileSource {
     }
 
     /// Every host a reader of the template could connect to (lower-cased, without port or trailing dot):
-    /// the authority of `scheme://authority/…` read per RFC 3986 (userinfo before the last "@" dropped;
+    /// the authority of `http(s)://authority/…` read per RFC 3986 (userinfo before the last "@" dropped;
     /// "{…}" placeholders lose their braces, so `{s}.tile.openstreetmap.org` reads as
-    /// s.tile.openstreetmap.org), plus Foundation's `URL.host` when it differs. Empty when no host can
-    /// be read.
+    /// s.tile.openstreetmap.org), plus Foundation's `URL.host` when it differs. Only http and https
+    /// templates have a host (the downloader fetches nothing else). Empty when no host can be read.
     public static func hosts(template: String) -> [String] {
         let t = template.trimmingCharacters(in: .whitespacesAndNewlines)
         var out: [String] = []
@@ -42,7 +42,10 @@ public enum MapTileSource {
         // The downloader (`TileURLTemplate.url`) fills {z}/{x}/{y} and asks Foundation's URL for the host.
         let filled = t.replacingOccurrences(of: "{z}", with: "1").replacingOccurrences(of: "{x}", with: "1")
             .replacingOccurrences(of: "{y}", with: "1").replacingOccurrences(of: "{", with: "").replacingOccurrences(of: "}", with: "")
-        if let raw = URL(string: filled)?.host, let h = normalized(raw), !out.contains(h) { out.append(h) }
+        if let url = URL(string: filled), let scheme = url.scheme, isWebScheme(scheme), let raw = url.host,
+           let h = normalized(raw), !out.contains(h) {
+            out.append(h)
+        }
         return out
     }
 
@@ -67,10 +70,16 @@ public enum MapTileSource {
 
     // MARK: - Parsing
 
-    /// Host of `scheme://[userinfo@]host[:port][/?#…]`, RFC 3986 delimiters only (a backslash is NOT one,
+    /// The only schemes the tile downloader fetches (`TileURLTemplate.url`).
+    static func isWebScheme(_ scheme: some StringProtocol) -> Bool {
+        let s = scheme.lowercased()
+        return s == "http" || s == "https"
+    }
+
+    /// Host of `http(s)://[userinfo@]host[:port][/?#…]`, RFC 3986 delimiters only (a backslash is NOT one,
     /// like Foundation), braces dropped, normalized.
     private static func rfcHost(_ s: String) -> String? {
-        guard let sep = s.range(of: "://"), !s[..<sep.lowerBound].isEmpty else { return nil }
+        guard let sep = s.range(of: "://"), isWebScheme(s[..<sep.lowerBound]) else { return nil }
         var authority = s[sep.upperBound...]
         if let end = authority.firstIndex(where: { $0 == "/" || $0 == "?" || $0 == "#" }) {
             authority = authority[..<end]

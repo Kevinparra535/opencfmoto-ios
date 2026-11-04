@@ -956,10 +956,11 @@ Effect:
 
 The dash map's raster tiles come from `BikeSettings.tileURLTemplate` (default
 `https://tile.openstreetmap.org/{z}/{x}/{y}.png`, editable in Settings). `MapTileSource` (OpenCfMotoCore,
-Linux-tested) reads the template's host — the RFC 3986 authority (userinfo and port dropped, `{…}`
-placeholders lose their braces), plus Foundation's `URL.host` when it differs — and calls it an **OSMF
-host** when it is `openstreetmap.org`, `osm.org` or any of their subdomains (`tile.`, the legacy
-`a.` / `b.` / `c.tile.` …), whatever the case or a trailing dot. When in doubt it picks the OSMF side.
+Linux-tested) reads the host of an http(s) template (the only schemes the downloader fetches) — the RFC 3986
+authority (userinfo and port dropped, `{…}` placeholders lose their braces), plus Foundation's `URL.host`
+when it differs — and calls it an **OSMF host** when it is `openstreetmap.org`, `osm.org` or any of their
+subdomains (`tile.`, the legacy `a.` / `b.` / `c.tile.` …), whatever the case or a trailing dot. When in
+doubt it picks the OSMF side.
 
 * **No prefetch from the OSMF servers.** Their Tile Usage Policy forbids prefetching and offline or bulk
   downloads (Android never prefetches). The iOS route-corridor prefetch (§16 R3: zooms 14–17 within 250 m

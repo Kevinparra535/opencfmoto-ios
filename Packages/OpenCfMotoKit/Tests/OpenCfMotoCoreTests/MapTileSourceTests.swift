@@ -28,6 +28,7 @@ final class MapTileSourceTests: XCTestCase {
             "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png",
             "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
             "https://TILE.OpenStreetMap.ORG/{z}/{x}/{y}.png",
+            "HTTPS://tile.openstreetmap.org/{z}/{x}/{y}.png",
             "https://tile.openstreetmap.org./{z}/{x}/{y}.png",
             "https://tile.openstreetmap.org:443/{z}/{x}/{y}.png",
             "https://user:secret@tile.openstreetmap.org/{z}/{x}/{y}.png",
@@ -74,10 +75,12 @@ final class MapTileSourceTests: XCTestCase {
         XCTAssertEqual(MapTileSource.hosts(template: "http://[::1]:8080/{z}/{x}/{y}.png").first, "[::1]")
     }
 
-    /// No readable host: never a prefetch (fail closed), no credit (no tile is ever downloaded either).
+    /// No readable host: never a prefetch (fail closed), no credit (no tile is ever downloaded either). Only
+    /// http(s) templates have a host, on every platform (Foundation on Apple reads a host in "://x/1").
     func testUnreadableTemplatesFailClosed() {
         for t in ["", "   ", "garbage", "tile.openstreetmap.org/{z}/{x}/{y}.png", "https:///{z}/{x}/{y}.png", "://x/{z}",
-                  "https://@/{z}/{x}/{y}.png"] {
+                  "https://@/{z}/{x}/{y}.png", "ftp://tile.openstreetmap.org/{z}/{x}/{y}.png", "file:///tiles/{z}/{x}/{y}.png",
+                  "//tile.openstreetmap.org/{z}/{x}/{y}.png"] {
             XCTAssertTrue(MapTileSource.hosts(template: t).isEmpty, "\(t): \(MapTileSource.hosts(template: t))")
             XCTAssertFalse(MapTileSource.allowsCorridorPrefetch(template: t), "no prefetch for \(t)")
             XCTAssertNil(MapTileSource.attribution(template: t), t)
