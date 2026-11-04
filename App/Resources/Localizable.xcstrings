@@ -391,6 +391,26 @@
         }
       }
     },
+    "And everyone who tested bikes, shared logs and filed issues.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Y todos los que probaron motos, compartieron registros y abrieron incidencias."
+          }
+        }
+      }
+    },
+    "Android app only, not in this app: BojanJ (Android Auto integration), Martin Escudero (Android Auto 17.4+), Glifaus (Wi-Fi Direct keep-alive), sashop2001 (AA DPI, Bluetooth trigger), headunit by Michael Reid and Open Headunit (headunit-revived) by Andre Rinas.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo en la app Android, no en esta: BojanJ (integración de Android Auto), Martin Escudero (Android Auto 17.4+), Glifaus (mantener activa la conexión Wi-Fi Direct), sashop2001 (DPI de AA, activación por Bluetooth), headunit de Michael Reid y Open Headunit (headunit-revived) de Andre Rinas."
+          }
+        }
+      }
+    },
     "Another CFMoto / EasyConnect app is using the bike's link ports (10920-10922), so the dash stays blank. Close it from the app switcher, then reconnect.": {
       "localizations": {
         "es": {
@@ -861,12 +881,12 @@
         }
       }
     },
-    "Built on the open-cfmoto community lineage:\n\n• dcoletto / coletz — original QR & EasyConn work\n• BojanJ — Android Auto receiver integration\n• richardbizik — 1000 MT-X support\n• ionutradu252 / open-cflink — handlebar controls, margins, reconnect & polish\n• eugen0309 — Wi-Fi Direct / CL-C450 path\n• Martin Escudero (martinescudero) — Android Auto 17.4+ head unit server path\n• Glifaus — Wi-Fi Direct keep-alive\n• sashop2001 — AA DPI, Bluetooth trigger, Bulgarian\n• Authoritt — vehicle telemetry field notes\n• headunit-revived — Android Auto projection stack (AGPL)\n\nAnd everyone who tested bikes, shared logs, and filed issues.": {
+    "Built on the open-cfmoto community:\n\n• dcoletto / coletz — the original open-cfmoto (QR & EasyConn)\n• richardbizik — 1000 MT-X support\n• ionutradu252 / OpenCFLink — handlebar controls, margins, reconnect & polish\n• eugen0309 — CL-C450 path (and Wi-Fi Direct on Android)\n• Authoritt — Spanish translation, Wi-Fi transport memory, telemetry notes": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Construido sobre el linaje de la comunidad open-cfmoto:\n\n• dcoletto / coletz: trabajo original de QR y EasyConn\n• BojanJ: integración del receptor de Android Auto\n• richardbizik: compatibilidad con la 1000 MT-X\n• ionutradu252 / open-cflink: controles del manillar, márgenes, reconexión y pulido\n• eugen0309: vía Wi-Fi Direct / CL-C450\n• Martin Escudero (martinescudero): vía del servidor de unidad central de Android Auto 17.4+\n• Glifaus: mantenimiento de la conexión Wi-Fi Direct\n• sashop2001: DPI de AA, activación por Bluetooth, búlgaro\n• Authoritt: notas de campo sobre la telemetría del vehículo\n• headunit-revived: pila de proyección de Android Auto (AGPL)\n\nY todos los que probaron motos, compartieron registros y abrieron incidencias."
+            "value": "Construido sobre la comunidad open-cfmoto:\n\n• dcoletto / coletz: el open-cfmoto original (QR y EasyConn)\n• richardbizik: compatibilidad con la 1000 MT-X\n• ionutradu252 / OpenCFLink: controles del manillar, márgenes, reconexión y pulido\n• eugen0309: vía CL-C450 (y Wi-Fi Direct en Android)\n• Authoritt: traducción al español, memoria del transporte Wi-Fi, notas de telemetría"
           }
         }
       }
@@ -1981,6 +2001,16 @@
         }
       }
     },
+    "Full credits": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Créditos completos"
+          }
+        }
+      }
+    },
     "Fun": {
       "localizations": {
         "es": {
@@ -2401,6 +2431,16 @@
         }
       }
     },
+    "Install guide": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guía de instalación"
+          }
+        }
+      }
+    },
     "Invalid QR": {
       "localizations": {
         "es": {
@@ -2811,12 +2851,12 @@
         }
       }
     },
-    "Map data © OpenStreetMap contributors (ODbL). Routing and search use public OpenStreetMap-based services.": {
+    "Map data © OpenStreetMap contributors (ODbL). Map tiles: OpenStreetMap Foundation (default server). Search: Photon by komoot and Nominatim. Places and speed limits: Overpass API. Routing: Valhalla (FOSSGIS) and OSRM; with your own key, © openrouteservice.org by HeiGIT. The phone map uses Apple Maps.": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Datos del mapa © colaboradores de OpenStreetMap (ODbL). Las rutas y la búsqueda usan servicios públicos basados en OpenStreetMap."
+            "value": "Datos del mapa © colaboradores de OpenStreetMap (ODbL). Teselas: Fundación OpenStreetMap (servidor por defecto). Búsqueda: Photon de komoot y Nominatim. Lugares y límites de velocidad: Overpass API. Rutas: Valhalla (FOSSGIS) y OSRM; con tu propia clave, © openrouteservice.org by HeiGIT. El mapa del teléfono usa Apple Maps."
           }
         }
       }
@@ -3411,6 +3451,16 @@
         }
       }
     },
+    "Open-source licenses": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Licencias de código abierto"
+          }
+        }
+      }
+    },
     "OpenCfMoto bike tuning": {
       "localizations": {
         "es": {
@@ -3737,6 +3787,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Apunta la cámara al QR de MotoPlay de la moto\n\nSi no escanea, prueba con el QR de iOS/CarPlay o introduce el Wi-Fi manualmente (TRK)."
+          }
+        }
+      }
+    },
+    "Portions © The Android Open Source Project and Material Icons by Google are licensed under the Apache License 2.0.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las partes © The Android Open Source Project y los iconos Material de Google tienen licencia Apache 2.0."
           }
         }
       }
@@ -5237,6 +5297,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Después inicia la transmisión de pantalla en el paso 2."
+          }
+        }
+      }
+    },
+    "This app comes with ABSOLUTELY NO WARRANTY, to the extent permitted by applicable law.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta app se ofrece SIN NINGUNA GARANTÍA, en la medida en que lo permita la ley aplicable."
           }
         }
       }

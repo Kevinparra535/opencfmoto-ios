@@ -1,4 +1,8 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later AND Apache-2.0
+// Portions Copyright (C) 2010 The Android Open Source Project (libcore `org.json`), licensed under
+// the Apache License, Version 2.0 (LICENSES/Apache-2.0.txt). Translated to Swift and modified by the
+// OpenCfMoto for iOS contributors; this file as a whole is distributed under the AGPL-3.0-or-later.
+//
 // Android (AOSP libcore) `org.json` semantics on top of the contract's `JSONValue` model:
 // - parser = port of AOSP `JSONTokener` (lenient: comments, unquoted/single-quoted strings,
 //   `=`/`=>` separators, `;` separators, hex/octal integers, case-insensitive literals, a leading

@@ -1,8 +1,15 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later AND Apache-2.0
 // Ported from OpenCfMoto (Android) res/drawable/ic_man_*.xml, ic_fab_*.xml, ic_search.xml,
 // ic_nav_arrow.xml, ic_dest_pin.xml — docs/spec/navigation-dash.md §11.5.
 // Path data is copied verbatim from the vector drawables; Android `rotation` groups are clockwise
 // about the pivot in a y-down space (identical to `DashTransform.rotation`).
+//
+// Material Icons by Google, licensed under the Apache License, Version 2.0
+// (LICENSES/Apache-2.0.txt), reach this file through those drawables: .fabGps (gps_fixed), .fabPlus
+// (add), .fabMinus (remove), .fabMenu (more_vert), .fabFit (crop_free), .fabVoice (volume_up) and
+// .search (search) carry the icons' path data unchanged; .fabCompass is explore with a smaller
+// needle and .manArrive is place (location_on) with its dot drawn as two arcs. The other icons are
+// OpenCfMoto's own geometry (the Apple Music ones were drawn for this port).
 
 import Foundation
 

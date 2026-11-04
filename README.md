@@ -1,6 +1,44 @@
-# OpenCfMoto para iOS
+<div align="center">
 
-*[English version below](#opencfmoto-for-ios-english)*
+<img src="App/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png" width="96" alt="OpenCfMoto for iOS app icon: a speedometer with a navigation arrow"/>
+
+# OpenCfMoto for iOS
+
+**CFMOTO / MotoPlay dash navigation from your iPhone.** Your own map, turn-by-turn guidance and Apple
+Music on **CFMOTO MotoPlay** and other **Carbit / EasyConnect** motorcycle dashboards, streamed over
+the bike's Wi-Fi. A **CarPlay alternative for motorcycles**: 450MT · 800MT · 450SR · 675SR-R · 700MT ·
+1000MT-X · 800NK · Voge · Moto Morini · QJ Motor…
+
+**Navegación en el tablero de tu CFMOTO / MotoPlay desde el iPhone.** Mapa propio, indicaciones giro a
+giro y Apple Music en los tableros **CFMOTO MotoPlay** y otros **Carbit / EasyConnect**, por el Wi-Fi de
+la moto. Una **alternativa a CarPlay para motos**.
+
+[![CI](https://github.com/Kevinparra535/opencfmoto-ios/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Kevinparra535/opencfmoto-ios/actions/workflows/ci.yml)
+[![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
+[![Platform: iOS 17+](https://img.shields.io/badge/platform-iOS%2017%2B-lightgrey)](#requirements)
+[![Swift 5.9+ · SwiftUI](https://img.shields.io/badge/Swift-5.9%2B%20%C2%B7%20SwiftUI-F05138?logo=swift&logoColor=white)](https://www.swift.org)
+[![iOS port of OpenCfMoto (Android)](https://img.shields.io/badge/iOS%20port%20of-OpenCfMoto%20%28Android%29-2ea44f)](https://github.com/zanderp/open-cfmoto)
+
+<img src="docs/screenshots/readme/dash-navigation.png" width="400" alt="CFMOTO dash navigation from an iPhone: turn card, speed, speed limit and arrival time on an 800×384 MotoPlay dash (demo data)"/>
+<img src="docs/screenshots/readme/dash-apple-music.png" width="400" alt="Apple Music on the motorcycle dash next to the turn card (demo song)"/>
+<br/>
+<img src="docs/screenshots/readme/phone-home.png" width="170" alt="OpenCfMoto home screen on the iPhone in demo mode"/>
+<img src="docs/screenshots/readme/phone-dash-view.png" width="170" alt="iPhone Dash view with the Apple Music sheet and the handlebar keypad (demo)"/>
+<img src="docs/screenshots/readme/dash-route-preview.png" width="400" alt="Route preview on the dash with Fast and Fun alternatives (demo data)"/>
+
+<sub>Simulator and dash snapshot-test images, demo data only · Capturas del simulador y de las pruebas del tablero, solo datos de demostración</sub>
+
+### [Try it](#try-it) · [Pruébala](#pruebala) · [Credits / Créditos](CREDITS.md) · [English](#opencfmoto-for-ios-english) · [Español](#opencfmoto-para-ios)
+
+</div>
+
+> **Early field testing (v0.1).** Community project, not affiliated with CFMOTO, Carbit or Apple. Set
+> your route before you ride. · **Pruebas de campo (v0.1).** Proyecto comunitario, sin afiliación con
+> CFMOTO, Carbit ni Apple. Fija la ruta antes de salir.
+
+---
+
+# OpenCfMoto para iOS
 
 **OpenCfMoto para iOS** es una app de iPhone que envía su **propia interfaz de navegación** —mapa,
 indicaciones giro a giro, velocidad, límite de velocidad, hora de llegada, reloj y menús— a los
@@ -11,6 +49,27 @@ usando el protocolo **PXC** obtenido por ingeniería inversa. Es un port a Swift
 
 > ⚠️ Proyecto comunitario en desarrollo (v0.1). Todavía no se ha probado en todas las motos:
 > los informes de campo (con registros) son lo más valioso que puedes aportar.
+
+<a id="pruebala"></a>
+## Pruébala
+
+- **En tu iPhone, sin Mac y gratis**: instala la versión para sideload
+  (`OpenCfMoto-vX.Y.Z-sideload.ipa`, en [Releases](https://github.com/Kevinparra535/opencfmoto-ios/releases))
+  con SideStore, AltStore Classic o Sideloadly y un Apple ID gratuito. Te unes tú al Wi-Fi de la moto
+  desde Ajustes (la app te da el nombre y copia la contraseña) y hay que renovarla cada 7 días. Paso a
+  paso: [docs/INSTALAR.md](docs/INSTALAR.md).
+- **Todo, también sin Mac**: haz un fork de este repositorio y compila tu propia copia en TestFlight con
+  GitHub Actions (cuenta de pago de Apple Developer, 99 USD al año) →
+  [docs/TESTFLIGHT.md](docs/TESTFLIGHT.md).
+- **Con un Mac**: compílala con Xcode (cuenta gratuita: 7 días; de pago: hasta un año) →
+  [Compilar e instalar](#compilar-e-instalar).
+- **Sin moto**: el modo demostración en el Simulador de iOS (argumento `-demo`, más abajo) o, en el
+  iPhone, Inicio ▸ **Vista de tablero**, que dibuja la pantalla del tablero sin tablero.
+- **¿Tienes Android?** Usa la app original,
+  [OpenCfMoto para Android](https://github.com/zanderp/open-cfmoto/releases/latest) (el APK está en su
+  página de Releases).
+- Cuéntanos cómo te fue con un
+  [informe de campo](https://github.com/Kevinparra535/opencfmoto-ios/issues/new?template=field-report.yml).
 
 ## Qué hace
 
@@ -38,7 +97,7 @@ usando el protocolo **PXC** obtenido por ingeniería inversa. Es un port a Swift
   se importan y exportan en el mismo formato que la app Android.
 - Interfaz en **español e inglés** (sigue el idioma del iPhone).
 
-## Tableros compatibles
+## Motos y tableros compatibles (CFMOTO 450MT, 800MT, 450SR…)
 
 Cualquier tablero CFMoto MotoPlay / EasyConnect u otro tablero del entorno Carbit que muestre un
 **QR de emparejamiento**; no hace falta T-BOX. Estas motos están confirmadas con la app Android
@@ -78,8 +137,9 @@ duplicadas, la pantalla debe estar encendida y la emisión se detiene al bloquea
 ## Requisitos
 
 - Un **iPhone con iOS 17** o posterior y, para compilarla tú, un **Mac con Xcode 16** o posterior.
-  **Sin Mac**: con la cuenta de pago, GitHub la compila y la sube a TestFlight
-  ([docs/TESTFLIGHT.md](docs/TESTFLIGHT.md)).
+  **Sin Mac**: la versión para sideload de [Releases](https://github.com/Kevinparra535/opencfmoto-ios/releases)
+  con un Apple ID gratuito ([docs/INSTALAR.md](docs/INSTALAR.md)) o, con la cuenta de pago, GitHub la
+  compila y la sube a tu TestFlight ([docs/TESTFLIGHT.md](docs/TESTFLIGHT.md)).
 - Una **cuenta de Apple Developer**:
   - **De pago** (Apple Developer Program) para la variante `full`: la app se une sola al Wi-Fi de
     la moto (*Hotspot Configuration*) y lee el SSID actual (*Access WiFi Information*).
@@ -156,12 +216,18 @@ Sigue la guía paso a paso [docs/PRUEBA-EN-LA-MOTO.md](docs/PRUEBA-EN-LA-MOTO.md
 - **Apple Music**: solo la app Música de Apple (ni Spotify ni YouTube Music: iOS no da acceso).
   Mientras suena, los botones ◀ ▶ ★ de la moto controlan la música; con el mando multimedia del
   teléfono activado, pausa la canción con ★ para devolvérselos al tablero.
+- **Versión para sideload** (gratuita, de Releases): te unes al Wi-Fi de la moto a mano en Ajustes
+  (la app muestra la red y copia la contraseña), caduca a los 7 días si no la renuevas, entra en el
+  máximo de 3 apps instaladas así y el modo espejo puede no estar disponible
+  ([docs/INSTALAR.md](docs/INSTALAR.md)).
 - **App Store**: el audio silencioso para los botones y la lectura del volumen podrían no ser
   aceptados en la revisión de Apple. Además, la licencia **AGPL** es difícil de compatibilizar con
   las condiciones de la App Store: distribuir esta app (o un derivado) a otras personas, ya sea en
   la App Store o con pruebas externas o un enlace público de TestFlight, requiere el permiso de los
-  titulares del proyecto original. La forma prevista es instalarla tú mismo, con Xcode o con las
-  pruebas internas de TestFlight (solo para ti).
+  titulares del proyecto original. La forma prevista es que cada persona la instale con su propio
+  Apple ID: la versión para sideload de Releases, Xcode o las pruebas internas de TestFlight (solo
+  para ti). Publicar el IPA en Releases, junto a su código fuente, es una distribución normal bajo la
+  AGPL.
 - Los servicios públicos de OpenStreetMap (teselas, Photon, Nominatim, Overpass, OSRM, Valhalla)
   tienen políticas de uso justo; para un uso intensivo configura tu propio servidor de teselas o
   una clave de OpenRouteService en Ajustes.
@@ -183,9 +249,12 @@ Packages/OpenCfMotoKit/         Paquete Swift
 docs/ARCHITECTURE.md            Arquitectura y reglas del proyecto
 docs/spec/                      Especificaciones de comportamiento extraídas de la app Android
 docs/TESTFLIGHT.md              Instalar sin Mac: compilar y subir a TestFlight desde GitHub
-.github/workflows/              ci.yml (pruebas y compilaciones) y testflight.yml (TestFlight)
+docs/INSTALAR.md                Instalar sin Mac con un Apple ID gratuito (SideStore, AltStore, Sideloadly)
+.github/workflows/              ci.yml (pruebas y compilaciones), testflight.yml (TestFlight) y
+                                release.yml (IPA para sideload)
 tools/                          Herramientas: traducciones, CI, tablero simulado (fakedash)
   testflight/                     App Store Connect (asc.py), firma y subida, revisión del IPA
+CREDITS.md, NOTICE, LICENSES/   Créditos, avisos de copyright y licencias de terceros (Apache 2.0)
 ```
 
 ## Pruebas e integración continua
@@ -213,27 +282,44 @@ títulos, ni artistas, ni identificadores de canciones en los registros: cada ca
 un código que cambia en cada arranque de la app); la portada de las canciones en streaming la carga
 MusicKit de Apple desde los servidores de Apple.
 
+## Preguntas frecuentes
+
+- **¿Funciona con CarPlay?** No. CarPlay solo funciona con unidades certificadas por Apple;
+  OpenCfMoto dibuja su propia interfaz de navegación para el tablero MotoPlay / EasyConnect de la
+  moto.
+- **¿Puedo ver Google Maps o Waze en el tablero de mi CFMOTO con un iPhone?** Con el modo espejo, sí:
+  el tablero muestra toda la pantalla del iPhone, pero sus toques no controlan esas apps (en la versión
+  para sideload el modo espejo puede no estar disponible).
+- **¿Funciona con Android?** Esta es la app de iPhone. En Android usa la app original,
+  [OpenCfMoto para Android](https://github.com/zanderp/open-cfmoto), que además retransmite Android
+  Auto.
+- **¿Está en la App Store?** No: mira [Pruébala](#pruebala).
+
 ## Créditos y licencia
 
-Port para iOS de **[OpenCfMoto](https://github.com/zanderp/open-cfmoto)**, © 2026 Alexandru y los
-colaboradores de OpenCfMoto, construido sobre el trabajo de la comunidad open-cfmoto: dcoletto /
-coletz (QR y EasyConn originales), richardbizik (1000 MT-X), ionutradu252 / open-cflink (controles
-del manillar, márgenes, reconexión), eugen0309 (Wi-Fi Direct / CL-C450), Glifaus, sashop2001,
-Authoritt y todos los que probaron motos y compartieron registros. El protocolo, los perfiles de
-tablero, la navegación, los GPX, los viajes y los formatos de ajustes se han portado de su código
-Kotlin y de su documentación de ingeniería inversa. No incluye código del receptor de Android Auto.
+Port para iOS de **[OpenCfMoto](https://github.com/zanderp/open-cfmoto)**, de Alexandru Popa
+([@zanderp](https://github.com/zanderp)) y los colaboradores de OpenCfMoto, que continúa el trabajo de
+la comunidad open-cfmoto: dcoletto / coletz, richardbizik, ionutradu252 / OpenCFLink, eugen0309,
+Authoritt (también la traducción al español), BojanJ, Martin Escudero, Glifaus, sashop2001 y los
+traductores. El protocolo, los perfiles de tablero, la navegación, los GPX, los viajes y los formatos
+de ajustes se han portado de su código Kotlin y de su documentación de ingeniería inversa. El receptor
+de Android Auto de la app Android (headunit de Michael Reid y Open Headunit de Andre Rinas) se
+acredita, pero no está en esta app. Incluye código traducido de AOSP e iconos Material de Google bajo
+la licencia Apache 2.0 ([LICENSES/Apache-2.0.txt](LICENSES/Apache-2.0.txt)). Datos de mapa ©
+colaboradores de OpenStreetMap (ODbL), a través de los servicios que se citan en los créditos. Lista
+completa: [CREDITS.md](CREDITS.md).
 
 Software libre bajo la **GNU Affero General Public License v3.0 o posterior** (ver
 [LICENSE](LICENSE) y [NOTICE](NOTICE)). Si redistribuyes una versión modificada, debes ofrecer su
-código fuente completo bajo la misma licencia. Datos de mapa © colaboradores de OpenStreetMap (ODbL).
+código fuente completo bajo la misma licencia.
 
 ## Aviso
 
 Proyecto comunitario independiente. No está afiliado, respaldado ni patrocinado por CFMOTO,
 Carbit, Apple, Google ni ninguna marca de motos. CFMOTO, MotoPlay, EasyConn, Carbit, iPhone,
-CarPlay, Android Auto y las marcas relacionadas pertenecen a sus propietarios. Úsalo bajo tu propia
-responsabilidad: no dependas de él para una navegación crítica, fija la ruta antes de salir y no
-manipules el teléfono mientras conduces.
+CarPlay, Android Auto y las marcas relacionadas pertenecen a sus propietarios. Se ofrece **sin
+ninguna garantía**: úsalo bajo tu propia responsabilidad, no dependas de él para una navegación
+crítica, fija la ruta antes de salir y no manipules el teléfono mientras conduces.
 
 ---
 
@@ -248,6 +334,26 @@ the reverse-engineered **PXC** protocol. It is a Swift port of the Android app
 
 > ⚠️ Community project, work in progress (v0.1). It has not been tested on every bike yet: field
 > reports (with logs) are the most valuable contribution you can make.
+
+## Try it
+
+- **On your iPhone, no Mac, free**: install the sideload build
+  (`OpenCfMoto-vX.Y.Z-sideload.ipa`, on [Releases](https://github.com/Kevinparra535/opencfmoto-ios/releases))
+  with SideStore, AltStore Classic or Sideloadly and a free Apple ID. You join the bike Wi-Fi yourself
+  in Settings (the app shows the network and copies the password), and the app must be refreshed
+  every 7 days. Step by step: [docs/INSTALAR.md](docs/INSTALAR.md#english).
+- **Everything, still without a Mac**: fork this repository and build your own TestFlight copy with
+  GitHub Actions (paid Apple Developer account, 99 USD a year) →
+  [docs/TESTFLIGHT.md](docs/TESTFLIGHT.md#english).
+- **With a Mac**: build it with Xcode (free account: 7 days; paid: up to a year) →
+  [Build and install](#build-and-install).
+- **No bike**: demo mode in the iOS Simulator (the `-demo` launch argument, see [Demo mode](#demo-mode))
+  or, on the iPhone, Home ▸ **Dash view**, which draws the dash picture without a dash.
+- **On Android?** Use the original
+  [OpenCfMoto for Android](https://github.com/zanderp/open-cfmoto/releases/latest) (the APK is on its
+  Releases page).
+- Tell us how it went with a
+  [field report](https://github.com/Kevinparra535/opencfmoto-ios/issues/new?template=field-report.yml).
 
 ## Features
 
@@ -275,7 +381,7 @@ the reverse-engineered **PXC** protocol. It is a Swift port of the Android app
   export in the same format as the Android app.
 - **English and Spanish** UI (follows the iPhone language).
 
-## Supported dashes
+## Supported bikes and dashes (CFMOTO 450MT, 800MT, 450SR…)
 
 Any CFMoto MotoPlay / EasyConnect dash, or another Carbit-framework dash that shows a **pairing
 QR**; no T-BOX needed. These bikes are confirmed with the Android app (the protocol and the dash
@@ -315,8 +421,9 @@ on and the broadcast stops when the phone locks.
 ## Requirements
 
 - An **iPhone with iOS 17** or later and, to build it yourself, a **Mac with Xcode 16** or later.
-  **No Mac**: with a paid account, GitHub builds it and uploads it to TestFlight
-  ([docs/TESTFLIGHT.md](docs/TESTFLIGHT.md)).
+  **No Mac**: the sideload build from [Releases](https://github.com/Kevinparra535/opencfmoto-ios/releases)
+  with a free Apple ID ([docs/INSTALAR.md](docs/INSTALAR.md#english)) or, with a paid account, GitHub
+  builds it and uploads it to your TestFlight ([docs/TESTFLIGHT.md](docs/TESTFLIGHT.md)).
 - An **Apple Developer account**:
   - **Paid** (Apple Developer Program) for the `full` flavor: the app joins the bike Wi-Fi by itself
     (*Hotspot Configuration*) and reads the current SSID (*Access WiFi Information*).
@@ -387,11 +494,17 @@ no Wi-Fi or dash, and a demo GPS route so you can watch the dash UI on the phone
 - **Apple Music**: the Apple Music app only (not Spotify or YouTube Music: iOS gives no access).
   While it plays, the bike's ◀ ▶ ★ buttons control the music; with the phone media remote on, pause
   the song with ★ to give them back to the dash.
+- **Sideload build** (free, from Releases): you join the bike Wi-Fi by hand in Settings (the app
+  shows the network and copies the password), it expires after 7 days unless refreshed, it counts
+  toward the limit of 3 apps installed that way and mirror mode may be unavailable
+  ([docs/INSTALAR.md](docs/INSTALAR.md#english)).
 - **App Store**: the silent audio for the buttons and the volume observation may not pass Apple's
   review. The **AGPL** is also hard to reconcile with the App Store terms: distributing this app (or
   a derivative) to other people — on the App Store, or through TestFlight external testing or a
-  public link — needs permission from the upstream copyright holders. The intended way is to install
-  it yourself, with Xcode or with TestFlight internal testing (only you).
+  public link — needs permission from the upstream copyright holders. The intended way is that
+  everyone installs it with their own Apple ID: the sideload build from Releases, Xcode or TestFlight
+  internal testing (only you). Publishing the IPA on Releases, next to its source code, is ordinary
+  AGPL distribution.
 - The public OpenStreetMap services (tiles, Photon, Nominatim, Overpass, OSRM, Valhalla) have
   fair-use policies; for heavy use set your own tile server or an OpenRouteService key in Settings.
 
@@ -412,9 +525,12 @@ Packages/OpenCfMotoKit/         Swift package
 docs/ARCHITECTURE.md            Architecture and project rules
 docs/spec/                      Behaviour specs extracted from the Android app
 docs/TESTFLIGHT.md              No Mac: build and upload to TestFlight from GitHub
-.github/workflows/              ci.yml (tests and builds) and testflight.yml (TestFlight)
+docs/INSTALAR.md                No Mac: install with a free Apple ID (SideStore, AltStore, Sideloadly)
+.github/workflows/              ci.yml (tests and builds), testflight.yml (TestFlight) and
+                                release.yml (sideload IPA)
 tools/                          Tooling: translations, CI, simulated dash (fakedash)
   testflight/                     App Store Connect (asc.py), signing and upload, IPA checks
+CREDITS.md, NOTICE, LICENSES/   Credits, copyright notices and third-party licenses (Apache 2.0)
 ```
 
 ## Tests and CI
@@ -441,23 +557,38 @@ OpenCfMoto sends it nowhere (no titles, artists or song ids in logs: each song s
 changes every time the app starts); the cover of streamed songs is loaded by Apple's MusicKit from
 Apple's servers.
 
+## FAQ
+
+- **Does it work with CarPlay?** No. CarPlay only works with head units certified by Apple;
+  OpenCfMoto draws its own navigation UI for the bike's MotoPlay / EasyConnect dash.
+- **Can I see Google Maps or Waze on my CFMOTO dash with an iPhone?** With mirror mode, yes: the dash
+  shows the whole iPhone screen, but its touches do not control those apps (mirror mode may be
+  unavailable in the sideload build).
+- **Does it work on Android?** This is the iPhone app. On Android use the original
+  [OpenCfMoto for Android](https://github.com/zanderp/open-cfmoto), which also relays Android Auto.
+- **Is it on the App Store?** No: see [Try it](#try-it).
+
 ## Credits and license
 
-iOS port of **[OpenCfMoto](https://github.com/zanderp/open-cfmoto)**, © 2026 Alexandru and the
-OpenCfMoto contributors, built on the open-cfmoto community lineage: dcoletto / coletz (original QR
-& EasyConn work), richardbizik (1000 MT-X), ionutradu252 / open-cflink (handlebar controls,
-margins, reconnect), eugen0309 (Wi-Fi Direct / CL-C450), Glifaus, sashop2001, Authoritt and
-everyone who tested bikes and shared logs. The protocol, dash profiles, navigation, GPX, trips and
-settings formats were ported from its Kotlin sources and reverse-engineering notes. No code from
-the Android Auto receiver is included.
+iOS port of **[OpenCfMoto](https://github.com/zanderp/open-cfmoto)**, by Alexandru Popa
+([@zanderp](https://github.com/zanderp)) and the OpenCfMoto contributors, which continues the work of
+the open-cfmoto community: dcoletto / coletz, richardbizik, ionutradu252 / OpenCFLink, eugen0309,
+Authoritt (also the Spanish translation), BojanJ, Martin Escudero, Glifaus, sashop2001 and the
+translators. The protocol, dash profiles, navigation, GPX, trips and settings formats were ported from
+its Kotlin sources and reverse-engineering notes. The Android app's Android Auto receiver (headunit by
+Michael Reid and Open Headunit by Andre Rinas) is credited but not included in this app. It contains
+code translated from AOSP and Material Icons by Google under the Apache License 2.0
+([LICENSES/Apache-2.0.txt](LICENSES/Apache-2.0.txt)). Map data © OpenStreetMap contributors (ODbL),
+through the services listed in the credits. Full list: [CREDITS.md](CREDITS.md).
 
 Free software under the **GNU Affero General Public License v3.0 or later** (see
 [LICENSE](LICENSE) and [NOTICE](NOTICE)). If you redistribute a modified version you must offer its
-complete source under the same license. Map data © OpenStreetMap contributors (ODbL).
+complete source under the same license.
 
 ## Disclaimer
 
 Independent community project. Not affiliated with, endorsed by or sponsored by CFMOTO, Carbit,
 Apple, Google or any motorcycle brand. CFMOTO, MotoPlay, EasyConn, Carbit, iPhone, CarPlay, Android
-Auto and related marks belong to their owners. Use at your own risk: do not rely on it for critical
-navigation, set your route before you ride and do not handle the phone while riding.
+Auto and related marks belong to their owners. It comes with **no warranty**: use it at your own
+risk, do not rely on it for critical navigation, set your route before you ride and do not handle the
+phone while riding.
