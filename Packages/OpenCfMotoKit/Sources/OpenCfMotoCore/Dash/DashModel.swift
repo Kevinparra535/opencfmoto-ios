@@ -127,6 +127,10 @@ public struct DashModel: Sendable, Equatable {
     /// Apple Music now playing (iOS addition): the map's now-playing tile, the menu's "Music" entry
     /// and the Music sheet. nil = none of them (feature off, no access, nothing loaded).
     public var music: DashNowPlaying?
+    /// Credit for the map tiles, drawn small in the map's free bottom-left corner (iOS addition,
+    /// navigation-dash.md §10.4): "© OpenStreetMap" while the tiles come from the OSMF servers
+    /// (`MapTileSource.attribution(template:)`); nil = no label (a tile server the rider configured).
+    public var mapAttribution: String?
 
     public init(canvas: DashSize = DashSize(width: 800, height: 384), margins: ScreenMargins = .zero,
                 densityDpiOverride: Int? = nil, nav: NavSnapshot = NavSnapshot(), fix: LocationFix? = nil,
@@ -135,7 +139,8 @@ public struct DashModel: Sendable, Equatable {
                 language: DashLanguage = .en, places: DashPlaces = .empty, search: DashSearchState = DashSearchState(),
                 recording: Bool = false, lapTimer: DashLapTimer? = nil, toastText: String? = nil, linkBanner: String? = nil,
                 holdMessage: String? = nil, showClock: Bool = true, handlebarFocus: Bool = true,
-                maxTileZoom: Int = MapProjection.defaultMaxTileZoom, music: DashNowPlaying? = nil) {
+                maxTileZoom: Int = MapProjection.defaultMaxTileZoom, music: DashNowPlaying? = nil,
+                mapAttribution: String? = nil) {
         self.canvas = canvas
         self.margins = margins
         self.densityDpiOverride = densityDpiOverride
@@ -158,6 +163,7 @@ public struct DashModel: Sendable, Equatable {
         self.handlebarFocus = handlebarFocus
         self.maxTileZoom = maxTileZoom
         self.music = music
+        self.mapAttribution = mapAttribution
     }
 
     /// Canvas size for a negotiated `VideoCanvas`.

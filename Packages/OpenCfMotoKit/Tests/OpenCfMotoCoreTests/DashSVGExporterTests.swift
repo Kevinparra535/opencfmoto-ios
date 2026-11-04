@@ -57,7 +57,27 @@ final class DashSVGExporterTests: XCTestCase {
         XCTAssertTrue(svg.contains("lengthAdjust=\"spacingAndGlyphs\""))
         let lines = DashTextLayout.layout("Fish & <Chips> \"x\"", in: DashRect(x: 0, y: 0, width: 300, height: 40), style: style,
                                           measurer: ApproximateTextMeasurer())
-        XCTAssertTrue(svg.contains("x=\"\(DashSVGNumber.format(lines[0].origin.x, decimals: 2))\" y=\"\(DashSVGNumber.format(lines[0].origin.y, decimals: 2))\""))
+        // centred: anchored at the line's centre (a rasteriser drawing the natural width keeps it centred)
+        XCTAssertEqual(lines[0].origin.x + lines[0].width / 2, 150, accuracy: 1e-9)
+        XCTAssertTrue(svg.contains("x=\"150\" text-anchor=\"middle\" y=\"\(DashSVGNumber.format(lines[0].origin.y, decimals: 2))\""))
+        // left: the line's start, no anchor; right: anchored at its end (the rect's right edge)
+        for (alignment, x, anchor) in [(DashTextAlignment.left, "20", ""), (.right, "220", " text-anchor=\"end\"")] {
+            var one = DashDisplayList(size: DashSize(width: 300, height: 100), background: .black)
+            one.commands = [.text("Ab", DashRect(x: 20, y: 0, width: 200, height: 40),
+                                  DashTextStyle(font: DashFont(size: 10), color: .white, alignment: alignment))]
+            let s = DashSVGExporter().svg(one)
+            XCTAssertTrue(s.contains("<text x=\"\(x)\"\(anchor) y="), "\(alignment): \(s)")
+        }
+        // a line with fallback-font runs keeps its start: cairosvg would anchor each run on its own
+        let centred = DashTextStyle(font: DashFont(size: 10), color: .white, alignment: .center)
+        var mixed = DashDisplayList(size: DashSize(width: 300, height: 100), background: .black)
+        mixed.commands = [.text("＋ Marker", DashRect(x: 20, y: 0, width: 200, height: 40), centred)]
+        let ms = DashSVGExporter().svg(mixed)
+        let start = DashTextLayout.layout("＋ Marker", in: DashRect(x: 20, y: 0, width: 200, height: 40), style: centred,
+                                          measurer: ApproximateTextMeasurer())[0].origin.x
+        XCTAssertTrue(ms.contains("<text x=\"\(DashSVGNumber.format(start, decimals: 2))\" y="), ms)
+        XCTAssertTrue(ms.contains("<tspan"), ms)
+        XCTAssertFalse(ms.contains("text-anchor"), ms)
         // without fitting: letter-spacing is emitted instead of textLength
         var plain = DashSVGExporter()
         plain.fitTextToMeasuredWidth = false

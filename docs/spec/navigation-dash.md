@@ -952,6 +952,44 @@ Effect:
 * The chrome (cards, FABs, search sheet, menu) has **one palette** for day and night (§11.2). The white search sheet stays white at night.
 * Re-evaluation [V]: only on bind, on a theme segment tap, on **Recenter / Recalc**, and from the phone Dash-view 🌗 button (`GpxDashUi.kt:170-173, 1562, 1610-1624`; `HudViewActivity.kt:268-272`). Unlike the Android-Auto path (60 s loop, `aa/AaReceiver.kt:128-145`) the built-in map does **not** flip at 19:00 by itself [I]. iOS: re-evaluate every 60 s.
 
+### 10.4 iOS: tile source rules — no prefetch from the OSMF servers, the "© OpenStreetMap" credit
+
+The dash map's raster tiles come from `BikeSettings.tileURLTemplate` (default
+`https://tile.openstreetmap.org/{z}/{x}/{y}.png`, editable in Settings). `MapTileSource` (OpenCfMotoCore,
+Linux-tested) reads the template's host — the RFC 3986 authority (userinfo and port dropped, `{…}`
+placeholders lose their braces), plus Foundation's `URL.host` when it differs — and calls it an **OSMF
+host** when it is `openstreetmap.org`, `osm.org` or any of their subdomains (`tile.`, the legacy
+`a.` / `b.` / `c.tile.` …), whatever the case or a trailing dot. When in doubt it picks the OSMF side.
+
+* **No prefetch from the OSMF servers.** Their Tile Usage Policy forbids prefetching and offline or bulk
+  downloads (Android never prefetches). The iOS route-corridor prefetch (§16 R3: zooms 14–17 within 250 m
+  of a new route, at most 400 tiles) runs only for a tile server the rider configured:
+  `MapTileSource.allowsCorridorPrefetch(template:)` is false for an OSMF host and for a template whose host
+  cannot be read, so RideModel does not ask, `TileImageCache.prefetch` refuses (queues nothing, returns 0),
+  and a corridor queued for another server is dropped — never fetched from the new one — when the template
+  changes. Visible tiles load as before (2 downloads, 90-day cache, identifying User-Agent).
+* **Credit on the dash map.** The OSMF tiles need a visible credit next to the map. RideModel sets
+  `DashModel.mapAttribution` = `MapTileSource.attribution(template:)` ("© OpenStreetMap" for an OSMF host, nil
+  for any other server: no label), and the scene draws it as a small plate — 11 sp medium `#E8EEF5` on 75 %
+  `#1A2332` (legible on day and night tiles), padding 8 × 2 dp, radius 6 dp, ellipsised to 45 % of the safe
+  width — in the **map layer** (after the tiles, route and puck, under every card, overlay and sheet; no hit
+  region: touches on it reach the map).
+  * Place (`DashLayout.mapAttribution`): the map's bottom-left corner, 8 dp from the safe area's left and
+    bottom edges, raised to end 6 dp above every piece of chrome it would come within 6 dp of — the metrics
+    card / bar, the preview, arrive and lap cards, the speed chip (and, for completeness, the pill, the nav
+    card and the FAB lane with the music tile and the clock). It therefore sits just above the bottom-left
+    stack: free ride landscape → the corner; navigating → above the metrics card (and the lap card); preview /
+    arrival → above the card; portrait free ride → above the speed chip. It never touches a control, a card,
+    the music tile, the speed chip or the clock on any supported canvas (DashLayoutInvariantTests,
+    DashMapAttributionTests); with no room left under the top chrome it is not drawn (not reached on those
+    canvases).
+  * The opaque Music sheet hides the map and its credit; the menu dimmer, the search sheet and the hold
+    picture draw over it like over the rest of the map. Toasts and the link banner stay clear of it on the
+    supported canvases.
+* Pictures of the dash with real OSM tiles (README, social posts) also caption them "Map © OpenStreetMap
+  contributors". The snapshot images in `docs/screenshots/dash/` use placeholder tiles and show the credit
+  where the dash draws it.
+
 ---
 
 ## 11. THE DASH UI
@@ -1508,8 +1546,8 @@ updates `DashModel.music` only on meaningful changes (song, state, seek / drift)
 
 * **R1 — Arrival logic.** The shipping Android code appears never to show the Arrived sheet (§4.8). Confirm intent with maintainers / a ride log (`[GPX] near dest at nav start`) before choosing iOS semantics.
 * **R2 — Via-leg cues.** Circuits and via-built alternatives likely lack turn cues on Android (§4.3). Confirm on a ride; iOS should fix.
-* **R3 — Internet while joined to the bike AP.** Android pins traffic to cellular explicitly. On iOS, verify that URLSession traffic reaches the internet while associated to a no-internet accessory Wi-Fi (NEHotspotConfiguration); fallbacks: `NWConnection` with `requiredInterfaceType = .cellular`, Multipath TCP entitlement, or prefetching routes/tiles before joining.
-* **R4 — Public-service policies.** tile.openstreetmap.org (no bulk, UA required, may refuse heavy app usage), Nominatim (1 req/s), Overpass (fair use), router.project-osrm.org and valhalla1.openstreetmap.de (demo servers, no SLA), Photon (komoot public). An App-Store app may need its own/paid tile & routing providers; keep endpoints configurable.
+* **R3 — Internet while joined to the bike AP.** Android pins traffic to cellular explicitly. On iOS, verify that URLSession traffic reaches the internet while associated to a no-internet accessory Wi-Fi (NEHotspotConfiguration); fallbacks: `NWConnection` with `requiredInterfaceType = .cellular`, Multipath TCP entitlement, or prefetching routes/tiles before joining (tiles: only from a tile server the rider configured, never the OSMF ones, §10.4).
+* **R4 — Public-service policies.** tile.openstreetmap.org (no bulk, UA required, may refuse heavy app usage), Nominatim (1 req/s), Overpass (fair use), router.project-osrm.org and valhalla1.openstreetmap.de (demo servers, no SLA), Photon (komoot public). An App-Store app may need its own/paid tile & routing providers; keep endpoints configurable. iOS today: no route-corridor prefetch from the OSMF tile servers and a "© OpenStreetMap" credit on the dash map (§10.4).
 * **R5 — ORS key.** Android bakes an optional default key at build time; decide how iOS supplies one (user-entered only?).
 * **R6 — Portrait canvas.** The 800×944 layout is shipping code but not visible in the repo's hardware footage; pixel estimates in §11.4 are derived.
 * **R7 — Text-dependent layout.** Wrap-content cards make exact geometry font-dependent (Roboto vs SF Pro); the gauge can overlap the metrics card on 800×384 (§11.3).

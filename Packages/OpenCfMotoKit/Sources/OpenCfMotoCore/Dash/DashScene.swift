@@ -3,11 +3,11 @@
 // (map overlays) and the presentation_gpx layouts — docs/spec/navigation-dash.md §11.
 //
 // Builds one dash frame as draw commands + hit-testable widgets + the handlebar focus order.
-// Z-order (back → front, Android XML order): map · search pill · lap card · nav card · metrics
-// card · speed chip · preview card · arrive card · FAB column · (now-playing tile) · (clock) ·
-// dimmer · search sheet / menu sheet. The Apple Music sheet (iOS addition) is opaque: only the sheet
-// and, while navigating, the nav card on top of it are drawn. The controller adds the focus ring,
-// toasts, link banner and hold card on top.
+// Z-order (back → front, Android XML order): map (+ its tile credit, iOS) · search pill · lap card · nav
+// card · metrics card · speed chip · preview card · arrive card · FAB column · (now-playing tile) ·
+// (clock) · dimmer · search sheet / menu sheet. The Apple Music sheet (iOS addition) is opaque: only
+// the sheet and, while navigating, the nav card on top of it are drawn. The controller adds the focus
+// ring, toasts, link banner and hold card on top.
 
 import Foundation
 
@@ -164,7 +164,8 @@ struct DashSceneBuilder {
             buildMusicSheet(music, navigating: navigating)
             return scene
         }
-        drawMap()
+        let mapDrawn = drawMap()
+        let mapLayerEnd = scene.commands.count // the map credit joins the map layer once the chrome is placed
 
         // Search pill (free ride & preview)
         var pillFrame: DashRect?
@@ -197,6 +198,7 @@ struct DashSceneBuilder {
         if let arrive { drawArrive(arrive) }
         // FAB lane (no sheet): FABs, the Apple Music now-playing tile under them, the clock chip.
         var tile: DashMusicTileLayout?
+        var lane: [DashRect] = []
         if input.sheet == .none {
             let clock = model.showClock ? clockChip(fabs) : nil
             if model.music != nil {
@@ -206,8 +208,19 @@ struct DashSceneBuilder {
             drawFabs(fabs)
             if let tile, let music = model.music { drawMusicTile(tile, music) }
             if let clock, !(tile?.hidesClock ?? false) { drawClock(clock) }
+            lane = fabs + [tile?.frame, (tile?.hidesClock ?? false) ? nil : clock?.rect].compactMap { $0 }
         }
         scene.topChromeBottom = (navFrame?.maxY ?? pillFrame?.maxY ?? c.safe.minY) + c.dp(8)
+        // Map credit ("© OpenStreetMap" on OSMF tiles, iOS addition): in the map layer, under every piece of
+        // chrome and sheet, and clear of all the chrome drawn on the map (navigation-dash.md §10.4).
+        if mapDrawn, let credit = model.mapAttribution {
+            let chrome = [pillFrame, navFrame, lapFrame, metrics?.frame, speedFrame, preview?.frame, arrive?.frame]
+                .compactMap { $0 } + lane
+            if let l = DashLayout.mapAttribution(c, text: credit, avoiding: chrome,
+                                                 topLimit: navFrame?.maxY ?? pillFrame?.maxY ?? c.safe.minY) {
+                scene.commands.insert(contentsOf: Self.attributionCommands(l), at: mapLayerEnd)
+            }
+        }
 
         switch input.sheet {
         case .menu:
@@ -300,9 +313,17 @@ struct DashSceneBuilder {
                                                        dash: dash.map { c.dp($0) })))
     }
 
-    private mutating func drawMap() {
+    /// The tile credit: a rounded plate with its text centred (map layer, no hit region: touches reach the map).
+    static func attributionCommands(_ l: DashMapAttributionLayout) -> [DashDrawCommand] {
+        [.fill(DashPath.roundedRect(l.frame, radius: min(l.cornerRadius, l.frame.height / 2)), DashPalette.attributionFill, .nonZero),
+         .text(l.text, l.frame, DashTextStyle(font: l.font, color: DashPalette.attributionText, alignment: .center))]
+    }
+
+    /// Returns false when there is no camera to draw the map with (nothing drawn).
+    @discardableResult
+    private mutating func drawMap() -> Bool {
         let m = model
-        guard let proj = input.camera.projection(viewport: m.canvas, anchor: input.anchor, tileSize: m.tileSize) else { return }
+        guard let proj = input.camera.projection(viewport: m.canvas, anchor: input.anchor, tileSize: m.tileSize) else { return false }
         scene.commands.append(.save)
         scene.commands.append(.transform(proj.mapToScreen))
         for t in proj.visibleTiles(maxTileZoom: m.maxTileZoom) {
@@ -381,6 +402,7 @@ struct DashSceneBuilder {
                 icon(.destPin, in: DashRect(x: s.x - w / 2, y: s.y - h, width: w, height: h))
             }
         }
+        return true
     }
 
     // MARK: Chrome

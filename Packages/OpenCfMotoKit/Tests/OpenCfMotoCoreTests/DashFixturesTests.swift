@@ -60,6 +60,8 @@ enum DashFixtures {
                               favorites: [Place(name: "Cafe Central", lat: 45.125, lon: 25.731, category: "cafe", subtitle: "Bulevardul Carol I")],
                               markers: [],
                               history: [campina, Place(name: "Free ride", lat: 0, lon: 0, category: "mode", subtitle: "Started free ride")])
+        // The default tile source (tile.openstreetmap.org): the map carries its credit (§10.4).
+        m.mapAttribution = MapTileSource.attribution(template: BikeSettings().tileURLTemplate)
         return m
     }
 

@@ -30,7 +30,8 @@ final class ProjectionAdapter: DashProjecting, @unchecked Sendable {
     private let lockedStreamPolicyOverride: LockedStreamPolicy?
 
     /// Corridor prefetch zooms / radius (the bike follow camera sits around z15.4–18.6; the tile
-    /// cache caps one prefetch at 400 tiles — OSM tile usage policy).
+    /// cache caps one prefetch at 400 tiles). Only for a tile server the rider configured: the OSMF
+    /// servers (the default tile.openstreetmap.org) forbid prefetching (OSM tile usage policy).
     private static let corridorZooms = 14 ... 17
     private static let corridorRadiusMeters = 250.0
 
@@ -118,6 +119,9 @@ final class ProjectionAdapter: DashProjecting, @unchecked Sendable {
         for t in tiles { self.tiles.request(z: t.z, x: t.x, y: t.y) }
     }
 
+    /// The route corridor ahead of the ride, for a custom tile server only: RideModel does not ask while
+    /// the template is an OSMF server (`MapTileSource.allowsCorridorPrefetch`), and the tile cache
+    /// refuses it then as well.
     func prefetchCorridor(_ points: [GeoPoint]) {
         guard points.count >= 2 else { return }
         tiles.prefetch(corridor: points, zooms: Self.corridorZooms, radiusMeters: Self.corridorRadiusMeters)

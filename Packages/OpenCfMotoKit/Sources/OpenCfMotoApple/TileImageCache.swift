@@ -14,10 +14,13 @@
 // through the injected HTTPClient (cellular-preferring on iOS). Stale tiles are served when the
 // network is unavailable and refreshed in the background when it is back.
 //
-// OSM tile usage policy: tile.openstreetmap.org forbids bulk / preventive downloading; Android
-// therefore never prefetches. `prefetch(corridor:…)` exists for the iOS cellular problem
-// (navigation-dash.md §16 R3) and is capped (`maxPrefetchTiles`); use it only for the active
-// route corridor at the riding zooms, or point the template at a provider that allows it.
+// OSM tile usage policy: the OpenStreetMap Foundation servers (tile.openstreetmap.org, the default)
+// forbid prefetching and offline / bulk downloads; Android never prefetches. `prefetch(corridor:…)`
+// exists for the iOS cellular problem (navigation-dash.md §16 R3) and runs ONLY for a tile server the
+// rider configured (`MapTileSource.allowsCorridorPrefetch`, navigation-dash.md §10.4): for an OSMF
+// template it queues nothing, and a corridor queued for another server is dropped — never fetched from
+// the new one — when the template changes. It is capped (`maxPrefetchTiles`) and meant for the active
+// route corridor at the riding zooms.
 
 import Foundation
 import OpenCfMotoCore
@@ -428,7 +431,7 @@ public final class TileImageCache: @unchecked Sendable {
         public var maxConcurrentDownloads: Int
         /// Pending visible-tile requests kept (newest first; older ones are dropped).
         public var maxQueuedRequests: Int
-        /// Cap for one `prefetch` call.
+        /// Cap for one `prefetch` call (custom tile servers only: never the OSMF ones).
         public var maxPrefetchTiles: Int
         /// Highest zoom the server provides (OSM 19); deeper tiles are drawn from ancestors.
         public var maxFetchZoom: Int
@@ -476,6 +479,8 @@ public final class TileImageCache: @unchecked Sendable {
 
     // Guarded by `lock`.
     private var template: String
+    /// `MapTileSource.allowsCorridorPrefetch(template:)`: false for the OSMF servers.
+    private var prefetchAllowed: Bool
     private var sourceDirectory: URL
     private var generation: UInt64 = 0
     private var memory: VideoLRU<MemoryKey, CGImage>
@@ -504,6 +509,7 @@ public final class TileImageCache: @unchecked Sendable {
             ?? FileManager.default.temporaryDirectory
         root = configuration.directory ?? caches.appendingPathComponent("tiles", isDirectory: true)
         template = configuration.urlTemplate
+        prefetchAllowed = MapTileSource.allowsCorridorPrefetch(template: configuration.urlTemplate)
         sourceDirectory = root.appendingPathComponent(TileDiskLayout.sourceKey(for: configuration.urlTemplate), isDirectory: true)
         memory = VideoLRU(capacity: configuration.memoryCapacity)
         nightFilter = TileNightFilter(style: configuration.nightStyle, dimming: configuration.nightDimming)
@@ -534,6 +540,7 @@ public final class TileImageCache: @unchecked Sendable {
             lock.lock()
             guard newValue != template else { lock.unlock(); return }
             template = newValue
+            prefetchAllowed = MapTileSource.allowsCorridorPrefetch(template: newValue)
             sourceDirectory = root.appendingPathComponent(TileDiskLayout.sourceKey(for: newValue), isDirectory: true)
             generation &+= 1
             memory.removeAll()
@@ -644,9 +651,15 @@ public final class TileImageCache: @unchecked Sendable {
     }
 
     /// Queues the tiles around a route corridor (disk-fresh tiles are skipped). Returns the number
-    /// of tiles considered (≤ `maxPrefetchTiles`).
+    /// of tiles considered (≤ `maxPrefetchTiles`). Only for a tile server the rider configured: with an
+    /// OSMF template (`MapTileSource.allowsCorridorPrefetch` false) nothing is queued and 0 is returned.
     @discardableResult
     public func prefetch(corridor rawCorridor: [GeoPoint], zooms: ClosedRange<Int>, radiusMeters: Double) -> Int {
+        let (allowed, gen, tpl) = lock.withLock { (prefetchAllowed, generation, template) }
+        guard allowed else {
+            Log.i("OSM", "corridor prefetch skipped: \(TileLogText.source(tpl)) does not allow prefetching (OSM tile usage policy)")
+            return 0
+        }
         let lo = max(0, zooms.lowerBound)
         let hi = min(configuration.maxFetchZoom, zooms.upperBound)
         let corridor = rawCorridor.filter(TileCoverage.isUsable) // untrusted route points (SEC-1)
@@ -665,13 +678,15 @@ public final class TileImageCache: @unchecked Sendable {
             guard let self else { return }
             var queued = 0
             for k in corridorKeys {
-                let (dir, expiry) = self.lock.withLock { (self.sourceDirectory, self.configuration.expiry) }
+                // The tile source changed since the call: this corridor was for the old server, never the new one.
+                let (dir, expiry, current) = self.lock.withLock { (self.sourceDirectory, self.configuration.expiry, self.generation) }
+                guard current == gen else { break }
                 if let created = self.fileDate(dir.appendingPathComponent(TileDiskLayout.relativePath(k))),
                    Date().timeIntervalSince(created) <= expiry {
                     continue
                 }
                 self.lock.withLock { () -> Void in
-                    if self.enqueueNetworkLocked(k, prefetch: true) { queued += 1 }
+                    if self.generation == gen, self.enqueueNetworkLocked(k, prefetch: true) { queued += 1 }
                 }
             }
             self.lock.withLock { () -> Void in self._stats.prefetchQueued += queued }
@@ -801,9 +816,11 @@ public final class TileImageCache: @unchecked Sendable {
 
     // MARK: private — network
 
-    /// Must be called with `lock` held. Returns true if the key was queued.
+    /// Must be called with `lock` held. Returns true if the key was queued. A prefetch is refused while
+    /// the template is an OSMF server (`prefetchAllowed`).
     private func enqueueNetworkLocked(_ key: TileCacheKey, prefetch: Bool) -> Bool {
         guard key.z <= configuration.maxFetchZoom, !netPending.contains(key) else { return false }
+        if prefetch, !prefetchAllowed { return false }
         if let until = retryNotBefore[key], ProcessInfo.processInfo.systemUptime < until { return false }
         netPending.insert(key)
         if prefetch {
@@ -852,7 +869,14 @@ public final class TileImageCache: @unchecked Sendable {
     }
 
     private func download(_ key: TileCacheKey, generation gen: UInt64) async {
-        let (tpl, dir) = lock.withLock { (template, sourceDirectory) }
+        let (tpl, dir, current) = lock.withLock { (template, sourceDirectory, generation) }
+        guard current == gen else {
+            // Queued for the previous tile source: never fetched from the new one (a corridor prefetched for
+            // a custom server must not reach an OSMF one; the render loop asks again for what it still needs).
+            _ = finishDownload(key, generation: gen, outcome: nil, retryDelay: nil, pause: 0, transportError: false)
+            pumpNetwork()
+            return
+        }
         var outcome: (image: CGImage, data: Data)?
         var retryDelay: TimeInterval?
         var pause: TimeInterval = 0

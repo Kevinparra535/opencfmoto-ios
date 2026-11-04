@@ -514,6 +514,19 @@ final class DashLayoutInvariantTests: XCTestCase {
                 } else {
                     XCTAssertNotNil(regions["music.tile"], "\(tag): no tile")
                 }
+                // The map credit (§10.4, every fixture uses the default OSM tiles): drawn once, inside the safe
+                // area, at least 6 dp clear of every control and card, the music tile, the speed chip and the
+                // clock (the tile's outset focus ring is 5 dp).
+                let credits = DashMapAttributionTests.credits(list)
+                XCTAssertEqual(credits.count, 1, "\(tag): \(credits.count) credit(s)")
+                if let credit = credits.first {
+                    XCTAssertTrue(credit.minX >= safe.minX - 0.01 && credit.maxX <= safe.maxX + 0.01 && credit.minY >= safe.minY - 0.01
+                                  && credit.maxY <= safe.maxY + 0.01, "\(tag): credit \(credit) outside the safe area \(safe)")
+                    let gap = 6 * model.scale - 0.01
+                    for (id, r) in regions {
+                        XCTAssertFalse(credit.insetBy(dx: -gap, dy: -gap).intersects(r), "\(tag): credit \(credit) within 6 dp of \(id) \(r)")
+                    }
+                }
             }
         }
     }
