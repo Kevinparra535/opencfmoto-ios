@@ -1,0 +1,163 @@
+17:29:19.095 I/APP: launch arguments: -e2eFakeDash (mt800 @ 127.0.0.1) -uiScreen dash
+17:29:19.180 I/THERMAL: thermalState=0 → none lowPower=false (start)
+17:29:19.189 I/E2E: seeded bike 'Fake dash 800MT' (QR parsed: ssid=CFMOTO-E2E800 mac=null action=1 (ap=true, p2p=false, hotspot=false) modelId=37426 sn=E2E800)
+17:29:19.202 I/APP: testing overrides: interfaces=lo0 127.0.0.2/8
+17:29:19.204 I/DUMP: recording H.264 → e2e-app.h264 (first 400 frames)
+17:29:19.204 I/E2E: fake dash mode: mt800 at 127.0.0.1:10930, phone 127.0.0.2 (lo0)
+17:29:19.208 I/APP: OpenCfMoto iOS 0.1.0 (1) · iPhone17,3 iOS 26.2 · full build · lang=en
+17:29:19.209 I/APP: Ready. Tap Connect to project the map to your dash.
+17:29:19.322 D/APP: RSA identity ready
+17:29:20.184 I/UI: -uiScreen dashPreview
+17:29:20.347 I/RIDE: GPS on (background=false)
+17:29:20.978 I/WIFI: Wi-Fi up without internet (iOS reports the path unsatisfied: notAvailable) — using the interface directly (wifi=up(local-only, path=unsatisfied:notAvailable) ssid=CFMOTO-E2E800 iface=lo0 ip=127.0.0.2 gw=127.0.0.1)
+17:29:20.978 I/APP: → Auto-connect: 'Fake dash 800MT' — already on its Wi-Fi (wifi=up(local-only, path=unsatisfied:notAvailable) ssid=CFMOTO-E2E800 iface=lo0 ip=127.0.0.2 gw=127.0.0.1). Disable in Setup ▸ Startup.
+17:29:20.978 I/APP: → Connect (auto): 'Fake dash 800MT'
+17:29:20.979 I/RIDE: GPS restarted with background updates (it was running for the preview)
+17:29:20.979 I/STATE: [state] Connecting to bike Wi-Fi… — Fake dash 800MT
+17:29:21.050 I/E2E: fake Wi-Fi: 'CFMOTO-E2E800' already joined (loopback)
+17:29:21.052 I/WIFI: Wi-Fi already joined: CFMOTO-E2E800 — skipping re-join
+17:29:21.052 D/E2E: setPreferCellular(true) ignored (loopback)
+17:29:21.053 I/STATE: [state] Linking to dashboard… — Fake dash 800MT
+17:29:21.053 I/VIDEO: [hold] VT session 800x384 H264_Baseline_3_1 2500kbps 24fps IDR 1.0s/24f software=false hw=?
+17:29:21.053 I/LINK: → starting PXC link (own dash UI) on wifi=up(local-only, path=unsatisfied:notAvailable) ssid=CFMOTO-E2E800 iface=lo0 ip=127.0.0.2 gw=127.0.0.1
+17:29:21.053 I/LINK: → bike profile (QR ssid=CFMOTO-E2E800 modelId=37426): CFDL26 / MotoPlay Landscape (800MT)
+17:29:21.056 I/LINK: [state] starting servers
+17:29:21.056 I/LINK: ---- environment ----
+17:29:21.056 I/LINK: interfaces: lo0 127.0.0.2/8
+17:29:21.057 I/LINK: ---------------------
+17:29:21.057 I/LINK: our IP=127.0.0.2  bike IP=127.0.0.1
+17:29:21.059 D/NET: listening on 0.0.0.0:10922
+17:29:21.059 D/NET: listening on 0.0.0.0:10921
+17:29:21.060 D/NET: listening on 0.0.0.0:10920
+17:29:21.060 I/LINK: listening on 127.0.0.2 ports [10922, 10921, 10920] (3 open)
+17:29:21.061 I/LINK: [state] probing (1)
+17:29:21.061 I/LINK: [PROBE] connect #1 -> 127.0.0.1:10930
+17:29:21.061 I/NET: route to 127.0.0.1: unbound (loopback destination)
+17:29:21.062 D/NET: connect 127.0.0.1:10930 unbound (loopback destination): connected in 0 ms from 127.0.0.1:60698
+17:29:21.062 I/LINK: [PROBE] -> MDNS_RESPOND (0x70000010) {"phoneType":"Android","packageName":"com.cfmoto.cfmotointernational"}
+17:29:21.094 I/VIDEO: [hold] first IDR 6704b SPS 27 42 e0 1f a9 18 19 06 36 02 d4 08 08 08 c2 b5 ef 7c 04 PPS 28 de 09 c8 — profile 66 constraints 0xE0 level 31 800x384 poc 0 refs 2 frame_num_bits 5 vui=yes reorder=- | pps cavlc deblock_ctrl=1 qp=28
+17:29:21.113 I/VIDEO: hold picture ready at 800x384 (expected canvas): 2 IDR(s), [6704, 7157]b
+17:29:21.146 I/LINK: [PROBE] <- cmd=0x70000011 {"status":true}
+17:29:21.146 I/LINK: [PROBE] *** accepted — bike should now connect back to our ports ***
+17:29:21.147 I/LINK: [state] waiting for dash
+17:29:21.432 D/NET: [:10922] accepted 127.0.0.1:60702 (local 127.0.0.1)
+17:29:21.432 I/LINK: [state] handshaking
+17:29:21.432 I/LINK: [:10922] <<< bike connected from 127.0.0.1:60702
+17:29:21.433 I/LINK: [:10922] framing=CmdBaseHead (PXC control)
+17:29:21.434 I/LINK: [:10922] bike selected CAR_CTRL (0x10000) → ack 0x10001
+17:29:21.434 I/LINK: [hb] PXC CAR_CTRL heartbeat started (0x70000000 every 2000ms)
+17:29:21.495 I/LINK: [:10922] *** CLIENT_INFO from bike *** {"HUID":"6WWVA2C00300088","HUName":"CFMOTO1565","package_name":"com.cfmoto.easyconnect","version_name":"CFDL26.2.3.0.5","sdkVersion":"1.1.2","flavor":65540,"productType":3,"screenType":1,"mirrorMode":1,"pxcVersion":"1.0.2","enableSockServerAuth":true,"dpi":160,"enableDPI":true,"supportScreenTouch":true,"supportHID":true,"supportLandscapeAdaptive":true,"supportFunction":128,"supportConnect":776,"socketTimeoutPeriodWifi":9,"supportScreenMirroring":true,"supportSyncCorrectTime":true}
+17:29:21.496 I/LINK: [:10922] carHuid=6WWV…******** HUName=CFMOTO1565 channel=
+17:29:21.496 I/LINK: [:10922] bike touch=true supportHID=true supportMirrorOverlayTouch=false socketTimeoutPeriodWifi=9
+17:29:21.496 I/LINK: [profile] scores=CFMoto 800NK (CRCP / sdk 0.9.23.x)=0, CFDL26 / 800NK Advanced (touch, 720×712)=9, Morini SoftAP / Alltrhike (MLN)=0, CFDL16 / MotoPlay Landscape (modelId 66660742)=1, CL‑C450 (544×512)=0, CFDL26 / MotoPlay Landscape (800MT)=19, CFDL26 / MotoPlay Portrait (1000 MT-X)=9, CFDL16 / legacy (BIKE A)=1
+17:29:21.496 I/LINK: [:10922] *** BikeProfile selected: CFDL26 / MotoPlay Landscape (800MT) ***
+17:29:21.497 I/LINK: [:10922] → CLIENT_INFO reply {"pxcVersion":"1.0.2","phoneUUID":"7ff325e4-3767-4c52-9bd6-99ec9671c826","phoneBrand":"Apple","phoneModel":"iPhone17,3","phoneOsVersion":"35","phoneOs":"Android","package":"com.cfm…
+17:29:21.506 I/APP: dash identified: CFMOTO1565 → CFDL26 / MotoPlay Landscape (800MT)
+17:29:21.551 I/LINK: [:10922] QUERY_SPEED {"usbSpeed":0,"wifiSpeed":0} → reply 0x10691
+17:29:21.604 D/NET: [:10922] accepted 127.0.0.1:60704 (local 127.0.0.1)
+17:29:21.604 I/LINK: [:10922] <<< bike connected from 127.0.0.1:60704
+17:29:21.604 I/LINK: [:10922] framing=CmdBaseHead (PXC control)
+17:29:21.604 I/LINK: [:10922] bike selected CAR_DATA (0x20000) → ack 0x20001
+17:29:21.604 I/LINK: [hb] PXC CAR_DATA heartbeat started (0x70000000 every 2000ms)
+17:29:21.657 I/LINK: [:10922] CFDL26 ctrl 0x10780 (LOG_REPORT (CFDL26)) len=56 {"log":"EasyConn mdns success (fakedash simulated log)"} hex=7b226c6f67223a2245617379436f6e6e206d646e732073756363657373202866616b65646173682073696d756c617465 → ack 0x10781 (empty)
+17:29:21.657 I/LINK: [:10922] CHECK_SN from bike: {"client_set":"easy_conn","sn":"DSXXZMHNFV3DEXEBB3PZ2"}
+17:29:21.658 I/LINK: [:10922] → CHECK_SN_RESULT {"isOk":true,"errCode":0,"errMsg":"","id":"DSXX…********","client_set":"easy_conn"}
+17:29:21.658 I/LINK: [state] waiting for video request
+17:29:21.659 I/LINK: [:10922] CFDL26 ctrl 0x103a0 (OTA_FTP_INFO (CFDL26)) len=85 {"port":11021,"userName":"carbit_ec_ftp_ota","pwd":"PLACEHOLDER-not-a-real-password"} hex=7b22706f7274223a31313032312c22757365724e616d65223a226361726269745f65635f6674705f6f7461222c227077 → ack 0x103a1 (empty)
+17:29:21.665 I/LINK: [:10922] CFDL26 ctrl 0x10020 (MEDIA_FEATURE_CFG (CFDL26)) len=56 {"music":1,"talkie":0,"tts":1,"vr":0,"autoChangeToBT":0} hex=7b226d75736963223a312c2274616c6b6965223a302c22747473223a312c227672223a302c226175746f4368616e6765 → ack 0x10021 (empty)
+17:29:21.672 I/LINK: [:10922] CFDL26 ctrl 0x10040 (?) len=39 {"maxNaviIcon":161,"supportFunction":0} hex=7b226d61784e61766949636f6e223a3136312c22737570706f727446756e6374696f6e223a307d → ack 0x10041 (empty)
+17:29:21.679 I/LINK: [CLOCK-LAB] HU_TIME_SYNC → echo
+17:29:21.679 I/LINK: [:10922] HU_TIME_SYNC #1 len=45 → ack 0x10601 mode=echo time=2026-11-04 17:29:21.658000000
+17:29:21.685 I/LINK: [:10922] CFDL26 ctrl 0x10750 (?) len=0  → ack 0x10751 (empty)
+17:29:21.692 I/LINK: [:10922] CFDL26 ctrl 0x10430 (?) len=0  → ack 0x10431 (empty)
+17:29:21.699 I/LINK: [CLOCK-LAB] HU_QUERY_TIME len=0 → 0x10451 empty
+17:29:21.699 I/LINK: [:10922] HU_QUERY_TIME (0x10450) len=0 channel=- → 0x10451 empty
+17:29:21.705 I/LINK: [:10922] CFDL26 ctrl 0x10460 (?) len=18 {"bluetooth":4129} hex=7b22626c7565746f6f7468223a343132397d → ack 0x10461 (empty)
+17:29:21.763 D/NET: [:10921] accepted 127.0.0.1:60706 (local 127.0.0.1)
+17:29:21.764 I/LINK: [:10921] <<< bike connected from 127.0.0.1:60706
+17:29:21.764 I/LINK: [:10921] framing=ReqBase (media plane) profile=CFDL26 / MotoPlay Landscape (800MT)
+17:29:21.764 I/LINK: [:10921] REQ_CONFIG_CAPTURE w=1280 h=576 fps=30 wantEncoder=2 ext=1 len=204 token=1
+17:29:21.766 I/LINK: [:10921] REQ_CONFIG_CAPTURE extra: codec=0 minQ=0 maxQ=0 bitRate=0 capScreenMode=0 touchMode=1 orientation=0 displayId=0 videoType=0 reserved=0 encryptedHUID=172 chars body=00 05 40 02 1e 00 00 00 02 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 01 00 00 45 69 79 4e 4c 5a 48 75 …(+164b)
+17:29:21.767 I/VIDEO: [own] VT session 1280x576 H264_Baseline_3_1 3375kbps 24fps IDR 1.0s/24f software=false hw=?
+17:29:21.767 I/VIDEO: own display 1280x576 prepared (mode foreground)
+17:29:21.767 I/LINK: [:10921] → RLY_CONFIG_CAPTURE(17) encoder=2 w=1280 h=576
+17:29:21.767 I/RIDE: laying the dash UI out for the prepared canvas 1280x576
+17:29:21.770 I/LINK: [:10921] REQ_GET_VERSION → RLY 49
+17:29:21.771 I/LINK: [:10921] REQ_CONFIGCAPTUREREXTEND len=29 {"version":1,"fakedash":true} → RLY 97
+17:29:21.771 I/panel: learned: this bike's screen is 1280x576 — next connect will fit AA resolution + match-aspect margins to it
+17:29:21.773 I/LINK: [:10921] REQ_RV_DATA_START(112): video 1280x576
+17:29:21.773 D/VIDEO: resynchronize: keyframe gate closed, queue flushed, IDR requested
+17:29:21.773 I/LINK: [VIDEO] bike attached → flushed queue + requested IDR (first frame will be a keyframe)
+17:29:21.773 I/LINK: [:10921] → RLY 113
+17:29:21.773 D/APP: dash (re)started pulling video
+17:29:21.808 I/VIDEO: [own] first IDR 97127b SPS 27 42 e0 1f a9 18 0a 00 93 60 2d 40 80 80 8c 2b 5e f7 c0 40 PPS 28 de 09 c8 — profile 66 constraints 0xE0 level 31 1280x576 poc 0 refs 2 frame_num_bits 5 vui=yes reorder=- | pps cavlc deblock_ctrl=1 qp=28
+17:29:21.827 I/VIDEO: [vt-list] avc1 encoders: anon-1 name=Dynamically Registered avc1 Video Encoder hw=false
+17:29:21.847 D/NET: [:10920] accepted 127.0.0.1:60707 (local 127.0.0.1)
+17:29:21.848 I/LINK: [:10920] <<< bike connected from 127.0.0.1:60707
+17:29:21.848 I/LINK: [:10920] framing=ReqBase (media plane) profile=CFDL26 / MotoPlay Landscape (800MT)
+17:29:21.848 I/VIDEO: [switch] first vt-hw IDR on the wire: 97127b (dump frame #1)
+17:29:21.849 I/LINK: [:10920] sent frame #1 (97127b, key)
+17:29:21.849 I/LINK: [state] streaming
+17:29:21.849 I/STATE: [state] Connected — projecting to dash — Fake dash 800MT
+17:29:21.849 I/trip: auto-logging this ride (dash)
+17:29:21.849 I/RIDE: own dash UI is live on the dash
+17:29:21.902 I/LINK: [:10920] sent frame #2 (45111b)
+17:29:21.963 I/LINK: [:10920] sent frame #3 (49972b)
+17:29:22.006 I/LINK: [:10920] sent frame #4 (28411b)
+17:29:22.058 I/LINK: [:10920] sent frame #5 (44467b)
+17:29:22.174 D/OSM: tile cache 0 MiB in 24 file(s)
+17:29:22.855 I/LINK: [:10921] TOUCH DOWN bike=(0,0) ptr=0 of 1
+17:29:23.008 I/LINK: [:10921] TOUCH UP bike=(0,0) ptr=0 of 1
+17:29:23.426 I/LINK: [:10921] TOUCH DOWN bike=(1279,575) ptr=0 of 1
+17:29:23.436 I/LINK: [hb] → PXC CAR_CTRL heartbeat #1
+17:29:23.574 I/LINK: [:10921] TOUCH UP bike=(1279,575) ptr=0 of 1
+17:29:23.614 I/LINK: [hb] → PXC CAR_DATA heartbeat #1
+17:29:23.714 I/LINK: [CLOCK-LAB] HU_TIME_SYNC → echo
+17:29:23.714 I/LINK: [:10922] HU_TIME_SYNC #2 len=39 → ack 0x10601 mode=echo time=2026-11-04 17:29:23.713
+17:29:23.991 I/LINK: [:10921] TOUCH DOWN bike=(640,288) ptr=0 of 1
+17:29:24.138 I/LINK: [:10921] TOUCH UP bike=(640,288) ptr=0 of 1
+17:29:24.555 I/LINK: [:10921] TOUCH DOWN bike=(100,100) ptr=0 of 1
+17:29:24.582 D/LINK: [:10921] TOUCH MOVE bike=(140,100) ptr=0
+17:29:24.601 I/LINK: [:10921] touch: contact came back 0ms later, keeping the drag alive instead of ending it (#1)
+17:29:24.841 I/LINK: [:10921] TOUCH UP bike=(300,100) ptr=0 of 1
+17:29:25.259 I/LINK: [:10921] TOUCH DOWN bike=(300,200) ptr=0 of 1
+17:29:25.265 I/LINK: [:10921] touch: ignoring ghost contact at (320,210) near an existing finger
+17:29:25.300 D/LINK: [:10921] TOUCH MOVE bike=(325,212) ptr=1
+17:29:25.411 I/LINK: [:10921] TOUCH UP bike=(300,200) ptr=0 of 1
+17:29:25.451 I/LINK: [hb] → PXC CAR_CTRL heartbeat #2
+17:29:25.643 I/LINK: [hb] → PXC CAR_DATA heartbeat #2
+17:29:25.717 I/LINK: [CLOCK-LAB] HU_TIME_SYNC → echo
+17:29:25.717 I/LINK: [:10922] HU_TIME_SYNC #3 len=45 → ack 0x10601 mode=echo time=2026-11-04T17:29:25.716000000
+17:29:25.826 I/LINK: [:10921] TOUCH DOWN bike=(200,200) ptr=0 of 1
+17:29:25.838 I/LINK: [:10921] TOUCH DOWN bike=(400,200) ptr=1 of 2
+17:29:25.858 D/LINK: [:10921] TOUCH MOVE bike=(190,200) ptr=0
+17:29:25.975 I/LINK: [:10921] TOUCH UP bike=(180,200) ptr=0 of 2
+17:29:26.059 I/LINK: [:10921] TOUCH UP bike=(420,200) ptr=1 of 1
+17:29:26.075 I/LINK: hb#1 probed=true video=true framesSent=48 openServers=3 state=streaming pulls/s=9.6
+17:29:27.170 I/LINK: [:10920] sent frame #60 (2149b)
+17:29:27.476 I/LINK: [hb] → PXC CAR_CTRL heartbeat #3
+17:29:27.685 I/LINK: [hb] → PXC CAR_DATA heartbeat #3
+17:29:27.713 I/LINK: [:10922] CFDL26 ctrl 0x10750 (?) len=0  → ack 0x10751 (empty)
+17:29:31.077 I/LINK: hb#2 probed=true video=true framesSent=95 openServers=3 state=streaming pulls/s=9.2
+17:29:33.035 D/NAV: [speed] maxspeed lookup failed: Map service temporarily unavailable (HTTP 502)
+17:29:33.314 I/LINK: [:10920] sent frame #120 (1710b)
+17:29:33.716 I/LINK: [:10922] CFDL26 ctrl 0x10750 (?) len=0  → ack 0x10751 (empty)
+17:29:36.085 I/LINK: hb#3 probed=true video=true framesSent=142 openServers=3 state=streaming pulls/s=9.2
+17:29:37.036 I/LINK: [:10922] bike closed
+17:29:37.037 I/LINK: [:10922] bike closed
+17:29:37.039 I/LINK: [:10921] media closed
+17:29:37.039 I/LINK: [:10920] media closed
+17:29:37.039 I/VIDEO: media sockets closed → queue flushed
+17:29:37.039 I/LINK: [state] reconnecting (1)
+17:29:37.040 I/LINK: [reconnect] link lost — re-probing (attempt 1/20) in 1000ms
+17:29:37.040 I/STATE: [state] Link dropped — reconnecting… — attempt 1
+17:29:38.041 I/LINK: [PROBE] connect #1 -> 127.0.0.1:10930
+17:29:38.042 D/NET: connect 127.0.0.1:10930 unbound (loopback destination) failed: ECONNREFUSED (Connection refused) (SO_ERROR) after 0 ms
+17:29:38.047 I/LINK: [PROBE] failed: transport failure: ECONNREFUSED: connection refused (127.0.0.1:10930)
+17:29:38.800 I/LINK: [PROBE] connect #2 -> 127.0.0.1:10930
+17:29:38.800 D/NET: connect 127.0.0.1:10930 unbound (loopback destination) failed: ECONNREFUSED (Connection refused) (SO_ERROR) after 0 ms
+17:29:38.800 I/LINK: [PROBE] failed: transport failure: ECONNREFUSED: connection refused (127.0.0.1:10930)
+17:29:41.100 I/LINK: hb#4 probed=false video=false framesSent=0 openServers=3 state=reconnecting (1) pulls/s=1.4
+17:29:42.811 I/LINK: [state] reconnecting (2)
+17:29:42.811 I/STATE: [state] Link dropped — reconnecting… — attempt 2
+17:29:42.811 I/LINK: [reconnect] link lost — re-probing (attempt 2/20) in 1500ms

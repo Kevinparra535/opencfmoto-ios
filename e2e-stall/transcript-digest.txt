@@ -1,0 +1,153 @@
+fakedash transcript digest: 421 entries; ctrl1 dash->phone HEARTBEAT=10, ctrl1 dash->phone HEARTBEAT_ACK=10, ctrl1 phone->dash HEARTBEAT=10, ctrl1 phone->dash HEARTBEAT_ACK=10, ctrl2 dash->phone HEARTBEAT=10, ctrl2 dash->phone HEARTBEAT_ACK=10, ctrl2 phone->dash HEARTBEAT=10, ctrl2 phone->dash HEARTBEAT_ACK=10, frames=115, keyframes=14, mctrl dash->phone REQ_HEARTBEAT=8, mctrl phone->dash RLY_HEARTBEAT=8, pulls(114)=115
+    4.681 probe  P>D MDNS_RESPOND(probe) (0x70000010) len=70 {"phoneType":"Android","packageName":"com.cfmoto.cfmotointernational"}  # probe from 127.0.0.1:60364
+    4.682 probe  D>P MDNS_RESPOND_ACK (0x70000011) len=15 {"status":true}  # probe accepted
+    4.684 -      EVENT: session 1 start: phone 127.0.0.1
+    4.887 ctrl1  EVENT: dash connected to 127.0.0.1:10922
+    4.888 ctrl1  D>P CHANNEL_CAR_CTRL (0x10000) len=0
+    4.889 ctrl1  P>D CAR_CTRL_ACK (0x10001) len=0  # reply to CAR_CTRL select 0x10000 in 1.1 ms
+    4.945 ctrl1  D>P CLIENT_INFO (0x10010) len=281 {"HUID":"6GUVA2C00100055","HUName":"CFDL16-6GUV","channel":"37416","flavor":65540,"sdkVersion":"0.9.29.1","pxcVersion":"1.0.2","screenType":1,"productType":3,"mirrorMode":1,"supportScreenMirroring":true,"socketTimeoutPer…
+    4.947 ctrl1  P>D CLIENT_INFO_RLY (0x10011) len=804 {"pxcVersion":"1.0.2","phoneUUID":"21173733-e4aa-464f-9eff-c37550929b35","phoneBrand":"Apple","phoneModel":"iPhone17,3","phoneOsVersion":"35","phoneOs":"Android","package":"com.cfmoto.cfmotointernational","versionCode":1…  # reply to CLIENT_INFO 0x10010 in 2.2 ms
+    5.008 ctrl1  D>P QUERY_SPEED (0x10690) len=28 {"usbSpeed":0,"wifiSpeed":0}
+    5.011 ctrl1  P>D QUERY_SPEED_RLY (0x10691) len=0  # reply to QUERY_SPEED 0x10690 in 3.4 ms
+    5.063 ctrl2  EVENT: dash connected to 127.0.0.1:10922
+    5.063 ctrl2  D>P CHANNEL_CAR_DATA (0x20000) len=0
+    5.064 ctrl2  P>D CAR_DATA_ACK (0x20001) len=0  # reply to CAR_DATA select 0x20000 in 0.5 ms
+    5.117 ctrl2  D>P CHECK_SN (0x103e0) len=55 {"client_set":"easy_conn","sn":"DSXXZMHNFV3DEXEBB3PZ2"}
+    5.118 ctrl2  P>D CHECK_SN_ACK (0x103e1) len=0  # reply to CHECK_SN 0x103e0 in 1.2 ms
+    5.118 ctrl2  P>D CHECK_SN_RESULT (0x201c0) len=91 {"isOk":true,"errCode":0,"errMsg":"","id":"DSXXZMHNFV3DEXEBB3PZ2","client_set":"easy_conn"}  # reply to CHECK_SN_RESULT 0x201c0 in 1.3 ms
+    5.119 ctrl2  D>P CHECK_SN_RESULT_ACK (0x201c1) len=0  # dash ack of CHECK_SN_RESULT
+    5.119 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200000100000000000000323032362d31312d30342031373a32383a34332e313631303030303030
+    5.119 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200000100000000000000323032362d31312d30342031373a32383a34332e313631303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 0.4 ms
+    5.120 ctrl2  D>P HU_QUERY_TIME (0x10450) len=0
+    5.120 ctrl2  P>D HU_QUERY_TIME_ACK (0x10451) len=0  # reply to HU_QUERY_TIME 0x10450 in 0.3 ms
+    5.174 mctrl  EVENT: dash connected to 127.0.0.1:10921
+    5.174 mctrl  D>P REQ_RV_CONFIG_CAPTURE (0x10) len=204 token=1 hex=200382011e00000002000000000000000000000000000000000000000001000057783168315378476857684b7544786c
+    5.177 mctrl  P>D RLY_RV_CONFIG_CAPTURE (0x11) len=9 token=0 hex=020000002003800101  # reply to REQ_RV_CONFIG_CAPTURE 800x386 in 3.4 ms
+    5.177 mctrl  D>P REQ_GET_VERSION (0x30) len=0 token=2
+    5.178 mctrl  P>D RLY_GET_VERSION (0x31) len=8 token=0 hex=0300000001000000  # reply to 48 REQ_GET_VERSION in 0.3 ms
+    5.178 mctrl  D>P REQ_HEARTBEAT (0x40) len=0 token=3
+    5.178 mctrl  P>D RLY_HEARTBEAT (0x41) len=0 token=0  # reply to 64 REQ_HEARTBEAT in 0.2 ms
+    5.178 mctrl  D>P REQ_CONFIGCAPTUREREXTEND (0x60) len=29 token=4 {"version":1,"fakedash":true}
+    5.178 mctrl  P>D RLY_CONFIGCAPTUREREXTEND (0x61) len=11 token=0 {"state":0}  # reply to 96 REQ_CONFIGCAPTUREREXTEND in 0.4 ms
+    5.179 mctrl  D>P REQ_RV_DATA_START (0x70) len=0 token=5
+    5.181 mctrl  P>D RLY_RV_DATA_START (0x71) len=0 token=0  # reply to 112 REQ_RV_DATA_START in 2.6 ms
+    5.253 mdata  EVENT: dash connected to 127.0.0.1:10920
+    5.253 mdata  D>P REQ_RV_DATA_NEXT (0x72) len=0 token=1
+    5.254 mdata  P>D frame len=4917  # frame #1 IDR 4917 B nal=[7,8,5,5,5,5,5] latency=0.4 ms
+    5.305 mdata  D>P REQ_RV_DATA_NEXT (0x72) len=0 token=2
+    5.306 mdata  P>D frame len=167  # frame #2 P 167 B nal=[1,1,1,1,1] latency=0.2 ms
+    5.356 mdata  D>P REQ_RV_DATA_NEXT (0x72) len=0 token=3
+    5.356 mdata  P>D frame len=394  # frame #3 P 394 B nal=[1,1,1,1,1] latency=0.3 ms
+    5.405 mdata  D>P REQ_RV_DATA_NEXT (0x72) len=0 token=4
+    5.417 mdata  P>D frame len=27033  # frame #4 P 27033 B nal=[1,1,1,1,1] latency=11.0 ms
+    5.459 mdata  P>D frame len=27985  # frame #5 P 27985 B nal=[1,1,1,1,1] latency=0.4 ms
+    5.508 mdata  P>D frame len=73512  # frame #6 P 73512 B nal=[1,1,1,1,1] latency=0.5 ms
+    5.770 mdata  P>D frame len=2568  # frame #7 P 2568 B nal=[1,1,1,1,1] latency=211.4 ms
+    6.484 mdata  P>D frame len=119447  # frame #8 IDR 119447 B nal=[7,8,5,5,5,5,5] latency=714.0 ms
+    6.890 ctrl1  D>P HEARTBEAT (0x70000000) len=0  # dash heartbeat
+    6.890 ctrl1  P>D HEARTBEAT_ACK (0x70000001) len=0  # reply to dash heartbeat 0x70000000 in 0.2 ms
+    6.929 ctrl1  P>D HEARTBEAT (0x70000000) len=0  # phone heartbeat
+    6.929 ctrl1  D>P HEARTBEAT_ACK (0x70000001) len=0  # ack of the phone heartbeat
+    7.065 ctrl2  D>P HEARTBEAT (0x70000000) len=0  # dash heartbeat
+    7.065 ctrl2  P>D HEARTBEAT_ACK (0x70000001) len=0  # reply to dash heartbeat 0x70000000 in 0.3 ms
+    7.073 ctrl2  P>D HEARTBEAT (0x70000000) len=0  # phone heartbeat
+    7.074 ctrl2  D>P HEARTBEAT_ACK (0x70000001) len=0  # ack of the phone heartbeat
+    7.123 ctrl2  D>P HU_TIME_SYNC (0x10600) len=39 hex=feffffff289200000200000000000000323032362d31312d30342031373a32383a34352e313635  # dash clock (short) seq=2
+    7.123 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200000200000000000000323032362d31312d30342031373a32383a34352e313635000000000000  # reply to HU_TIME_SYNC 0x10600 (short) in 0.6 ms
+    7.493 mdata  P>D frame len=119125  # frame #18 IDR 119125 B nal=[7,8,5,5,5,5,5] latency=8.9 ms
+    8.185 mctrl  D>P REQ_HEARTBEAT (0x40) len=0 token=6
+    8.185 mctrl  P>D RLY_HEARTBEAT (0x41) len=0 token=0  # reply to media heartbeat 64 in 0.6 ms
+    8.526 mdata  P>D frame len=119097  # frame #27 IDR 119097 B nal=[7,8,5,5,5,5,5] latency=585.9 ms
+    8.893 ctrl1  D>P HEARTBEAT (0x70000000) len=0  # dash heartbeat
+    8.894 ctrl1  P>D HEARTBEAT_ACK (0x70000001) len=0  # reply to dash heartbeat 0x70000000 in 1.6 ms
+    8.934 ctrl1  P>D HEARTBEAT (0x70000000) len=0  # phone heartbeat
+    8.934 ctrl1  D>P HEARTBEAT_ACK (0x70000001) len=0  # ack of the phone heartbeat
+    9.067 ctrl2  D>P HEARTBEAT (0x70000000) len=0  # dash heartbeat
+    9.067 ctrl2  P>D HEARTBEAT_ACK (0x70000001) len=0  # reply to dash heartbeat 0x70000000 in 0.3 ms
+    9.100 ctrl2  P>D HEARTBEAT (0x70000000) len=0  # phone heartbeat
+    9.100 ctrl2  D>P HEARTBEAT_ACK (0x70000001) len=0  # ack of the phone heartbeat
+    9.124 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200000300000000000000323032362d31312d30345431373a32383a34372e313636303030303030  # dash clock (tsep) seq=3
+    9.125 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200000300000000000000323032362d31312d30345431373a32383a34372e313636303030303030  # reply to HU_TIME_SYNC 0x10600 (tsep) in 1.2 ms
+    9.525 mdata  P>D frame len=119480  # frame #37 IDR 119480 B nal=[7,8,5,5,5,5,5] latency=546.4 ms
+   10.530 mdata  P>D frame len=118597  # frame #47 IDR 118597 B nal=[7,8,5,5,5,5,5] latency=9.3 ms
+   10.895 ctrl1  D>P HEARTBEAT (0x70000000) len=0  # dash heartbeat
+   10.895 ctrl1  P>D HEARTBEAT_ACK (0x70000001) len=0  # reply to dash heartbeat 0x70000000 in 0.3 ms
+   10.941 ctrl1  P>D HEARTBEAT (0x70000000) len=0  # phone heartbeat
+   10.941 ctrl1  D>P HEARTBEAT_ACK (0x70000001) len=0  # ack of the phone heartbeat
+   11.076 ctrl2  D>P HEARTBEAT (0x70000000) len=0  # dash heartbeat
+   11.077 ctrl2  P>D HEARTBEAT_ACK (0x70000001) len=0  # reply to dash heartbeat 0x70000000 in 0.4 ms
+   11.099 ctrl2  P>D HEARTBEAT (0x70000000) len=0  # phone heartbeat
+   11.099 ctrl2  D>P HEARTBEAT_ACK (0x70000001) len=0  # ack of the phone heartbeat
+   11.125 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200000400000000000000313937302d30312d30312030303a30303a30342e303030303030303030  # dash clock (epoch) seq=4
+   11.126 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200000400000000000000323032362d31312d30342031373a32383a34392e313638303030303030  # reply to HU_TIME_SYNC 0x10600 (epoch) in 0.8 ms
+   11.187 mctrl  D>P REQ_HEARTBEAT (0x40) len=0 token=7
+   11.187 mctrl  P>D RLY_HEARTBEAT (0x41) len=0 token=0  # reply to media heartbeat 64 in 0.4 ms
+   11.563 mdata  P>D frame len=117658  # frame #56 IDR 117658 B nal=[7,8,5,5,5,5,5] latency=590.7 ms
+   11.564 mdata  EVENT: stall start (12.0 s)
+   13.129 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200000500000000000000323032362d31312d30342031373a32383a35312e313730303030303030  # dash clock (normal) seq=5
+   13.133 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200000500000000000000323032362d31312d30342031373a32383a35312e313730303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 4.6 ms
+   15.136 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200000600000000000000323032362d31312d30342031373a32383a35332e313739303030303030  # dash clock (normal) seq=6
+   15.137 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200000600000000000000323032362d31312d30342031373a32383a35332e313739303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 0.9 ms
+   17.142 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200000700000000000000323032362d31312d30342031373a32383a35352e313834303030303030  # dash clock (normal) seq=7
+   17.143 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200000700000000000000323032362d31312d30342031373a32383a35352e313834303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 1.2 ms
+   19.145 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200000800000000000000323032362d31312d30342031373a32383a35372e313837303030303030  # dash clock (normal) seq=8
+   19.146 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200000800000000000000323032362d31312d30342031373a32383a35372e313837303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 0.7 ms
+   19.715 ctrl2  EVENT: phone closed the connection (EOF)
+   19.772 ctrl2  FINDING: note [WATCHDOG] the phone dropped every socket 8.21 s after the last frame (watchdog > 8 s, 5 s tick)
+   19.773 ctrl1  EVENT: phone closed the connection (EOF)
+   19.773 mctrl  EVENT: phone closed the connection (EOF)
+   19.773 mdata  EVENT: phone closed the connection (EOF (seen at teardown))
+   19.775 -      EVENT: session 1 end: phone closed ctrl2 (EOF)
+   20.706 probe  P>D MDNS_RESPOND(probe) (0x70000010) len=70 {"phoneType":"Android","packageName":"com.cfmoto.cfmotointernational"}  # probe from 127.0.0.1:60562
+   20.706 probe  D>P MDNS_RESPOND_ACK (0x70000011) len=15 {"status":true}  # probe accepted
+   20.707 -      EVENT: session 2 start: phone 127.0.0.1
+   20.911 ctrl1  EVENT: dash connected to 127.0.0.1:10922
+   20.911 ctrl1  D>P CHANNEL_CAR_CTRL (0x10000) len=0
+   20.912 ctrl1  P>D CAR_CTRL_ACK (0x10001) len=0  # reply to CAR_CTRL select 0x10000 in 1.0 ms
+   20.968 ctrl1  D>P CLIENT_INFO (0x10010) len=281 {"HUID":"6GUVA2C00100055","HUName":"CFDL16-6GUV","channel":"37416","flavor":65540,"sdkVersion":"0.9.29.1","pxcVersion":"1.0.2","screenType":1,"productType":3,"mirrorMode":1,"supportScreenMirroring":true,"socketTimeoutPer…
+   20.970 ctrl1  P>D CLIENT_INFO_RLY (0x10011) len=804 {"pxcVersion":"1.0.2","phoneUUID":"21173733-e4aa-464f-9eff-c37550929b35","phoneBrand":"Apple","phoneModel":"iPhone17,3","phoneOsVersion":"35","phoneOs":"Android","package":"com.cfmoto.cfmotointernational","versionCode":1…  # reply to CLIENT_INFO 0x10010 in 2.3 ms
+   21.026 ctrl1  D>P QUERY_SPEED (0x10690) len=28 {"usbSpeed":0,"wifiSpeed":0}
+   21.026 ctrl1  P>D QUERY_SPEED_RLY (0x10691) len=0  # reply to QUERY_SPEED 0x10690 in 0.8 ms
+   21.083 ctrl2  EVENT: dash connected to 127.0.0.1:10922
+   21.083 ctrl2  D>P CHANNEL_CAR_DATA (0x20000) len=0
+   21.088 ctrl2  P>D CAR_DATA_ACK (0x20001) len=0  # reply to CAR_DATA select 0x20000 in 4.6 ms
+   21.144 ctrl2  D>P CHECK_SN (0x103e0) len=55 {"client_set":"easy_conn","sn":"DSXXZMHNFV3DEXEBB3PZ2"}
+   21.145 ctrl2  P>D CHECK_SN_ACK (0x103e1) len=0  # reply to CHECK_SN 0x103e0 in 1.8 ms
+   21.145 ctrl2  P>D CHECK_SN_RESULT (0x201c0) len=91 {"isOk":true,"errCode":0,"errMsg":"","id":"DSXXZMHNFV3DEXEBB3PZ2","client_set":"easy_conn"}  # reply to CHECK_SN_RESULT 0x201c0 in 1.9 ms
+   21.146 ctrl2  D>P CHECK_SN_RESULT_ACK (0x201c1) len=0  # dash ack of CHECK_SN_RESULT
+   21.146 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200000100000000000000323032362d31312d30342031373a32383a35392e313838303030303030
+   21.146 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200000100000000000000323032362d31312d30342031373a32383a35392e313838303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 0.3 ms
+   21.146 ctrl2  D>P HU_QUERY_TIME (0x10450) len=0
+   21.147 ctrl2  P>D HU_QUERY_TIME_ACK (0x10451) len=0  # reply to HU_QUERY_TIME 0x10450 in 0.4 ms
+   21.200 mctrl  EVENT: dash connected to 127.0.0.1:10921
+   21.201 mctrl  D>P REQ_RV_CONFIG_CAPTURE (0x10) len=204 token=1 hex=200382011e00000002000000000000000000000000000000000000000001000057783168315378476857684b7544786c
+   21.210 mctrl  P>D RLY_RV_CONFIG_CAPTURE (0x11) len=9 token=0 hex=020000002003800101  # reply to REQ_RV_CONFIG_CAPTURE 800x386 in 9.0 ms
+   21.210 mctrl  D>P REQ_GET_VERSION (0x30) len=0 token=2
+   21.210 mctrl  P>D RLY_GET_VERSION (0x31) len=8 token=0 hex=0300000001000000  # reply to 48 REQ_GET_VERSION in 0.3 ms
+   21.211 mctrl  D>P REQ_CONFIGCAPTUREREXTEND (0x60) len=29 token=4 {"version":1,"fakedash":true}
+   21.211 mctrl  P>D RLY_CONFIGCAPTUREREXTEND (0x61) len=11 token=0 {"state":0}  # reply to 96 REQ_CONFIGCAPTUREREXTEND in 0.3 ms
+   21.211 mctrl  D>P REQ_RV_DATA_START (0x70) len=0 token=5
+   21.212 mctrl  P>D RLY_RV_DATA_START (0x71) len=0 token=0  # reply to 112 REQ_RV_DATA_START in 0.5 ms
+   21.289 mdata  EVENT: dash connected to 127.0.0.1:10920
+   21.292 mdata  P>D frame len=116458  # frame #1 IDR 116458 B nal=[7,8,5,5,5,5,5] latency=2.1 ms
+   22.703 mdata  P>D frame len=116659  # frame #11 IDR 116659 B nal=[7,8,5,5,5,5,5] latency=545.0 ms
+   23.149 ctrl2  D>P HU_TIME_SYNC (0x10600) len=39 hex=feffffff289200000200000000000000323032362d31312d30342031373a32393a30312e313931  # dash clock (short) seq=2
+   23.150 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200000200000000000000323032362d31312d30342031373a32393a30312e313931000000000000  # reply to HU_TIME_SYNC 0x10600 (short) in 0.6 ms
+   23.773 mdata  P>D frame len=116757  # frame #21 IDR 116757 B nal=[7,8,5,5,5,5,5] latency=618.0 ms
+   24.775 mdata  P>D frame len=117456  # frame #31 IDR 117456 B nal=[7,8,5,5,5,5,5] latency=550.4 ms
+   25.153 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200000300000000000000323032362d31312d30345431373a32393a30332e313935303030303030  # dash clock (tsep) seq=3
+   25.153 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200000300000000000000323032362d31312d30345431373a32393a30332e313935303030303030  # reply to HU_TIME_SYNC 0x10600 (tsep) in 0.6 ms
+   25.801 mdata  P>D frame len=117482  # frame #41 IDR 117482 B nal=[7,8,5,5,5,5,5] latency=12.5 ms
+   26.801 mdata  P>D frame len=117556  # frame #51 IDR 117556 B nal=[7,8,5,5,5,5,5] latency=8.9 ms
+   27.161 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200000400000000000000313937302d30312d30312030303a30303a30342e303030303030303030  # dash clock (epoch) seq=4
+   27.163 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200000400000000000000323032362d31312d30342031373a32393a30352e323032303030303030  # reply to HU_TIME_SYNC 0x10600 (epoch) in 3.5 ms
+   27.815 mdata  P>D frame len=117493  # frame #59 IDR 117493 B nal=[7,8,5,5,5,5,5] latency=620.0 ms
+   27.816 ctrl1  EVENT: dash closed the connection
+   27.818 ctrl2  EVENT: dash closed the connection
+   27.819 mctrl  EVENT: dash closed the connection
+   27.820 mdata  EVENT: dash closed the connection
+   27.857 -      EVENT: session 2 end: completed
+          … last frames:
+   27.045 mdata  P>D frame len=44469  # frame #56 P 44469 B nal=[1,1,1,1,1] latency=0.3 ms
+   27.096 mdata  P>D frame len=31190  # frame #57 P 31190 B nal=[1,1,1,1,1] latency=0.6 ms
+   27.163 mdata  P>D frame len=9607  # frame #58 P 9607 B nal=[1,1,1,1,1] latency=17.2 ms

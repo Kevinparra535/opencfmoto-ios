@@ -1,0 +1,238 @@
+{
+  "tool": "fakedash 1.0",
+  "scenario": "locked",
+  "min_variants": 1,
+  "dash": "cfdl16",
+  "dash_title": "CFDL16 (CFMoto 675 SR-R) 800x386 landscape, non-touch, sdk 0.9.29.1",
+  "started": "2026-11-04T17:31:02",
+  "duration_s": 72.349,
+  "goal_reached": true,
+  "result": "PASS",
+  "violations": 0,
+  "warnings": 0,
+  "expected_profile_android_default": {
+    "name": "LegacyCfdl16",
+    "supportFunction": 0,
+    "supportScreenTouch": false,
+    "scores": {
+      "Nk800": 0,
+      "Cfdl26NkTouch": 0,
+      "MoriniMlSoftAp": 1,
+      "Cfdl16MotoPlayLandscape": 3,
+      "ClC450": 0,
+      "Cfdl26Landscape": -1,
+      "Cfdl26Portrait": 0,
+      "LegacyCfdl16": 10
+    }
+  },
+  "identity": {
+    "phoneUUID": "43adad19-96c1-48b4-ae9d-d6e8dc7ea4e7",
+    "pubkey": "sha256:06e60c641accc00e",
+    "phoneBrand": "Apple",
+    "phoneModel": "iPhone17,3",
+    "phoneOsVersion": "35",
+    "supportFunction": 0,
+    "supportScreenTouch": false
+  },
+  "probes": [
+    {
+      "t": 8.408,
+      "ip": "127.0.0.1",
+      "port": 62105,
+      "result": "accepted",
+      "valid": true
+    }
+  ],
+  "sessions": [
+    {
+      "cycle": 1,
+      "phone_ip": "127.0.0.1",
+      "plan": {
+        "stream_s": 60.0,
+        "stall_s": 0.0,
+        "resume_s": 0.0,
+        "touch": false
+      },
+      "probe_t": 8.408,
+      "start_t": 8.415,
+      "end_t": 69.661,
+      "end_reason": "completed",
+      "handshake_s": 0.617,
+      "canvas": "800x384",
+      "frames": 408,
+      "keyframes": 57,
+      "bytes": 19587999,
+      "avg_frame_bytes": 48009,
+      "first_frame_after_113_s": 0.083,
+      "pull_latency_ms": {
+        "p50": 1.74,
+        "p95": 623.64,
+        "max": 761.89
+      },
+      "pull_phases": [
+        {
+          "label": "stream",
+          "seconds": 60.05,
+          "frames": 408,
+          "fps": 6.79
+        }
+      ],
+      "idr_interval_s": {
+        "mean": 1.066,
+        "max": 1.734
+      },
+      "sps": {
+        "profile_idc": 66,
+        "constraint_flags": 224,
+        "level_idc": 31,
+        "sps_id": 0,
+        "chroma_format_idc": 1,
+        "log2_max_frame_num": 5,
+        "poc_type": 0,
+        "max_num_ref_frames": 2,
+        "frame_mbs_only": 1,
+        "width": 800,
+        "height": 384,
+        "coded_width": 800,
+        "coded_height": 384,
+        "frame_cropping": false,
+        "vui": true,
+        "full_range": 0,
+        "hex": "2742e01fa91819063602d4080808c2b5ef7c04"
+      },
+      "pps_hex": "28de09c8",
+      "sps_variants": [
+        {
+          "hex": "2742e01fa91819063602d4080808c2b5ef7c04",
+          "pps_hex": "28de09c8",
+          "first_frame": 1,
+          "frames": 408,
+          "profile": 66,
+          "level": 31,
+          "constraints": 224,
+          "poc_type": 0,
+          "refs": 2,
+          "log2_max_frame_num": 5,
+          "vui": true,
+          "reorder": null,
+          "width": 800,
+          "height": 384
+        }
+      ],
+      "heartbeats": {
+        "ctrl1": {
+          "beats": 30,
+          "life_s": 60.92,
+          "first_after_select_s": 1.947,
+          "max_gap_s": 2.122,
+          "mean_interval_s": 2.026
+        },
+        "ctrl2": {
+          "beats": 29,
+          "life_s": 60.46,
+          "first_after_select_s": 2.008,
+          "max_gap_s": 2.114,
+          "mean_interval_s": 2.022
+        }
+      },
+      "closed": {
+        "ctrl1": {
+          "by": "dash",
+          "t": 69.649
+        },
+        "ctrl2": {
+          "by": "dash",
+          "t": 69.653
+        },
+        "mctrl": {
+          "by": "dash",
+          "t": 69.655
+        },
+        "mdata": {
+          "by": "dash",
+          "t": 69.655
+        }
+      },
+      "clock_replies": {
+        "normal→echo": 28,
+        "short→echo": 1,
+        "tsep→echo": 1,
+        "epoch→phone": 1
+      }
+    }
+  ],
+  "frames_total": 408,
+  "decode": {
+    "file": "/Users/runner/work/opencfmoto-ios/opencfmoto-ios/e2e-out/e2e-locked/dash.h264",
+    "codec": "h264",
+    "profile": "Constrained Baseline",
+    "level": 31,
+    "width": 800,
+    "height": 384,
+    "pix_fmt": "yuv420p",
+    "decoded_frames": 408,
+    "ffprobe_errors": [],
+    "decode_returncode": 0,
+    "decode_error_lines": 0,
+    "decode_errors": [],
+    "lenient_decodable": true,
+    "strict": true,
+    "strict_flags": "-xerror -err_detect +crccheck+bitstream+buffer+explode",
+    "headers_file": "/Users/runner/work/opencfmoto-ios/opencfmoto-ios/e2e-out/e2e-locked/frames/headers.txt",
+    "headers_lines": 174,
+    "frames_received": 408,
+    "expected_size": "800x384",
+    "decodable": true
+  },
+  "counts": {
+    "ctrl1 dash->phone 0x10000 CHANNEL_CAR_CTRL": 1,
+    "ctrl1 dash->phone 0x10010 CLIENT_INFO": 1,
+    "ctrl1 dash->phone 0x10690 QUERY_SPEED": 1,
+    "ctrl1 dash->phone 0x70000000 HEARTBEAT": 30,
+    "ctrl1 dash->phone 0x70000001 HEARTBEAT_ACK": 30,
+    "ctrl1 phone->dash 0x10001 CAR_CTRL_ACK": 1,
+    "ctrl1 phone->dash 0x10011 CLIENT_INFO_RLY": 1,
+    "ctrl1 phone->dash 0x10691 QUERY_SPEED_RLY": 1,
+    "ctrl1 phone->dash 0x70000000 HEARTBEAT": 30,
+    "ctrl1 phone->dash 0x70000001 HEARTBEAT_ACK": 30,
+    "ctrl2 dash->phone 0x103e0 CHECK_SN": 1,
+    "ctrl2 dash->phone 0x10450 HU_QUERY_TIME": 1,
+    "ctrl2 dash->phone 0x10600 HU_TIME_SYNC": 31,
+    "ctrl2 dash->phone 0x20000 CHANNEL_CAR_DATA": 1,
+    "ctrl2 dash->phone 0x201c1 CHECK_SN_RESULT_ACK": 1,
+    "ctrl2 dash->phone 0x70000000 HEARTBEAT": 30,
+    "ctrl2 dash->phone 0x70000001 HEARTBEAT_ACK": 29,
+    "ctrl2 phone->dash 0x103e1 CHECK_SN_ACK": 1,
+    "ctrl2 phone->dash 0x10451 HU_QUERY_TIME_ACK": 1,
+    "ctrl2 phone->dash 0x10601 HU_TIME_SYNC_ACK": 31,
+    "ctrl2 phone->dash 0x20001 CAR_DATA_ACK": 1,
+    "ctrl2 phone->dash 0x201c0 CHECK_SN_RESULT": 1,
+    "ctrl2 phone->dash 0x70000000 HEARTBEAT": 29,
+    "ctrl2 phone->dash 0x70000001 HEARTBEAT_ACK": 30,
+    "mctrl dash->phone 0x10 REQ_RV_CONFIG_CAPTURE": 1,
+    "mctrl dash->phone 0x30 REQ_GET_VERSION": 1,
+    "mctrl dash->phone 0x40 REQ_HEARTBEAT": 21,
+    "mctrl dash->phone 0x60 REQ_CONFIGCAPTUREREXTEND": 1,
+    "mctrl dash->phone 0x70 REQ_RV_DATA_START": 1,
+    "mctrl phone->dash 0x11 RLY_RV_CONFIG_CAPTURE": 1,
+    "mctrl phone->dash 0x31 RLY_GET_VERSION": 1,
+    "mctrl phone->dash 0x41 RLY_HEARTBEAT": 21,
+    "mctrl phone->dash 0x61 RLY_CONFIGCAPTUREREXTEND": 1,
+    "mctrl phone->dash 0x71 RLY_RV_DATA_START": 1,
+    "mdata dash->phone 0x72 REQ_RV_DATA_NEXT": 408,
+    "mdata phone->dash raw frame": 408,
+    "probe dash->phone 0x70000011 MDNS_RESPOND_ACK": 1,
+    "probe phone->dash 0x70000010 MDNS_RESPOND(probe)": 1
+  },
+  "findings": [
+    {
+      "t": 72.349,
+      "severity": "info",
+      "rule": "LOCKED_ONE_VARIANT",
+      "message": "one SPS/PPS variant over the run: both encoders wrote the same SPS/PPS, or no switch happened (the app's `[switch] first … IDR on the wire … (dump frame #k)` lines tell)",
+      "conn": null,
+      "cycle": null,
+      "count": 1
+    }
+  ]
+}

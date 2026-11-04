@@ -1,0 +1,200 @@
+fakedash transcript digest: 1194 entries; ctrl1 dash->phone HEARTBEAT=30, ctrl1 dash->phone HEARTBEAT_ACK=30, ctrl1 phone->dash HEARTBEAT=30, ctrl1 phone->dash HEARTBEAT_ACK=30, ctrl2 dash->phone HEARTBEAT=30, ctrl2 dash->phone HEARTBEAT_ACK=29, ctrl2 phone->dash HEARTBEAT=29, ctrl2 phone->dash HEARTBEAT_ACK=30, frames=408, keyframes=57, mctrl dash->phone REQ_HEARTBEAT=21, mctrl phone->dash RLY_HEARTBEAT=21, pulls(114)=408
+    8.410 probe  P>D MDNS_RESPOND(probe) (0x70000010) len=70 {"phoneType":"Android","packageName":"com.cfmoto.cfmotointernational"}  # probe from 127.0.0.1:62105
+    8.411 probe  D>P MDNS_RESPOND_ACK (0x70000011) len=15 {"status":true}  # probe accepted
+    8.415 -      EVENT: session 1 start: phone 127.0.0.1
+    8.647 ctrl1  EVENT: dash connected to 127.0.0.1:10922
+    8.649 ctrl1  D>P CHANNEL_CAR_CTRL (0x10000) len=0
+    8.732 ctrl1  P>D CAR_CTRL_ACK (0x10001) len=0  # reply to CAR_CTRL select 0x10000 in 84.7 ms
+    8.823 ctrl1  D>P CLIENT_INFO (0x10010) len=281 {"HUID":"6GUVA2C00100055","HUName":"CFDL16-6GUV","channel":"37416","flavor":65540,"sdkVersion":"0.9.29.1","pxcVersion":"1.0.2","screenType":1,"productType":3,"mirrorMode":1,"supportScreenMirroring":true,"socketTimeoutPer…
+    8.834 ctrl1  P>D CLIENT_INFO_RLY (0x10011) len=799 {"pxcVersion":"1.0.2","phoneUUID":"43adad19-96c1-48b4-ae9d-d6e8dc7ea4e7","phoneBrand":"Apple","phoneModel":"iPhone17,3","phoneOsVersion":"35","phoneOs":"Android","package":"com.cfmoto.cfmotointernational","versionCode":1…  # reply to CLIENT_INFO 0x10010 in 14.9 ms
+    9.068 ctrl1  D>P QUERY_SPEED (0x10690) len=28 {"usbSpeed":0,"wifiSpeed":0}
+    9.124 ctrl1  P>D QUERY_SPEED_RLY (0x10691) len=0  # reply to QUERY_SPEED 0x10690 in 58.6 ms
+    9.192 ctrl2  EVENT: dash connected to 127.0.0.1:10922
+    9.192 ctrl2  D>P CHANNEL_CAR_DATA (0x20000) len=0
+    9.195 ctrl2  P>D CAR_DATA_ACK (0x20001) len=0  # reply to CAR_DATA select 0x20000 in 3.0 ms
+    9.246 ctrl2  D>P CHECK_SN (0x103e0) len=55 {"client_set":"easy_conn","sn":"DSXXZMHNFV3DEXEBB3PZ2"}
+    9.249 ctrl2  P>D CHECK_SN_ACK (0x103e1) len=0  # reply to CHECK_SN 0x103e0 in 3.2 ms
+    9.249 ctrl2  P>D CHECK_SN_RESULT (0x201c0) len=91 {"isOk":true,"errCode":0,"errMsg":"","id":"DSXXZMHNFV3DEXEBB3PZ2","client_set":"easy_conn"}  # reply to CHECK_SN_RESULT 0x201c0 in 3.4 ms
+    9.250 ctrl2  D>P CHECK_SN_RESULT_ACK (0x201c1) len=0  # dash ack of CHECK_SN_RESULT
+    9.250 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200000100000000000000323032362d31312d30342031373a33313a31312e343039303030303030
+    9.251 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200000100000000000000323032362d31312d30342031373a33313a31312e343039303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 0.8 ms
+    9.251 ctrl2  D>P HU_QUERY_TIME (0x10450) len=0
+    9.252 ctrl2  P>D HU_QUERY_TIME_ACK (0x10451) len=0  # reply to HU_QUERY_TIME 0x10450 in 0.6 ms
+    9.332 mctrl  EVENT: dash connected to 127.0.0.1:10921
+    9.333 mctrl  D>P REQ_RV_CONFIG_CAPTURE (0x10) len=204 token=1 hex=200382011e000000020000000000000000000000000000000000000000010000717151304d50484b4366703571435a4d
+    9.448 mctrl  P>D RLY_RV_CONFIG_CAPTURE (0x11) len=9 token=0 hex=020000002003800101  # reply to REQ_RV_CONFIG_CAPTURE 800x386 in 114.8 ms
+    9.454 mctrl  D>P REQ_GET_VERSION (0x30) len=0 token=2
+    9.482 mctrl  P>D RLY_GET_VERSION (0x31) len=8 token=0 hex=0300000001000000  # reply to 48 REQ_GET_VERSION in 28.7 ms
+    9.521 mctrl  D>P REQ_HEARTBEAT (0x40) len=0 token=3
+    9.521 mctrl  P>D RLY_HEARTBEAT (0x41) len=0 token=0  # reply to 64 REQ_HEARTBEAT in 1.1 ms
+    9.523 mctrl  D>P REQ_CONFIGCAPTUREREXTEND (0x60) len=29 token=4 {"version":1,"fakedash":true}
+    9.527 mctrl  P>D RLY_CONFIGCAPTUREREXTEND (0x61) len=11 token=0 {"state":0}  # reply to 96 REQ_CONFIGCAPTUREREXTEND in 5.1 ms
+    9.528 mctrl  D>P REQ_RV_DATA_START (0x70) len=0 token=5
+    9.530 mctrl  P>D RLY_RV_DATA_START (0x71) len=0 token=0  # reply to 112 REQ_RV_DATA_START in 2.4 ms
+    9.602 mdata  EVENT: dash connected to 127.0.0.1:10920
+    9.612 mdata  D>P REQ_RV_DATA_NEXT (0x72) len=0 token=1
+    9.613 mdata  P>D frame len=63825  # frame #1 IDR 63825 B nal=[7,8,5,5,5,5,5] latency=0.7 ms
+    9.699 mdata  D>P REQ_RV_DATA_NEXT (0x72) len=0 token=2
+    9.709 mdata  P>D frame len=215  # frame #2 P 215 B nal=[1,1,1,1,1] latency=9.7 ms
+    9.709 mdata  D>P REQ_RV_DATA_NEXT (0x72) len=0 token=3
+   10.071 mdata  P>D frame len=1301  # frame #3 P 1301 B nal=[1,1,1,1,1] latency=360.9 ms
+   10.071 mdata  D>P REQ_RV_DATA_NEXT (0x72) len=0 token=4
+   10.084 mdata  P>D frame len=48297  # frame #4 P 48297 B nal=[1,1,1,1,1] latency=13.2 ms
+   10.153 mdata  P>D frame len=65872  # frame #5 P 65872 B nal=[1,1,1,1,1] latency=1.8 ms
+   10.176 mdata  P>D frame len=51573  # frame #6 P 51573 B nal=[1,1,1,1,1] latency=1.1 ms
+   10.223 mdata  P>D frame len=55859  # frame #7 P 55859 B nal=[1,1,1,1,1] latency=1.0 ms
+   10.284 mdata  P>D frame len=59823  # frame #8 P 59823 B nal=[1,1,1,1,1] latency=6.6 ms
+   10.680 ctrl1  P>D HEARTBEAT (0x70000000) len=0  # phone heartbeat
+   10.681 ctrl1  D>P HEARTBEAT_ACK (0x70000001) len=0  # ack of the phone heartbeat
+   10.769 ctrl1  D>P HEARTBEAT (0x70000000) len=0  # dash heartbeat
+   10.769 ctrl1  P>D HEARTBEAT_ACK (0x70000001) len=0  # reply to dash heartbeat 0x70000000 in 10.5 ms
+   11.066 mdata  P>D frame len=119567  # frame #13 IDR 119567 B nal=[7,8,5,5,5,5,5] latency=543.9 ms
+   11.203 ctrl2  D>P HEARTBEAT (0x70000000) len=0  # dash heartbeat
+   11.203 ctrl2  P>D HEARTBEAT (0x70000000) len=0  # phone heartbeat
+   11.203 ctrl2  D>P HEARTBEAT_ACK (0x70000001) len=0  # ack of the phone heartbeat
+   11.203 ctrl2  P>D HEARTBEAT_ACK (0x70000001) len=0  # reply to dash heartbeat 0x70000000 in 0.9 ms
+   11.261 ctrl2  D>P HU_TIME_SYNC (0x10600) len=39 hex=feffffff289200000200000000000000323032362d31312d30342031373a33313a31332e343230  # dash clock (short) seq=2
+   11.262 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200000200000000000000323032362d31312d30342031373a33313a31332e343230000000000000  # reply to HU_TIME_SYNC 0x10600 (short) in 1.0 ms
+   12.107 mdata  P>D frame len=118899  # frame #23 IDR 118899 B nal=[7,8,5,5,5,5,5] latency=589.9 ms
+   12.532 mctrl  D>P REQ_HEARTBEAT (0x40) len=0 token=6
+   12.532 mctrl  P>D RLY_HEARTBEAT (0x41) len=0 token=0  # reply to media heartbeat 64 in 0.7 ms
+   12.677 ctrl1  P>D HEARTBEAT (0x70000000) len=0  # phone heartbeat
+   12.677 ctrl1  D>P HEARTBEAT_ACK (0x70000001) len=0  # ack of the phone heartbeat
+   12.771 ctrl1  D>P HEARTBEAT (0x70000000) len=0  # dash heartbeat
+   12.774 ctrl1  P>D HEARTBEAT_ACK (0x70000001) len=0  # reply to dash heartbeat 0x70000000 in 2.8 ms
+   13.115 mdata  P>D frame len=119532  # frame #32 IDR 119532 B nal=[7,8,5,5,5,5,5] latency=604.4 ms
+   13.208 ctrl2  D>P HEARTBEAT (0x70000000) len=0  # dash heartbeat
+   13.211 ctrl2  P>D HEARTBEAT (0x70000000) len=0  # phone heartbeat
+   13.211 ctrl2  D>P HEARTBEAT_ACK (0x70000001) len=0  # ack of the phone heartbeat
+   13.211 ctrl2  P>D HEARTBEAT_ACK (0x70000001) len=0  # reply to dash heartbeat 0x70000000 in 3.8 ms
+   13.270 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200000300000000000000323032362d31312d30345431373a33313a31352e343239303030303030  # dash clock (tsep) seq=3
+   13.271 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200000300000000000000323032362d31312d30345431373a33313a31352e343239303030303030  # reply to HU_TIME_SYNC 0x10600 (tsep) in 1.0 ms
+   14.124 mdata  P>D frame len=118796  # frame #43 IDR 118796 B nal=[7,8,5,5,5,5,5] latency=11.9 ms
+   14.724 ctrl1  P>D HEARTBEAT (0x70000000) len=0  # phone heartbeat
+   14.725 ctrl1  D>P HEARTBEAT_ACK (0x70000001) len=0  # ack of the phone heartbeat
+   14.774 ctrl1  D>P HEARTBEAT (0x70000000) len=0  # dash heartbeat
+   14.774 ctrl1  P>D HEARTBEAT_ACK (0x70000001) len=0  # reply to dash heartbeat 0x70000000 in 0.5 ms
+   15.155 mdata  P>D frame len=117296  # frame #54 IDR 117296 B nal=[7,8,5,5,5,5,5] latency=0.8 ms
+   15.212 ctrl2  D>P HEARTBEAT (0x70000000) len=0  # dash heartbeat
+   15.212 ctrl2  P>D HEARTBEAT_ACK (0x70000001) len=0  # reply to dash heartbeat 0x70000000 in 0.6 ms
+   15.219 ctrl2  P>D HEARTBEAT (0x70000000) len=0  # phone heartbeat
+   15.219 ctrl2  D>P HEARTBEAT_ACK (0x70000001) len=0  # ack of the phone heartbeat
+   15.286 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200000400000000000000313937302d30312d30312030303a30303a30342e303030303030303030  # dash clock (epoch) seq=4
+   15.287 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200000400000000000000323032362d31312d30342031373a33313a31372e343433303030303030  # reply to HU_TIME_SYNC 0x10600 (epoch) in 3.0 ms
+   15.534 mctrl  D>P REQ_HEARTBEAT (0x40) len=0 token=7
+   15.534 mctrl  P>D RLY_HEARTBEAT (0x41) len=0 token=0  # reply to media heartbeat 64 in 0.6 ms
+   16.203 mdata  P>D frame len=117229  # frame #65 IDR 117229 B nal=[7,8,5,5,5,5,5] latency=0.4 ms
+   17.201 mdata  P>D frame len=116624  # frame #74 IDR 116624 B nal=[7,8,5,5,5,5,5] latency=0.6 ms
+   17.290 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200000500000000000000323032362d31312d30342031373a33313a31392e343439303030303030  # dash clock (normal) seq=5
+   17.291 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200000500000000000000323032362d31312d30342031373a33313a31392e343439303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 0.7 ms
+   18.246 mdata  P>D frame len=116079  # frame #85 IDR 116079 B nal=[7,8,5,5,5,5,5] latency=0.2 ms
+   19.291 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200000600000000000000323032362d31312d30342031373a33313a32312e343439303030303030  # dash clock (normal) seq=6
+   19.291 mdata  P>D frame len=115812  # frame #95 IDR 115812 B nal=[7,8,5,5,5,5,5] latency=0.5 ms
+   19.292 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200000600000000000000323032362d31312d30342031373a33313a32312e343439303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 0.8 ms
+   20.291 mdata  P>D frame len=115351  # frame #105 IDR 115351 B nal=[7,8,5,5,5,5,5] latency=0.5 ms
+   21.294 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200000700000000000000323032362d31312d30342031373a33313a32332e343533303030303030  # dash clock (normal) seq=7
+   21.295 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200000700000000000000323032362d31312d30342031373a33313a32332e343533303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 0.5 ms
+   21.351 mdata  P>D frame len=115539  # frame #115 IDR 115539 B nal=[7,8,5,5,5,5,5] latency=0.5 ms
+   22.350 mdata  P>D frame len=115779  # frame #125 IDR 115779 B nal=[7,8,5,5,5,5,5] latency=0.4 ms
+   23.298 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200000800000000000000323032362d31312d30342031373a33313a32352e343536303030303030  # dash clock (normal) seq=8
+   23.299 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200000800000000000000323032362d31312d30342031373a33313a32352e343536303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 1.2 ms
+   23.399 mdata  P>D frame len=115947  # frame #136 IDR 115947 B nal=[7,8,5,5,5,5,5] latency=0.8 ms
+   24.443 mdata  P>D frame len=116462  # frame #147 IDR 116462 B nal=[7,8,5,5,5,5,5] latency=0.3 ms
+   25.217 mdata  P>D frame len=61908  # frame #151 IDR 61908 B nal=[7,8,5,5,5,5,5] latency=572.4 ms
+   25.301 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200000900000000000000323032362d31312d30342031373a33313a32372e343539303030303030  # dash clock (normal) seq=9
+   25.301 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200000900000000000000323032362d31312d30342031373a33313a32372e343539303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 0.7 ms
+   26.352 mdata  P>D frame len=116620  # frame #156 IDR 116620 B nal=[7,8,5,5,5,5,5] latency=746.4 ms
+   27.304 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200000a00000000000000323032362d31312d30342031373a33313a32392e343632303030303030  # dash clock (normal) seq=10
+   27.305 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200000a00000000000000323032362d31312d30342031373a33313a32392e343632303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 1.1 ms
+   27.363 mdata  P>D frame len=116935  # frame #160 IDR 116935 B nal=[7,8,5,5,5,5,5] latency=629.9 ms
+   28.378 mdata  P>D frame len=117372  # frame #164 IDR 117372 B nal=[7,8,5,5,5,5,5] latency=640.7 ms
+   29.307 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200000b00000000000000323032362d31312d30342031373a33313a33312e343635303030303030  # dash clock (normal) seq=11
+   29.308 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200000b00000000000000323032362d31312d30342031373a33313a33312e343635303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 0.9 ms
+   29.377 mdata  P>D frame len=117551  # frame #168 IDR 117551 B nal=[7,8,5,5,5,5,5] latency=621.0 ms
+   30.480 mdata  P>D frame len=116818  # frame #173 IDR 116818 B nal=[7,8,5,5,5,5,5] latency=125.4 ms
+   31.309 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200000c00000000000000323032362d31312d30342031373a33313a33332e343637303030303030  # dash clock (normal) seq=12
+   31.309 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200000c00000000000000323032362d31312d30342031373a33313a33332e343637303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 0.6 ms
+   31.604 mdata  P>D frame len=117217  # frame #178 IDR 117217 B nal=[7,8,5,5,5,5,5] latency=125.0 ms
+   32.609 mdata  P>D frame len=117013  # frame #181 IDR 117013 B nal=[7,8,5,5,5,5,5] latency=127.0 ms
+   33.313 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200000d00000000000000323032362d31312d30342031373a33313a33352e343730303030303030  # dash clock (normal) seq=13
+   33.323 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200000d00000000000000323032362d31312d30342031373a33313a33352e343730303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 10.4 ms
+   33.738 mdata  P>D frame len=116584  # frame #186 IDR 116584 B nal=[7,8,5,5,5,5,5] latency=129.0 ms
+   34.880 mdata  P>D frame len=116690  # frame #191 IDR 116690 B nal=[7,8,5,5,5,5,5] latency=132.3 ms
+   35.321 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200000e00000000000000323032362d31312d30342031373a33313a33372e343830303030303030  # dash clock (normal) seq=14
+   35.322 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200000e00000000000000323032362d31312d30342031373a33313a33372e343830303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 0.4 ms
+   36.615 mdata  P>D frame len=117641  # frame #196 IDR 117641 B nal=[7,8,5,5,5,5,5] latency=761.9 ms
+   37.325 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200000f00000000000000323032362d31312d30342031373a33313a33392e343833303030303030  # dash clock (normal) seq=15
+   37.325 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200000f00000000000000323032362d31312d30342031373a33313a33392e343833303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 0.8 ms
+   37.744 mdata  P>D frame len=119218  # frame #201 IDR 119218 B nal=[7,8,5,5,5,5,5] latency=133.3 ms
+   38.740 mdata  P>D frame len=120237  # frame #205 IDR 120237 B nal=[7,8,5,5,5,5,5] latency=106.1 ms
+   39.327 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200001000000000000000323032362d31312d30342031373a33313a34312e343835303030303030  # dash clock (normal) seq=16
+   39.327 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200001000000000000000323032362d31312d30342031373a33313a34312e343835303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 0.5 ms
+   39.858 mdata  P>D frame len=121085  # frame #210 IDR 121085 B nal=[7,8,5,5,5,5,5] latency=125.4 ms
+   40.979 mdata  P>D frame len=121419  # frame #214 IDR 121419 B nal=[7,8,5,5,5,5,5] latency=127.2 ms
+   41.330 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200001100000000000000323032362d31312d30342031373a33313a34332e343838303030303030  # dash clock (normal) seq=17
+   41.339 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200001100000000000000323032362d31312d30342031373a33313a34332e343838303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 9.7 ms
+   41.979 mdata  P>D frame len=122119  # frame #218 IDR 122119 B nal=[7,8,5,5,5,5,5] latency=128.4 ms
+   43.121 mdata  P>D frame len=122835  # frame #223 IDR 122835 B nal=[7,8,5,5,5,5,5] latency=139.8 ms
+   43.339 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200001200000000000000323032362d31312d30342031373a33313a34352e343938303030303030  # dash clock (normal) seq=18
+   43.340 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200001200000000000000323032362d31312d30342031373a33313a34352e343938303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 1.1 ms
+   44.105 mdata  P>D frame len=123350  # frame #227 IDR 123350 B nal=[7,8,5,5,5,5,5] latency=129.2 ms
+   45.115 mdata  P>D frame len=124298  # frame #230 IDR 124298 B nal=[7,8,5,5,5,5,5] latency=131.2 ms
+   45.341 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200001300000000000000323032362d31312d30342031373a33313a34372e343939303030303030  # dash clock (normal) seq=19
+   45.342 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200001300000000000000323032362d31312d30342031373a33313a34372e343939303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 0.6 ms
+   46.235 mdata  P>D frame len=124913  # frame #234 IDR 124913 B nal=[7,8,5,5,5,5,5] latency=124.8 ms
+   47.344 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200001400000000000000323032362d31312d30342031373a33313a34392e353032303030303030  # dash clock (normal) seq=20
+   47.344 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200001400000000000000323032362d31312d30342031373a33313a34392e353032303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 0.4 ms
+   47.857 mdata  P>D frame len=124472  # frame #239 IDR 124472 B nal=[7,8,5,5,5,5,5] latency=627.6 ms
+   48.982 mdata  P>D frame len=124652  # frame #243 IDR 124652 B nal=[7,8,5,5,5,5,5] latency=740.6 ms
+   49.346 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200001500000000000000323032362d31312d30342031373a33313a35312e353035303030303030  # dash clock (normal) seq=21
+   49.347 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200001500000000000000323032362d31312d30342031373a33313a35312e353035303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 0.4 ms
+   50.116 mdata  P>D frame len=125155  # frame #247 IDR 125155 B nal=[7,8,5,5,5,5,5] latency=121.3 ms
+   51.231 mdata  P>D frame len=123232  # frame #252 IDR 123232 B nal=[7,8,5,5,5,5,5] latency=120.5 ms
+   51.361 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200001600000000000000323032362d31312d30342031373a33313a35332e353230303030303030  # dash clock (normal) seq=22
+   51.363 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200001600000000000000323032362d31312d30342031373a33313a35332e353230303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 2.5 ms
+   52.234 mdata  P>D frame len=124477  # frame #257 IDR 124477 B nal=[7,8,5,5,5,5,5] latency=123.7 ms
+   53.262 mdata  P>D frame len=124413  # frame #261 IDR 124413 B nal=[7,8,5,5,5,5,5] latency=127.3 ms
+   53.390 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200001700000000000000323032362d31312d30342031373a33313a35352e353438303030303030  # dash clock (normal) seq=23
+   53.392 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200001700000000000000323032362d31312d30342031373a33313a35352e353438303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 1.8 ms
+   54.355 mdata  P>D frame len=125104  # frame #265 IDR 125104 B nal=[7,8,5,5,5,5,5] latency=121.2 ms
+   54.812 mdata  P>D frame len=61380  # frame #267 IDR 61380 B nal=[7,8,5,5,5,5,5] latency=312.2 ms
+   55.393 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200001800000000000000323032362d31312d30342031373a33313a35372e353532303030303030  # dash clock (normal) seq=24
+   55.394 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200001800000000000000323032362d31312d30342031373a33313a35372e353532303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 0.6 ms
+   56.051 mdata  P>D frame len=125797  # frame #277 IDR 125797 B nal=[7,8,5,5,5,5,5] latency=577.5 ms
+   57.076 mdata  P>D frame len=120398  # frame #286 IDR 120398 B nal=[7,8,5,5,5,5,5] latency=620.4 ms
+   57.394 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200001900000000000000323032362d31312d30342031373a33313a35392e353532303030303030  # dash clock (normal) seq=25
+   57.394 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200001900000000000000323032362d31312d30342031373a33313a35392e353532303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 0.8 ms
+   58.090 mdata  P>D frame len=126326  # frame #295 IDR 126326 B nal=[7,8,5,5,5,5,5] latency=595.8 ms
+   59.101 mdata  P>D frame len=120721  # frame #304 IDR 120721 B nal=[7,8,5,5,5,5,5] latency=607.2 ms
+   59.397 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200001a00000000000000323032362d31312d30342031373a33323a30312e353535303030303030  # dash clock (normal) seq=26
+   59.397 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200001a00000000000000323032362d31312d30342031373a33323a30312e353535303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 0.6 ms
+   60.125 mdata  P>D frame len=126614  # frame #313 IDR 126614 B nal=[7,8,5,5,5,5,5] latency=615.7 ms
+   61.128 mdata  P>D frame len=127729  # frame #324 IDR 127729 B nal=[7,8,5,5,5,5,5] latency=9.4 ms
+   61.399 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200001b00000000000000323032362d31312d30342031373a33323a30332e353538303030303030  # dash clock (normal) seq=27
+   61.400 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200001b00000000000000323032362d31312d30342031373a33323a30332e353538303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 0.4 ms
+   62.166 mdata  P>D frame len=128191  # frame #332 IDR 128191 B nal=[7,8,5,5,5,5,5] latency=633.3 ms
+   63.177 mdata  P>D frame len=128678  # frame #342 IDR 128678 B nal=[7,8,5,5,5,5,5] latency=7.9 ms
+   63.401 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200001c00000000000000323032362d31312d30342031373a33323a30352e353539303030303030  # dash clock (normal) seq=28
+   63.401 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200001c00000000000000323032362d31312d30342031373a33323a30352e353539303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 0.3 ms
+   64.212 mdata  P>D frame len=128071  # frame #353 IDR 128071 B nal=[7,8,5,5,5,5,5] latency=0.2 ms
+   65.213 mdata  P>D frame len=128840  # frame #362 IDR 128840 B nal=[7,8,5,5,5,5,5] latency=12.2 ms
+   65.402 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200001d00000000000000323032362d31312d30342031373a33323a30372e353630303030303030  # dash clock (normal) seq=29
+   65.403 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200001d00000000000000323032362d31312d30342031373a33323a30372e353630303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 1.1 ms
+   66.224 mdata  P>D frame len=130076  # frame #372 IDR 130076 B nal=[7,8,5,5,5,5,5] latency=13.1 ms
+   67.251 mdata  P>D frame len=129228  # frame #381 IDR 129228 B nal=[7,8,5,5,5,5,5] latency=569.0 ms
+   67.403 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200001e00000000000000323032362d31312d30342031373a33323a30392e353632303030303030  # dash clock (normal) seq=30
+   67.404 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200001e00000000000000323032362d31312d30342031373a33323a30392e353632303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 0.8 ms
+   68.291 mdata  P>D frame len=130548  # frame #391 IDR 130548 B nal=[7,8,5,5,5,5,5] latency=586.0 ms
+   69.296 mdata  P>D frame len=131171  # frame #401 IDR 131171 B nal=[7,8,5,5,5,5,5] latency=541.2 ms
+   69.405 ctrl2  D>P HU_TIME_SYNC (0x10600) len=45 hex=feffffff289200001f00000000000000323032362d31312d30342031373a33323a31312e353633303030303030  # dash clock (normal) seq=31
+   69.405 ctrl2  P>D HU_TIME_SYNC_ACK (0x10601) len=45 hex=feffffff289200001f00000000000000323032362d31312d30342031373a33323a31312e353633303030303030  # reply to HU_TIME_SYNC 0x10600 (normal) in 0.8 ms
+   69.649 ctrl1  EVENT: dash closed the connection
+   69.653 ctrl2  EVENT: dash closed the connection
+   69.655 mctrl  EVENT: dash closed the connection
+   69.655 mdata  EVENT: dash closed the connection
+   69.661 -      EVENT: session 1 end: completed
+   72.349 -      FINDING: note [LOCKED_ONE_VARIANT] one SPS/PPS variant over the run: both encoders wrote the same SPS/PPS, or no switch happened (the app's `[switch] first … IDR on the wire … (dump frame #k)` lines tell)
+          … last frames:
+   69.499 mdata  P>D frame len=38140  # frame #406 P 38140 B nal=[1,1,1,1,1] latency=0.4 ms
+   69.550 mdata  P>D frame len=34968  # frame #407 P 34968 B nal=[1,1,1,1,1] latency=0.3 ms
+   69.599 mdata  P>D frame len=35297  # frame #408 P 35297 B nal=[1,1,1,1,1] latency=0.3 ms
