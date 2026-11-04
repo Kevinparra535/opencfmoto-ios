@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # The sideload build (docs/INSTALAR.md), step 2 of 2: the IPA from tools/release/build_ipa.sh's
-# unsigned archive. macOS only (codesign, ditto, PlistBuddy).
+# unsigned archive. macOS only (codesign, ditto).
 #
 # Riders sign the IPA again with their own Apple ID, and SideStore / AltStore register the App
 # Groups that the IPA's signature carries (an unsigned app carries none, and mirror mode would be
@@ -54,7 +54,17 @@ find "$APP" -name embedded.mobileprovision -exec rm -f {} +
 if [ ! -d "$APPEX" ]; then die "The app has no PlugIns/OpenCfMotoMirror.appex (the screen mirroring extension)."; fi
 
 # 2. What the bundles declare.
-plist_value() { /usr/libexec/PlistBuddy -c "Print :$2" "$1/Info.plist" 2> /dev/null || true; }
+# A top-level Info.plist value (nothing when the key is missing; plistlib reads binary plists).
+plist_value() {
+  python3 -I -c 'import plistlib, sys
+try:
+    with open(sys.argv[1], "rb") as fh:
+        value = plistlib.load(fh).get(sys.argv[2])
+except Exception:
+    value = None
+if value is not None:
+    print(value)' "$1/Info.plist" "$2"
+}
 app_id=$(plist_value "$APP" CFBundleIdentifier)
 ext_id=$(plist_value "$APPEX" CFBundleIdentifier)
 group=$(plist_value "$APP" OCMAppGroupIdentifier)
