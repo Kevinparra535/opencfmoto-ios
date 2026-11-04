@@ -1,0 +1,13 @@
+# Keeps the SHA-pinned GitHub Actions of .github/workflows/ up to date (one grouped pull request a
+# week). The Swift package has no third-party dependencies, so nothing else is watched.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "CI"

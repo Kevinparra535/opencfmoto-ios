@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability (private) / Vulnerabilidad de seguridad (privado)
+    url: https://github.com/Kevinparra535/opencfmoto-ios/security/advisories/new
+    about: Report it privately, never as a public issue. / Repórtala en privado, nunca como incidencia pública.
+  - name: OpenCfMoto for Android (the original app) / La app Android original
+    url: https://github.com/zanderp/open-cfmoto/issues
+    about: Problems with the Android app belong to the upstream project. / Los problemas de la app Android van al proyecto original.
+  - name: Install guide / Guía de instalación
+    url: https://github.com/Kevinparra535/opencfmoto-ios/blob/main/docs/INSTALAR.md
+    about: SideStore, AltStore, Sideloadly or your own TestFlight. / SideStore, AltStore, Sideloadly o tu propio TestFlight.

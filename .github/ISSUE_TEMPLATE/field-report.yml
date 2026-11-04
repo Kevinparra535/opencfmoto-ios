@@ -1,0 +1,92 @@
+name: Field report / Informe de campo
+description: Tried the app on a real bike? Tell us how far it got. / ¿La probaste en una moto real? Cuéntanos hasta dónde llegó.
+title: "Field report: "
+labels: ["field-report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Before you post: this issue is public. / Antes de publicar: esta incidencia es pública.**
+
+        The log the app shares (Logs ▸ Share) hides Wi-Fi passwords and serial numbers, but it **still contains Wi-Fi network names (SSIDs), MAC addresses and GPS positions**. Before you attach it, delete or replace your home Wi-Fi name, your bike's Wi-Fi name, every address like `AA:BB:CC:DD:EE:FF` and any coordinates near your home or work. Never post a photo of the dash's pairing QR code: it contains the bike's Wi-Fi password.
+
+        El registro que comparte la app (Registros ▸ Compartir) oculta las contraseñas Wi-Fi y los números de serie, pero **sigue conteniendo nombres de redes Wi-Fi (SSID), direcciones MAC y posiciones GPS**. Antes de adjuntarlo, borra o reemplaza el nombre del Wi-Fi de tu casa, el del Wi-Fi de tu moto, cualquier dirección como `AA:BB:CC:DD:EE:FF` y las coordenadas cercanas a tu casa o trabajo. Nunca publiques una foto del QR de emparejamiento del tablero: lleva la contraseña del Wi-Fi de la moto.
+
+        Security problems go to the private [vulnerability report](https://github.com/Kevinparra535/opencfmoto-ios/security/advisories/new), not here. / Los problemas de seguridad van al [reporte privado](https://github.com/Kevinparra535/opencfmoto-ios/security/advisories/new), no aquí.
+  - type: input
+    id: bike
+    attributes:
+      label: Bike model and year / Moto y año
+      placeholder: "CFMOTO 450MT 2025"
+    validations:
+      required: true
+  - type: dropdown
+    id: dash
+    attributes:
+      label: Dash / Tablero
+      options:
+        - "Landscape, most CFMOTO dashes (800 × 384) / Horizontal, la mayoría"
+        - "Portrait (1000 MT-X, 800 × 944) / Vertical"
+        - "800NK Advanced (720 × 704)"
+        - "Wide (800MT, 1280 × 576) / Panorámico"
+        - "Moto Morini (1024 × 464)"
+        - "CL-C450 (544 × 512)"
+        - "Other or not sure / Otro o no lo sé"
+    validations:
+      required: true
+  - type: input
+    id: phone
+    attributes:
+      label: iPhone and iOS version / iPhone y versión de iOS
+      placeholder: "iPhone 15, iOS 26.1"
+    validations:
+      required: true
+  - type: input
+    id: build
+    attributes:
+      label: App version and build (About) / Versión y compilación (Acerca de)
+      placeholder: "0.1.0 (1)"
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it? / ¿Cómo la instalaste?
+      options:
+        - "Sideload build from Releases with SideStore / Versión sideload con SideStore"
+        - "Sideload build from Releases with AltStore / Versión sideload con AltStore"
+        - "Sideload build from Releases with Sideloadly / Versión sideload con Sideloadly"
+        - "Xcode, free account / Xcode, cuenta gratuita"
+        - "Xcode, paid account / Xcode, cuenta de pago"
+        - "My own TestFlight (fork) / Mi propio TestFlight (fork)"
+        - "Other / Otro"
+  - type: dropdown
+    id: result
+    attributes:
+      label: How far did it get? / ¿Hasta dónde llegó?
+      options:
+        - "Did not join the bike Wi-Fi / No se unió al Wi-Fi de la moto"
+        - "Joined the Wi-Fi, no link with the dash / Se unió al Wi-Fi, sin enlace con el tablero"
+        - "Linked, but no picture on the dash / Enlazó, pero sin imagen en el tablero"
+        - "Picture on the dash / Imagen en el tablero"
+        - "Map and navigation worked / El mapa y la navegación funcionaron"
+        - "Worked, with problems / Funcionó, con problemas"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened? / ¿Qué pasó?
+      description: Steps, what you expected and what you saw. / Pasos, qué esperabas y qué viste.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log (Logs ▸ Share), cleaned as described above / Registro (Registros ▸ Compartir), limpio como se explica arriba
+      render: text
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy / Privacidad
+      options:
+        - label: "I removed Wi-Fi names, MAC addresses and locations I don't want public, and I did not post the dash QR code. / Quité nombres de Wi-Fi, direcciones MAC y ubicaciones que no quiero hacer públicos, y no publiqué el QR del tablero."
+          required: true

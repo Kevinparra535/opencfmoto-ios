@@ -1,0 +1,27 @@
+name: Bug or idea / Error o idea
+description: Something wrong in the app, the docs or the tools, or an idea. Not tried on a bike? Use this one. / Algo mal en la app, la documentación o las herramientas, o una idea.
+labels: ["triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **This issue is public. / Esta incidencia es pública.** Logs and screenshots of the real app can show Wi-Fi network names (SSIDs), MAC addresses and GPS positions: remove them first, and never post the dash's pairing QR code. Tried it on a bike? Please use the **Field report** form instead. / Los registros y las capturas de la app real pueden mostrar nombres de Wi-Fi (SSID), direcciones MAC y posiciones GPS: quítalos antes, y nunca publiques el QR del tablero. ¿La probaste en una moto? Usa mejor el formulario **Informe de campo**.
+  - type: textarea
+    id: what
+    attributes:
+      label: What is it? / ¿Qué es?
+      description: For a bug, the steps, what you expected and what you saw. For an idea, what it would let you do. / Para un error, los pasos, qué esperabas y qué viste. Para una idea, qué te permitiría hacer.
+    validations:
+      required: true
+  - type: input
+    id: build
+    attributes:
+      label: App version and build, iPhone and iOS (if it is about the app) / Versión, iPhone e iOS (si es sobre la app)
+      placeholder: "0.1.0 (1), iPhone 15, iOS 26.1"
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy / Privacidad
+      options:
+        - label: "Nothing I attach shows Wi-Fi names, MAC addresses, locations or the dash QR code. / Nada de lo que adjunto muestra nombres de Wi-Fi, direcciones MAC, ubicaciones ni el QR del tablero."
+          required: true
