@@ -24,7 +24,8 @@ Environment: ASC_KEY_ID, ASC_ISSUER_ID and ASC_PRIVATE_KEY (the text of the .p8 
 spaces, a one-line paste or literal "\\n" sequences are tolerated) or ASC_PRIVATE_KEY_PATH.
 Optional: ASC_API_BASE (tests), ASC_POLL_SCALE (tests: multiplies every wait and timeout),
 ASC_OPENSSL (openssl binary). GITHUB_OUTPUT / GITHUB_STEP_SUMMARY receive key=value outputs and a
-Markdown summary when set; outputs are echoed to stdout as key=value lines too.
+Markdown summary when set. Outputs are echoed to stdout too: states and numbers as key=value
+lines, identifiers (team, ids, profiles...) by name only, as the log is public.
 GITHUB_REPOSITORY_ID, GITHUB_RUN_ID and GITHUB_RUN_ATTEMPT (set by GitHub Actions) name the CI
 profiles and tell the janitor which of them belong to this repository.
 
@@ -156,13 +157,23 @@ def append_summary(markdown: str) -> None:
         log(f"(cannot write the step summary: {exc})")
 
 
+# Outputs whose values are states, numbers or the version: echoed to the log as name=value. Every
+# other output is an identifier (team, App IDs and their resource ids, the app record, certificate,
+# profiles, uploads, builds, the TestFlight group): the log is public, so it shows only the name.
+LOGGED_OUTPUT_VALUES = frozenset({"ready", "uploaded", "committed", "processed", "processing_state",
+                                  "build_number", "marketing_version"})
+
+
 def set_output(name: str, value) -> None:
     text = "" if value is None else str(value).replace("\r", " ").replace("\n", " ")
     path = os.environ.get("GITHUB_OUTPUT")
     if path:
         with open(path, "a", encoding="utf-8") as fh:
             fh.write(f"{name}={text}\n")
-    log(f"{name}={text}")
+    if name in LOGGED_OUTPUT_VALUES:
+        log(f"{name}={text}")
+    else:
+        log(f"{name}: {'set' if text else 'empty'} (value not shown: the log is public)")
 
 
 _REPORT_LABELS = {"error": ("ERROR", "Error"), "warning": ("AVISO / WARNING", "Aviso / Warning"),
@@ -976,7 +987,6 @@ def cmd_prepare(args) -> int:
             ("Capacidades activadas ahora / capabilities enabled now",
              "; ".join(f"`{bid}`: {', '.join(caps)}" for bid, caps in
                        ((app_bid, app_added), (mirror_bid, mirror_added)) if caps) or "—"),
-            ("Team ID", f"`{team_id}`"),
             ("App Group", f"`{group}` (la API no puede comprobarlo / the API cannot check it)"),
             ("App en App Store Connect / app record",
              f"`{app_id}`" if app else "falta / missing"),
@@ -1597,8 +1607,10 @@ def cmd_create_signing(args) -> int:
         set_output("cert_team_id", team)
     elif any(t and t != team for t in profile_teams):
         report("warning", "Team ID distinto / Team ID mismatch",
-               f"El certificado es del equipo {team} pero un perfil indica {profile_teams}.",
-               f"The certificate belongs to team {team} but a profile says {profile_teams}.")
+               "El certificado y uno de los perfiles indican equipos distintos (los Team ID no se "
+               "muestran: el registro es público).",
+               "The certificate and one of the profiles name different teams (team IDs are not "
+               "shown: the log is public).")
 
     # 4. The entitlements Apple put in the profiles. App Groups cannot be created or assigned to
     #    an App ID through the API, so a missing group is the owner's one-time web step.
@@ -1620,7 +1632,7 @@ def cmd_create_signing(args) -> int:
         rows.append((f"Perfil / profile ({role})", f"{name} (`{uuid}`) — {', '.join(flags)}"))
 
     summary = "### TestFlight · firma / signing\n\n" + md_table(
-        [("Certificado / certificate", f"`{cert_id}` (Apple Distribution, team `{team}`)")] + rows)
+        [("Certificado / certificate", f"`{cert_id}` (Apple Distribution)")] + rows)
     if missing_group or missing_other:
         es_parts, en_parts = [], []
         if missing_group:

@@ -277,13 +277,19 @@ jobs:
           done
           export TF_WORK="$d" TF_SIGNING_DIR="$d/signing" TF_ALLOW_UNTRUSTED_IDENTITY=1
           # macOS's own /bin/bash (3.2) here; the settings step above used the bash on PATH.
-          /bin/bash tools/testflight/build_and_sign.sh setup-keychain
+          /bin/bash tools/testflight/build_and_sign.sh setup-keychain 2>&1 | tee "$d/setup-keychain.log"
           kc="$d/testflight.keychain-db"
           fail() {
             echo "::error title=TestFlight dry run (keychain)::$1"
             /bin/bash tools/testflight/build_and_sign.sh teardown > /dev/null 2>&1 || true
             exit 1
           }
+          # The log is public and an identity is named after the account holder: counted, never shown.
+          if grep -q -E "CI Dry Run|ABCDE12345" "$d/setup-keychain.log"; then
+            fail "setup-keychain printed the signing identity's name or team ID"
+          fi
+          grep -q -F "(1 Apple Distribution identity; name and team not shown)" "$d/setup-keychain.log" \
+            || fail "setup-keychain did not report the identity count: $(tr '\n' ' ' < "$d/setup-keychain.log")"
           # (Outputs go through variables: `cmd | grep -q` can fail on SIGPIPE under pipefail.)
           search=$(security list-keychains -d user)
           grep -q -F "$kc" <<< "$search" || fail "the temporary keychain is not in the user search list: $search"
