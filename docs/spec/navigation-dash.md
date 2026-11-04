@@ -984,8 +984,9 @@ host** when it is `openstreetmap.org`, `osm.org` or any of their subdomains (`ti
     DashMapAttributionTests); with no room left under the top chrome it is not drawn (not reached on those
     canvases).
   * The opaque Music sheet hides the map and its credit; the menu dimmer, the search sheet and the hold
-    picture draw over it like over the rest of the map. Toasts and the link banner stay clear of it on the
-    supported canvases.
+    picture draw over it like over the rest of the map. Toasts and the link banner are drawn over everything
+    from the top chrome down: with one-line texts they stay clear of it in every map state on the supported
+    canvases (DashMapAttributionTests); a long two-line toast may cover it while it shows (2.5 s).
 * Pictures of the dash with real OSM tiles (README, social posts) also caption them "Map © OpenStreetMap
   contributors". The snapshot images in `docs/screenshots/dash/` use placeholder tiles and show the credit
   where the dash draws it.
