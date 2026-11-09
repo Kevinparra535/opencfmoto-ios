@@ -7,7 +7,9 @@
 # fails nothing is deployed. CI runs the same check and its tests on every push.
 #
 # One-time owner step: Settings ▸ Pages ▸ Build and deployment ▸ Source: «GitHub Actions». Without it
-# configure-pages fails with "Get Pages site failed" (the workflow token cannot turn Pages on).
+# configure-pages fails with "Get Pages site failed" (the workflow token cannot turn Pages on). Do it
+# before the merge that first brings site/ to main (that push deploys). If you turn it on later, run this
+# workflow once by hand (Actions ▸ Pages ▸ Run workflow).
 #
 # Actions are pinned to commit SHAs (the same checkout as ci.yml; Dependabot keeps them current). Only
 # this job may deploy, and only from main.

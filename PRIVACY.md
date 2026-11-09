@@ -19,16 +19,21 @@ persona compila para sí y las que se compilan con Xcode.
 
 ## Lo que se queda en tu iPhone
 
-Todo esto se guarda solo en el almacenamiento de la app en tu iPhone. Como cualquier dato de una app,
-entra en las copias de seguridad de tu iPhone (iCloud o el computador) si las usas, y se borra al borrar
+Todo esto se guarda solo en tu iPhone. Las motos, viajes, lugares, ajustes y registros entran en las
+copias de seguridad del iPhone (iCloud o el computador) si las usas; las teselas del mapa y los archivos
+para compartir (también las grabaciones del tablero), no. La contraseña Wi-Fi va en el llavero, solo en
+este iPhone: no pasa a otro iPhone ni al llavero de iCloud, e iOS puede conservarla aunque borres la app.
+Para borrarla, quita la moto en Garaje («Eliminar moto») antes de borrar la app; lo demás se borra con
 la app.
 
 - **Tus motos** (Garaje): nombre, modelo, nombre de la red Wi-Fi de la moto y lo que el tablero cuenta de
   sí mismo (modelo, número de serie). La **contraseña Wi-Fi** de cada moto va en el llavero (Keychain)
   de iOS, solo en este iPhone (no se sincroniza con el llavero de iCloud). La foto de la moto, si eliges
   una.
-- **Tus viajes** (si dejas activado «Registrar viajes automáticamente»): el recorrido GPS, la distancia,
-  las velocidades y las horas de cada ruta mientras el tablero muestra el mapa.
+- **Tus viajes**: los que se registran solos con «Registrar viajes automáticamente» (activado de
+  fábrica, mientras el tablero muestra el mapa) y los que grabas tú con «Empezar a grabar» (o con
+  «Grabar la ruta» en el tablero): el recorrido GPS, la distancia, las velocidades y las horas de cada
+  uno.
 - **Tus lugares**: casa, favoritos, marcadores, los últimos destinos y dónde aparcaste.
 - **Tus ajustes**, con tu servidor de mapas y tu clave de openrouteservice si los pones.
 - **Los registros** (Registros): lo que hace la app (pasos de la conexión, errores, el modelo del
@@ -38,11 +43,12 @@ la app.
   la borra. Si iOS entrega a la app el informe de un cierre inesperado (MetricKit), la app lo guarda con
   los registros.
 - **Las grabaciones del tablero** (Registros ▸ Diagnóstico del enlace ▸ «Grabar el vídeo enviado al
-  tablero»): el vídeo que recibe el tablero, en el que se ve el mapa alrededor de ti. Se borran en el
-  siguiente arranque.
+  tablero»): el vídeo que recibe el tablero: el mapa alrededor de ti o, en el modo Espejo, todo lo que
+  muestra la pantalla del iPhone (también otras apps y avisos). Se borran en el siguiente arranque.
 - **Las teselas del mapa** que ya se descargaron (hasta 512 MB, cada una caduca a los 90 días).
-- **Los archivos que preparas para compartir** (GPX, registros, ajustes): se borran solos poco después
-  (al pasar la app a segundo plano, los que tienen más de 2 minutos) y en el siguiente arranque.
+- **Los archivos que preparas para compartir** (GPX, registros, ajustes y datos de mapa; estos últimos
+  llevan tu casa, tus lugares y dónde aparcaste): se borran solos poco después (al pasar la app a segundo
+  plano, los que tienen más de 2 minutos) y en el siguiente arranque.
 
 ## Permisos y para qué
 
@@ -63,6 +69,7 @@ la app.
   dos cosas.
 - **Audio en segundo plano** (no es un permiso): los avisos de voz y, solo si activas los botones del
   manillar, un audio silencioso para recibirlos. La app no usa el micrófono.
+- **Grabación de pantalla** (no es un permiso): la transmisión del modo Espejo, que inicias tú.
 
 ## Servicios en línea que usa la app
 
@@ -88,6 +95,11 @@ envía el vídeo del mapa (con la canción, si activaste Apple Music en el table
 que pide su protocolo: «Apple» y el modelo de tu iPhone (o la marca y el modelo de un teléfono Android si
 activas «Identificarse como teléfono Android»), un identificador y una clave de firma que la app crea de
 nuevo en cada arranque.
+
+En el modo Espejo («Duplicar toda la pantalla del iPhone»), iOS da a la extensión OpenCfMoto Mirror la
+imagen de la pantalla solo mientras dura la transmisión que tú inicias (la extensión no usa el sonido);
+iOS muestra el indicador rojo. La app la envía al tablero por el Wi-Fi de la moto: no se guarda (salvo
+que actives la grabación) ni sale a internet.
 
 Fuera de estos servicios y del tablero, la app no se conecta a nada: ni a GitHub ni a ningún servidor
 nuestro. Los enlaces de la pantalla Acerca de se abren en Safari solo si los tocas.
@@ -132,14 +144,19 @@ builds for themselves, and builds made with Xcode.
 
 ### What stays on your iPhone
 
-All of this is kept only in the app's storage on your iPhone. Like any app data, it is part of your
-iPhone's backups (iCloud or a computer) if you use them, and it is deleted with the app.
+All of this is kept only on your iPhone. Bikes, trips, places, settings and logs are part of your
+iPhone's backups (iCloud or a computer) if you use them; map tiles and files prepared for sharing (dash
+recordings included) are not. The Wi-Fi password is in the Keychain, on this iPhone only: it does not move
+to another iPhone or to iCloud Keychain, and iOS may keep it even after you delete the app. To erase it,
+remove the bike in Garage ("Remove bike") before deleting the app; everything else is deleted with the
+app.
 
 - **Your bikes** (Garage): name, model, the bike's Wi-Fi network name and what the dash reports about
   itself (model, serial number). Each bike's **Wi-Fi password** is kept in the iOS Keychain, on this
   iPhone only (it does not sync to iCloud Keychain). The bike photo, if you choose one.
-- **Your trips** (if "Log trips automatically" stays on): the GPS track, distance, speeds and times of
-  each ride while the dash shows the map.
+- **Your trips**: those logged by themselves with "Log trips automatically" (on by default, while the
+  dash shows the map) and those you record with "Start recording" (or with "Record ride" on the dash):
+  the GPS track, distance, speeds and times of each.
 - **Your places**: home, favorites, markers, recent destinations and where you parked.
 - **Your settings**, including your tile server and openrouteservice key if you set them.
 - **The logs** (Logs): what the app does (connection steps, errors, the dash model, the bike's Wi-Fi
@@ -148,10 +165,12 @@ iPhone's backups (iCloud or a computer) if you use them, and it is deleted with 
   so it is not lost if iOS closes the app; the next launch restores it and deletes it. If iOS hands the
   app a crash report (MetricKit), the app keeps it with the logs.
 - **Dash recordings** (Logs ▸ Link diagnostics ▸ "Record the dash video stream"): the video the dash
-  receives, which shows the map around you. They are deleted at the next launch.
+  receives: the map around you or, in Mirror mode, everything the iPhone screen shows (other apps and
+  notifications too). They are deleted at the next launch.
 - **Map tiles** already downloaded (up to 512 MB; each expires after 90 days).
-- **Files you prepare for sharing** (GPX, logs, settings): deleted soon after by themselves (when the app
-  goes to the background, those older than 2 minutes) and at the next launch.
+- **Files you prepare for sharing** (GPX, logs, settings and map data; map data carries your home, your
+  places and where you parked): deleted soon after by themselves (when the app goes to the background,
+  those older than 2 minutes) and at the next launch.
 
 ### Permissions and why
 
@@ -170,6 +189,7 @@ iPhone's backups (iCloud or a computer) if you use them, and it is deleted with 
   read the name of the current Wi-Fi network. The sideload build can do neither.
 - **Background audio** (not a permission): voice prompts and, only if you turn on the handlebar buttons,
   a silent audio track to receive them. The app does not use the microphone.
+- **Screen recording** (not a permission): the Mirror mode broadcast, which you start.
 
 ### Online services the app uses
 
@@ -194,6 +214,11 @@ request, and has its own privacy policy. To the map services the app introduces 
 map video (with the song, if you turned on Apple Music on the dash). To link, it sends what the dash's
 protocol asks for: "Apple" and your iPhone's model (or an Android phone's brand and model if you turn on
 "Identify as an Android phone"), and an identifier and a signing key the app makes anew at every launch.
+
+In Mirror mode ("Mirror the whole iPhone screen"), iOS gives the OpenCfMoto Mirror extension the screen
+image only while the broadcast you start lasts (the extension does not use the sound); iOS shows the red
+indicator. The app sends it to the dash over the bike's Wi-Fi: it is not saved (unless you turn on the
+recording) and never goes to the internet.
 
 Apart from these services and the dash, the app connects to nothing: not to GitHub, not to any server of
 ours. The links on the About screen open in Safari only if you tap them.

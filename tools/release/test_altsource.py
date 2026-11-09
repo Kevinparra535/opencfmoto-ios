@@ -358,14 +358,20 @@ class AltSourceTest(unittest.TestCase):
                        "«Ya me he conectado»", "\"I've joined\"", "solo de esta página", "Only download it from this page",
                        "con un botón para copiarla (la copia dura 2 minutos)",
                        "with a copy button (the copy lasts 2 minutes)",
-                       "| Enlace fijo / stable link | https://github.com/Example/opencfmoto-ios/releases/latest/download/"
-                       "OpenCfMoto-sideload.ipa (desde esta versión / from this release on) |"):
+                       "| Enlace fijo a la última versión / stable link to the latest release | "
+                       "https://github.com/Example/opencfmoto-ios/releases/latest/download/OpenCfMoto-sideload.ipa "
+                       "(siempre la versión más reciente, desde esta; su SHA-256 está en el SHA256SUMS.txt de esa "
+                       "versión / always the newest release, from this one on; its SHA-256 is in that release's "
+                       "SHA256SUMS.txt) |"):
             self.assertIn(needle, notes)
         for claim in ("copia la contraseña", "copies the password"):
             self.assertNotIn(claim, notes)
         self.assertLess(notes.index("**ES:**"), notes.index("**EN:**"), "Spanish first")
         self.assertLess(notes.index("### ES:"), notes.index("### EN:"))
-        self.assertLess(notes.index("| IPA |"), notes.index("| Enlace fijo / stable link |"))
+        # The IPA, then its SHA-256, then the stable link: that link follows the latest release, so its IPA can
+        # be a newer one whose hash is not the one in the SHA-256 row.
+        self.assertLess(notes.index("| IPA |"), notes.index("| SHA-256 |"))
+        self.assertLess(notes.index("| SHA-256 |"), notes.index("| Enlace fijo a la última versión / stable link"))
 
     def test_the_stable_ipa_name_is_the_one_packaged_and_released(self):
         # package_ipa.sh writes the copy, release.yml's draft job requires and attaches it, the notes link it.

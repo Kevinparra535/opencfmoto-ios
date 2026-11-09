@@ -354,8 +354,12 @@ def release_notes(ipa: dict, args, version: str) -> str:
         "| | |",
         "|---|---|",
         f"| IPA | `{ipa_name}` ({ipa['size'] / 1e6:.1f} MB) |",
-        f"| Enlace fijo / stable link | {stable_ipa} (desde esta versión / from this release on) |",
         f"| SHA-256 | `{ipa['sha256']}` (`SHA256SUMS.txt`) |",
+        # After the SHA-256 row: this link follows the Latest release, so on an older release's page it
+        # downloads a newer IPA, whose hash is in that release's SHA256SUMS.txt, not in the row above.
+        f"| Enlace fijo a la última versión / stable link to the latest release | {stable_ipa} (siempre la versión "
+        "más reciente, desde esta; su SHA-256 está en el SHA256SUMS.txt de esa versión / always the newest release, "
+        "from this one on; its SHA-256 is in that release's SHA256SUMS.txt) |",
         f"| Versión / version | {version} ({info.get('CFBundleVersion')}), iPhone, iOS {minos} o posterior / or later |",
         f"| Fuente AltStore / SideStore source | `{source_url}` |",
         f"| Código fuente / Corresponding Source (AGPL-3.0 §6) | tag `{args.tag}`{commit}: «Source code» abajo / below |",

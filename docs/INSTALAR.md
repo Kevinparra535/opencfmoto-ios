@@ -7,11 +7,12 @@
 >
 > 1. Instala **SideStore** o **AltStore Classic** en tu iPhone siguiendo su guía oficial
 >    ([opción 1](#opción-1-sidestore-sin-computador-después-de-instalarla) u
->    [opción 2](#opción-2-altstore-classic-windows-o-mac), más abajo).
+>    [opción 2](#opción-2-altstore-classic-windows-o-mac), más abajo), con el **Modo de desarrollador**
+>    activado y tu Apple ID de confianza
+>    ([paso 4 de la opción 1](#opción-1-sidestore-sin-computador-después-de-instalarla)).
 > 2. En el iPhone, abre <https://kevinparra535.github.io/opencfmoto-ios/> en **Safari** y toca
 >    **«Añadir a SideStore»** o **«Añadir a AltStore»**.
-> 3. Instala OpenCfMoto desde esa fuente, activa el **Modo de desarrollador** y confía en tu Apple ID
->    ([paso 4 de la opción 1](#opción-1-sidestore-sin-computador-después-de-instalarla)).
+> 3. Instala OpenCfMoto desde esa fuente.
 
 OpenCfMoto no está en la App Store. Hay tres formas de instalarla en un iPhone, y una app para Android:
 
@@ -39,8 +40,8 @@ iPhone. Es la variante «free» de la app: la misma, salvo que no puede unirse s
   su versión 2.3).
 - Un computador con **Windows, Mac o Linux**. SideStore se instala con iloader, que funciona en los
   tres; AltServer (para AltStore) y Sideloadly solo funcionan en Windows y Mac. Con SideStore lo
-  necesitas una vez; con AltStore, para instalarla y, si no usas Remote AltServer, para renovar; con
-  Sideloadly, cada semana.
+  necesitas una vez (y otra vez si caduca su *pairing file*, por ejemplo tras actualizar iOS); con
+  AltStore, para instalarla y, si no usas Remote AltServer, para renovar; con Sideloadly, cada semana.
 - Un **Apple ID gratuito**. Mejor uno secundario, solo para esto, con la verificación en dos pasos
   activada. OpenCfMoto nunca te pide tu Apple ID: solo lo usa la herramienta de instalación, para
   firmar la app a tu nombre.
@@ -62,9 +63,10 @@ iPhone. Es la variante «free» de la app: la misma, salvo que no puede unirse s
 3. Conecta el iPhone al computador por cable y acepta «Confiar en este ordenador». En el instalador,
    inicia sesión con tu Apple ID, instala SideStore y copia el *pairing file* a SideStore, como indica
    la guía.
-4. En el iPhone, activa **Ajustes ▸ Privacidad y seguridad ▸ Modo de desarrollador** (el iPhone se
-   reinicia). Después ve a **Ajustes ▸ General ▸ VPN y gestión de dispositivos**, toca tu Apple ID y
-   pulsa **Confiar**.
+4. En el iPhone, activa **Ajustes (Configuración) ▸ Privacidad y seguridad ▸ Modo de
+   desarrollador** (el iPhone se reinicia). Después ve a **Ajustes ▸ General ▸ VPN y gestión de
+   dispositivos** (en Latinoamérica, «VPN y administración de dispositivos»; el nombre cambia con la
+   versión de iOS: está al final de General), toca tu Apple ID y pulsa **Confiar**.
 5. En el iPhone, abre <https://kevinparra535.github.io/opencfmoto-ios/> en **Safari** y toca
    **«Añadir a SideStore»**. O, en SideStore, ve a *Sources* ▸ **+** y pega esta dirección:
 
@@ -74,8 +76,8 @@ iPhone. Es la variante «free» de la app: la misma, salvo que no puede unirse s
 
    Después instala OpenCfMoto desde esa fuente. También puedes ir a *My Apps* ▸ **+** y elegir el
    `.ipa` que descargaste.
-6. Cada 7 días, antes de que caduque: conecta LocalDevVPN y pulsa SideStore ▸ *My Apps* ▸
-   **Refresh All**.
+6. Cada 7 días, con Wi-Fi (no con datos móviles), antes de que caduque: conecta LocalDevVPN y pulsa
+   SideStore ▸ *My Apps* ▸ **Refresh All**.
 
 ### Opción 2: AltStore Classic (Windows o Mac)
 
@@ -87,8 +89,9 @@ iPhone. Es la variante «free» de la app: la misma, salvo que no puede unirse s
 3. Activa el Modo de desarrollador y confía en tu Apple ID, como en la opción 1 (paso 4).
 4. En el iPhone, abre <https://kevinparra535.github.io/opencfmoto-ios/> en **Safari** y toca
    **«Añadir a AltStore»** (o, en AltStore, ve a *Browse* o *Sources* ▸ **+** y pega la misma
-   dirección de la opción 1). Después instala OpenCfMoto desde esa fuente. También puedes ir a
-   *My Apps* ▸ **+** y elegir el `.ipa`.
+   dirección de la opción 1). Después instala OpenCfMoto desde esa fuente (con AltServer abierto en
+   el computador, en el mismo Wi-Fi, o con Remote AltServer). También puedes ir a *My Apps* ▸ **+** y
+   elegir el `.ipa`.
 5. AltStore renueva las apps sola mientras el computador con AltServer está encendido en el mismo
    Wi-Fi. También puedes abrir AltStore y pulsar **Refresh All**. Desde AltStore 2.3 puede renovar
    además **sin el computador**, con *Remote AltServer* (en los ajustes de AltStore, *Set up Remote
@@ -147,8 +150,9 @@ instálalo encima, con la misma herramienta y el mismo Apple ID, para conservar 
 
 Desde la versión siguiente a la v0.1.0, cada release trae además `OpenCfMoto-sideload.ipa`: el mismo
 IPA con un nombre que no cambia, así que
-<https://github.com/Kevinparra535/opencfmoto-ios/releases/latest/download/OpenCfMoto-sideload.ipa>
-descarga siempre el de la última versión.
+`https://github.com/Kevinparra535/opencfmoto-ios/releases/latest/download/OpenCfMoto-sideload.ipa`
+descarga siempre el de la última versión (la v0.1.0 todavía no lo trae: hasta la próxima versión esa
+dirección da error 404).
 
 ### Comprobar el SHA-256
 
@@ -236,12 +240,12 @@ dentro del IPA. Ese código sigue disponible mientras se ofrezca el IPA. Si modi
 >
 > 1. Install **SideStore** or **AltStore Classic** on your iPhone by following its official guide
 >    ([option 1](#option-1-sidestore-no-computer-after-the-setup) or
->    [option 2](#option-2-altstore-classic-windows-or-mac), below).
+>    [option 2](#option-2-altstore-classic-windows-or-mac), below), with **Developer Mode** turned on and
+>    your Apple ID trusted ([step 4 of option 1](#option-1-sidestore-no-computer-after-the-setup)).
 > 2. On the iPhone, open <https://kevinparra535.github.io/opencfmoto-ios/> in **Safari** and tap
 >    **"Add to SideStore"** or **"Add to AltStore"** (the buttons also say «Añadir a SideStore» /
 >    «Añadir a AltStore»).
-> 3. Install OpenCfMoto from that source, turn on **Developer Mode** and trust your Apple ID
->    ([step 4 of option 1](#option-1-sidestore-no-computer-after-the-setup)).
+> 3. Install OpenCfMoto from that source.
 
 OpenCfMoto is not on the App Store. There are three ways to install it on an iPhone, and an app for
 Android:
@@ -270,8 +274,8 @@ app's "free" flavour: the same app, except that it cannot join Wi-Fi networks by
   version 2.3).
 - A **Windows, Mac or Linux** computer. SideStore installs with iloader, which runs on all three;
   AltServer (for AltStore) and Sideloadly only run on Windows and Mac. You need the computer once with
-  SideStore; with AltStore, to install it and, unless you use Remote AltServer, to refresh; and every
-  week with Sideloadly.
+  SideStore (and again if its *pairing file* expires, for example after an iOS update); with AltStore,
+  to install it and, unless you use Remote AltServer, to refresh; and every week with Sideloadly.
 - A **free Apple ID**. A secondary one, just for this, with two-factor authentication, is best.
   OpenCfMoto never asks for your Apple ID: only the install tool uses it, to sign the app for you.
 - Download the IPA **only** from this repository's
@@ -303,8 +307,8 @@ app's "free" flavour: the same app, except that it cannot join Wi-Fi networks by
 
    Then install OpenCfMoto from that source. You can also go to *My Apps* ▸ **+** and pick the `.ipa`
    you downloaded.
-6. Every 7 days, before it expires: connect LocalDevVPN and tap SideStore ▸ *My Apps* ▸ **Refresh
-   All**.
+6. Every 7 days, on Wi-Fi (not mobile data), before it expires: connect LocalDevVPN and tap SideStore ▸
+   *My Apps* ▸ **Refresh All**.
 
 #### Option 2: AltStore Classic (Windows or Mac)
 
@@ -316,8 +320,9 @@ app's "free" flavour: the same app, except that it cannot join Wi-Fi networks by
 3. Turn on Developer Mode and trust your Apple ID, as in option 1 (step 4).
 4. On the iPhone, open <https://kevinparra535.github.io/opencfmoto-ios/> in **Safari** and tap
    **"Add to AltStore"** (or, in AltStore, go to *Browse* or *Sources* ▸ **+** and paste the same
-   address as in option 1). Then install OpenCfMoto from that source. You can also go to *My Apps* ▸
-   **+** and pick the `.ipa`.
+   address as in option 1). Then install OpenCfMoto from that source (with AltServer running on the
+   computer on the same Wi-Fi, or with Remote AltServer). You can also go to *My Apps* ▸ **+** and pick
+   the `.ipa`.
 5. AltStore refreshes its apps by itself while the computer running AltServer is on the same Wi-Fi.
    You can also open AltStore and tap **Refresh All**. Since AltStore 2.3 it can also refresh **without
    the computer**, through *Remote AltServer* (in AltStore's settings, *Set up Remote AltServer…*): you
@@ -375,8 +380,9 @@ install it over the old one, with the same tool and the same Apple ID, to keep y
 
 From the release after v0.1.0 on, every release also carries `OpenCfMoto-sideload.ipa`: the same IPA
 under a name that never changes, so
-<https://github.com/Kevinparra535/opencfmoto-ios/releases/latest/download/OpenCfMoto-sideload.ipa>
-always downloads the latest one.
+`https://github.com/Kevinparra535/opencfmoto-ios/releases/latest/download/OpenCfMoto-sideload.ipa`
+always downloads the latest one (v0.1.0 does not carry it yet: until the next release that address
+returns 404).
 
 #### Check the SHA-256
 

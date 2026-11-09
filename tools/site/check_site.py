@@ -4,14 +4,18 @@
 
 usage: check_site.py [--base /opencfmoto-ios/] SITE_DIR
 
-Every SITE_DIR/**/*.html must:
+Every file under SITE_DIR is an .html page or a raster image (IMAGE_EXTENSIONS): no CSS, JavaScript, SVG,
+font, .htm or hidden file is published (CSS and SVG go inline in the pages). Every SITE_DIR/**/*.html must:
 - be UTF-8 with <!DOCTYPE html>, parse (html.parser), and have <html lang="…">, <meta charset="utf-8">, a
   viewport <meta> (width=device-width) and a non-empty <title>;
-- load nothing from another site: src, srcset, poster, background and data of every element, every <link
-  href> and the href of other non-link elements (SVG <image>, <use>), and @import / url(…) in <style> and in
-  style="…" are relative or data: only; no <script src>, <base>, <iframe>, <frame>, <object>, <embed>,
-  <applet>, <form>; no on…="…" event attributes; inline scripts use no network or navigation API (fetch,
-  XMLHttpRequest, sendBeacon, WebSocket, EventSource, Worker, import(), eval, innerHTML, location, …);
+- load nothing from another site: src, srcset, imagesrcset, poster, background and data of every element,
+  every <link href> and the href of other non-link elements (SVG <image>, <use>), and @import / url(…) in
+  <style> and in style="…" are relative or data:image/… only, and no quoted string in that CSS is an absolute
+  or protocol-relative URL (image-set("https://…")); no <link rel=stylesheet>, <script src>, <base>,
+  <iframe>, <frame>, <object>, <embed>, <applet>, <form>; no on…="…" event attributes, no ping= or
+  attributionsrc= (hyperlink-auditing pings); every inline script is a reviewed one (its SHA-256 is in
+  ALLOWED_SCRIPT_SHA256) and uses no network or navigation API (fetch, XMLHttpRequest, sendBeacon,
+  WebSocket, EventSource, Worker, import(), eval, innerHTML, location, …);
 - link (<a> / <area> href, <meta http-equiv="refresh"> url) only to: a #fragment of the page, a relative path
   that exists under SITE_DIR (and its #fragment), mailto:, an https URL on ALLOWED_LINKS, or the SideStore /
   AltStore Classic add-source links (sidestore://source?url=…, altstore-classic://source?url=…) whose url is
@@ -26,6 +30,7 @@ Exit 0 when everything passes; 1 with one ::error annotation per problem; 2 on u
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html.parser
 import os
 import posixpath
@@ -51,15 +56,31 @@ ALLOWED_LINKS = (
     ("apps.apple.com", "/"),
 )
 
+# Besides the .html pages, the only files the site may publish (the icon): no CSS, script, SVG or font files.
+IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico")
+
+# The reviewed inline scripts (the copy buttons of site/index.html): the SHA-256 of the text between <script>
+# and </script> (pages are read with universal newlines, so a \r\n checkout hashes the same). Any other script
+# fails the check, so a change to it gets a review: read the new script, then put the SHA-256 the check prints
+# here.
+ALLOWED_SCRIPT_SHA256 = {
+    "f651ff1c66054f35dd04c7c9564a0473fa4b6c3e6f00180a83d458bc4205f0e3",  # site/index.html: the copy buttons
+}
+
 FORBIDDEN_TAGS = {"base", "iframe", "frame", "frameset", "object", "embed", "applet", "form"}
 NAVIGATION_TAGS = {"a", "area"}
 RESOURCE_ATTRIBUTES = {"src", "poster", "background", "data", "action", "formaction"}
+SRCSET_ATTRIBUTES = {"srcset", "imagesrcset"}
+PING_ATTRIBUTES = {"ping", "attributionsrc"}
 SCRIPT_RISKS = re.compile(
     r"\b(?:fetch|XMLHttpRequest|sendBeacon|WebSocket|EventSource|SharedWorker|Worker|importScripts|eval|Function"
     r"|location|innerHTML|outerHTML|insertAdjacentHTML)\b|\bimport\s*\(|document\s*\.\s*write|\.\s*(?:src|srcset|href)\b"
     r"|\bopen\s*\(")
 CSS_URL = re.compile(r"""url\(\s*(?:"([^"]*)"|'([^']*)'|([^)\s]*))\s*\)""", re.IGNORECASE)
-CSS_IMPORT = re.compile(r"""@import\s+(?:url\(\s*)?["']?([^"')\s;]*)""", re.IGNORECASE)
+# @import "x.css", @import'x.css', @import url(x.css): minified CSS writes no space after @import.
+CSS_IMPORT = re.compile(r"""@import\s*(?:url\(\s*)?["']?([^"')\s;]*)""", re.IGNORECASE)
+# A quoted CSS string that is an absolute or protocol-relative URL: image-set("https://…" 1x) and the like.
+CSS_QUOTED_URL = re.compile(r"""["']\s*((?:[a-z][a-z0-9+.-]*:)?//[^"']*)""", re.IGNORECASE)
 REFRESH_URL = re.compile(r"""^\s*\d+(?:\.\d*)?\s*[;,]\s*url\s*=\s*["']?([^"']*)["']?\s*$""", re.IGNORECASE)
 
 
@@ -115,18 +136,22 @@ class Page(html.parser.HTMLParser):
             values.setdefault(name, value)
         if tag in FORBIDDEN_TAGS:
             self.problem(line, f"<{tag}> is not allowed on these pages")
+        if tag == "link" and "stylesheet" in (values.get("rel") or "").lower().split():
+            self.problem(line, "<link rel=stylesheet>: inline <style> only")
         for name, value in attrs:
             if name.startswith("on"):
                 self.problem(line, f"<{tag} {name}=…>: no event attributes; put the code in the inline script")
+            if name in PING_ATTRIBUTES:
+                self.problem(line, f"<{tag} {name}>: no hyperlink-auditing pings")
             if name == "id" and value:
                 self.add_id(value, line)
             if name in RESOURCE_ATTRIBUTES and value is not None:
                 self.resources.append((value, line, f"<{tag} {name}>"))
-            if name == "srcset" and value:
+            if name in SRCSET_ATTRIBUTES and value:
                 for candidate in value.split(","):
                     url = candidate.strip().split(" ")[0] if candidate.strip() else ""
                     if url:
-                        self.resources.append((url, line, f"<{tag} srcset>"))
+                        self.resources.append((url, line, f"<{tag} {name}>"))
             if name == "style" and value:
                 self.styles.append((value, line, f"<{tag} style>"))
         href = values.get("href", values.get("xlink:href"))
@@ -213,6 +238,11 @@ def is_local(url: str) -> bool:
     return not parts.netloc and not url.strip().startswith("//")
 
 
+def script_sha256(code: str) -> str:
+    """The SHA-256 ALLOWED_SCRIPT_SHA256 lists for an inline script's text."""
+    return hashlib.sha256(code.encode("utf-8")).hexdigest()
+
+
 def allowed_https(url: str) -> bool:
     parts = urllib.parse.urlsplit(url)
     try:
@@ -264,10 +294,17 @@ class Site:
         for directory, dirs, files in os.walk(self.root):
             dirs.sort()
             for name in sorted(files):
-                if not name.lower().endswith(".html"):
-                    continue
                 path = os.path.join(directory, name)
                 rel = os.path.relpath(path, self.root).replace(os.sep, "/")
+                extension = posixpath.splitext(name)[1].lower()
+                hidden = any(part.startswith(".") for part in rel.split("/"))
+                if hidden or extension not in (".html",) + IMAGE_EXTENSIONS:
+                    kind = ("a hidden file" if hidden else f"a {extension} file" if extension
+                            else "a file without extension")
+                    self.problem(rel, 1, f"{kind}: only .html pages and images are published: CSS and SVG go inline")
+                    continue
+                if extension != ".html":
+                    continue  # an image (the icon)
                 try:
                     with open(path, encoding="utf-8") as fh:
                         text = fh.read()
@@ -329,9 +366,16 @@ class Site:
                     self.check_resource(rel, url, line, f"{what} url()")
                 for match in CSS_IMPORT.finditer(css):
                     self.check_resource(rel, match.group(1), line, f"{what} @import")
+                for match in CSS_QUOTED_URL.finditer(css):
+                    self.problem(rel, line, f"{what} names «{match.group(1)}»: no quoted URL of another site in CSS "
+                                            f"(image-set(), @import, …)")
             for code, line in page.scripts:
                 for match in SCRIPT_RISKS.finditer(code):
                     self.problem(rel, line, f"the inline script uses «{match.group(0)}»: it may only copy text")
+                digest = script_sha256(code)
+                if digest not in ALLOWED_SCRIPT_SHA256:
+                    self.problem(rel, line, f"the inline script changed (SHA-256 {digest}): review it, then update "
+                                            f"ALLOWED_SCRIPT_SHA256 in tools/site/check_site.py")
             for url, line, what in page.navigation:
                 self.check_link(rel, page, url, line, what)
             for value, line in page.field_values:
@@ -358,11 +402,17 @@ class Site:
 
     def check_resource(self, rel, url, line, what):
         if not is_local(url):
-            self.problem(rel, line, f"{what} loads «{url}» from elsewhere: use a file under site/ or data:")
+            self.problem(rel, line, f"{what} loads «{url}» from elsewhere: use a file under site/ or data:image/…")
             return
-        if url.strip().lower().startswith("data:"):
+        url = url.strip()
+        if url.lower().startswith("data:"):
+            # data:text/css or data:text/html could carry their own @import / <img src>: images only.
+            media = url[5:].split(",", 1)[0].split(";", 1)[0].strip().lower()
+            if not media.startswith("image/"):
+                shown = url if len(url) <= 60 else url[:59] + "…"
+                self.problem(rel, line, f"{what} «{shown}»: a data: URL may only be an image (data:image/…)")
             return
-        self.check_local(rel, url.strip(), line, what, page=None)
+        self.check_local(rel, url, line, what, page=None)
 
     def check_local(self, rel, url, line, what, page):
         parts = urllib.parse.urlsplit(url)

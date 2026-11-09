@@ -85,6 +85,9 @@ li { margin-bottom: 6px; }
 .lead { font-size: 1.15rem; margin: 0 auto 12px; max-width: 34rem; text-wrap: balance; }
 .claim { font-weight: 700; margin: 0 0 10px; text-wrap: balance; }
 .fine { color: var(--muted); font-size: 0.9rem; text-wrap: balance; }
+/* Addresses to type: break after a slash, never at the hyphen of opencfmoto-ios. */
+.url { overflow-wrap: anywhere; }
+.nowrap { white-space: nowrap; }
 
 /* Boxes */
 .callout {
@@ -226,12 +229,13 @@ li { margin-bottom: 6px; }
     <p class="lead">Tu propio mapa, navegación giro a giro y Apple Music en el tablero de tu moto, por el Wi-Fi de la moto.</p>
     <p class="claim">Gratis, código abierto, sin cuentas ni anuncios</p>
     <p class="fine">Para tableros CFMOTO MotoPlay y otros Carbit / EasyConnect. Proyecto comunitario, sin afiliación con CFMOTO.</p>
+    <p class="fine">¿Funciona con tu moto? Mira la <a href="https://github.com/Kevinparra535/opencfmoto-ios#motos-y-tableros-compatibles-cfmoto-450mt-800mt-450sr">lista de motos y tableros</a> antes de instalar: los tableros que se conectan al punto de acceso del teléfono (algunos Zontes / Carbit) no funcionan en iOS.</p>
   </div>
 </header>
 
 <main>
-<p class="callout"><strong>Abre esta página en Safari en tu iPhone.</strong> Los botones del paso&nbsp;2 solo funcionan ahí (no en el navegador de otras apps ni en un computador).</p>
-<p class="needs">Necesitas un iPhone con iOS 17 o posterior, un Apple ID gratuito (mejor uno secundario, solo para esto) y, para la primera instalación, un computador. OpenCfMoto nunca te pide tu Apple ID: solo lo usa la herramienta de instalación, para firmar la app a tu nombre.</p>
+<p class="callout">Abre esta página en Safari en tu iPhone: <strong class="url">kevinparra535.github.io/<wbr><span class="nowrap">opencfmoto-ios</span></strong>. Los botones del paso&nbsp;2 solo funcionan ahí (no en el navegador de otras apps ni en un computador). Si se abrió dentro de otra app (WhatsApp, Telegram, GitHub…), toca ⋯ o el botón de compartir y elige «Abrir en Safari».</p>
+<p class="needs">Necesitas un iPhone con iOS 17 o posterior, un Apple ID gratuito (mejor uno secundario, solo para esto) y un computador: con SideStore, para configurarla (y otra vez si caduca su <i>pairing file</i>); con AltStore sin Remote AltServer y con Sideloadly, también para instalar y renovar cada 7 días. OpenCfMoto nunca te pide tu Apple ID: solo lo usa la herramienta de instalación, para firmar la app a tu nombre.</p>
 
 <section class="step" id="paso-1" aria-labelledby="paso-1-titulo">
   <h2 class="step-title" id="paso-1-titulo"><span class="n" aria-hidden="true">1</span> Elige una herramienta</h2>
@@ -243,6 +247,7 @@ li { margin-bottom: 6px; }
       <ul>
         <li>Necesita <a href="https://apps.apple.com/app/localdevvpn/id6755608044">LocalDevVPN</a> (App Store) y <a href="https://github.com/nab138/iloader">iloader</a> en Windows, Mac o Linux.</li>
         <li>Usa la versión 0.7.0-alpha o posterior: con la 0.6.4 y anteriores no se puede iniciar sesión.</li>
+        <li>Renueva con Wi-Fi (no con datos móviles). Si su <i>pairing file</i> caduca (por ejemplo, tras actualizar iOS), vuelve a ponerlo con iloader en el computador.</li>
       </ul>
       <p><a class="site" href="https://sidestore.io">sidestore.io</a></p>
     </article>
@@ -265,6 +270,11 @@ li { margin-bottom: 6px; }
       <p><a class="site" href="https://sideloadly.io">sideloadly.io</a></p>
     </article>
   </div>
+  <p>Con la herramienta ya instalada y antes del paso&nbsp;2, en el iPhone (con Sideloadly, en el paso&nbsp;3):</p>
+  <ul>
+    <li><strong>Modo de desarrollador:</strong> Ajustes (Configuración) ▸ Privacidad y seguridad ▸ Modo de desarrollador (el iPhone se reinicia).</li>
+    <li><strong>Confía en tu Apple ID:</strong> Ajustes ▸ General ▸ VPN y gestión de dispositivos (en Latinoamérica, «VPN y administración de dispositivos»; el nombre cambia con la versión de iOS: está al final de General) ▸ tu Apple ID ▸ Confiar.</li>
+  </ul>
   <p class="callout"><strong>Solo las webs oficiales.</strong> No uses servicios de firma de pago, certificados «enterprise» ni webs que redistribuyen IPA: no son legítimos y ponen en riesgo tu cuenta y tu iPhone.</p>
 </section>
 
@@ -275,7 +285,8 @@ li { margin-bottom: 6px; }
     <a class="button" href="sidestore://source?url=https%3A%2F%2Fgithub.com%2FKevinparra535%2Fopencfmoto-ios%2Freleases%2Flatest%2Fdownload%2Faltstore-source.json">Añadir a SideStore <span class="en" lang="en">Add to SideStore</span></a>
     <a class="button" href="altstore-classic://source?url=https%3A%2F%2Fgithub.com%2FKevinparra535%2Fopencfmoto-ios%2Freleases%2Flatest%2Fdownload%2Faltstore-source.json">Añadir a AltStore <span class="en" lang="en">Add to AltStore</span></a>
   </div>
-  <p class="note">¿El botón no hace nada, o Safari dice que la dirección no es válida? Esa herramienta todavía no está instalada en este iPhone: vuelve al paso&nbsp;1.</p>
+  <p>Para instalar desde la fuente: en SideStore, con Wi-Fi y LocalDevVPN conectada; en AltStore, con AltServer abierto en el computador, en el mismo Wi-Fi (o con Remote AltServer configurado).</p>
+  <p class="note">¿El botón no hace nada, o Safari dice que la dirección no es válida? Esa herramienta todavía no está instalada en este iPhone (vuelve al paso&nbsp;1), o tu AltStore es anterior a la 2.2: actualízala o copia la dirección de abajo. ¿iOS pide el Modo de desarrollador o dice que el desarrollador no es de confianza? Haz lo del final del paso&nbsp;1 y vuelve a tocar el botón.</p>
   <div class="copy">
     <label for="fuente">O copia la dirección de la fuente y pégala en la herramienta (<i>Sources</i> ▸ <b>+</b>):</label>
     <textarea id="fuente" readonly rows="3" spellcheck="false" autocapitalize="off" autocomplete="off">https://github.com/Kevinparra535/opencfmoto-ios/releases/latest/download/altstore-source.json</textarea>
@@ -285,9 +296,11 @@ li { margin-bottom: 6px; }
     </div>
   </div>
   <h3 class="sub-title">¿Usas Sideloadly?</h3>
-  <p>En el computador, descarga el IPA de la última versión y arrástralo a Sideloadly.</p>
+  <p>En el computador, descarga el IPA de la última versión (<strong class="url">github.com/<wbr>Kevinparra535/<wbr><span class="nowrap">opencfmoto-ios</span>/<wbr>releases/<wbr>latest</strong>) y arrástralo a Sideloadly.</p>
   <!-- Both «Download the IPA» links: switch them to releases/latest/download/OpenCfMoto-sideload.ipa once the
-       latest published release carries that file (release.yml attaches it from the release after v0.1.0 on). -->
+       latest published release carries that file (release.yml attaches it from the release after v0.1.0 on).
+       Then also turn that address back into a link in docs/INSTALAR.md («Actualizar» and "Updating"): it is
+       written as code there while it still returns 404. -->
   <a class="button secondary" href="https://github.com/Kevinparra535/opencfmoto-ios/releases/latest">Descargar el IPA</a>
   <p class="note">Descárgalo solo de ahí: es el archivo <code>OpenCfMoto-vX.Y.Z-sideload.ipa</code>. Antes de instalarlo, <a href="https://github.com/Kevinparra535/opencfmoto-ios/blob/main/docs/INSTALAR.md#comprobar-el-sha-256">comprueba su SHA-256</a> con <code>SHA256SUMS.txt</code>, de la misma página.</p>
 </section>
@@ -295,9 +308,8 @@ li { margin-bottom: 6px; }
 <section class="step" id="paso-3" aria-labelledby="paso-3-titulo">
   <h2 class="step-title" id="paso-3-titulo"><span class="n" aria-hidden="true">3</span> En el iPhone</h2>
   <ul>
-    <li><strong>Modo de desarrollador:</strong> Ajustes ▸ Privacidad y seguridad ▸ Modo de desarrollador (el iPhone se reinicia).</li>
-    <li><strong>Confía en tu Apple ID:</strong> Ajustes ▸ General ▸ VPN y gestión de dispositivos ▸ tu Apple ID ▸ Confiar.</li>
-    <li><strong>Renuévala cada 7 días:</strong> con un Apple ID gratuito la app caduca a los 7 días. Hazlo antes desde tu herramienta (en SideStore, con LocalDevVPN conectada: <i>My Apps</i> ▸ <i>Refresh All</i>).</li>
+    <li><strong>Si usaste Sideloadly:</strong> activa el Modo de desarrollador y confía en tu Apple ID como en el paso&nbsp;1, antes de abrir OpenCfMoto.</li>
+    <li><strong>Renuévala cada 7 días:</strong> con un Apple ID gratuito la app caduca a los 7 días. Hazlo antes desde tu herramienta (en SideStore, con Wi-Fi y LocalDevVPN conectada: <i>My Apps</i> ▸ <i>Refresh All</i>).</li>
     <li><strong>Límites del Apple ID gratuito:</strong> como máximo 3 apps instaladas así (SideStore o AltStore cuentan como una) y 10 identificadores de app por semana. OpenCfMoto usa 2: la app y su extensión de espejo.</li>
     <li><strong>El Wi-Fi de la moto, a mano:</strong> esta versión no puede unirse sola al Wi-Fi de la moto. Al conectar, la app te muestra la red y la contraseña, con un botón para copiarla (la copia dura 2 minutos): únete en Ajustes ▸ Wi-Fi y vuelve a OpenCfMoto.</li>
   </ul>
@@ -325,9 +337,10 @@ li { margin-bottom: 6px; }
     <p class="lead">Your own map, turn-by-turn guidance and Apple Music on your motorcycle's dash, over the bike's Wi-Fi.</p>
     <p class="claim">Free, open source, no accounts and no ads</p>
     <p class="fine">For CFMOTO MotoPlay and other Carbit / EasyConnect dashes. A community project, not affiliated with CFMOTO.</p>
+    <p class="fine">Will it work with your bike? Check the <a href="https://github.com/Kevinparra535/opencfmoto-ios#supported-bikes-and-dashes-cfmoto-450mt-800mt-450sr">list of bikes and dashes</a> before installing: dashes that join the phone's hotspot (some Zontes / Carbit) do not work on iOS.</p>
   </div>
-  <p class="callout"><strong>Open this page in Safari on your iPhone.</strong> The step&nbsp;2 buttons only work there (not in other apps' browsers or on a computer).</p>
-  <p class="needs">You need an iPhone with iOS 17 or later, a free Apple ID (a secondary one, just for this, is best) and, for the first install, a computer. OpenCfMoto never asks for your Apple ID: only the install tool uses it, to sign the app for you.</p>
+  <p class="callout">Open this page in Safari on your iPhone: <strong class="url">kevinparra535.github.io/<wbr><span class="nowrap">opencfmoto-ios</span></strong>. The step&nbsp;2 buttons only work there (not in other apps' browsers or on a computer). If it opened inside another app (WhatsApp, Telegram, GitHub…), tap ⋯ or the share button and choose "Open in Safari".</p>
+  <p class="needs">You need an iPhone with iOS 17 or later, a free Apple ID (a secondary one, just for this, is best) and a computer: with SideStore, to set it up (and again if its <i>pairing file</i> expires); with AltStore without Remote AltServer, and with Sideloadly, also to install and refresh every 7 days. OpenCfMoto never asks for your Apple ID: only the install tool uses it, to sign the app for you.</p>
 
   <section class="step" id="step-1" aria-labelledby="step-1-title">
     <h3 class="step-title" id="step-1-title"><span class="n" aria-hidden="true">1</span> Pick an install tool</h3>
@@ -339,6 +352,7 @@ li { margin-bottom: 6px; }
         <ul>
           <li>Needs <a href="https://apps.apple.com/app/localdevvpn/id6755608044">LocalDevVPN</a> (App Store) and <a href="https://github.com/nab138/iloader">iloader</a> on Windows, Mac or Linux.</li>
           <li>Use version 0.7.0-alpha or newer: sign-in does not work on 0.6.4 and older.</li>
+          <li>Refresh on Wi-Fi (not mobile data). If its <i>pairing file</i> expires (for example after an iOS update), place it again with iloader on the computer.</li>
         </ul>
         <p><a class="site" href="https://sidestore.io">sidestore.io</a></p>
       </article>
@@ -361,13 +375,19 @@ li { margin-bottom: 6px; }
         <p><a class="site" href="https://sideloadly.io">sideloadly.io</a></p>
       </article>
     </div>
+    <p>With the tool installed, and before step&nbsp;2, on the iPhone (with Sideloadly, in step&nbsp;3):</p>
+    <ul>
+      <li><strong>Developer Mode:</strong> Settings ▸ Privacy &amp; Security ▸ Developer Mode (the iPhone restarts).</li>
+      <li><strong>Trust your Apple ID:</strong> Settings ▸ General ▸ VPN &amp; Device Management ▸ your Apple ID ▸ Trust.</li>
+    </ul>
     <p class="callout"><strong>Official sites only.</strong> Do not use paid signing services, "enterprise" certificates or sites that rehost IPAs: they are not legitimate and put your account and your iPhone at risk.</p>
   </section>
 
   <section class="step" id="step-2" aria-labelledby="step-2-title">
     <h3 class="step-title" id="step-2-title"><span class="n" aria-hidden="true">2</span> Add OpenCfMoto</h3>
     <p>With the tool installed on this iPhone, tap its button in <a href="#botones">step&nbsp;2 above</a>: «<span lang="es">Añadir a SideStore</span>» (Add to SideStore) or «<span lang="es">Añadir a AltStore</span>» (Add to AltStore). The tool opens with the OpenCfMoto source: add the source, then install OpenCfMoto from it.</p>
-    <p class="note">Button does nothing, or Safari says the address is invalid? That tool is not installed on this iPhone yet: go back to step&nbsp;1.</p>
+    <p>To install from the source: in SideStore, on Wi-Fi with LocalDevVPN connected; in AltStore, with AltServer running on the computer on the same Wi-Fi (or with Remote AltServer set up).</p>
+    <p class="note">Button does nothing, or Safari says the address is invalid? That tool is not installed on this iPhone yet (go back to step&nbsp;1), or your AltStore is older than 2.2: update it or copy the address below. Does iOS ask for Developer Mode or say the developer is not trusted? Do the end of step&nbsp;1, then tap the button again.</p>
     <div class="copy">
       <label for="source">Or copy the source address and paste it into the tool (<i>Sources</i> ▸ <b>+</b>):</label>
       <textarea id="source" readonly rows="3" spellcheck="false" autocapitalize="off" autocomplete="off">https://github.com/Kevinparra535/opencfmoto-ios/releases/latest/download/altstore-source.json</textarea>
@@ -377,7 +397,7 @@ li { margin-bottom: 6px; }
       </div>
     </div>
     <h4 class="sub-title">Using Sideloadly?</h4>
-    <p>On the computer, download the latest release's IPA and drop it into Sideloadly.</p>
+    <p>On the computer, download the latest release's IPA (<strong class="url">github.com/<wbr>Kevinparra535/<wbr><span class="nowrap">opencfmoto-ios</span>/<wbr>releases/<wbr>latest</strong>) and drop it into Sideloadly.</p>
     <a class="button secondary" href="https://github.com/Kevinparra535/opencfmoto-ios/releases/latest">Download the IPA</a>
     <p class="note">Only download it from there: it is the file <code>OpenCfMoto-vX.Y.Z-sideload.ipa</code>. Before installing it, <a href="https://github.com/Kevinparra535/opencfmoto-ios/blob/main/docs/INSTALAR.md#check-the-sha-256">check its SHA-256</a> against <code>SHA256SUMS.txt</code>, on the same page.</p>
   </section>
@@ -385,9 +405,8 @@ li { margin-bottom: 6px; }
   <section class="step" id="step-3" aria-labelledby="step-3-title">
     <h3 class="step-title" id="step-3-title"><span class="n" aria-hidden="true">3</span> On the iPhone</h3>
     <ul>
-      <li><strong>Developer Mode:</strong> Settings ▸ Privacy &amp; Security ▸ Developer Mode (the iPhone restarts).</li>
-      <li><strong>Trust your Apple ID:</strong> Settings ▸ General ▸ VPN &amp; Device Management ▸ your Apple ID ▸ Trust.</li>
-      <li><strong>Refresh it every 7 days:</strong> with a free Apple ID the app expires after 7 days. Refresh it before then with your tool (in SideStore, with LocalDevVPN connected: <i>My Apps</i> ▸ <i>Refresh All</i>).</li>
+      <li><strong>If you used Sideloadly:</strong> turn on Developer Mode and trust your Apple ID as in step&nbsp;1, before opening OpenCfMoto.</li>
+      <li><strong>Refresh it every 7 days:</strong> with a free Apple ID the app expires after 7 days. Refresh it before then with your tool (in SideStore, on Wi-Fi with LocalDevVPN connected: <i>My Apps</i> ▸ <i>Refresh All</i>).</li>
       <li><strong>Free Apple ID limits:</strong> at most 3 apps installed this way (SideStore or AltStore counts as one) and 10 app identifiers a week. OpenCfMoto uses 2: the app and its mirror extension.</li>
       <li><strong>The bike Wi-Fi, by hand:</strong> this build cannot join the bike Wi-Fi by itself. When you connect, the app shows the network and the password, with a copy button (the copy lasts 2 minutes): join it in Settings ▸ Wi-Fi and come back to OpenCfMoto.</li>
     </ul>

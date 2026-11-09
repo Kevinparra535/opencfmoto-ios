@@ -26,6 +26,22 @@ SOURCE = check_site.SOURCE
 ENCODED = "https%3A%2F%2Fgithub.com%2FKevinparra535%2Fopencfmoto-ios%2Freleases%2Flatest%2Fdownload%2Faltstore-source.json"
 SIDESTORE = "sidestore://source?url=" + ENCODED
 ALTSTORE = "altstore-classic://source?url=" + ENCODED
+FORBIDDEN = ("base", "iframe", "frame", "frameset", "object", "embed", "applet", "form")
+
+
+def site_script() -> str:
+    """The inline script of the repository's site/index.html, as check_site.Page collects it. The fixture
+    carries it, so that it passes the ALLOWED_SCRIPT_SHA256 pin like the real page."""
+    page = check_site.Page("index.html")
+    with open(os.path.join(ROOT, "site", "index.html"), encoding="utf-8") as fh:
+        page.feed(fh.read())
+    page.close()
+    if len(page.scripts) != 1:
+        raise SystemExit(f"site/index.html has {len(page.scripts)} inline scripts; the test fixture expects 1")
+    return page.scripts[0][0]
+
+
+SCRIPT = site_script()
 
 HEAD = """<!DOCTYPE html>
 <html lang="{lang}">
@@ -53,14 +69,10 @@ INDEX = HEAD.format(lang="es", title="OpenCfMoto", icon="icon.png") + """<body>
 <a href="privacy/">privacidad</a> <a href="privacy/index.html#arriba">arriba</a></p>
 <section id="english" lang="en"><p><a href="#botones">buttons</a> <a href="#inicio">top</a></p>
 <input id="source" readonly value="{source}"></section>
-<script>
-document.querySelector("button[data-copy]").addEventListener("click", function () {{
-  navigator.clipboard.writeText(document.getElementById("fuente").value);
-}});
-</script>
+<script>@SITE_SCRIPT@</script>
 </body>
 </html>
-""".format(sidestore=SIDESTORE, altstore=ALTSTORE, source=SOURCE)
+""".format(sidestore=SIDESTORE, altstore=ALTSTORE, source=SOURCE).replace("@SITE_SCRIPT@", SCRIPT)
 
 PRIVACY = HEAD.format(lang="es", title="Privacidad", icon="../icon.png").replace(
     "<title>", '<meta http-equiv="refresh" content="0; url=https://github.com/Kevinparra535/opencfmoto-ios/blob/main/PRIVACY.md">\n<title>') + """<body>
@@ -89,7 +101,7 @@ class CheckSiteTest(unittest.TestCase):
     def write(self, rel, text, encoding="utf-8"):
         path = os.path.join(self.root, *rel.split("/"))
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding=encoding) as fh:
+        with open(path, "w", encoding=encoding, newline="") as fh:  # the line ends as given, on any OS
             fh.write(text)
 
     def edit(self, rel, old, new, count=1):
@@ -184,17 +196,59 @@ class CheckSiteTest(unittest.TestCase):
                 problems = [p for p in self.problems() if "the inline script uses" in p.message]
                 self.assertTrue(problems, code)
 
+    def test_the_inline_script_is_pinned(self):
+        # SCRIPT_RISKS cannot see every way a script could load something: any script but the reviewed one
+        # fails, and the problem gives the SHA-256 to put in ALLOWED_SCRIPT_SHA256 after the review.
+        for code in ('document.body.setAttribute("src", "https://evil.example/x.png");',
+                     'document.body.style.backgroundImage = "url(https://evil.example/x.png)";',
+                     "var unused = 1;"):
+            with self.subTest(code=code):
+                self.setUp()
+                self.edit("index.html", "</script>", code + "\n</script>")
+                problem = self.assert_problem("the inline script changed")
+                self.assertIn(check_site.script_sha256(SCRIPT + code + "\n"), problem.message)
+                self.assertIn("ALLOWED_SCRIPT_SHA256", problem.message)
+                self.assertEqual(problem.line, self.line_of("index.html", "<script>"))
+                self.assertFalse([p for p in self.problems() if "the inline script uses" in p.message],
+                                 "only the pin catches these")
+        self.setUp()
+        self.edit("index.html", "</body>", "<script>var second = 1;</script>\n</body>")
+        self.assert_problem("the inline script changed")
+        self.setUp()
+        self.edit("index.html", "</body>", "<script></script>\n</body>")
+        self.assert_problem("the inline script changed")
+        # A checkout with \r\n line ends keeps the reviewed script's hash (the pages are read with universal
+        # newlines).
+        self.setUp()
+        self.write("index.html", INDEX.replace("\n", "\r\n"))
+        self.assertEqual(self.problems(), [])
+
     def test_resources_from_elsewhere(self):
         cases = (
             ('<img src="https://example.com/a.png" alt="">', "<img src> loads «https://example.com/a.png»"),
             ('<img src="//cdn.example.com/a.png" alt="">', "<img src> loads «//cdn.example.com/a.png»"),
             ('<img srcset="a.png 1x, https://example.com/b.png 2x" src="icon.png" alt="">', "<img srcset> loads"),
+            ('<link rel="preload" as="image" href="icon.png" imagesrcset="https://evil.example/x.png 1x">',
+             "<link imagesrcset> loads «https://evil.example/x.png»"),
             ('<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter">', "<link href> loads"),
             ("<style>@import url(https://example.com/a.css);</style>", "<style> @import loads"),
             ("<style>@import 'https://example.com/a.css';</style>", "<style> @import loads"),
+            ('<style>@import"https://evil.example/a.css";</style>', "<style> @import loads «https://evil.example/a.css»"),
+            ("<style>@import url(//evil.example/a.css);</style>", "<style> @import loads «//evil.example/a.css»"),
+            ('<style>p { background-image: image-set("https://evil.example/x.png" 1x) }</style>',
+             "<style> names «https://evil.example/x.png»"),
+            ("<style>p { background-image: image-set('//evil.example/x.png' 1x) }</style>",
+             "<style> names «//evil.example/x.png»"),
+            ('<p style="background-image: image-set(&quot;HTTPS://evil.example/x.png&quot; 1x)">x</p>',
+             "<p style> names «HTTPS://evil.example/x.png»"),
             ('<p style="background: url(http://example.com/a.png)">x</p>', "<p style> url() loads"),
             ('<svg><image href="https://example.com/a.png"/></svg>', "<image href> loads"),
+            ('<svg><use xlink:href="https://example.com/s.svg#i"/></svg>', "<use href> loads «https://example.com/s.svg#i»"),
             ('<video poster="https://example.com/a.png"></video>', "<video poster> loads"),
+            ('<table background="https://example.com/a.png"><tr><td>x</td></tr></table>', "<table background> loads"),
+            ('<object data="https://example.com/a"></object>', "<object data> loads «https://example.com/a»"),
+            ('<form action="https://example.com/"></form>', "<form action> loads «https://example.com/»"),
+            ('<button formaction="https://example.com/">x</button>', "<button formaction> loads «https://example.com/»"),
         )
         for markup, needle in cases:
             with self.subTest(markup=markup):
@@ -205,6 +259,83 @@ class CheckSiteTest(unittest.TestCase):
     def test_local_resources_must_exist(self):
         self.edit("index.html", 'href="icon.png"', 'href="missing.png"')
         self.assert_problem("<link href> «missing.png»: no such file in the site")
+
+    def test_a_css_file_is_not_published(self):
+        # A stylesheet next to the pages could @import anything (the check reads only the pages).
+        self.write("x.css", "@import url(https://fonts.googleapis.com/css2?family=Inter);\n")
+        problem = self.assert_problem("only .html pages and images are published: CSS and SVG go inline", "x.css")
+        self.assertIn("a .css file", problem.message)
+
+    def test_an_htm_file_is_not_published(self):
+        # GitHub Pages serves extra.htm as a page, but the check reads only *.html.
+        self.write("extra.htm", '<img src="https://example.com/a.png" alt="">\n')
+        problem = self.assert_problem("only .html pages and images are published", "extra.htm")
+        self.assertIn("a .htm file", problem.message)
+
+    def test_only_pages_and_images_are_published(self):
+        cases = (
+            ("page.xhtml", "a .xhtml file"), ("app.js", "a .js file"), ("logo.svg", "a .svg file"),
+            ("fonts/inter.woff2", "a .woff2 file"), ("CNAME", "a file without extension"),
+            (".nojekyll", "a hidden file"), (".hidden.html", "a hidden file"), (".well-known/security.txt", "a hidden file"),
+        )
+        for rel, needle in cases:
+            with self.subTest(rel=rel):
+                self.setUp()
+                self.write(rel, "x\n")
+                problem = self.assert_problem("only .html pages and images are published", rel)
+                self.assertIn(needle, problem.message)
+        self.setUp()
+        for rel in ("photo.jpg", "photo2.JPEG", "anim.gif", "pic.webp", "favicon.ico", "img/icon-2x.png"):
+            self.write(rel, "fake image\n")
+        self.assertEqual(self.problems(), [], "raster images are published as they are")
+
+    def test_no_stylesheet_links(self):
+        self.write("x.css", "p { color: red }\n")
+        for markup in ('<link rel="stylesheet" href="x.css">', '<link rel="alternate STYLESHEET" href="x.css">'):
+            with self.subTest(markup=markup):
+                self.edit("index.html", "</head>", markup + "\n</head>")
+                self.assert_problem("<link rel=stylesheet>: inline <style> only")
+                self.edit("index.html", markup + "\n", "")
+
+    def test_data_urls_must_be_images(self):
+        self.edit("index.html", "</head>",
+                  '<link rel="stylesheet" href="data:text/css,@import url(https://evil.example/a.css);">\n</head>')
+        self.assert_problem("<link rel=stylesheet>: inline <style> only")
+        self.assert_problem("<link href> «data:text/css,@import url(https://evil.example/a.css);»: a data: URL may "
+                            "only be an image")
+        cases = (
+            '<img src="data:text/html,&lt;img src=https://evil.example/x.png&gt;" alt="">',
+            '<link rel="icon" href="data:text/css,p{}">',
+            '<p style="background: url(data:text/css,p{})">x</p>',
+            '<img src="data:,x" alt="">',
+            '<img src=" DATA:Text/HTML;base64,PHA+eDwvcD4=" alt="">',
+        )
+        for markup in cases:
+            with self.subTest(markup=markup):
+                self.setUp()
+                self.edit("index.html", "</body>", markup + "\n</body>")
+                self.assert_problem("a data: URL may only be an image (data:image/…)")
+        self.setUp()
+        self.edit("index.html", "</body>", '<img src="data:image/png;base64,iVBORw0KGgo=" alt="">\n'
+                                           '<img src="DATA:IMAGE/SVG+XML,%3Csvg%2F%3E" alt="">\n</body>')
+        self.assertEqual(self.problems(), [])
+
+    def test_no_hyperlink_auditing_pings(self):
+        for markup in ('<a href="#inicio" ping="https://tracker.example/p">x</a>',
+                       '<a href="#inicio" attributionsrc="https://tracker.example/a">x</a>',
+                       '<img src="icon.png" alt="" attributionsrc>', '<area href="#inicio" ping="/p">'):
+            with self.subTest(markup=markup):
+                self.setUp()
+                self.edit("index.html", "</body>", markup + "\n</body>")
+                self.assert_problem("no hyperlink-auditing pings")
+
+    def test_every_forbidden_tag(self):
+        self.assertEqual(set(FORBIDDEN), check_site.FORBIDDEN_TAGS, "every forbidden tag needs its case here")
+        for tag in FORBIDDEN:
+            with self.subTest(tag=tag):
+                self.setUp()
+                self.edit("index.html", "</body>", f"<{tag}></{tag}>\n</body>")
+                self.assert_problem(f"<{tag}> is not allowed")
 
     def test_forbidden_tags_and_event_attributes(self):
         self.edit("index.html", "</body>", '<iframe title="x"></iframe><form></form>\n<p onclick="go()">x</p>\n</body>')
@@ -315,6 +446,17 @@ class CheckSiteTest(unittest.TestCase):
         self.edit("index.html", f"<textarea id=\"fuente\" readonly>{SOURCE}</textarea>",
                   f"<textarea id=\"fuente\" readonly>\n{SOURCE}</textarea>")
         self.assertEqual(self.problems(), [], "the newline right after <textarea> is not part of the value")
+
+    def test_a_field_without_readonly_does_not_count(self):
+        # The field still shows SOURCE; only readonly is missing (the other field is gone).
+        self.edit("index.html", f'<textarea id="fuente" readonly>{SOURCE}</textarea>',
+                  f'<textarea id="fuente">{SOURCE}</textarea>')
+        self.edit("index.html", f'<input id="source" readonly value="{SOURCE}">', "")
+        self.assert_problem("no read-only field")
+        self.setUp()
+        self.edit("index.html", f'<input id="source" readonly value="{SOURCE}">', f'<input id="source" value="{SOURCE}">')
+        self.edit("index.html", f'<textarea id="fuente" readonly>{SOURCE}</textarea>', "")
+        self.assert_problem("no read-only field")
 
     # ------------------------------------------------------------ command line
 
