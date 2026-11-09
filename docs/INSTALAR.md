@@ -3,7 +3,18 @@
 *Español primero · [English below](#english)*
 
 > [!TIP]
-> **Ruta rápida**
+> **La forma más fácil: TestFlight**
+>
+> 1. Instala [TestFlight](https://apps.apple.com/app/testflight/id899247664) desde la App Store (es gratis).
+> 2. En el iPhone, abre <https://testflight.apple.com/join/aWur6hxp> y, en TestFlight, toca **Aceptar** y
+>    después **Instalar**.
+> 3. Abre OpenCfMoto.
+>
+> Es la versión completa, que se une sola al Wi-Fi de la moto, y no necesita computador. Más detalles en
+> [TestFlight: la beta pública](#testflight-la-beta-pública).
+
+> [!NOTE]
+> **Ruta rápida con tu Apple ID gratuito (sin TestFlight)**
 >
 > 1. Instala **SideStore** o **AltStore Classic** en tu iPhone siguiendo su guía oficial
 >    ([opción 1](#opción-1-sidestore-sin-computador-después-de-instalarla) u
@@ -14,17 +25,67 @@
 >    **«Añadir a SideStore»** o **«Añadir a AltStore»**.
 > 3. Instala OpenCfMoto desde esa fuente.
 
-OpenCfMoto no está en la App Store. Hay tres formas de instalarla en un iPhone, y una app para Android:
+OpenCfMoto no está en la App Store. Hay cuatro formas de instalarla en un iPhone, y una app para Android:
 
 | Camino | Para quién | Coste | Wi-Fi de la moto | Dura |
 |---|---|---|---|---|
+| [TestFlight: la beta pública](#testflight-la-beta-pública) | Cualquiera con iOS 17 o posterior, sin computador | Gratis | La app se une sola | Hasta 90 días por compilación, y TestFlight ofrece la siguiente |
 | [A. IPA de prueba con tu Apple ID gratuito](#a-ipa-de-prueba-con-tu-apple-id-gratuito) | Cualquiera con un computador (Windows, Mac o Linux) | Gratis | Te unes tú desde Ajustes | 7 días, y se renueva |
-| [B. Tu propia copia con TestFlight](#b-tu-propia-copia-completa-cuenta-de-pago-sin-mac) | Quien quiere todo y no tiene Mac | 99 USD al año | La app se une sola | 90 días por compilación |
+| [B. Tu propia copia con TestFlight](#b-tu-propia-copia-completa-cuenta-de-pago-sin-mac) | Quien quiere su propia copia completa y no tiene Mac | 99 USD al año | La app se une sola | 90 días por compilación |
 | [C. Xcode en un Mac](#c-desarrolladores-xcode) | Desarrolladores | Gratis o de pago | Según la cuenta | 7 días o un año |
 | [Android](#tienes-android) | Teléfonos Android | Gratis | La app original | — |
 
 Sin moto también puedes probarla: en el iPhone, **Inicio ▸ Vista de tablero** dibuja la pantalla del
 tablero sin tablero, con tu GPS real.
+
+## TestFlight: la beta pública
+
+La forma más fácil de probarla: la versión completa de OpenCfMoto, con la app TestFlight de Apple.
+
+1. Instala [TestFlight](https://apps.apple.com/app/testflight/id899247664) desde la App Store (es gratis).
+2. En el iPhone, abre <https://testflight.apple.com/join/aWur6hxp> y, en TestFlight, toca **Aceptar** y
+   después **Instalar**.
+3. Abre OpenCfMoto: permite la ubicación, la cámara y la red local, escanea el QR del tablero
+   (**Inicio ▸ Escanear**) y toca **Conectar**.
+
+- **Necesitas** un iPhone con **iOS 17** o posterior. Ni computador ni Modo de desarrollador.
+- **La versión completa:** se une sola al Wi-Fi de la moto (iOS te pregunta si quieres conectarte a su
+  red: **Conectar**), lee el nombre de la red Wi-Fi y el modo espejo funciona.
+- **Sin renovarla cada 7 días:** cada compilación dura hasta 90 días desde que se sube a TestFlight.
+  Cuando sale una nueva, TestFlight te la ofrece (o la instala sola, si activas sus actualizaciones
+  automáticas).
+- **Es una beta:** puede tener fallos. Envía tus comentarios desde TestFlight o con una captura de
+  pantalla hecha en OpenCfMoto.
+- **Si la beta está llena** (TestFlight dice que está llena o que no acepta a nadie más), usa la
+  [opción A](#a-ipa-de-prueba-con-tu-apple-id-gratuito).
+- **Para salir de la beta:** en TestFlight, abre OpenCfMoto y toca **Dejar de probar** (*Stop Testing*),
+  o borra la app.
+- **Privacidad:** TestFlight (de Apple) nos muestra los fallos y el uso de la app y los comentarios que
+  envíes; con el enlace público, sin tu nombre ni tu correo, salvo el correo que escribas en un
+  comentario. Detalle: [PRIVACY.md](../PRIVACY.md#si-la-instalas-con-testflight).
+
+### Si ya tenías la versión para sideload
+
+La de TestFlight es otra app (con otro identificador): puede convivir con la que ya tenías y empieza
+vacía. Para pasar lo tuyo:
+
+- **Tus motos:** vuelve a escanear el QR del tablero (**Inicio ▸ Escanear**). Las contraseñas Wi-Fi no
+  pasan de una app a otra.
+- **El ajuste de cada moto** (perfil, calidad de vídeo, ajuste de pantalla, márgenes, botones…): en la
+  versión para sideload, **Ajustes ▸ Compartir configuración ▸ Compartir JSON** y guárdalo en Archivos;
+  en la de TestFlight, con esa moto ya añadida, **Importar…** en el mismo sitio. No lleva contraseñas,
+  nombres de red ni números de serie.
+- **Tus lugares y las preferencias del mapa** (casa, favoritos, marcadores, historial y dónde
+  aparcaste): **Ajustes ▸ Datos de mapa ▸ Exportar datos de mapa…** en una e **Importar datos de mapa…**
+  en la otra.
+- **Tus viajes** no pasan: puedes exportar cada uno con **Exportar GPX**, pero la app abre un GPX como
+  ruta para seguir, no como viaje.
+- Tu servidor de mapas y tu clave de openrouteservice, si los usas, y las demás preferencias se ponen de
+  nuevo.
+
+Cuando la de TestFlight funcione, puedes borrar la otra (con un Apple ID gratuito, libera uno de los 3
+espacios). Antes, quita la moto en **Garaje** («Eliminar moto»): si no, iOS puede conservar su
+contraseña.
 
 ## A. IPA de prueba con tu Apple ID gratuito
 
@@ -236,7 +297,18 @@ dentro del IPA. Ese código sigue disponible mientras se ofrezca el IPA. Si modi
 ## English
 
 > [!TIP]
-> **Quick path**
+> **The easiest way: TestFlight**
+>
+> 1. Install [TestFlight](https://apps.apple.com/app/testflight/id899247664) from the App Store (it is free).
+> 2. On the iPhone, open <https://testflight.apple.com/join/aWur6hxp> and, in TestFlight, tap **Accept**,
+>    then **Install**.
+> 3. Open OpenCfMoto.
+>
+> It is the full version, which joins the bike Wi-Fi by itself, and it needs no computer. More in
+> [TestFlight: the public beta](#testflight-the-public-beta).
+
+> [!NOTE]
+> **Quick path with your free Apple ID (without TestFlight)**
 >
 > 1. Install **SideStore** or **AltStore Classic** on your iPhone by following its official guide
 >    ([option 1](#option-1-sidestore-no-computer-after-the-setup) or
@@ -247,18 +319,63 @@ dentro del IPA. Ese código sigue disponible mientras se ofrezca el IPA. Si modi
 >    «Añadir a AltStore»).
 > 3. Install OpenCfMoto from that source.
 
-OpenCfMoto is not on the App Store. There are three ways to install it on an iPhone, and an app for
+OpenCfMoto is not on the App Store. There are four ways to install it on an iPhone, and an app for
 Android:
 
 | Path | For | Cost | Bike Wi-Fi | Lasts |
 |---|---|---|---|---|
+| [TestFlight: the public beta](#testflight-the-public-beta) | Anyone with iOS 17 or later, no computer | Free | The app joins by itself | Up to 90 days per build, and TestFlight offers the next |
 | [A. Sideload IPA with your free Apple ID](#a-sideload-ipa-with-your-free-apple-id) | Anyone with a computer (Windows, Mac or Linux) | Free | You join it in Settings | 7 days, then refresh |
-| [B. Your own TestFlight copy](#b-your-own-full-copy-paid-account-no-mac) | Riders who want everything and have no Mac | 99 USD a year | The app joins by itself | 90 days per build |
+| [B. Your own TestFlight copy](#b-your-own-full-copy-paid-account-no-mac) | Riders who want their own full copy and have no Mac | 99 USD a year | The app joins by itself | 90 days per build |
 | [C. Xcode on a Mac](#c-developers-xcode) | Developers | Free or paid | Depends on the account | 7 days or a year |
 | [Android](#on-android) | Android phones | Free | The original app | — |
 
 No bike? On the iPhone, **Home ▸ Dash view** draws the dash picture without a dash, with your real
 GPS.
+
+### TestFlight: the public beta
+
+The easiest way to try it: the full version of OpenCfMoto, with Apple's TestFlight app.
+
+1. Install [TestFlight](https://apps.apple.com/app/testflight/id899247664) from the App Store (it is free).
+2. On the iPhone, open <https://testflight.apple.com/join/aWur6hxp> and, in TestFlight, tap **Accept**,
+   then **Install**.
+3. Open OpenCfMoto: allow Location, the Camera and the Local Network, scan the dash QR (**Home ▸ Scan**)
+   and tap **Connect**.
+
+- **You need** an iPhone with **iOS 17** or later. No computer, no Developer Mode.
+- **The full version:** it joins the bike Wi-Fi by itself (iOS asks whether to join its network:
+  **Join**), reads the Wi-Fi network name, and mirror mode works.
+- **No refreshing every 7 days:** each build lasts up to 90 days from its upload to TestFlight. When a
+  new one is out, TestFlight offers it to you (or installs it by itself, if you turn on its automatic
+  updates).
+- **It is a beta:** expect bugs. Send your feedback from TestFlight, or with a screenshot taken in
+  OpenCfMoto.
+- **If the beta is full** (TestFlight says it is full or not accepting anyone else), use
+  [option A](#a-sideload-ipa-with-your-free-apple-id).
+- **To leave the beta:** in TestFlight, open OpenCfMoto and tap **Stop Testing**, or delete the app.
+- **Privacy:** Apple's TestFlight shows us the app's crashes and usage and the feedback you send; through
+  the public link, without your name or e-mail, unless you type your e-mail in your feedback. Details:
+  [PRIVACY.md](../PRIVACY.md#if-you-install-it-with-testflight).
+
+#### If you had the sideload build
+
+The TestFlight one is another app (with another identifier): it can sit next to the one you had, and it
+starts empty. To bring your things over:
+
+- **Your bikes:** scan the dash QR again (**Home ▸ Scan**). Wi-Fi passwords do not move from one app to
+  the other.
+- **Each bike's tuning** (profile, video quality, fit, margins, buttons…): in the sideload build,
+  **Settings ▸ Share settings ▸ Share JSON** and save it to Files; in the TestFlight one, with that bike
+  added, **Import…** in the same place. It carries no passwords, network names or serial numbers.
+- **Your places and map preferences** (home, favorites, markers, history and where you parked):
+  **Settings ▸ Map data ▸ Export map data…** in one and **Import map data…** in the other.
+- **Your trips** do not move: you can export each one with **Export GPX**, but the app opens a GPX as a
+  route to follow, not as a trip.
+- Your tile server and openrouteservice key, if you use them, and the other preferences are set again.
+
+Once the TestFlight one works, you can delete the other (with a free Apple ID, that frees one of the 3
+slots). First remove the bike in **Garage** ("Remove bike"): otherwise iOS may keep its password.
 
 ### A. Sideload IPA with your free Apple ID
 

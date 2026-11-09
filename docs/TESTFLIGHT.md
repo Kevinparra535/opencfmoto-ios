@@ -1,5 +1,9 @@
 # Instalar en el iPhone sin Mac (TestFlight)
 
+> **¿Solo quieres probar la app?** Únete a la beta pública: <https://testflight.apple.com/join/aWur6hxp>.
+> Esta guía es para compilar tu propia copia. · **Just want to try the app?** Join the public beta:
+> <https://testflight.apple.com/join/aWur6hxp>. This guide is for building your own copy.
+
 *Español primero · [English below](#english)*
 
 GitHub compila la app en un Mac en la nube, la firma con tu cuenta de Apple Developer y la sube a
