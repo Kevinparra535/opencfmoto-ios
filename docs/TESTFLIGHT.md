@@ -10,8 +10,8 @@ GitHub compila la app en un Mac en la nube, la firma con tu cuenta de Apple Deve
 **TestFlight**. Tú la instalas en el iPhone con la app TestFlight. No necesitas un Mac: todo se hace
 desde el navegador. La primera vez lleva unos 30–45 minutos, casi todo de espera.
 
-Es solo para ti (pruebas internas de TestFlight). Distribuirla a otras personas requiere el permiso de
-los autores originales (ver [Seguridad y licencia](#seguridad-y-licencia)).
+Tu copia es solo para ti (pruebas internas de TestFlight). Distribuirla a otras personas requiere el
+permiso de los autores originales (ver [Seguridad y licencia](#seguridad-y-licencia)).
 
 > **Tu propia copia (fork).** Necesitas una cuenta **de pago** de Apple Developer (99 USD al año; la
 > inscripción, en developer.apple.com o en la app Apple Developer, suele tardar de 1 a 2 días) y cerca
@@ -232,7 +232,9 @@ Lo que el workflow resuelve solo:
   pruebas externas, un enlace público de TestFlight o la App Store, requiere el permiso de sus
   titulares. Para que otras personas la prueben está el IPA de Releases, que cada una firma con su
   propio Apple ID ([INSTALAR.md](INSTALAR.md)): eso sí es distribución AGPL normal, con el código
-  fuente en la misma página.
+  fuente en la misma página. La beta pública de este repositorio es una prueba abierta a la comunidad
+  mientras se pide ese permiso (ver [Limitaciones conocidas](../README.md#limitaciones-conocidas) en
+  el README).
 
 ---
 
@@ -312,7 +314,9 @@ step's header, the environment variables the workflow passes between jobs: the i
 Connect app record, of the bundle identifiers, of the certificate and of the profiles show there. They
 are not secrets: they are useless without your API key.
 
-Internal testing only: distributing the app to anyone else needs permission from the upstream AGPL
-copyright holders. To let others try it, there is the sideload IPA on Releases, which each rider signs
-with their own Apple ID ([INSTALAR.md](INSTALAR.md#english)): that is ordinary AGPL distribution, with
-the source on the same page.
+Your copy is for internal testing only: distributing it to anyone else needs permission from the
+upstream AGPL copyright holders. To let others try it, there is the sideload IPA on Releases, which each
+rider signs with their own Apple ID ([INSTALAR.md](INSTALAR.md#english)): that is ordinary AGPL
+distribution, with the source on the same page. This repository's public beta is a test open to the
+community while that permission is being requested (see
+[Known limitations](../README.md#known-limitations) in the README).

@@ -237,13 +237,14 @@ Sigue la guía paso a paso [docs/PRUEBA-EN-LA-MOTO.md](docs/PRUEBA-EN-LA-MOTO.md
   caduca a los 7 días si no la renuevas, entra en el máximo de 3 apps instaladas así y el modo
   espejo puede no estar disponible ([docs/INSTALAR.md](docs/INSTALAR.md)).
 - **App Store**: el audio silencioso para los botones y la lectura del volumen podrían no ser
-  aceptados en la revisión de Apple. Además, la licencia **AGPL** es difícil de compatibilizar con
-  las condiciones de la App Store: distribuir esta app (o un derivado) a otras personas, ya sea en
-  la App Store o con pruebas externas o un enlace público de TestFlight, requiere el permiso de los
-  titulares del proyecto original. La forma prevista es que cada persona la instale con su propio
-  Apple ID: la versión para sideload de Releases, Xcode o las pruebas internas de TestFlight (solo
-  para ti). Publicar el IPA en Releases, junto a su código fuente, es una distribución normal bajo la
-  AGPL.
+  aceptados en la revisión de Apple.
+- **Licencia, TestFlight y App Store**: la licencia **AGPL** del proyecto original es difícil de
+  compatibilizar con las condiciones de Apple. Distribuir esta app (o un derivado) en la App Store o
+  a otras personas con TestFlight necesita el permiso de los titulares del proyecto original. La beta
+  pública de TestFlight es una prueba abierta a la comunidad mientras pedimos ese permiso: si eres uno
+  de los titulares y no estás de acuerdo,
+  [abre un issue](https://github.com/Kevinparra535/opencfmoto-ios/issues) y la retiramos. El IPA de
+  Releases, publicado junto a su código fuente, es una distribución AGPL normal.
 - Los servicios públicos de OpenStreetMap (teselas, Photon, Nominatim, Overpass, OSRM, Valhalla)
   tienen políticas de uso justo; para un uso intensivo configura tu propio servidor de teselas o
   una clave de OpenRouteService en Ajustes.
@@ -540,12 +541,14 @@ no Wi-Fi or dash, and a demo GPS route so you can watch the dash UI on the phone
   after 7 days unless refreshed, it counts toward the limit of 3 apps installed that way and mirror
   mode may be unavailable ([docs/INSTALAR.md](docs/INSTALAR.md#english)).
 - **App Store**: the silent audio for the buttons and the volume observation may not pass Apple's
-  review. The **AGPL** is also hard to reconcile with the App Store terms: distributing this app (or
-  a derivative) to other people — on the App Store, or through TestFlight external testing or a
-  public link — needs permission from the upstream copyright holders. The intended way is that
-  everyone installs it with their own Apple ID: the sideload build from Releases, Xcode or TestFlight
-  internal testing (only you). Publishing the IPA on Releases, next to its source code, is ordinary
-  AGPL distribution.
+  review.
+- **License, TestFlight and the App Store**: the upstream project's **AGPL** license is hard to
+  reconcile with Apple's terms. Distributing this app (or a derivative) on the App Store, or to other
+  people through TestFlight, needs permission from the upstream copyright holders. The public
+  TestFlight beta is a test open to the community while we ask for that permission: if you are one of
+  the copyright holders and you disagree,
+  [open an issue](https://github.com/Kevinparra535/opencfmoto-ios/issues) and we will take it down.
+  The IPA on Releases, published next to its source code, is ordinary AGPL distribution.
 - The public OpenStreetMap services (tiles, Photon, Nominatim, Overpass, OSRM, Valhalla) have
   fair-use policies; for heavy use set your own tile server or an OpenRouteService key in Settings.
 
