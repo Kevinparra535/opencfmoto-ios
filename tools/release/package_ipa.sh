@@ -15,9 +15,11 @@
 #
 #   usage: package_ipa.sh <unsigned .xcarchive> <out dir> <vX.Y.Z>
 #
-# Writes <out dir>/OpenCfMoto-<vX.Y.Z>-sideload.ipa and <out dir>/SHA256SUMS.txt (check with
-# `shasum -a 256 -c SHA256SUMS.txt`), and the step outputs ipa_name and sha256 (GITHUB_OUTPUT).
-# Every failure ends with a ::error annotation. Written for bash 3.2.
+# Writes <out dir>/OpenCfMoto-<vX.Y.Z>-sideload.ipa, a byte copy of it with a name that never changes,
+# <out dir>/OpenCfMoto-sideload.ipa (releases/latest/download/OpenCfMoto-sideload.ipa then always
+# downloads the latest release's IPA), and <out dir>/SHA256SUMS.txt with both, the versioned IPA FIRST
+# (check with `shasum -a 256 -c SHA256SUMS.txt`); and the step outputs ipa_name, stable_ipa_name and
+# sha256 (GITHUB_OUTPUT). Every failure ends with a ::error annotation. Written for bash 3.2.
 
 set -Eeuo pipefail
 
@@ -51,6 +53,7 @@ trap 'rm -rf "$WORK"' EXIT
 APP="$WORK/Payload/OpenCfMoto.app"
 APPEX="$APP/PlugIns/OpenCfMotoMirror.appex"
 IPA_NAME="OpenCfMoto-$VERSION-sideload.ipa"
+STABLE_NAME="OpenCfMoto-sideload.ipa"
 
 # 1. The app (with its extension) into Payload/, without any provisioning profile.
 mkdir -p "$WORK/Payload"
@@ -131,7 +134,7 @@ if [ -n "$(find "$APP" -name embedded.mobileprovision)" ]; then die "A provision
 
 # 5. The IPA: Payload/ only (no __MACOSX, no extended attributes), then the same checks on a copy
 #    unzipped from it.
-rm -f "$OUT/$IPA_NAME"
+rm -f "$OUT/$IPA_NAME" "$OUT/$STABLE_NAME"
 (cd "$WORK" && zip -qry -X "$OUT/$IPA_NAME" Payload)
 others=$(unzip -Z1 "$OUT/$IPA_NAME" | grep -v -E '^Payload(/|$)' || true)
 if [ -n "$others" ]; then die "The IPA holds more than Payload/: $others"; fi
@@ -150,12 +153,20 @@ for pair in "${LICENCE_FILES[@]}"; do
 done
 note "licence texts in the IPA, identical to the repository's:$found"
 
-# 6. SHA256SUMS.txt (the format of `shasum -a 256` and `sha256sum`) and the step outputs.
-(cd "$OUT" && shasum -a 256 "$IPA_NAME" > SHA256SUMS.txt)
+# 6. The same IPA under the name that never changes, SHA256SUMS.txt (the format of `shasum -a 256` and
+#    `sha256sum`) with the versioned IPA on line 1 (release.yml reads it there), and the step outputs.
+cp "$OUT/$IPA_NAME" "$OUT/$STABLE_NAME"
+cmp -s "$OUT/$IPA_NAME" "$OUT/$STABLE_NAME" || die "$STABLE_NAME is not a byte copy of $IPA_NAME."
+(cd "$OUT" && shasum -a 256 "$IPA_NAME" "$STABLE_NAME" > SHA256SUMS.txt)
+(cd "$OUT" && shasum -a 256 -c SHA256SUMS.txt) || die "shasum -c SHA256SUMS.txt failed right after writing it."
 sha=$(awk 'NR == 1 { print $1 }' "$OUT/SHA256SUMS.txt")
 if ! [[ "$sha" =~ ^[0-9a-f]{64}$ ]]; then die "Could not compute the IPA's SHA-256."; fi
+listed=$(awk '{ print $2 }' "$OUT/SHA256SUMS.txt" | tr '\n' ' ')
+if [ "$listed" != "$IPA_NAME $STABLE_NAME " ] || [ "$(awk 'NR == 2 { print $1 }' "$OUT/SHA256SUMS.txt")" != "$sha" ]; then
+  die "SHA256SUMS.txt must list $IPA_NAME, then $STABLE_NAME, with the same SHA-256; it lists: $listed"
+fi
 size=$(wc -c < "$OUT/$IPA_NAME" | tr -d ' ')
-note "$IPA_NAME: $size bytes, SHA-256 $sha"
+note "$IPA_NAME (and $STABLE_NAME, the same bytes): $size bytes, SHA-256 $sha"
 if [ -n "${GITHUB_OUTPUT:-}" ]; then
-  printf 'ipa_name=%s\nsha256=%s\n' "$IPA_NAME" "$sha" >> "$GITHUB_OUTPUT"
+  printf 'ipa_name=%s\nstable_ipa_name=%s\nsha256=%s\n' "$IPA_NAME" "$STABLE_NAME" "$sha" >> "$GITHUB_OUTPUT"
 fi

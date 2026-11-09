@@ -37,6 +37,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 DEFAULT_COLORSET = os.path.join(ROOT, "App", "Resources", "Assets.xcassets", "AccentColor.colorset")
 ICON_PATH = "App/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png"
 UPSTREAM = "https://github.com/zanderp/open-cfmoto"
+# The copy of the IPA under a name that never changes (tools/release/package_ipa.sh), so that
+# releases/latest/download/<it> always downloads the latest release's IPA. The source itself keeps the
+# versioned downloadURL: AltStore / SideStore compare it with the version they install.
+STABLE_IPA_NAME = "OpenCfMoto-sideload.ipa"
 
 # Entitlements a re-signing tool replaces with its own (AltStore does not compare them either).
 IGNORED_ENTITLEMENTS = {"application-identifier", "com.apple.developer.team-identifier", "get-task-allow"}
@@ -334,6 +338,7 @@ def release_notes(ipa: dict, args, version: str) -> str:
     ipa_name = os.path.basename(args.ipa)
     guide = f"{site}/blob/main/docs/INSTALAR.md"
     source_url = f"{site}/releases/latest/download/altstore-source.json"
+    stable_ipa = f"{site}/releases/latest/download/{STABLE_IPA_NAME}"
     commit = f" = commit `{args.commit}`" if args.commit else ""
     built_by = f"[workflow run]({args.run_url})" if args.run_url else "`.github/workflows/release.yml`"
     minos = str(info.get("MinimumOSVersion") or "17.0")
@@ -349,6 +354,7 @@ def release_notes(ipa: dict, args, version: str) -> str:
         "| | |",
         "|---|---|",
         f"| IPA | `{ipa_name}` ({ipa['size'] / 1e6:.1f} MB) |",
+        f"| Enlace fijo / stable link | {stable_ipa} (desde esta versión / from this release on) |",
         f"| SHA-256 | `{ipa['sha256']}` (`SHA256SUMS.txt`) |",
         f"| Versión / version | {version} ({info.get('CFBundleVersion')}), iPhone, iOS {minos} o posterior / or later |",
         f"| Fuente AltStore / SideStore source | `{source_url}` |",

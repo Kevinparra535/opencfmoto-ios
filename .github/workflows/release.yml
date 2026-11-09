@@ -6,7 +6,9 @@
 #                   Wi-Fi in Settings) as an unsigned Release archive, linted
 #                   (tools/release/build_ipa.sh, which also refuses any XcodeGen but the version in
 #                   tools/release/xcodegen-version); the IPA, signed ad hoc with only the App Group
-#                   entitlement, and SHA256SUMS.txt (tools/release/package_ipa.sh); the AltStore /
+#                   entitlement, the same file as OpenCfMoto-sideload.ipa (a name that never changes:
+#                   releases/latest/download/OpenCfMoto-sideload.ipa always gets the latest IPA) and
+#                   SHA256SUMS.txt, versioned IPA first (tools/release/package_ipa.sh); the AltStore /
 #                   SideStore source and the release notes, read from that IPA
 #                   (tools/release/altsource.py); LICENSE.txt, NOTICE.txt and LICENSE-Apache-2.0.txt
 #                   (the IPA carries the same three texts: package_ipa.sh checks them). All of it is
@@ -16,8 +18,9 @@
 #                   SHA-256, notes), then publish it by hand. Publishing creates the tag at this
 #                   commit; its «Source code» archives are the Corresponding Source (AGPL-3.0 §6),
 #                   so never delete a tag while its IPA is online. Publish it as a normal release,
-#                   not a pre-release: releases/latest/download/altstore-source.json (the source URL
-#                   in docs/INSTALAR.md) only follows normal releases.
+#                   not a pre-release, with «Set as the latest release»: releases/latest/download/
+#                   altstore-source.json (the source URL in docs/INSTALAR.md and on the landing page,
+#                   site/) and …/OpenCfMoto-sideload.ipa only follow the latest normal release.
 #
 # No Apple secret, team, certificate or profile anywhere: riders re-sign the IPA with their own
 # Apple ID (SideStore, AltStore Classic, Sideloadly). This repository is public, and so are its
@@ -60,6 +63,7 @@ jobs:
       HOMEBREW_NO_ENV_HINTS: "1"
     outputs:
       ipa_name: ${{ steps.package.outputs.ipa_name }}
+      stable_ipa_name: ${{ steps.package.outputs.stable_ipa_name }}
       sha256: ${{ steps.package.outputs.sha256 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -108,7 +112,7 @@ jobs:
       - name: Archive the free flavour (Release, iPhone, unsigned) and lint it
         run: bash tools/release/build_ipa.sh "$RUNNER_TEMP/release/OpenCfMoto.xcarchive" "$VERSION" "$GITHUB_RUN_NUMBER"
 
-      - name: Package the IPA (ad-hoc signature, App Group only) and SHA256SUMS.txt
+      - name: Package the IPA (ad-hoc signature, App Group only), its stable-name copy and SHA256SUMS.txt
         id: package
         run: bash tools/release/package_ipa.sh "$RUNNER_TEMP/release/OpenCfMoto.xcarchive" "$RUNNER_TEMP/release/out" "$VERSION"
 
@@ -139,6 +143,7 @@ jobs:
         if: always()
         env:
           IPA: ${{ steps.package.outputs.ipa_name }}
+          STABLE_IPA: ${{ steps.package.outputs.stable_ipa_name }}
           SHA: ${{ steps.package.outputs.sha256 }}
           OUTCOME: ${{ job.status }}
         run: |
@@ -146,7 +151,7 @@ jobs:
             echo "## Sideload IPA"
             echo
             if [ "$OUTCOME" = success ]; then
-              echo "\`${IPA}\` · SHA-256 \`${SHA}\` · build $GITHUB_RUN_NUMBER of \`$GITHUB_SHA\`"
+              echo "\`${IPA}\` (also \`${STABLE_IPA}\`, the same file) · SHA-256 \`${SHA}\` · build $GITHUB_RUN_NUMBER of \`$GITHUB_SHA\`"
               echo
               if [ "$DRAFT" = true ]; then
                 echo "El trabajo «Draft GitHub Release» crea ahora el borrador: revísalo en Releases y publícalo a mano (versión normal, no *pre-release*). / The «Draft GitHub Release» job now makes the draft: check it under Releases and publish it by hand (a normal release, not a pre-release)."
@@ -171,6 +176,7 @@ jobs:
       VERSION: ${{ inputs.version }}
       GH_TOKEN: ${{ github.token }}
       IPA: ${{ needs.build.outputs.ipa_name }}
+      STABLE_IPA: ${{ needs.build.outputs.stable_ipa_name }}
       SHA: ${{ needs.build.outputs.sha256 }}
     steps:
       - name: Download this run's files
@@ -180,12 +186,17 @@ jobs:
         run: |
           set -euo pipefail
           cd out
-          for f in "$IPA" SHA256SUMS.txt altstore-source.json RELEASE_NOTES.md LICENSE.txt NOTICE.txt LICENSE-Apache-2.0.txt; do
+          for f in "$IPA" "$STABLE_IPA" SHA256SUMS.txt altstore-source.json RELEASE_NOTES.md LICENSE.txt NOTICE.txt LICENSE-Apache-2.0.txt; do
             [ -s "$f" ] || { echo "::error title=Release::falta / missing: $f"; exit 1; }
           done
           [ "$IPA" = "OpenCfMoto-$VERSION-sideload.ipa" ] || { echo "::error title=Release::unexpected IPA name: $IPA"; exit 1; }
+          # The stable name: releases/latest/download/OpenCfMoto-sideload.ipa (docs/INSTALAR.md, the notes).
+          [ "$STABLE_IPA" = "OpenCfMoto-sideload.ipa" ] || { echo "::error title=Release::unexpected stable IPA name: $STABLE_IPA"; exit 1; }
           sha256sum -c SHA256SUMS.txt
+          [ "$(awk 'NR == 1 { print $2 }' SHA256SUMS.txt)" = "$IPA" ] || { echo "::error title=Release::line 1 of SHA256SUMS.txt must be $IPA"; exit 1; }
           [ "$(awk 'NR == 1 { print $1 }' SHA256SUMS.txt)" = "$SHA" ] || { echo "::error title=Release::the SHA-256 differs from the build job's"; exit 1; }
+          [ "$(awk -v f="$STABLE_IPA" '$2 == f { print $1 }' SHA256SUMS.txt)" = "$SHA" ] || { echo "::error title=Release::SHA256SUMS.txt must list $STABLE_IPA with the build job's SHA-256"; exit 1; }
+          [ "$(sha256sum "$STABLE_IPA" | awk '{ print $1 }')" = "$SHA" ] || { echo "::error title=Release::$STABLE_IPA is not the build job's IPA"; exit 1; }
           python3 -I -c 'import json, sys
           doc = json.load(open("altstore-source.json", encoding="utf-8"))
           (version,) = doc["apps"][0]["versions"]
@@ -208,7 +219,7 @@ jobs:
           fi
           gh release create "$VERSION" -R "$GITHUB_REPOSITORY" --draft --target "$GITHUB_SHA" \
             --title "OpenCfMoto for iOS $VERSION (sideload)" --notes-file out/RELEASE_NOTES.md \
-            "out/$IPA" out/SHA256SUMS.txt out/altstore-source.json out/LICENSE.txt out/NOTICE.txt \
+            "out/$IPA" "out/$STABLE_IPA" out/SHA256SUMS.txt out/altstore-source.json out/LICENSE.txt out/NOTICE.txt \
             out/LICENSE-Apache-2.0.txt
           {
             echo "## Borrador de release / Draft release $VERSION"

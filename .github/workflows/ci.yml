@@ -403,7 +403,8 @@ jobs:
   # Apple ID can sign, also the README's Personal Team build) as an unsigned Release archive for
   # iPhone with the newest Xcode, linted (tools/release/build_ipa.sh); the IPA signed ad hoc with
   # only the App Group, no team, carrying the licence texts (tools/release/package_ipa.sh checks
-  # all three); the AltStore / SideStore source read from that IPA (tools/release/altsource.py).
+  # all three), its stable-name copy and SHA256SUMS.txt; the AltStore / SideStore source read from
+  # that IPA (tools/release/altsource.py).
   sideload:
     name: Sideload IPA dry run (free flavour, newest Xcode)
     runs-on: macos-15
@@ -444,7 +445,17 @@ jobs:
         run: |
           set -euo pipefail
           out="$RUNNER_TEMP/sideload/out"
-          python3 -I tools/release/altsource.py --ipa "$out/OpenCfMoto-$VERSION-sideload.ipa" --repo "$GITHUB_REPOSITORY" \
+          # What release.yml's draft job requires: the stable-name copy (releases/latest/download/
+          # OpenCfMoto-sideload.ipa), byte for byte, and SHA256SUMS.txt with the versioned IPA first.
+          ipa="OpenCfMoto-$VERSION-sideload.ipa"
+          (cd "$out" && shasum -a 256 -c SHA256SUMS.txt)
+          cmp "$out/$ipa" "$out/OpenCfMoto-sideload.ipa"
+          listed=$(awk '{ print $2 }' "$out/SHA256SUMS.txt" | tr '\n' ' ')
+          if [ "$listed" != "$ipa OpenCfMoto-sideload.ipa " ]; then
+            echo "::error title=Sideload dry run::SHA256SUMS.txt lists «$listed», expected $ipa then OpenCfMoto-sideload.ipa"
+            exit 1
+          fi
+          python3 -I tools/release/altsource.py --ipa "$out/$ipa" --repo "$GITHUB_REPOSITORY" \
             --tag "$VERSION" --commit "$GITHUB_SHA" --source-out "$out/altstore-source.json" --notes-out "$out/RELEASE_NOTES.md"
           owner=$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-')
           python3 -I -c 'import json, sys

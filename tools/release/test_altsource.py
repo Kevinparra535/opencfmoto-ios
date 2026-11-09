@@ -16,6 +16,7 @@ import io
 import json
 import os
 import plistlib
+import re
 import shutil
 import struct
 import subprocess
@@ -203,6 +204,8 @@ class AltSourceTest(unittest.TestCase):
         self.assertIn("no warranty", app["localizedDescription"])
         self.assertIn("never handle the phone while riding", app["localizedDescription"])
         self.assertIn(f"sha256 {hashlib.sha256(data).hexdigest()}", out)
+        # The source names the versioned IPA only, never the stable-name copy.
+        self.assertNotIn(altsource.STABLE_IPA_NAME, json.dumps(doc))
 
     def test_every_extension_entitlement_and_privacy_key_is_declared(self):
         # AltStore throws undeclaredPermissions for anything in an extension the source does not list.
@@ -354,12 +357,26 @@ class AltSourceTest(unittest.TestCase):
                        "Never handle the phone while riding", "Ajustes ▸ Wi-Fi", "Settings ▸ Wi-Fi",
                        "«Ya me he conectado»", "\"I've joined\"", "solo de esta página", "Only download it from this page",
                        "con un botón para copiarla (la copia dura 2 minutos)",
-                       "with a copy button (the copy lasts 2 minutes)"):
+                       "with a copy button (the copy lasts 2 minutes)",
+                       "| Enlace fijo / stable link | https://github.com/Example/opencfmoto-ios/releases/latest/download/"
+                       "OpenCfMoto-sideload.ipa (desde esta versión / from this release on) |"):
             self.assertIn(needle, notes)
         for claim in ("copia la contraseña", "copies the password"):
             self.assertNotIn(claim, notes)
         self.assertLess(notes.index("**ES:**"), notes.index("**EN:**"), "Spanish first")
         self.assertLess(notes.index("### ES:"), notes.index("### EN:"))
+        self.assertLess(notes.index("| IPA |"), notes.index("| Enlace fijo / stable link |"))
+
+    def test_the_stable_ipa_name_is_the_one_packaged_and_released(self):
+        # package_ipa.sh writes the copy, release.yml's draft job requires and attaches it, the notes link it.
+        repo = os.path.dirname(os.path.dirname(HERE))
+        with open(os.path.join(HERE, "package_ipa.sh"), encoding="utf-8") as fh:
+            packaged = re.findall(r'^STABLE_NAME="([^"]+)"$', fh.read(), re.MULTILINE)
+        self.assertEqual(packaged, [altsource.STABLE_IPA_NAME])
+        with open(os.path.join(repo, ".github", "workflows", "release.yml"), encoding="utf-8") as fh:
+            workflow = fh.read()
+        self.assertIn(f'[ "$STABLE_IPA" = "{altsource.STABLE_IPA_NAME}" ]', workflow)
+        self.assertIn('"out/$STABLE_IPA"', workflow)
 
     def test_without_notes_out_only_the_source_is_written(self):
         ipa = self.fx.ipa()
