@@ -17,13 +17,17 @@ font, .htm or hidden file is published (CSS and SVG go inline in the pages). Eve
   ALLOWED_SCRIPT_SHA256) and uses no network or navigation API (fetch, XMLHttpRequest, sendBeacon,
   WebSocket, EventSource, Worker, import(), eval, innerHTML, location, …);
 - link (<a> / <area> href, <meta http-equiv="refresh"> url) only to: a #fragment of the page, a relative path
-  that exists under SITE_DIR (and its #fragment), mailto:, an https URL on ALLOWED_LINKS, or the SideStore /
-  AltStore Classic add-source links (sidestore://source?url=…, altstore-classic://source?url=…) whose url is
-  exactly SOURCE, percent-encoded: AltStore and SideStore identify a source by its URL;
+  that exists under SITE_DIR (and its #fragment), mailto:, an https URL on ALLOWED_LINKS, exactly TESTFLIGHT
+  (the public TestFlight beta: any other testflight.apple.com URL, a mistyped join code too, is an error), or
+  the SideStore / AltStore Classic add-source links (sidestore://source?url=…, altstore-classic://source?url=…)
+  whose url is exactly SOURCE, percent-encoded: AltStore and SideStore identify a source by its URL;
+- print a testflight.apple.com/… address (for people reading on a computer) only as TESTFLIGHT's, with or
+  without https://;
 - 404.html: relative references only root-relative ("/opencfmoto-ios/…"): GitHub Pages serves it at any depth.
 The site's index.html also: <html lang="es">, an id="english" element with lang="en", each add-source link
-exactly once, and a read-only field (<textarea readonly> or <input readonly>) showing exactly SOURCE: the copy
-button needs JavaScript, the field does not.
+exactly once, a link to TESTFLIGHT both in the Spanish part (outside id="english") and in the English part,
+and a read-only field (<textarea readonly> or <input readonly>) showing exactly SOURCE: the copy button needs
+JavaScript, the field does not.
 
 Exit 0 when everything passes; 1 with one ::error annotation per problem; 2 on usage errors.
 """
@@ -40,6 +44,12 @@ import urllib.parse
 
 SOURCE = "https://github.com/Kevinparra535/opencfmoto-ios/releases/latest/download/altstore-source.json"
 DEEP_LINK_SCHEMES = ("sidestore", "altstore-classic")
+# The public TestFlight beta (the owner's link): the only testflight.apple.com URL the pages may carry, so that
+# a mistyped join code fails the check instead of sending riders to someone else's beta or to an error page.
+TESTFLIGHT = "https://testflight.apple.com/join/aWur6hxp"
+TESTFLIGHT_HOST = "testflight.apple.com"
+# A testflight.apple.com/… address printed as text: the path ends at the first character a join code never has.
+TESTFLIGHT_TEXT = re.compile(r"testflight\.apple\.com(/[A-Za-z0-9/_-]*)", re.IGNORECASE)
 DEFAULT_BASE = "/opencfmoto-ios/"
 
 # https links the pages may carry: (host, path prefix). The prefix matches whole path segments, so
@@ -111,8 +121,9 @@ class Page(html.parser.HTMLParser):
         self.ids: dict = {}            # id / <a name> -> first line
         self.duplicate_ids: list = []  # (id, line)
         self.english_lang = None       # lang of the id="english" element; "" when it has none
-        self.navigation: list = []     # (url, line, what)
+        self.navigation: list = []     # (url, line, what, english): english = inside the id="english" element
         self.resources: list = []      # (url, line, what)
+        self.text: list = []           # the page's text outside <title>, <script>, <style>, <textarea>: (data, line)
         self.scripts: list = []        # (code, line)
         self.styles: list = []         # (css, line, what)
         self.readonly_values: list = []  # read-only <input value> / <textarea> text: (value, line)
@@ -122,6 +133,8 @@ class Page(html.parser.HTMLParser):
         self._readonly = False         # the open <textarea> is read-only
         self._buffer: list = []
         self._buffer_line = 0
+        self._english_tag = None       # the tag of the id="english" element while inside it
+        self._english_depth = 0        # open elements with that tag name since it began (it included)
 
     # ------------------------------------------------------------ parser callbacks
 
@@ -134,6 +147,12 @@ class Page(html.parser.HTMLParser):
         values: dict = {}
         for name, value in attrs:
             values.setdefault(name, value)
+        if self._english_depth:
+            if tag == self._english_tag:
+                self._english_depth += 1
+        elif values.get("id") == "english":
+            self._english_tag, self._english_depth = tag, 1
+        english = self._english_depth > 0
         if tag in FORBIDDEN_TAGS:
             self.problem(line, f"<{tag}> is not allowed on these pages")
         if tag == "link" and "stylesheet" in (values.get("rel") or "").lower().split():
@@ -157,7 +176,7 @@ class Page(html.parser.HTMLParser):
         href = values.get("href", values.get("xlink:href"))
         if href is not None:
             if tag in NAVIGATION_TAGS:
-                self.navigation.append((href, line, f"<{tag} href>"))
+                self.navigation.append((href, line, f"<{tag} href>", english))
             else:
                 self.resources.append((href, line, f"<{tag} href>"))
         if tag == "a" and values.get("name"):
@@ -172,7 +191,7 @@ class Page(html.parser.HTMLParser):
             if (values.get("http-equiv") or "").lower() == "refresh":
                 match = REFRESH_URL.match(values.get("content") or "")
                 if match:
-                    self.navigation.append((match.group(1).strip(), line, "<meta http-equiv=refresh>"))
+                    self.navigation.append((match.group(1).strip(), line, "<meta http-equiv=refresh>", english))
                 else:
                     self.problem(line, "<meta http-equiv=refresh> needs content=\"0; url=…\"")
         elif tag == "script":
@@ -192,6 +211,8 @@ class Page(html.parser.HTMLParser):
             self.english_lang = (values.get("lang") or "").strip()
 
     def handle_endtag(self, tag):
+        if self._english_depth and tag == self._english_tag:
+            self._english_depth -= 1
         if self._stack_text == tag:
             text = "".join(self._buffer)
             if tag == "title":
@@ -212,6 +233,8 @@ class Page(html.parser.HTMLParser):
     def handle_data(self, data):
         if self._stack_text:
             self._buffer.append(data)
+        else:
+            self.text.append((data, self.getpos()[0]))
 
     # ------------------------------------------------------------ helpers
 
@@ -376,11 +399,12 @@ class Site:
                 if digest not in ALLOWED_SCRIPT_SHA256:
                     self.problem(rel, line, f"the inline script changed (SHA-256 {digest}): review it, then update "
                                             f"ALLOWED_SCRIPT_SHA256 in tools/site/check_site.py")
-            for url, line, what in page.navigation:
+            for url, line, what, _english in page.navigation:
                 self.check_link(rel, page, url, line, what)
             for value, line in page.field_values:
                 if "altstore-source.json" in value and value.strip() != SOURCE:
                     self.problem(rel, line, f"a field shows «{value}», not the release source {SOURCE}")
+            self.check_printed_testflight(rel, page)
         index = self.pages.get("index.html")
         if index is not None:
             self.check_index(index)
@@ -444,7 +468,11 @@ class Site:
             if not parts.path:
                 self.problem(rel, line, f"{what} «{url}»: mailto: without an address")
         elif scheme == "https":
-            if not allowed_https(url):
+            if (parts.hostname or "").lower() == TESTFLIGHT_HOST:
+                if url != TESTFLIGHT:
+                    self.problem(rel, line, f"{what} «{url}»: the only TestFlight link allowed is the public beta "
+                                            f"{TESTFLIGHT} (tools/site/check_site.py TESTFLIGHT)")
+            elif not allowed_https(url):
                 self.problem(rel, line, f"{what} «{url}» is not on the allow-list (tools/site/check_site.py ALLOWED_LINKS)")
         elif scheme in DEEP_LINK_SCHEMES:
             reason = deep_link_problem(url)
@@ -453,6 +481,22 @@ class Site:
         else:
             self.problem(rel, line, f"{what} «{url}»: only #fragments, site paths, mailto:, allowed https links "
                                     f"and the {' / '.join(s + '://source' for s in DEEP_LINK_SCHEMES)} links")
+
+    def check_printed_testflight(self, rel, page):
+        """A testflight.apple.com/… address printed for people reading on a computer is TESTFLIGHT's. The text is
+        joined first: <wbr> splits the printed address into several pieces."""
+        text, starts, offset = "", [], 0
+        for data, line in page.text:
+            starts.append((offset, line))
+            text += data
+            offset += len(data)
+        expected = urllib.parse.urlsplit(TESTFLIGHT).path
+        for match in TESTFLIGHT_TEXT.finditer(text):
+            if match.group(1) == expected:
+                continue
+            line = next(line for start, line in reversed(starts) if start <= match.start())
+            self.problem(rel, line, f"the page shows the address «{match.group(0)}», not the public TestFlight beta "
+                                    f"{TESTFLIGHT} (tools/site/check_site.py TESTFLIGHT)")
 
     def check_index(self, page):
         rel = page.rel
@@ -463,7 +507,7 @@ class Site:
         elif page.english_lang != "en":
             self.problem(rel, page.ids["english"], "the id=\"english\" element needs lang=\"en\"")
         for scheme in DEEP_LINK_SCHEMES:
-            lines = [line for url, line, _ in page.navigation
+            lines = [line for url, line, _what, _english in page.navigation
                      if urllib.parse.urlsplit(url.strip()).scheme.lower() == scheme]
             if len(lines) != 1:
                 where = f" (lines {', '.join(map(str, lines))})" if lines else ""
@@ -472,6 +516,14 @@ class Site:
         if not any(value == SOURCE for value, _ in page.readonly_values):
             self.problem(rel, 1, f"no read-only field (<textarea readonly> or <input readonly value=…>) showing exactly "
                                  f"{SOURCE}")
+        # The public TestFlight beta, in both languages: the English half has its own button.
+        testflight = [english for url, _line, _what, english in page.navigation if url.strip() == TESTFLIGHT]
+        if False not in testflight:
+            self.problem(rel, 1, f"no link to the public TestFlight beta {TESTFLIGHT} in the Spanish part (outside "
+                                 f"id=\"english\")")
+        if "english" in page.ids and True not in testflight:
+            self.problem(rel, page.ids["english"], f"no link to the public TestFlight beta {TESTFLIGHT} in the English "
+                                                   f"part (id=\"english\")")
 
 
 def check_site(root: str, base: str = DEFAULT_BASE) -> list:
@@ -494,8 +546,8 @@ def main(argv=None) -> int:
     if problems:
         print(f"site check: {len(problems)} problem(s) in {pages} page(s)", flush=True)
         return 1
-    print(f"site check: {pages} page(s) OK (no external requests, links allowed, add-source links to {SOURCE})",
-          flush=True)
+    print(f"site check: {pages} page(s) OK (no external requests, links allowed, add-source links to {SOURCE}, "
+          f"TestFlight link {TESTFLIGHT})", flush=True)
     return 0
 
 

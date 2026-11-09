@@ -207,6 +207,24 @@ li { margin-bottom: 6px; }
 .copied { margin: 0; color: var(--muted); font-size: 0.95rem; }
 .copied:empty { display: none; }
 
+/* TestFlight, the easiest way: first after the header, in a box of its own */
+.tf {
+  background: var(--surface);
+  border: 2px solid var(--accent);
+  border-radius: 16px;
+  padding: 4px 16px 6px;
+  margin: 0 0 12px;
+}
+.tf-title { font-size: 1.5rem; margin: 16px 0 14px; text-wrap: balance; }
+.button.big { min-height: 72px; margin: 0 0 12px; font-size: 1.3rem; }
+@media (min-width: 560px) { .button.big { max-width: 24rem; } }
+.tf-steps li::marker { font-weight: 700; }
+.facts { padding-left: 1.1rem; }
+
+/* The free method, after TestFlight: its own heading, then steps 1-3 */
+.alt { margin-top: 40px; }
+.alt-title { font-size: 1.5rem; margin: 0 0 10px; text-wrap: balance; }
+
 /* Safety, license, links */
 .legal { border-top: 1px solid var(--border); margin-top: 28px; padding-top: 8px; }
 .safety { font-size: 1.05rem; }
@@ -234,15 +252,37 @@ li { margin-bottom: 6px; }
 </header>
 
 <main>
+<section class="tf" id="testflight" aria-labelledby="testflight-titulo">
+  <h2 class="tf-title" id="testflight-titulo">La forma más fácil: TestFlight</h2>
+  <a class="button big" href="https://testflight.apple.com/join/aWur6hxp">Probar en TestFlight <span class="en" lang="en">Try it on TestFlight</span></a>
+  <p class="note">¿Lo lees en un computador? Abre esta dirección en tu iPhone:<br><strong class="url">testflight.apple.com/<wbr>join/<wbr>aWur6hxp</strong></p>
+  <ol class="tf-steps">
+    <li>Instala <a href="https://apps.apple.com/app/testflight/id899247664">TestFlight</a> desde la App Store (es gratis).</li>
+    <li>En el iPhone, toca «Probar en TestFlight». En TestFlight, toca «Aceptar» y después «Instalar».</li>
+    <li>Abre OpenCfMoto.</li>
+  </ol>
+  <ul class="facts">
+    <li><strong>La versión completa:</strong> se une sola al <span class="nowrap">Wi-Fi</span> de la moto.</li>
+    <li><strong>Sin computador</strong> y sin renovarla cada 7 días.</li>
+    <li><strong>Cada compilación dura hasta 90 días;</strong> cuando sale una nueva, TestFlight te la ofrece.</li>
+    <li><strong>Es una beta:</strong> envía tus comentarios desde TestFlight.</li>
+  </ul>
+  <p class="note">Necesitas un iPhone con iOS 17 o posterior. Si TestFlight dice que la beta está llena o que no acepta a nadie más, usa el método de abajo. Con TestFlight, Apple nos muestra los fallos y el uso de la app, sin tu nombre ni tu correo: <a href="https://github.com/Kevinparra535/opencfmoto-ios/blob/main/PRIVACY.md#si-la-instalas-con-testflight">privacidad</a>.</p>
+</section>
+
+<!-- The free method: the transition, then steps 1-3 (nested in this section). -->
+<section class="alt" id="sin-testflight" aria-labelledby="sin-testflight-titulo">
+<h2 class="alt-title" id="sin-testflight-titulo">¿Sin TestFlight? Instálala gratis con tu Apple ID</h2>
+<p>La versión para sideload: una herramienta la instala con tu propio Apple ID gratuito. Te unes tú al <span class="nowrap">Wi-Fi</span> de la moto y hay que renovarla cada 7 días. En tres pasos:</p>
 <p class="callout">Abre esta página en Safari en tu iPhone: <strong class="url">kevinparra535.github.io/<wbr><span class="nowrap">opencfmoto-ios</span></strong>. Los botones del paso&nbsp;2 solo funcionan ahí (no en el navegador de otras apps ni en un computador). Si se abrió dentro de otra app (WhatsApp, Telegram, GitHub…), toca ⋯ o el botón de compartir y elige «Abrir en Safari».</p>
 <p class="needs">Necesitas un iPhone con iOS 17 o posterior, un Apple ID gratuito (mejor uno secundario, solo para esto) y un computador: con SideStore, para configurarla (y otra vez si caduca su <i>pairing file</i>); con AltStore sin Remote AltServer y con Sideloadly, también para instalar y renovar cada 7 días. OpenCfMoto nunca te pide tu Apple ID: solo lo usa la herramienta de instalación, para firmar la app a tu nombre.</p>
 
 <section class="step" id="paso-1" aria-labelledby="paso-1-titulo">
-  <h2 class="step-title" id="paso-1-titulo"><span class="n" aria-hidden="true">1</span> Elige una herramienta</h2>
+  <h3 class="step-title" id="paso-1-titulo"><span class="n" aria-hidden="true">1</span> Elige una herramienta</h3>
   <p>OpenCfMoto no está en la App Store: una de estas herramientas la instala con tu propio Apple ID. Instálala siguiendo su guía oficial y vuelve aquí.</p>
   <div class="cards">
     <article class="card recommended" aria-labelledby="sidestore-es">
-      <h3 class="card-title" id="sidestore-es">SideStore <span class="badge">Recomendada</span></h3>
+      <h4 class="card-title" id="sidestore-es">SideStore <span class="badge">Recomendada</span></h4>
       <p>Después de configurarla una vez con un computador, instala y renueva las apps desde el propio iPhone.</p>
       <ul>
         <li>Necesita <a href="https://apps.apple.com/app/localdevvpn/id6755608044">LocalDevVPN</a> (App Store) y <a href="https://github.com/nab138/iloader">iloader</a> en Windows, Mac o Linux.</li>
@@ -252,7 +292,7 @@ li { margin-bottom: 6px; }
       <p><a class="site" href="https://sidestore.io">sidestore.io</a></p>
     </article>
     <article class="card" aria-labelledby="altstore-es">
-      <h3 class="card-title" id="altstore-es">AltStore Classic</h3>
+      <h4 class="card-title" id="altstore-es">AltStore Classic</h4>
       <ul>
         <li>Se instala con AltServer, en Windows o Mac.</li>
         <li>Desde la versión 2.3 pide iOS 17.4 o posterior.</li>
@@ -262,7 +302,7 @@ li { margin-bottom: 6px; }
       <p><a class="site" href="https://altstore.io">altstore.io</a></p>
     </article>
     <article class="card" aria-labelledby="sideloadly-es">
-      <h3 class="card-title" id="sideloadly-es">Sideloadly</h3>
+      <h4 class="card-title" id="sideloadly-es">Sideloadly</h4>
       <ul>
         <li>En Windows o Mac: arrastras el IPA y lo instala.</li>
         <li>Hay que repetirlo cada 7 días, con el computador.</li>
@@ -279,7 +319,7 @@ li { margin-bottom: 6px; }
 </section>
 
 <section class="step" id="paso-2" aria-labelledby="paso-2-titulo">
-  <h2 class="step-title" id="paso-2-titulo"><span class="n" aria-hidden="true">2</span> Añade OpenCfMoto</h2>
+  <h3 class="step-title" id="paso-2-titulo"><span class="n" aria-hidden="true">2</span> Añade OpenCfMoto</h3>
   <p>Con la herramienta ya instalada en este iPhone, toca su botón: se abre con la fuente de OpenCfMoto. Añade la fuente e instala OpenCfMoto desde ella.</p>
   <div class="actions" id="botones">
     <a class="button" href="sidestore://source?url=https%3A%2F%2Fgithub.com%2FKevinparra535%2Fopencfmoto-ios%2Freleases%2Flatest%2Fdownload%2Faltstore-source.json">Añadir a SideStore <span class="en" lang="en">Add to SideStore</span></a>
@@ -295,7 +335,7 @@ li { margin-bottom: 6px; }
       <p class="copied" role="status" data-status-for="fuente"></p>
     </div>
   </div>
-  <h3 class="sub-title">¿Usas Sideloadly?</h3>
+  <h4 class="sub-title">¿Usas Sideloadly?</h4>
   <p>En el computador, descarga el IPA de la última versión (<strong class="url">github.com/<wbr>Kevinparra535/<wbr><span class="nowrap">opencfmoto-ios</span>/<wbr>releases/<wbr>latest</strong>) y arrástralo a Sideloadly.</p>
   <!-- Both «Download the IPA» links: switch them to releases/latest/download/OpenCfMoto-sideload.ipa once the
        latest published release carries that file (release.yml attaches it from the release after v0.1.0 on).
@@ -306,7 +346,7 @@ li { margin-bottom: 6px; }
 </section>
 
 <section class="step" id="paso-3" aria-labelledby="paso-3-titulo">
-  <h2 class="step-title" id="paso-3-titulo"><span class="n" aria-hidden="true">3</span> En el iPhone</h2>
+  <h3 class="step-title" id="paso-3-titulo"><span class="n" aria-hidden="true">3</span> En el iPhone</h3>
   <ul>
     <li><strong>Si usaste Sideloadly:</strong> activa el Modo de desarrollador y confía en tu Apple ID como en el paso&nbsp;1, antes de abrir OpenCfMoto.</li>
     <li><strong>Renuévala cada 7 días:</strong> con un Apple ID gratuito la app caduca a los 7 días. Hazlo antes desde tu herramienta (en SideStore, con Wi-Fi y LocalDevVPN conectada: <i>My Apps</i> ▸ <i>Refresh All</i>).</li>
@@ -315,6 +355,7 @@ li { margin-bottom: 6px; }
   </ul>
   <p class="tip"><strong>¿Sin moto?</strong> Pruébala en <b>Inicio ▸ Vista de tablero</b>: dibuja la pantalla del tablero con tu GPS real.</p>
 </section>
+</section><!-- #sin-testflight -->
 
 <section class="legal" id="aviso" aria-labelledby="aviso-titulo">
   <h2 class="sub-title" id="aviso-titulo">Seguridad y licencia</h2>
@@ -339,15 +380,38 @@ li { margin-bottom: 6px; }
     <p class="fine">For CFMOTO MotoPlay and other Carbit / EasyConnect dashes. A community project, not affiliated with CFMOTO.</p>
     <p class="fine">Will it work with your bike? Check the <a href="https://github.com/Kevinparra535/opencfmoto-ios#supported-bikes-and-dashes-cfmoto-450mt-800mt-450sr">list of bikes and dashes</a> before installing: dashes that join the phone's hotspot (some Zontes / Carbit) do not work on iOS.</p>
   </div>
+
+  <section class="tf" id="testflight-en" aria-labelledby="testflight-en-title">
+    <h3 class="tf-title" id="testflight-en-title">The easiest way: TestFlight</h3>
+    <a class="button big" href="https://testflight.apple.com/join/aWur6hxp">Try it on TestFlight</a>
+    <p class="note">Reading this on a computer? Open this address on your iPhone:<br><strong class="url">testflight.apple.com/<wbr>join/<wbr>aWur6hxp</strong></p>
+    <ol class="tf-steps">
+      <li>Install <a href="https://apps.apple.com/app/testflight/id899247664">TestFlight</a> from the App Store (it is free).</li>
+      <li>On the iPhone, tap "Try it on TestFlight". In TestFlight, tap Accept, then Install.</li>
+      <li>Open OpenCfMoto.</li>
+    </ol>
+    <ul class="facts">
+      <li><strong>The full version:</strong> it joins the bike <span class="nowrap">Wi-Fi</span> by itself.</li>
+      <li><strong>No computer</strong> and no refreshing every 7 days.</li>
+      <li><strong>Each build lasts up to 90 days;</strong> when a new one is out, TestFlight offers it to you.</li>
+      <li><strong>It is a beta:</strong> send your feedback from TestFlight.</li>
+    </ul>
+    <p class="note">You need an iPhone with iOS 17 or later. If TestFlight says the beta is full or is not accepting anyone else, use the method below. With TestFlight, Apple shows us the app's crashes and usage, without your name or e-mail: <a href="https://github.com/Kevinparra535/opencfmoto-ios/blob/main/PRIVACY.md#if-you-install-it-with-testflight">privacy</a>.</p>
+  </section>
+
+  <!-- The free method: the transition, then steps 1-3 (nested in this section). -->
+  <section class="alt" id="without-testflight" aria-labelledby="without-testflight-title">
+  <h3 class="alt-title" id="without-testflight-title">No TestFlight? Install it free with your Apple ID</h3>
+  <p>The sideload build: an install tool installs it with your own free Apple ID. You join the bike <span class="nowrap">Wi-Fi</span> yourself, and it must be refreshed every 7 days. Three steps:</p>
   <p class="callout">Open this page in Safari on your iPhone: <strong class="url">kevinparra535.github.io/<wbr><span class="nowrap">opencfmoto-ios</span></strong>. The step&nbsp;2 buttons only work there (not in other apps' browsers or on a computer). If it opened inside another app (WhatsApp, Telegram, GitHub…), tap ⋯ or the share button and choose "Open in Safari".</p>
   <p class="needs">You need an iPhone with iOS 17 or later, a free Apple ID (a secondary one, just for this, is best) and a computer: with SideStore, to set it up (and again if its <i>pairing file</i> expires); with AltStore without Remote AltServer, and with Sideloadly, also to install and refresh every 7 days. OpenCfMoto never asks for your Apple ID: only the install tool uses it, to sign the app for you.</p>
 
   <section class="step" id="step-1" aria-labelledby="step-1-title">
-    <h3 class="step-title" id="step-1-title"><span class="n" aria-hidden="true">1</span> Pick an install tool</h3>
+    <h4 class="step-title" id="step-1-title"><span class="n" aria-hidden="true">1</span> Pick an install tool</h4>
     <p>OpenCfMoto is not on the App Store: one of these tools installs it with your own Apple ID. Install it by following its official guide, then come back here.</p>
     <div class="cards">
       <article class="card recommended" aria-labelledby="sidestore-en">
-        <h4 class="card-title" id="sidestore-en">SideStore <span class="badge">Recommended</span></h4>
+        <h5 class="card-title" id="sidestore-en">SideStore <span class="badge">Recommended</span></h5>
         <p>After a one-time setup with a computer, it installs and refreshes apps on the iPhone itself.</p>
         <ul>
           <li>Needs <a href="https://apps.apple.com/app/localdevvpn/id6755608044">LocalDevVPN</a> (App Store) and <a href="https://github.com/nab138/iloader">iloader</a> on Windows, Mac or Linux.</li>
@@ -357,7 +421,7 @@ li { margin-bottom: 6px; }
         <p><a class="site" href="https://sidestore.io">sidestore.io</a></p>
       </article>
       <article class="card" aria-labelledby="altstore-en">
-        <h4 class="card-title" id="altstore-en">AltStore Classic</h4>
+        <h5 class="card-title" id="altstore-en">AltStore Classic</h5>
         <ul>
           <li>Installed with AltServer, on Windows or Mac.</li>
           <li>Since version 2.3 it needs iOS 17.4 or later.</li>
@@ -367,7 +431,7 @@ li { margin-bottom: 6px; }
         <p><a class="site" href="https://altstore.io">altstore.io</a></p>
       </article>
       <article class="card" aria-labelledby="sideloadly-en">
-        <h4 class="card-title" id="sideloadly-en">Sideloadly</h4>
+        <h5 class="card-title" id="sideloadly-en">Sideloadly</h5>
         <ul>
           <li>On Windows or Mac: drop the IPA in and it installs it.</li>
           <li>Repeat it every 7 days, with the computer.</li>
@@ -384,7 +448,7 @@ li { margin-bottom: 6px; }
   </section>
 
   <section class="step" id="step-2" aria-labelledby="step-2-title">
-    <h3 class="step-title" id="step-2-title"><span class="n" aria-hidden="true">2</span> Add OpenCfMoto</h3>
+    <h4 class="step-title" id="step-2-title"><span class="n" aria-hidden="true">2</span> Add OpenCfMoto</h4>
     <p>With the tool installed on this iPhone, tap its button in <a href="#botones">step&nbsp;2 above</a>: «<span lang="es">Añadir a SideStore</span>» (Add to SideStore) or «<span lang="es">Añadir a AltStore</span>» (Add to AltStore). The tool opens with the OpenCfMoto source: add the source, then install OpenCfMoto from it.</p>
     <p>To install from the source: in SideStore, on Wi-Fi with LocalDevVPN connected; in AltStore, with AltServer running on the computer on the same Wi-Fi (or with Remote AltServer set up).</p>
     <p class="note">Button does nothing, or Safari says the address is invalid? That tool is not installed on this iPhone yet (go back to step&nbsp;1), or your AltStore is older than 2.2: update it or copy the address below. Does iOS ask for Developer Mode or say the developer is not trusted? Do the end of step&nbsp;1, then tap the button again.</p>
@@ -396,14 +460,14 @@ li { margin-bottom: 6px; }
         <p class="copied" role="status" data-status-for="source"></p>
       </div>
     </div>
-    <h4 class="sub-title">Using Sideloadly?</h4>
+    <h5 class="sub-title">Using Sideloadly?</h5>
     <p>On the computer, download the latest release's IPA (<strong class="url">github.com/<wbr>Kevinparra535/<wbr><span class="nowrap">opencfmoto-ios</span>/<wbr>releases/<wbr>latest</strong>) and drop it into Sideloadly.</p>
     <a class="button secondary" href="https://github.com/Kevinparra535/opencfmoto-ios/releases/latest">Download the IPA</a>
     <p class="note">Only download it from there: it is the file <code>OpenCfMoto-vX.Y.Z-sideload.ipa</code>. Before installing it, <a href="https://github.com/Kevinparra535/opencfmoto-ios/blob/main/docs/INSTALAR.md#check-the-sha-256">check its SHA-256</a> against <code>SHA256SUMS.txt</code>, on the same page.</p>
   </section>
 
   <section class="step" id="step-3" aria-labelledby="step-3-title">
-    <h3 class="step-title" id="step-3-title"><span class="n" aria-hidden="true">3</span> On the iPhone</h3>
+    <h4 class="step-title" id="step-3-title"><span class="n" aria-hidden="true">3</span> On the iPhone</h4>
     <ul>
       <li><strong>If you used Sideloadly:</strong> turn on Developer Mode and trust your Apple ID as in step&nbsp;1, before opening OpenCfMoto.</li>
       <li><strong>Refresh it every 7 days:</strong> with a free Apple ID the app expires after 7 days. Refresh it before then with your tool (in SideStore, on Wi-Fi with LocalDevVPN connected: <i>My Apps</i> ▸ <i>Refresh All</i>).</li>
@@ -412,6 +476,7 @@ li { margin-bottom: 6px; }
     </ul>
     <p class="tip"><strong>No bike?</strong> Try it in <b>Home ▸ Dash view</b>: it draws the dash picture with your real GPS.</p>
   </section>
+  </section><!-- #without-testflight -->
 
   <section class="legal" aria-labelledby="notice-title">
     <h3 class="sub-title" id="notice-title">Safety and license</h3>

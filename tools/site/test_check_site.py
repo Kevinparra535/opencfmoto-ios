@@ -23,6 +23,7 @@ sys.path.insert(0, HERE)
 import check_site  # noqa: E402
 
 SOURCE = check_site.SOURCE
+TESTFLIGHT = check_site.TESTFLIGHT
 ENCODED = "https%3A%2F%2Fgithub.com%2FKevinparra535%2Fopencfmoto-ios%2Freleases%2Flatest%2Fdownload%2Faltstore-source.json"
 SIDESTORE = "sidestore://source?url=" + ENCODED
 ALTSTORE = "altstore-classic://source?url=" + ENCODED
@@ -57,6 +58,7 @@ HEAD = """<!DOCTYPE html>
 INDEX = HEAD.format(lang="es", title="OpenCfMoto", icon="icon.png") + """<body>
 <a href="#english">English</a>
 <h1 id="inicio">OpenCfMoto para iPhone</h1>
+<p><a href="{testflight}">Probar en TestFlight</a> <strong>testflight.apple.com/<wbr>join/<wbr>aWur6hxp</strong></p>
 <div id="botones">
 <a href="{sidestore}">Añadir a SideStore</a>
 <a href="{altstore}">Añadir a AltStore</a>
@@ -67,12 +69,13 @@ INDEX = HEAD.format(lang="es", title="OpenCfMoto", icon="icon.png") + """<body>
 <a href="https://github.com/zanderp/open-cfmoto">Android</a> <a href="https://sidestore.io">SideStore</a>
 <a href="https://apps.apple.com/app/localdevvpn/id6755608044">LocalDevVPN</a> <a href="mailto:someone@example.com">mail</a>
 <a href="privacy/">privacidad</a> <a href="privacy/index.html#arriba">arriba</a></p>
-<section id="english" lang="en"><p><a href="#botones">buttons</a> <a href="#inicio">top</a></p>
+<section id="english" lang="en"><section id="step-en"><p><a href="#botones">buttons</a> <a href="#inicio">top</a></p></section>
+<p><a href="{testflight}">Try it on TestFlight</a> or open https://testflight.apple.com/join/aWur6hxp.</p>
 <input id="source" readonly value="{source}"></section>
 <script>@SITE_SCRIPT@</script>
 </body>
 </html>
-""".format(sidestore=SIDESTORE, altstore=ALTSTORE, source=SOURCE).replace("@SITE_SCRIPT@", SCRIPT)
+""".format(sidestore=SIDESTORE, altstore=ALTSTORE, source=SOURCE, testflight=TESTFLIGHT).replace("@SITE_SCRIPT@", SCRIPT)
 
 PRIVACY = HEAD.format(lang="es", title="Privacidad", icon="../icon.png").replace(
     "<title>", '<meta http-equiv="refresh" content="0; url=https://github.com/Kevinparra535/opencfmoto-ios/blob/main/PRIVACY.md">\n<title>') + """<body>
@@ -384,6 +387,92 @@ class CheckSiteTest(unittest.TestCase):
         self.edit("index.html", f'<a href="{SIDESTORE}">Añadir a SideStore</a>', "")
         self.assert_problem("the sidestore://source link must be on the page exactly once, found 0")
 
+    def test_the_testflight_link_is_the_public_beta(self):
+        # TESTFLIGHT exactly: a mistyped join code, or any other testflight.apple.com page, fails.
+        cases = (
+            "https://testflight.apple.com/join/aWur6hxq",  # one character off
+            "https://testflight.apple.com/join/AWUR6HXP",  # join codes are case-sensitive
+            "https://testflight.apple.com/join/aWur6hx",
+            "https://testflight.apple.com/join/aWur6hxp/",
+            "https://testflight.apple.com/join/aWur6hxp?ref=site",
+            "https://testflight.apple.com/join/aWur6hxp#x",
+            "https://testflight.apple.com/join/",
+            "https://testflight.apple.com/",
+            "https://testflight.apple.com",
+            "https://testflight.apple.com/v1/app/1234567890",
+            "https://TestFlight.Apple.com/join/aWur6hxp",
+            "https://someone@testflight.apple.com/join/aWur6hxp",
+            "https://testflight.apple.com:443/join/aWur6hxp",
+        )
+        for url in cases:
+            with self.subTest(url=url):
+                self.setUp()
+                self.edit("index.html", '<a href="https://sidestore.io">', f'<a href="{url}">')
+                problem = self.assert_problem(f"<a href> «{url}»: the only TestFlight link allowed is the public beta "
+                                              f"{TESTFLIGHT}")
+                self.assertEqual(problem.line, self.line_of("index.html", f'"{url}"'))
+        # Other pages too; and the other ways to reach TestFlight are not links these pages may carry.
+        self.setUp()
+        self.edit("404.html", '<a href="#top" id="top">', '<a href="https://testflight.apple.com/join/aWur6hxq" id="top">')
+        self.assert_problem("the only TestFlight link allowed is the public beta", "404.html")
+        for url in ("http://testflight.apple.com/join/aWur6hxp", "itms-beta://testflight.apple.com/join/aWur6hxp",
+                    "https://beta.testflight.apple.com/join/aWur6hxp"):
+            with self.subTest(url=url):
+                self.setUp()
+                self.edit("index.html", '<a href="https://sidestore.io">', f'<a href="{url}">')
+                problems = self.problems()
+                self.assertEqual(len(problems), 1, problems)
+                self.assertIn(f"«{url}»", problems[0].message)
+        # The pinned link passes anywhere, as often as the pages need it.
+        self.setUp()
+        self.edit("404.html", '<a href="#top" id="top">', f'<a href="{TESTFLIGHT}" id="top">')
+        self.edit("index.html", '<a href="https://sidestore.io">', f'<a href="{TESTFLIGHT}">')
+        self.assertEqual(self.problems(), [])
+
+    def test_a_printed_testflight_address_is_the_public_beta(self):
+        # For people reading on a computer: the address they type on the iPhone. <wbr> splits it in pieces.
+        cases = (
+            ("testflight.apple.com/<wbr>join/<wbr>aWur6hxq", "testflight.apple.com/join/aWur6hxq"),
+            ("TESTFLIGHT.apple.com/join/<wbr>aWur6hxQ", "TESTFLIGHT.apple.com/join/aWur6hxQ"),
+            ("testflight.apple.com/<wbr>join", "testflight.apple.com/join"),
+            ("testflight.apple.com/<wbr>join/<wbr>aWur6hxp/x", "testflight.apple.com/join/aWur6hxp/x"),
+        )
+        for printed, shown in cases:
+            with self.subTest(printed=printed):
+                self.setUp()
+                self.edit("index.html", "testflight.apple.com/<wbr>join/<wbr>aWur6hxp", printed)
+                problem = self.assert_problem(f"the page shows the address «{shown}», not the public TestFlight beta "
+                                              f"{TESTFLIGHT}")
+                self.assertEqual(problem.line, self.line_of("index.html", printed))
+        self.setUp()
+        self.edit("404.html", "</p>", " https://testflight.apple.com/join/aWur6hxq</p>")
+        self.assert_problem("the page shows the address «testflight.apple.com/join/aWur6hxq»", "404.html")
+        # The pinned address passes with or without https:// and before punctuation; the bare host is no address.
+        self.setUp()
+        self.edit("404.html", "</p>", " (https://testflight.apple.com/join/aWur6hxp), TestFlight: testflight.apple.com.</p>")
+        self.assertEqual(self.problems(), [])
+
+    def test_index_links_the_testflight_beta_in_both_languages(self):
+        self.edit("index.html", f'<a href="{TESTFLIGHT}">Try it on TestFlight</a>', "")
+        problem = self.assert_problem(f"no link to the public TestFlight beta {TESTFLIGHT} in the English part")
+        self.assertEqual(problem.line, self.line_of("index.html", '<section id="english"'))
+        self.assertFalse([p for p in self.problems() if "in the Spanish part" in p.message])
+        self.setUp()
+        self.edit("index.html", f'<a href="{TESTFLIGHT}">Probar en TestFlight</a>', "")
+        self.assert_problem(f"no link to the public TestFlight beta {TESTFLIGHT} in the Spanish part")
+        self.assertFalse([p for p in self.problems() if "in the English part" in p.message])
+        # After the English part ends, a link is Spanish again: the English part has none.
+        self.setUp()
+        self.edit("index.html", f'<a href="{TESTFLIGHT}">Try it on TestFlight</a>', "")
+        self.edit("index.html", "<script>", f'<p><a href="{TESTFLIGHT}">TestFlight</a></p>\n<script>')
+        self.assert_problem("in the English part")
+        # A second link inside the English part does not stand in for the Spanish one. (The fixture's English link
+        # comes after a <section> nested in the English one, so the fixture passing shows that it still counts.)
+        self.setUp()
+        self.edit("index.html", f'<a href="{TESTFLIGHT}">Probar en TestFlight</a>', "")
+        self.edit("index.html", '<section id="step-en">', f'<a href="{TESTFLIGHT}">x</a><section id="step-en">')
+        self.assert_problem("in the Spanish part")
+
     def test_local_links_and_fragments(self):
         cases = (
             ('<a href="#nowhere">x</a>', "no id «nowhere» on this page"),
@@ -467,6 +556,7 @@ class CheckSiteTest(unittest.TestCase):
         ok = run(".")
         self.assertEqual(ok.returncode, 0, ok.stdout + ok.stderr)
         self.assertIn("3 page(s) OK", ok.stdout)
+        self.assertIn(f"TestFlight link {TESTFLIGHT}", ok.stdout)
         self.edit("index.html", '<a href="https://sidestore.io">', '<a href="https://example.com/">')
         bad = run(".")
         self.assertEqual(bad.returncode, 1, bad.stdout + bad.stderr)
