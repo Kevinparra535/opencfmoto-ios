@@ -434,8 +434,16 @@ class CheckSiteTest(unittest.TestCase):
         cases = (
             ("testflight.apple.com/<wbr>join/<wbr>aWur6hxq", "testflight.apple.com/join/aWur6hxq"),
             ("TESTFLIGHT.apple.com/join/<wbr>aWur6hxQ", "TESTFLIGHT.apple.com/join/aWur6hxQ"),
+            ("testflight.apple.com/<wbr>join/<wbr>AWUR6HXP", "testflight.apple.com/join/AWUR6HXP"),  # case only
             ("testflight.apple.com/<wbr>join", "testflight.apple.com/join"),
             ("testflight.apple.com/<wbr>join/<wbr>aWur6hxp/x", "testflight.apple.com/join/aWur6hxp/x"),
+            ("testflight.apple.com/ ", "testflight.apple.com/"),
+            # A mistyped or lookalike host: whoever types it lands on another site.
+            ("testflight.aple.com/<wbr>join/<wbr>aWur6hxp", "testflight.aple.com/join/aWur6hxp"),
+            ("testfligth.apple.com/<wbr>join/<wbr>aWur6hxp", "testfligth.apple.com/join/aWur6hxp"),
+            ("testflight-apple.com/<wbr>join/<wbr>aWur6hxp", "testflight-apple.com/join/aWur6hxp"),
+            ("beta.testflight.apple.com/<wbr>join/<wbr>aWur6hxp", "beta.testflight.apple.com/join/aWur6hxp"),
+            ("testflight.apple.com.example.org/<wbr>JOIN/<wbr>aWur6hxp", "testflight.apple.com.example.org/JOIN/aWur6hxp"),
         )
         for printed, shown in cases:
             with self.subTest(printed=printed):
@@ -447,6 +455,9 @@ class CheckSiteTest(unittest.TestCase):
         self.setUp()
         self.edit("404.html", "</p>", " https://testflight.apple.com/join/aWur6hxq</p>")
         self.assert_problem("the page shows the address «testflight.apple.com/join/aWur6hxq»", "404.html")
+        self.setUp()
+        self.edit("404.html", "</p>", " testflight-apple.com/join/</p>")
+        self.assert_problem("the page shows the address «testflight-apple.com/join/»", "404.html")
         # The pinned address passes with or without https:// and before punctuation; the bare host is no address.
         self.setUp()
         self.edit("404.html", "</p>", " (https://testflight.apple.com/join/aWur6hxp), TestFlight: testflight.apple.com.</p>")
@@ -472,6 +483,42 @@ class CheckSiteTest(unittest.TestCase):
         self.edit("index.html", f'<a href="{TESTFLIGHT}">Probar en TestFlight</a>', "")
         self.edit("index.html", '<section id="step-en">', f'<a href="{TESTFLIGHT}">x</a><section id="step-en">')
         self.assert_problem("in the Spanish part")
+        # Browsers drop the spaces around an href: a padded link still counts.
+        self.setUp()
+        self.edit("index.html", f'<a href="{TESTFLIGHT}">Try it on TestFlight</a>',
+                  f'<a href=" {TESTFLIGHT} ">Try it on TestFlight</a>')
+        self.assertEqual(self.problems(), [])
+
+    def test_index_shows_the_testflight_address_in_both_languages(self):
+        # For people reading on a computer: each part prints the address, whatever else it shows.
+        printed = "testflight.apple.com/join/aWur6hxp"
+        self.edit("index.html", "<strong>testflight.apple.com/<wbr>join/<wbr>aWur6hxp</strong>", "<strong></strong>")
+        problem = self.assert_problem(f'the Spanish part (outside id="english") does not show the address {printed}')
+        self.assertEqual(problem.line, 1)
+        self.assertFalse([p for p in self.problems() if "the English part" in p.message])
+        self.setUp()
+        self.edit("index.html", " or open https://testflight.apple.com/join/aWur6hxp.", ".")
+        problem = self.assert_problem(f'the English part (id="english") does not show the address {printed}')
+        self.assertEqual(problem.line, self.line_of("index.html", '<section id="english"'))
+        self.assertFalse([p for p in self.problems() if "the Spanish part" in p.message])
+        # The English part's address does not stand in for the Spanish one; after the English part ends, text is
+        # Spanish again.
+        self.setUp()
+        self.edit("index.html", "<strong>testflight.apple.com/<wbr>join/<wbr>aWur6hxp</strong>", "<strong></strong>")
+        self.edit("index.html", '<section id="step-en">', f"<p>{printed}</p><section id=\"step-en\">")
+        self.assert_problem("the Spanish part (outside id=\"english\") does not show the address")
+        self.setUp()
+        self.edit("index.html", "<strong>testflight.apple.com/<wbr>join/<wbr>aWur6hxp</strong>", "<strong></strong>")
+        self.edit("index.html", "<script>", f"<p>https://{printed}</p>\n<script>")
+        self.assertEqual(self.problems(), [])
+        # Printed in another case, or with a mistyped host, it is not the address people must type.
+        for shown in ("TestFlight.Apple.com/join/aWur6hxp", "testflight.aple.com/join/aWur6hxp",
+                      "testflight.apple.com/join/aWur6hxq"):
+            with self.subTest(shown=shown):
+                self.setUp()
+                self.edit("index.html", "<strong>testflight.apple.com/<wbr>join/<wbr>aWur6hxp</strong>",
+                          f"<strong>{shown}</strong>")
+                self.assert_problem("the Spanish part (outside id=\"english\") does not show the address")
 
     def test_local_links_and_fragments(self):
         cases = (

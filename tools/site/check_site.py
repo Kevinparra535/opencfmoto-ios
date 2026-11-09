@@ -22,12 +22,14 @@ font, .htm or hidden file is published (CSS and SVG go inline in the pages). Eve
   the SideStore / AltStore Classic add-source links (sidestore://source?url=…, altstore-classic://source?url=…)
   whose url is exactly SOURCE, percent-encoded: AltStore and SideStore identify a source by its URL;
 - print a testflight.apple.com/… address (for people reading on a computer) only as TESTFLIGHT's, with or
-  without https://;
+  without https://, and a «<host>/join/<code>» address only on testflight.apple.com (a mistyped or lookalike
+  host fails);
 - 404.html: relative references only root-relative ("/opencfmoto-ios/…"): GitHub Pages serves it at any depth.
 The site's index.html also: <html lang="es">, an id="english" element with lang="en", each add-source link
-exactly once, a link to TESTFLIGHT both in the Spanish part (outside id="english") and in the English part,
-and a read-only field (<textarea readonly> or <input readonly>) showing exactly SOURCE: the copy button needs
-JavaScript, the field does not.
+exactly once, a link to TESTFLIGHT and its printed address (testflight.apple.com/join/…, the text people type
+on the iPhone) both in the Spanish part (outside id="english") and in the English part, and a read-only field
+(<textarea readonly> or <input readonly>) showing exactly SOURCE: the copy button needs JavaScript, the field
+does not.
 
 Exit 0 when everything passes; 1 with one ::error annotation per problem; 2 on usage errors.
 """
@@ -50,6 +52,9 @@ TESTFLIGHT = "https://testflight.apple.com/join/aWur6hxp"
 TESTFLIGHT_HOST = "testflight.apple.com"
 # A testflight.apple.com/… address printed as text: the path ends at the first character a join code never has.
 TESTFLIGHT_TEXT = re.compile(r"testflight\.apple\.com(/[A-Za-z0-9/_-]*)", re.IGNORECASE)
+# Any «<host>/join/<code>» address printed as text: its host must be TESTFLIGHT_HOST, so that a mistyped or lookalike
+# host (testflight.aple.com, testflight-apple.com) fails instead of sending people who type it to another site.
+PRINTED_JOIN = re.compile(r"([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)/join/[A-Za-z0-9]*", re.IGNORECASE)
 DEFAULT_BASE = "/opencfmoto-ios/"
 
 # https links the pages may carry: (host, path prefix). The prefix matches whole path segments, so
@@ -123,7 +128,7 @@ class Page(html.parser.HTMLParser):
         self.english_lang = None       # lang of the id="english" element; "" when it has none
         self.navigation: list = []     # (url, line, what, english): english = inside the id="english" element
         self.resources: list = []      # (url, line, what)
-        self.text: list = []           # the page's text outside <title>, <script>, <style>, <textarea>: (data, line)
+        self.text: list = []           # the text outside <title>, <script>, <style>, <textarea>: (data, line, english)
         self.scripts: list = []        # (code, line)
         self.styles: list = []         # (css, line, what)
         self.readonly_values: list = []  # read-only <input value> / <textarea> text: (value, line)
@@ -234,7 +239,7 @@ class Page(html.parser.HTMLParser):
         if self._stack_text:
             self._buffer.append(data)
         else:
-            self.text.append((data, self.getpos()[0]))
+            self.text.append((data, self.getpos()[0], self._english_depth > 0))
 
     # ------------------------------------------------------------ helpers
 
@@ -483,19 +488,22 @@ class Site:
                                     f"and the {' / '.join(s + '://source' for s in DEEP_LINK_SCHEMES)} links")
 
     def check_printed_testflight(self, rel, page):
-        """A testflight.apple.com/… address printed for people reading on a computer is TESTFLIGHT's. The text is
-        joined first: <wbr> splits the printed address into several pieces."""
+        """A testflight.apple.com/… address printed for people reading on a computer is TESTFLIGHT's, and so is the
+        host of any printed «<host>/join/<code>» address. The text is joined first: <wbr> splits the printed address
+        into several pieces."""
         text, starts, offset = "", [], 0
-        for data, line in page.text:
+        for data, line, _english in page.text:
             starts.append((offset, line))
             text += data
             offset += len(data)
         expected = urllib.parse.urlsplit(TESTFLIGHT).path
-        for match in TESTFLIGHT_TEXT.finditer(text):
-            if match.group(1) == expected:
-                continue
-            line = next(line for start, line in reversed(starts) if start <= match.start())
-            self.problem(rel, line, f"the page shows the address «{match.group(0)}», not the public TestFlight beta "
+        wrong = [(match.start(), match.group(0)) for match in TESTFLIGHT_TEXT.finditer(text) if match.group(1) != expected]
+        # Another host: testflight.apple.com's own addresses are TESTFLIGHT_TEXT's (one problem each).
+        wrong += [(match.start(), match.group(0)) for match in PRINTED_JOIN.finditer(text)
+                  if match.group(1).lower() != TESTFLIGHT_HOST]
+        for position, shown in sorted(wrong):
+            line = next(line for start, line in reversed(starts) if start <= position)
+            self.problem(rel, line, f"the page shows the address «{shown}», not the public TestFlight beta "
                                     f"{TESTFLIGHT} (tools/site/check_site.py TESTFLIGHT)")
 
     def check_index(self, page):
@@ -524,6 +532,18 @@ class Site:
         if "english" in page.ids and True not in testflight:
             self.problem(rel, page.ids["english"], f"no link to the public TestFlight beta {TESTFLIGHT} in the English "
                                                    f"part (id=\"english\")")
+        # Its address printed in each part, for people reading on a computer (they type it on the iPhone), exactly
+        # like the read-only field shows SOURCE: an empty or mistyped printed address fails.
+        printed = TESTFLIGHT.split("://", 1)[1]
+        spanish_text = "".join(data for data, _line, in_english in page.text if not in_english)
+        if printed not in spanish_text:
+            self.problem(rel, 1, f"the Spanish part (outside id=\"english\") does not show the address {printed} "
+                                 f"(the text people reading on a computer type on the iPhone)")
+        english_text = "".join(data for data, _line, in_english in page.text if in_english)
+        if "english" in page.ids and printed not in english_text:
+            self.problem(rel, page.ids["english"], f"the English part (id=\"english\") does not show the address "
+                                                   f"{printed} (the text people reading on a computer type on the "
+                                                   f"iPhone)")
 
 
 def check_site(root: str, base: str = DEFAULT_BASE) -> list:

@@ -81,6 +81,8 @@ li { margin-bottom: 6px; }
 .top a { font-weight: 600; text-decoration: none; padding: 8px 4px; }
 .hero { text-align: center; padding: 8px 0 20px; }
 .hero img { width: 88px; height: 88px; border-radius: 20px; display: block; margin: 0 auto 14px; }
+/* Narrow phones: a smaller icon keeps the TestFlight button on the first screen while Safari shows its bars. */
+@media (max-width: 400px) { .hero img { width: 64px; height: 64px; border-radius: 15px; } }
 .hero-title { font-size: 2rem; margin: 0 0 10px; letter-spacing: -0.01em; text-wrap: balance; }
 .lead { font-size: 1.15rem; margin: 0 auto 12px; max-width: 34rem; text-wrap: balance; }
 .claim { font-weight: 700; margin: 0 0 10px; text-wrap: balance; }
@@ -247,7 +249,6 @@ li { margin-bottom: 6px; }
     <p class="lead">Tu propio mapa, navegación giro a giro y Apple Music en el tablero de tu moto, por el Wi-Fi de la moto.</p>
     <p class="claim">Gratis, código abierto, sin cuentas ni anuncios</p>
     <p class="fine">Para tableros CFMOTO MotoPlay y otros Carbit / EasyConnect. Proyecto comunitario, sin afiliación con CFMOTO.</p>
-    <p class="fine">¿Funciona con tu moto? Mira la <a href="https://github.com/Kevinparra535/opencfmoto-ios#motos-y-tableros-compatibles-cfmoto-450mt-800mt-450sr">lista de motos y tableros</a> antes de instalar: los tableros que se conectan al punto de acceso del teléfono (algunos Zontes / Carbit) no funcionan en iOS.</p>
   </div>
 </header>
 
@@ -256,6 +257,7 @@ li { margin-bottom: 6px; }
   <h2 class="tf-title" id="testflight-titulo">La forma más fácil: TestFlight</h2>
   <a class="button big" href="https://testflight.apple.com/join/aWur6hxp">Probar en TestFlight <span class="en" lang="en">Try it on TestFlight</span></a>
   <p class="note">¿Lo lees en un computador? Abre esta dirección en tu iPhone:<br><strong class="url">testflight.apple.com/<wbr>join/<wbr>aWur6hxp</strong></p>
+  <p class="note">¿Funciona con tu moto? Mira la <a href="https://github.com/Kevinparra535/opencfmoto-ios#motos-y-tableros-compatibles-cfmoto-450mt-800mt-450sr">lista de motos y tableros</a> antes de instalar: los tableros que se conectan al punto de acceso del teléfono (algunos Zontes / Carbit) no funcionan en iOS.</p>
   <ol class="tf-steps">
     <li>Instala <a href="https://apps.apple.com/app/testflight/id899247664">TestFlight</a> desde la App Store (es gratis).</li>
     <li>En el iPhone, toca «Probar en TestFlight». En TestFlight, toca «Aceptar» y después «Instalar».</li>
@@ -378,13 +380,13 @@ li { margin-bottom: 6px; }
     <p class="lead">Your own map, turn-by-turn guidance and Apple Music on your motorcycle's dash, over the bike's Wi-Fi.</p>
     <p class="claim">Free, open source, no accounts and no ads</p>
     <p class="fine">For CFMOTO MotoPlay and other Carbit / EasyConnect dashes. A community project, not affiliated with CFMOTO.</p>
-    <p class="fine">Will it work with your bike? Check the <a href="https://github.com/Kevinparra535/opencfmoto-ios#supported-bikes-and-dashes-cfmoto-450mt-800mt-450sr">list of bikes and dashes</a> before installing: dashes that join the phone's hotspot (some Zontes / Carbit) do not work on iOS.</p>
   </div>
 
   <section class="tf" id="testflight-en" aria-labelledby="testflight-en-title">
     <h3 class="tf-title" id="testflight-en-title">The easiest way: TestFlight</h3>
     <a class="button big" href="https://testflight.apple.com/join/aWur6hxp">Try it on TestFlight</a>
     <p class="note">Reading this on a computer? Open this address on your iPhone:<br><strong class="url">testflight.apple.com/<wbr>join/<wbr>aWur6hxp</strong></p>
+    <p class="note">Will it work with your bike? Check the <a href="https://github.com/Kevinparra535/opencfmoto-ios#supported-bikes-and-dashes-cfmoto-450mt-800mt-450sr">list of bikes and dashes</a> before installing: dashes that join the phone's hotspot (some Zontes / Carbit) do not work on iOS.</p>
     <ol class="tf-steps">
       <li>Install <a href="https://apps.apple.com/app/testflight/id899247664">TestFlight</a> from the App Store (it is free).</li>
       <li>On the iPhone, tap "Try it on TestFlight". In TestFlight, tap Accept, then Install.</li>

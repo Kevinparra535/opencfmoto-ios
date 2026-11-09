@@ -8,4 +8,4 @@ contact_links:
     about: Problems with the Android app belong to the upstream project. / Los problemas de la app Android van al proyecto original.
   - name: Install guide / Guía de instalación
     url: https://github.com/Kevinparra535/opencfmoto-ios/blob/main/docs/INSTALAR.md
-    about: SideStore, AltStore, Sideloadly or your own TestFlight. / SideStore, AltStore, Sideloadly o tu propio TestFlight.
+    about: The public TestFlight beta, SideStore, AltStore, Sideloadly or your own TestFlight. / La beta pública de TestFlight, SideStore, AltStore, Sideloadly o tu propio TestFlight.

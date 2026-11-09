@@ -4,6 +4,8 @@
 
 # OpenCfMoto for iOS
 
+[![iPhone: TestFlight · probar la beta / try the beta](https://img.shields.io/badge/TestFlight-probar%20la%20beta%20%C2%B7%20try%20the%20beta-0066CC?style=for-the-badge&logo=apple&logoColor=white)](https://testflight.apple.com/join/aWur6hxp)
+
 **CFMOTO / MotoPlay dash navigation from your iPhone.** Your own map, turn-by-turn guidance and Apple
 Music on **CFMOTO MotoPlay** and other **Carbit / EasyConnect** motorcycle dashboards, streamed over
 the bike's Wi-Fi. A **CarPlay alternative for motorcycles**: 450MT · 800MT · 450SR · 675SR-R · 700MT ·
@@ -12,8 +14,6 @@ the bike's Wi-Fi. A **CarPlay alternative for motorcycles**: 450MT · 800MT · 4
 **Navegación en el tablero de tu CFMOTO / MotoPlay desde el iPhone.** Mapa propio, indicaciones giro a
 giro y Apple Music en los tableros **CFMOTO MotoPlay** y otros **Carbit / EasyConnect**, por el Wi-Fi de
 la moto. Una **alternativa a CarPlay para motos**.
-
-[![iPhone: TestFlight · probar la beta / try the beta](https://img.shields.io/badge/TestFlight-probar%20la%20beta%20%C2%B7%20try%20the%20beta-0066CC?style=for-the-badge&logo=apple&logoColor=white)](https://testflight.apple.com/join/aWur6hxp)
 
 [![CI](https://github.com/Kevinparra535/opencfmoto-ios/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Kevinparra535/opencfmoto-ios/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/Kevinparra535/opencfmoto-ios)](https://github.com/Kevinparra535/opencfmoto-ios/releases/latest)
@@ -56,14 +56,14 @@ usando el protocolo **PXC** obtenido por ingeniería inversa. Es un port a Swift
 <a id="pruebala"></a>
 ## Pruébala
 
-- **La más fácil: la beta pública en TestFlight**, sin computador:
+- **La más fácil: la beta pública en TestFlight**, gratis y sin computador:
   [testflight.apple.com/join/aWur6hxp](https://testflight.apple.com/join/aWur6hxp). Instala
   [TestFlight](https://apps.apple.com/app/testflight/id899247664) desde la App Store, abre ese enlace en el
   iPhone y toca **Aceptar** e **Instalar**. Es la versión completa: se une sola al Wi-Fi de la moto. No hay
   que renovarla cada 7 días: cada compilación dura hasta 90 días y, cuando sale una nueva, TestFlight te
   la ofrece. Es una beta: envía tus comentarios desde TestFlight. Necesitas iOS 17 o posterior. Si
   TestFlight dice que la beta está llena, usa la opción siguiente.
-- **Gratis con tu Apple ID, sin TestFlight:
+- **Con tu Apple ID gratuito, sin TestFlight:
   [kevinparra535.github.io/opencfmoto-ios](https://kevinparra535.github.io/opencfmoto-ios/#sin-testflight)**.
   Abre esa página en Safari en tu iPhone: eliges la herramienta (SideStore, AltStore Classic o Sideloadly)
   y, con SideStore o AltStore, un botón le añade la fuente de OpenCfMoto; desde ahí instalas la app con tu
@@ -155,7 +155,7 @@ duplicadas, la pantalla debe estar encendida y la emisión se detiene al bloquea
   [Releases](https://github.com/Kevinparra535/opencfmoto-ios/releases) con un Apple ID gratuito
   ([docs/INSTALAR.md](docs/INSTALAR.md)) o, con la cuenta de pago, GitHub la compila y la sube a tu
   TestFlight ([docs/TESTFLIGHT.md](docs/TESTFLIGHT.md)).
-- Una **cuenta de Apple Developer**:
+- Para compilarla tú, una **cuenta de Apple Developer**:
   - **De pago** (Apple Developer Program) para la variante `full`: la app se une sola al Wi-Fi de
     la moto (*Hotspot Configuration*) y lee el SSID actual (*Access WiFi Information*).
   - **Gratuita** (Personal Team) para la variante `free`: sin esos permisos, te unes al Wi-Fi de
@@ -265,7 +265,8 @@ Packages/OpenCfMotoKit/         Paquete Swift
 docs/ARCHITECTURE.md            Arquitectura y reglas del proyecto
 docs/spec/                      Especificaciones de comportamiento extraídas de la app Android
 docs/TESTFLIGHT.md              Instalar sin Mac: compilar y subir a TestFlight desde GitHub
-docs/INSTALAR.md                Instalar sin Mac con un Apple ID gratuito (SideStore, AltStore, Sideloadly)
+docs/INSTALAR.md                Instalar sin Mac: la beta pública de TestFlight o un Apple ID gratuito
+                                (SideStore, AltStore, Sideloadly)
 .github/workflows/              ci.yml (pruebas y compilaciones), testflight.yml (TestFlight),
                                 release.yml (IPA para sideload) y pages.yml (la página de instalación)
 site/                           La página de instalación (GitHub Pages), revisada por tools/site/
@@ -305,9 +306,10 @@ títulos, ni artistas, ni identificadores de canciones en los registros: cada ca
 un código que cambia en cada arranque de la app); la portada de las canciones en streaming la carga
 MusicKit de Apple desde los servidores de Apple. Con la beta de TestFlight, TestFlight (de Apple) nos
 muestra los fallos de la app, cuántas veces la usas, el modelo de tu iPhone y su versión de iOS, y los
-comentarios que nos envíes; con el enlace público, sin tu nombre ni tu correo, salvo el correo que
-escribas en un comentario ([detalle](PRIVACY.md#si-la-instalas-con-testflight)). Todo el detalle,
-servicio por servicio: [PRIVACY.md](PRIVACY.md).
+comentarios que nos envíes, con datos del iPhone en ese momento (como la zona horaria y el operador); con
+el enlace público, sin tu nombre ni tu correo, salvo el correo que escribas en un comentario
+([detalle](PRIVACY.md#si-la-instalas-con-testflight)). Todo el detalle, servicio por servicio:
+[PRIVACY.md](PRIVACY.md).
 
 ## Preguntas frecuentes
 
@@ -364,14 +366,14 @@ the reverse-engineered **PXC** protocol. It is a Swift port of the Android app
 
 ## Try it
 
-- **Easiest: the public TestFlight beta**, no computer needed:
+- **Easiest: the public TestFlight beta**, free and no computer needed:
   [testflight.apple.com/join/aWur6hxp](https://testflight.apple.com/join/aWur6hxp). Install
   [TestFlight](https://apps.apple.com/app/testflight/id899247664) from the App Store, open that link on the
   iPhone and tap **Accept** and **Install**. It is the full build: it joins the bike Wi-Fi by itself. No
   refreshing every 7 days: each build lasts up to 90 days and, when a new one is out, TestFlight offers
   it to you. It is a beta: send your feedback from TestFlight. You need iOS 17 or later. If TestFlight
   says the beta is full, use the next option.
-- **Free with your Apple ID, without TestFlight:
+- **With your free Apple ID, without TestFlight:
   [kevinparra535.github.io/opencfmoto-ios](https://kevinparra535.github.io/opencfmoto-ios/#without-testflight)**.
   Open that page in Safari on your iPhone: pick an install tool (SideStore, AltStore Classic or
   Sideloadly) and, with SideStore or AltStore, one button adds the OpenCfMoto source to it; you install the
@@ -463,7 +465,7 @@ on and the broadcast stops when the phone locks.
   [Releases](https://github.com/Kevinparra535/opencfmoto-ios/releases) with a free Apple ID
   ([docs/INSTALAR.md](docs/INSTALAR.md#english)) or, with a paid account, GitHub builds it and uploads it
   to your TestFlight ([docs/TESTFLIGHT.md](docs/TESTFLIGHT.md)).
-- An **Apple Developer account**:
+- To build it yourself, an **Apple Developer account**:
   - **Paid** (Apple Developer Program) for the `full` flavor: the app joins the bike Wi-Fi by itself
     (*Hotspot Configuration*) and reads the current SSID (*Access WiFi Information*).
   - **Free** (Personal Team) for the `free` flavor: without those entitlements you join the bike
@@ -564,7 +566,8 @@ Packages/OpenCfMotoKit/         Swift package
 docs/ARCHITECTURE.md            Architecture and project rules
 docs/spec/                      Behaviour specs extracted from the Android app
 docs/TESTFLIGHT.md              No Mac: build and upload to TestFlight from GitHub
-docs/INSTALAR.md                No Mac: install with a free Apple ID (SideStore, AltStore, Sideloadly)
+docs/INSTALAR.md                No Mac: the public TestFlight beta or a free Apple ID
+                                (SideStore, AltStore, Sideloadly)
 .github/workflows/              ci.yml (tests and builds), testflight.yml (TestFlight),
                                 release.yml (sideload IPA) and pages.yml (the install page)
 site/                           The install page (GitHub Pages), checked by tools/site/
@@ -601,8 +604,9 @@ OpenStreetMap services. With **Apple Music on the dash** the song is read on the
 OpenCfMoto sends it nowhere (no titles, artists or song ids in logs: each song shows as a code that
 changes every time the app starts); the cover of streamed songs is loaded by Apple's MusicKit from
 Apple's servers. With the TestFlight beta, Apple's TestFlight shows us the app's crashes, how often you
-use it, your iPhone model and its iOS version, and any feedback you send us; through the public link,
-without your name or e-mail, unless you type your e-mail in your feedback
+use it, your iPhone model and its iOS version, and any feedback you send us, with details of the iPhone
+at that moment (such as its time zone and carrier); through the public link, without your name or
+e-mail, unless you type your e-mail in your feedback
 ([details](PRIVACY.md#if-you-install-it-with-testflight)). Every detail, service by service:
 [PRIVACY.md](PRIVACY.md#english).
 

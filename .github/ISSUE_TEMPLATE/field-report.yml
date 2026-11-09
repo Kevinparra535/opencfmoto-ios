@@ -51,6 +51,7 @@ body:
     attributes:
       label: How did you install it? / ¿Cómo la instalaste?
       options:
+        - "Public TestFlight beta / Beta pública de TestFlight"
         - "Sideload build from Releases with SideStore / Versión sideload con SideStore"
         - "Sideload build from Releases with AltStore / Versión sideload con AltStore"
         - "Sideload build from Releases with Sideloadly / Versión sideload con Sideloadly"

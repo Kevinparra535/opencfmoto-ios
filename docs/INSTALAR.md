@@ -29,7 +29,7 @@ OpenCfMoto no está en la App Store. Hay cuatro formas de instalarla en un iPhon
 
 | Camino | Para quién | Coste | Wi-Fi de la moto | Dura |
 |---|---|---|---|---|
-| [TestFlight: la beta pública](#testflight-la-beta-pública) | Cualquiera con iOS 17 o posterior, sin computador | Gratis | La app se une sola | Hasta 90 días por compilación, y TestFlight ofrece la siguiente |
+| [TestFlight: la beta pública](#testflight-la-beta-pública) | Cualquiera con iOS 17 o posterior, sin computador | Gratis | La app se une sola | Hasta 90 días por compilación, y TestFlight ofrece la siguiente cuando sale |
 | [A. IPA de prueba con tu Apple ID gratuito](#a-ipa-de-prueba-con-tu-apple-id-gratuito) | Cualquiera con un computador (Windows, Mac o Linux) | Gratis | Te unes tú desde Ajustes | 7 días, y se renueva |
 | [B. Tu propia copia con TestFlight](#b-tu-propia-copia-completa-cuenta-de-pago-sin-mac) | Quien quiere su propia copia completa y no tiene Mac | 99 USD al año | La app se une sola | 90 días por compilación |
 | [C. Xcode en un Mac](#c-desarrolladores-xcode) | Desarrolladores | Gratis o de pago | Según la cuenta | 7 días o un año |
@@ -53,16 +53,22 @@ La forma más fácil de probarla: la versión completa de OpenCfMoto, con la app
   red: **Conectar**), lee el nombre de la red Wi-Fi y el modo espejo funciona.
 - **Sin renovarla cada 7 días:** cada compilación dura hasta 90 días desde que se sube a TestFlight.
   Cuando sale una nueva, TestFlight te la ofrece (o la instala sola, si activas sus actualizaciones
-  automáticas).
+  automáticas). TestFlight muestra cuántos días le quedan a la tuya: míralo antes de un viaje largo. Si
+  caduca antes de que salga una nueva, la app no abre hasta entonces (mientras tanto, puedes usar la
+  [opción A](#a-ipa-de-prueba-con-tu-apple-id-gratuito)).
 - **Es una beta:** puede tener fallos. Envía tus comentarios desde TestFlight o con una captura de
   pantalla hecha en OpenCfMoto.
 - **Si la beta está llena** (TestFlight dice que está llena o que no acepta a nadie más), usa la
   [opción A](#a-ipa-de-prueba-con-tu-apple-id-gratuito).
-- **Para salir de la beta:** en TestFlight, abre OpenCfMoto y toca **Dejar de probar** (*Stop Testing*),
-  o borra la app.
+- **Para salir de la beta:** en TestFlight, abre OpenCfMoto, toca **Dejar de probar** (*Stop Testing*) y
+  después borra la app.
 - **Privacidad:** TestFlight (de Apple) nos muestra los fallos y el uso de la app y los comentarios que
   envíes; con el enlace público, sin tu nombre ni tu correo, salvo el correo que escribas en un
   comentario. Detalle: [PRIVACY.md](../PRIVACY.md#si-la-instalas-con-testflight).
+
+Para la primera salida sigue [PRUEBA-EN-LA-MOTO.md](PRUEBA-EN-LA-MOTO.md) (sáltate el paso 1 de
+«Antes de salir»: la app ya está instalada; en la tabla, usa la fila de TestFlight). Fija la ruta antes
+de salir.
 
 ### Si ya tenías la versión para sideload
 
@@ -80,8 +86,12 @@ vacía. Para pasar lo tuyo:
   en la otra.
 - **Tus viajes** no pasan: puedes exportar cada uno con **Exportar GPX**, pero la app abre un GPX como
   ruta para seguir, no como viaje.
-- Tu servidor de mapas y tu clave de openrouteservice, si los usas, y las demás preferencias se ponen de
-  nuevo.
+- Tu servidor de mapas y tu clave de openrouteservice, si los usas, y las demás preferencias no pasan:
+  vuelve a ponerlos a mano en la de TestFlight.
+
+Mientras tengas las dos, usa una a la vez: antes de conectar con una, cierra la otra desde el selector de
+apps. Las dos usan los mismos puertos para hablar con el tablero: si la otra sigue conectada, el aviso
+«La aplicación oficial de CFMoto está estorbando» se refiere a ella.
 
 Cuando la de TestFlight funcione, puedes borrar la otra (con un Apple ID gratuito, libera uno de los 3
 espacios). Antes, quita la moto en **Garaje** («Eliminar moto»): si no, iOS puede conservar su
@@ -324,7 +334,7 @@ Android:
 
 | Path | For | Cost | Bike Wi-Fi | Lasts |
 |---|---|---|---|---|
-| [TestFlight: the public beta](#testflight-the-public-beta) | Anyone with iOS 17 or later, no computer | Free | The app joins by itself | Up to 90 days per build, and TestFlight offers the next |
+| [TestFlight: the public beta](#testflight-the-public-beta) | Anyone with iOS 17 or later, no computer | Free | The app joins by itself | Up to 90 days per build, and TestFlight offers the next one when it is out |
 | [A. Sideload IPA with your free Apple ID](#a-sideload-ipa-with-your-free-apple-id) | Anyone with a computer (Windows, Mac or Linux) | Free | You join it in Settings | 7 days, then refresh |
 | [B. Your own TestFlight copy](#b-your-own-full-copy-paid-account-no-mac) | Riders who want their own full copy and have no Mac | 99 USD a year | The app joins by itself | 90 days per build |
 | [C. Xcode on a Mac](#c-developers-xcode) | Developers | Free or paid | Depends on the account | 7 days or a year |
@@ -348,15 +358,21 @@ The easiest way to try it: the full version of OpenCfMoto, with Apple's TestFlig
   **Join**), reads the Wi-Fi network name, and mirror mode works.
 - **No refreshing every 7 days:** each build lasts up to 90 days from its upload to TestFlight. When a
   new one is out, TestFlight offers it to you (or installs it by itself, if you turn on its automatic
-  updates).
+  updates). TestFlight shows how many days yours has left: check it before a long trip. If it expires
+  before a new one is out, the app will not open until then (meanwhile, you can use
+  [option A](#a-sideload-ipa-with-your-free-apple-id)).
 - **It is a beta:** expect bugs. Send your feedback from TestFlight, or with a screenshot taken in
   OpenCfMoto.
 - **If the beta is full** (TestFlight says it is full or not accepting anyone else), use
   [option A](#a-sideload-ipa-with-your-free-apple-id).
-- **To leave the beta:** in TestFlight, open OpenCfMoto and tap **Stop Testing**, or delete the app.
+- **To leave the beta:** in TestFlight, open OpenCfMoto, tap **Stop Testing**, then delete the app.
 - **Privacy:** Apple's TestFlight shows us the app's crashes and usage and the feedback you send; through
   the public link, without your name or e-mail, unless you type your e-mail in your feedback. Details:
   [PRIVACY.md](../PRIVACY.md#if-you-install-it-with-testflight).
+
+For the first ride, follow [PRUEBA-EN-LA-MOTO.md](PRUEBA-EN-LA-MOTO.md) (in Spanish, with a short
+English summary at the top; skip step 1 of «Antes de salir»: the app is already installed; in the table
+the TestFlight row applies). Set the route before you ride.
 
 #### If you had the sideload build
 
@@ -372,7 +388,12 @@ starts empty. To bring your things over:
   **Settings ▸ Map data ▸ Export map data…** in one and **Import map data…** in the other.
 - **Your trips** do not move: you can export each one with **Export GPX**, but the app opens a GPX as a
   route to follow, not as a trip.
-- Your tile server and openrouteservice key, if you use them, and the other preferences are set again.
+- Your tile server and openrouteservice key, if you use them, and the other preferences do not move: set
+  them again by hand in the TestFlight one.
+
+While you have both, use one at a time: before you connect with one, close the other from the app
+switcher. Both use the same ports to talk to the dash: if the other one is still connected, the warning
+"Official CFMoto app is in the way" means that one.
 
 Once the TestFlight one works, you can delete the other (with a free Apple ID, that frees one of the 3
 slots). First remove the bike in **Garage** ("Remove bike"): otherwise iOS may keep its password.

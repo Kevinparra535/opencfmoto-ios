@@ -1,10 +1,11 @@
 # Prueba en la moto — guía paso a paso
 
-> **In English, in short:** this is the checklist for a first ride. Install the app (the free
-> sideload IPA from Releases: [INSTALAR.md](INSTALAR.md#english)), pair the bike by scanning the
-> dash QR, tap **Connect** with the engine off and compare what you see with the table in «En la
-> moto». With the sideload build you join the bike Wi-Fi yourself: the app shows the **"Join the
-> bike Wi-Fi"** sheet (use the sideload row of the table). Then share the logs (Logs ▸ Share) in a
+> **In English, in short:** this is the checklist for a first ride. Install the app (easiest: the public
+> TestFlight beta, <https://testflight.apple.com/join/aWur6hxp>; or the free sideload IPA from Releases:
+> [INSTALAR.md](INSTALAR.md#english)), pair the bike by scanning the dash QR, tap **Connect** with the
+> engine off and compare what you see with the table in «En la moto». With the sideload build you join
+> the bike Wi-Fi yourself: the app shows the **"Join the bike Wi-Fi"** sheet (use the sideload row of
+> the table). Then share the logs (Logs ▸ Share) in a
 > [field report](https://github.com/Kevinparra535/opencfmoto-ios/issues/new?template=field-report.yml).
 
 Esta guía es para la **primera prueba real** de OpenCfMoto para iOS con tu tablero CFMoto / Carbit.
@@ -21,9 +22,11 @@ permiso de red local, el codificador de video del teléfono y el comportamiento 
 
 ## Antes de salir
 
-1. **Instala la app** en tu iPhone. **Sin Mac y gratis**: la versión sideload de Releases con tu
-   Apple ID ([INSTALAR.md](INSTALAR.md)); es Release, pero la variante «free»: al Wi-Fi de la moto te
-   unes tú en Ajustes (ver la tabla). **Sin Mac, con cuenta de pago**: tu propio TestFlight
+1. **Instala la app** en tu iPhone. **La más fácil, gratis y sin Mac**: la beta pública de TestFlight
+   ([INSTALAR.md](INSTALAR.md#testflight-la-beta-pública)); ya es Release y la variante completa (en la
+   tabla, la fila de TestFlight). **Con tu Apple ID gratuito**: la versión sideload de Releases
+   ([INSTALAR.md](INSTALAR.md)); es Release, pero la variante «free»: al Wi-Fi de la moto te unes tú en
+   Ajustes (ver la tabla). **Sin Mac, con cuenta de pago**: tu propio TestFlight
    ([TESTFLIGHT.md](TESTFLIGHT.md)); esa build ya es Release y la variante completa. **Con Mac**:
    desde Xcode (README → *Compilar e instalar*), con `OCM_FLAVOR = full`, que permite que la app se
    una sola al Wi-Fi de la moto; para la moto compílala en **Release** (va más fluida) y ábrela desde
