@@ -1729,6 +1729,7 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
             s.summaryIndex[c.route.tag] = s.summaries.count
             s.summaries.append(BackgroundLog.EncoderSummary(name: name, frames: 0, keyframes: 0, errors: 0, averageEncodeMs: nil))
         }
+        Self.tempStressWiden() // TEMPORARY stress experiment W3
         let p = currentEffective()
         Log.i("VIDEO", BackgroundLog.backgroundSoftware(fps: p.frameRate, encoder: name, bitrate: p.bitrate))
         c.route.goLive(first: c.probeIDR) { encoderOutput($0, route: c.route) }
@@ -1763,6 +1764,7 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
             }
             return s.holdCanvas != nil && s.holdCanvas == s.canvasSize ? s.holdFrames.count : 0
         }
+        Self.tempStressWiden() // TEMPORARY stress experiment W4
         factory?.flush()
         markKeyframePending(sessionLost: true)
         applyEffectiveParameters() // cancels the render timer
@@ -1838,6 +1840,7 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
         retireLiveEncoder()
         backgroundRung = nil
         shared.withLock { $0.mode = .foreground; $0.health = nil; $0.backgroundTag = nil }
+        Self.tempStressWiden() // TEMPORARY stress experiment W1
         encoder = makeForegroundEncoder()
         frameQueue.resynchronize() // the dash decoder's reference is the hold / software picture
         logSwitch(from: oldName, to: shared.current.feeding ?? DashEncoderKind.videoToolboxHardware.description, now: now)
@@ -1852,7 +1855,19 @@ public final class DashProjectionEngine: VideoFrameSource, @unchecked Sendable {
         }
         Log.i("VIDEO", BackgroundLog.foreground(backgroundSeconds: since.map { now - $0 } ?? 0, encoders: summaries,
                                                 holdServed: holdServed))
+        Self.tempStressWiden() // TEMPORARY stress experiment W2
         endBackgroundPeriod()
+    }
+
+    /// TEMPORARY stress experiment (dropped before the fix is final): `OCM_WIDEN_SWITCH_MS` sleeps inside
+    /// the switch windows (after each `mode` change, and between L13 and the end of the background period).
+    private static let tempStressWidenSeconds: TimeInterval = {
+        guard let raw = ProcessInfo.processInfo.environment["OCM_WIDEN_SWITCH_MS"], let ms = Double(raw), ms > 0 else { return 0 }
+        return ms / 1000
+    }()
+
+    private static func tempStressWiden() {
+        if tempStressWidenSeconds > 0 { Thread.sleep(forTimeInterval: tempStressWidenSeconds) }
     }
 
     /// L7: the encoder that feeds the dash changes; the keyframe gate is closed.
