@@ -117,21 +117,32 @@ final class VideoEngineBackgroundTests: XCTestCase {
         return frames
     }
 
-    /// `.inactive` (hold picture, optionally the pre-warm), then `.background`; waits for the outcome.
+    /// `.inactive` (hold picture, optionally the pre-warm), then `.background`; waits for the outcome, L6
+    /// (`background → …`). The engine sets `mode` in the middle of the switch, before L6 (in hold also before
+    /// L7), so `mode` alone does not say the switch is done.
     private func lock(_ engine: DashProjectionEngine, preWarm: Bool = false, file: StaticString = #filePath, line: UInt = #line) {
         let built = Locked<Bool?>(nil)
         engine.prepareHoldPicture { ok in built.set(ok) }
         if preWarm { engine.prepareBackgroundEncoder() }
         XCTAssertTrue(waitUntil { built.current != nil }, file: file, line: line)
         XCTAssertEqual(built.current, true, "hold picture", file: file, line: line)
+        let switched = LogCapture()
+        defer { switched.stop() }
         engine.enterBackground()
-        XCTAssertTrue(waitUntil { engine.mode == .hold || engine.mode == .backgroundSoftware }, "ladder outcome",
-                      file: file, line: line)
+        XCTAssertTrue(switched.wait("background \u{2192} "), "ladder outcome (L6)", file: file, line: line)
+        XCTAssertTrue(engine.mode == .hold || engine.mode == .backgroundSoftware, "ladder outcome", file: file, line: line)
     }
 
+    /// `.active` again; waits for the end of the switch back to the hardware encoder, L13 (`foreground → …`):
+    /// logged after the gate closed and the queue was flushed (L7) and the new encoder's IDR was submitted.
+    /// `mode` is `.foreground` before all that; a pull right then still gets the frame the background encoder
+    /// had queued (the next frame of the stream the dash decodes, same tag, so P0-6 holds).
     private func unlock(_ engine: DashProjectionEngine, file: StaticString = #filePath, line: UInt = #line) {
+        let switched = LogCapture()
+        defer { switched.stop() }
         engine.enterForeground()
-        XCTAssertTrue(waitUntil { engine.mode == .foreground }, file: file, line: line)
+        XCTAssertTrue(switched.wait("foreground \u{2192} "), "switch done (L13)", file: file, line: line)
+        XCTAssertEqual(engine.mode, .foreground, file: file, line: line)
     }
 
     /// P0-6 invariant: wherever the encoder tag changes on the wire, the frame is an IDR.
@@ -265,7 +276,8 @@ final class VideoEngineBackgroundTests: XCTestCase {
         unlock(engine)
         let resumed = await pull(engine, 8)
         let served = foreground + background + resumed
-        // The switch flushed what the old encoder had queued: right after it, the new encoder's IDR.
+        // The switch flushed what the old encoder had queued: right after it, the new encoder's IDR (`lock` and
+        // `unlock` return once the switch is done, not when `mode` changes).
         XCTAssertTrue(background.first?.isKeyframe ?? false)
         XCTAssertNotEqual(background.first?.encoderTag, foreground.last?.encoderTag)
         XCTAssertTrue(resumed.first?.isKeyframe ?? false)
@@ -373,7 +385,8 @@ final class VideoEngineBackgroundTests: XCTestCase {
         for _ in 0 ..< 20 where engine.mode != .hold {
             _ = await engine.nextFrame(timeout: 0.5)
         }
-        XCTAssertTrue(waitUntil { engine.mode == .hold })
+        XCTAssertTrue(log.wait("background \u{2192} hold"), "L6 ends the switch; `mode` is .hold before L7 and L6")
+        XCTAssertEqual(engine.mode, .hold)
         let demotion = "[bg] vt-sw demoted: 3 encode errors in 10s (last VTCompressionSessionEncodeFrame failed: kVTInvalidSessionErr) \u{2192} hold"
         XCTAssertEqual(log.lines("[bg] vt-sw demoted"), [demotion])
         XCTAssertEqual(log.level(demotion), .warn)
@@ -480,6 +493,7 @@ final class VideoEngineBackgroundTests: XCTestCase {
         XCTAssertTrue(waitUntil { engine.mode == .backgroundSoftware })
         XCTAssertEqual(log.lines("[bg] retry ladder"), ["[bg] retry ladder (60s after the demotion, attempt 1/3)"])
         XCTAssertTrue(log.messages.contains("[switch] hold \u{2192} vt-sw: gate closed; next frame on the wire is an IDR"))
+        XCTAssertTrue(log.wait("[bg-probe] dry run ended"), "logged after `mode` changes")
         XCTAssertEqual(log.count("[bg-probe] dry run ended"), 1, "the dry run stops when the hold ends")
         let frames = await pull(engine, 3)
         XCTAssertTrue(frames.first?.isKeyframe ?? false)
@@ -685,6 +699,7 @@ final class VideoEngineBackgroundTests: XCTestCase {
         XCTAssertGreaterThan(stats.backgroundSeconds, 0)
         XCTAssertEqual(stats.demotions, 0)
         unlock(engine)
+        XCTAssertTrue(waitUntil { engine.stats.backgroundSeconds == 0 }, "the background period ended (just after L13)")
         let foreground = engine.stats
         XCTAssertEqual(foreground.encoder, "vt-hw")
         XCTAssertNil(foreground.backgroundFpsCap)
