@@ -3,15 +3,17 @@
 *Español primero · [English below](#english)*
 
 Última actualización: 9 de noviembre de 2026. Esta página describe lo que hace la app de iPhone
-**OpenCfMoto para iOS** según el código de este repositorio: la versión para sideload de
-[Releases](https://github.com/Kevinparra535/opencfmoto-ios/releases), las copias de TestFlight que cada
-persona compila para sí y las que se compilan con Xcode.
+**OpenCfMoto para iOS** según el código de este repositorio: la beta pública de TestFlight, la versión
+para sideload de [Releases](https://github.com/Kevinparra535/opencfmoto-ios/releases), las copias de
+TestFlight que cada persona compila para sí y las que se compilan con Xcode.
 
 ## En resumen
 
 - **Sin cuentas, sin anuncios, sin telemetría ni analítica, sin rastreo.** La app no lleva SDK de
-  terceros (ni de analítica ni de publicidad) y OpenCfMoto no tiene servidor propio: a nosotros no nos
-  llega nada de tu iPhone.
+  terceros (ni de analítica ni de publicidad) y OpenCfMoto no tiene servidor propio: la app no nos envía
+  nada de tu iPhone. La excepción es TestFlight, de Apple: con la beta pública, TestFlight nos muestra
+  los fallos y el uso de la app y los comentarios que envíes, sin tu nombre ni tu correo (salvo el correo
+  que escribas en un comentario; ver [Si la instalas con TestFlight](#si-la-instalas-con-testflight)).
 - **Tus datos se quedan en tu iPhone** (motos, viajes, lugares, registros) hasta que tú los compartes.
 - **El mapa, las búsquedas, las rutas y los límites de velocidad** salen de servicios públicos basados
   en OpenStreetMap y, en las pantallas del iPhone, de Apple. Ven tu dirección IP y lo que se les pide,
@@ -115,7 +117,33 @@ Wi-Fi de la moto, los modelos y los nombres de los destinos sí quedan: léelos 
 Si vas a adjuntar registros a una incidencia pública de GitHub, quita también las ubicaciones.
 
 iOS puede enviar a Apple sus propios datos de diagnóstico si lo permitiste en Ajustes ▸ Privacidad y
-seguridad ▸ Análisis y mejoras. Eso lo hace iOS, no la app, y a nosotros no nos llega.
+seguridad ▸ Análisis y mejoras. Eso lo hace iOS, no la app, y a nosotros no nos llega; con la beta de
+TestFlight, los fallos sí nos llegan por TestFlight (ver
+[Si la instalas con TestFlight](#si-la-instalas-con-testflight)).
+
+## Si la instalas con TestFlight
+
+TestFlight es un servicio de Apple, con su propio aviso de privacidad:
+[TestFlight & Privacy](https://www.apple.com/legal/privacy/data/en/test-flight/) (en inglés). Mientras
+pruebas la beta pública, Apple recoge estos datos de la prueba y nos los muestra en App Store Connect, su
+web para quien publica la beta:
+
+- **Los fallos:** el informe de cada cierre inesperado de la app y, si TestFlight te ofrece contar qué
+  pasó y lo escribes, también ese comentario.
+- **El uso:** si la instalaste y cuándo, cuántas veces la usas (sesiones), cuántos fallos tuvo, el modelo
+  de tu iPhone y su versión de iOS.
+- **Tus comentarios:** lo que envíes desde TestFlight, también las capturas de pantalla que adjuntes.
+
+Con el enlace público no vemos tu nombre ni tu correo: en App Store Connect apareces como anónimo. Si
+escribes tu correo al enviar un comentario, lo vemos solo en ese comentario. Lo que Apple hace con estos
+datos lo explica su aviso.
+
+OpenCfMoto no añade nada a esto: la app sigue sin enviarnos datos; esto lo recoge TestFlight, no el
+código de la app. Con la versión para sideload o con Xcode no pasa, y en tu propia copia de TestFlight
+(un *fork*) estos datos te llegan a ti, no a nosotros.
+
+Para dejar de compartirlos, sal de la beta: en TestFlight, abre OpenCfMoto y toca «Dejar de probar»
+(*Stop Testing*), o borra la app. Lo que ya se envió sigue el aviso de privacidad de TestFlight.
 
 ## Contacto
 
@@ -128,15 +156,17 @@ en el historial del repositorio.
 ## English
 
 Last updated: November 9, 2026. This page describes what the **OpenCfMoto for iOS** iPhone app does,
-according to the code in this repository: the sideload build from
+according to the code in this repository: the public TestFlight beta, the sideload build from
 [Releases](https://github.com/Kevinparra535/opencfmoto-ios/releases), the TestFlight copies each person
 builds for themselves, and builds made with Xcode.
 
 ### In short
 
 - **No accounts, no ads, no telemetry or analytics, no tracking.** The app contains no third-party SDKs
-  (no analytics, no advertising), and OpenCfMoto has no server of its own: nothing from your iPhone
-  reaches us.
+  (no analytics, no advertising), and OpenCfMoto has no server of its own: the app sends us nothing from
+  your iPhone. The exception is Apple's TestFlight: with the public beta, TestFlight shows us the app's
+  crashes and usage and the feedback you send, without your name or e-mail (unless you type your e-mail
+  in your feedback; see [If you install it with TestFlight](#if-you-install-it-with-testflight)).
 - **Your data stays on your iPhone** (bikes, trips, places, logs) until you share it.
 - **The map, search, routing and speed limits** come from public OpenStreetMap-based services and, on
   the iPhone's own screens, from Apple. They see your IP address and what is asked of them, which
@@ -233,7 +263,33 @@ models and destination names do stay: read them before you post them. If you att
 GitHub issue, remove locations too.
 
 iOS may send Apple its own diagnostic data if you allowed it in Settings ▸ Privacy & Security ▸
-Analytics & Improvements. That is iOS, not the app, and it does not reach us.
+Analytics & Improvements. That is iOS, not the app, and it does not reach us; with the TestFlight beta,
+crashes do reach us through TestFlight (see
+[If you install it with TestFlight](#if-you-install-it-with-testflight)).
+
+### If you install it with TestFlight
+
+TestFlight is an Apple service with its own privacy notice,
+[TestFlight & Privacy](https://www.apple.com/legal/privacy/data/en/test-flight/). While you test the
+public beta, Apple collects this testing data and shows it to us in App Store Connect, its website for
+whoever publishes the beta:
+
+- **Crashes:** the report of each time the app closes unexpectedly and, if you add a comment when
+  TestFlight offers it, that comment too.
+- **Usage:** whether and when you installed it, how many times you use it (sessions), how many crashes it
+  had, your iPhone model and its iOS version.
+- **Your feedback:** what you send from TestFlight, screenshots you attach included.
+
+Through the public link we do not see your name or e-mail: App Store Connect shows you as anonymous. If you
+type your e-mail when you send feedback, we see it on that feedback only. What Apple does with this data
+is in its notice.
+
+OpenCfMoto adds nothing to this: the app still sends us no data; TestFlight collects this, not the app's
+code. It does not happen with the sideload build or with Xcode, and in your own TestFlight copy (a fork)
+this data reaches you, not us.
+
+To stop sharing it, leave the beta: in TestFlight, open OpenCfMoto and tap Stop Testing, or delete the
+app. What was already sent follows Apple's TestFlight privacy notice.
 
 ### Contact
 
