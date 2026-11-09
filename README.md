@@ -14,6 +14,7 @@ giro y Apple Music en los tableros **CFMOTO MotoPlay** y otros **Carbit / EasyCo
 la moto. Una **alternativa a CarPlay para motos**.
 
 [![CI](https://github.com/Kevinparra535/opencfmoto-ios/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Kevinparra535/opencfmoto-ios/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Kevinparra535/opencfmoto-ios)](https://github.com/Kevinparra535/opencfmoto-ios/releases/latest)
 [![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
 [![Platform: iOS 17+](https://img.shields.io/badge/platform-iOS%2017%2B-lightgrey)](#requirements)
 [![Swift 5.9+ · SwiftUI](https://img.shields.io/badge/Swift-5.9%2B%20%C2%B7%20SwiftUI-F05138?logo=swift&logoColor=white)](https://www.swift.org)
@@ -28,7 +29,7 @@ la moto. Una **alternativa a CarPlay para motos**.
 
 <sub>What the app streamed to a simulated dash in CI, and iOS simulator screenshots; demo data only · Map © OpenStreetMap contributors<br/>Lo que la app envió a un tablero simulado en la CI y capturas del simulador de iOS; solo datos de demostración · Mapa © colaboradores de OpenStreetMap</sub>
 
-### [Try it](#try-it) · [Pruébala](#pruebala) · [Credits / Créditos](CREDITS.md) · [English](#opencfmoto-for-ios-english) · [Español](#opencfmoto-para-ios)
+### [Install on your iPhone / Instalar en tu iPhone](https://kevinparra535.github.io/opencfmoto-ios/) · [Try it](#try-it) · [Pruébala](#pruebala) · [Credits / Créditos](CREDITS.md) · [English](#opencfmoto-for-ios-english) · [Español](#opencfmoto-para-ios)
 
 </div>
 
@@ -53,11 +54,15 @@ usando el protocolo **PXC** obtenido por ingeniería inversa. Es un port a Swift
 <a id="pruebala"></a>
 ## Pruébala
 
-- **En tu iPhone, sin Mac y gratis**: instala la versión para sideload
-  (`OpenCfMoto-vX.Y.Z-sideload.ipa`, en [Releases](https://github.com/Kevinparra535/opencfmoto-ios/releases))
-  con SideStore, AltStore Classic o Sideloadly y un Apple ID gratuito. Te unes tú al Wi-Fi de la moto
-  desde Ajustes (la app te da el nombre y la contraseña, con un botón para copiarla; la copia dura 2
-  minutos) y hay que renovarla cada 7 días. Paso a paso: [docs/INSTALAR.md](docs/INSTALAR.md).
+- **En tu iPhone, sin Mac y gratis:
+  [kevinparra535.github.io/opencfmoto-ios](https://kevinparra535.github.io/opencfmoto-ios/)**. Abre esa
+  página en Safari en tu iPhone: eliges la herramienta (SideStore, AltStore Classic o Sideloadly) y, con
+  SideStore o AltStore, un botón le añade la fuente de OpenCfMoto; desde ahí instalas la app con tu Apple
+  ID gratuito. Es la versión para sideload (`OpenCfMoto-vX.Y.Z-sideload.ipa`, en
+  [Releases](https://github.com/Kevinparra535/opencfmoto-ios/releases)).
+  Te unes tú al Wi-Fi de la moto desde Ajustes (la app te da el nombre y la contraseña, con un botón para
+  copiarla; la copia dura 2 minutos) y hay que renovarla cada 7 días. Paso a paso:
+  [docs/INSTALAR.md](docs/INSTALAR.md).
 - **Todo, también sin Mac**: haz un fork de este repositorio y compila tu propia copia en TestFlight con
   GitHub Actions (cuenta de pago de Apple Developer, 99 USD al año) →
   [docs/TESTFLIGHT.md](docs/TESTFLIGHT.md).
@@ -251,11 +256,13 @@ docs/ARCHITECTURE.md            Arquitectura y reglas del proyecto
 docs/spec/                      Especificaciones de comportamiento extraídas de la app Android
 docs/TESTFLIGHT.md              Instalar sin Mac: compilar y subir a TestFlight desde GitHub
 docs/INSTALAR.md                Instalar sin Mac con un Apple ID gratuito (SideStore, AltStore, Sideloadly)
-.github/workflows/              ci.yml (pruebas y compilaciones), testflight.yml (TestFlight) y
-                                release.yml (IPA para sideload)
+.github/workflows/              ci.yml (pruebas y compilaciones), testflight.yml (TestFlight),
+                                release.yml (IPA para sideload) y pages.yml (la página de instalación)
+site/                           La página de instalación (GitHub Pages), revisada por tools/site/
 tools/                          Herramientas: traducciones, CI, tablero simulado (fakedash)
   testflight/                     App Store Connect (asc.py), firma y subida, revisión del IPA
 CREDITS.md, NOTICE, LICENSES/   Créditos, avisos de copyright y licencias de terceros (Apache 2.0)
+PRIVACY.md                      Privacidad: qué se queda en el iPhone y qué servicios consulta la app
 ```
 
 ## Pruebas e integración continua
@@ -286,7 +293,8 @@ los registros. Las búsquedas, rutas y teselas consultan servicios de OpenStreet
 Music en el tablero**, la canción se lee en el iPhone y OpenCfMoto no la envía a ningún sitio (ni
 títulos, ni artistas, ni identificadores de canciones en los registros: cada canción aparece con
 un código que cambia en cada arranque de la app); la portada de las canciones en streaming la carga
-MusicKit de Apple desde los servidores de Apple.
+MusicKit de Apple desde los servidores de Apple. Todo el detalle, servicio por servicio:
+[PRIVACY.md](PRIVACY.md).
 
 ## Preguntas frecuentes
 
@@ -343,11 +351,14 @@ the reverse-engineered **PXC** protocol. It is a Swift port of the Android app
 
 ## Try it
 
-- **On your iPhone, no Mac, free**: install the sideload build
-  (`OpenCfMoto-vX.Y.Z-sideload.ipa`, on [Releases](https://github.com/Kevinparra535/opencfmoto-ios/releases))
-  with SideStore, AltStore Classic or Sideloadly and a free Apple ID. You join the bike Wi-Fi yourself
-  in Settings (the app shows the network and the password, with a copy button; the copy lasts 2
-  minutes), and the app must be refreshed every 7 days. Step by step:
+- **On your iPhone, no Mac, free:
+  [kevinparra535.github.io/opencfmoto-ios](https://kevinparra535.github.io/opencfmoto-ios/#english)**. Open
+  that page in Safari on your iPhone: pick an install tool (SideStore, AltStore Classic or Sideloadly) and,
+  with SideStore or AltStore, one button adds the OpenCfMoto source to it; you install the app from there
+  with your free Apple ID. It is the sideload build (`OpenCfMoto-vX.Y.Z-sideload.ipa`, on
+  [Releases](https://github.com/Kevinparra535/opencfmoto-ios/releases)).
+  You join the bike Wi-Fi yourself in Settings (the app shows the network and the password, with a copy
+  button; the copy lasts 2 minutes), and the app must be refreshed every 7 days. Step by step:
   [docs/INSTALAR.md](docs/INSTALAR.md#english).
 - **Everything, still without a Mac**: fork this repository and build your own TestFlight copy with
   GitHub Actions (paid Apple Developer account, 99 USD a year) →
@@ -533,11 +544,13 @@ docs/ARCHITECTURE.md            Architecture and project rules
 docs/spec/                      Behaviour specs extracted from the Android app
 docs/TESTFLIGHT.md              No Mac: build and upload to TestFlight from GitHub
 docs/INSTALAR.md                No Mac: install with a free Apple ID (SideStore, AltStore, Sideloadly)
-.github/workflows/              ci.yml (tests and builds), testflight.yml (TestFlight) and
-                                release.yml (sideload IPA)
+.github/workflows/              ci.yml (tests and builds), testflight.yml (TestFlight),
+                                release.yml (sideload IPA) and pages.yml (the install page)
+site/                           The install page (GitHub Pages), checked by tools/site/
 tools/                          Tooling: translations, CI, simulated dash (fakedash)
   testflight/                     App Store Connect (asc.py), signing and upload, IPA checks
 CREDITS.md, NOTICE, LICENSES/   Credits, copyright notices and third-party licenses (Apache 2.0)
+PRIVACY.md                      Privacy: what stays on the iPhone and which services the app queries
 ```
 
 ## Tests and CI
@@ -566,7 +579,7 @@ Wi-Fi passwords live in the Keychain and are redacted in logs. Search, routing a
 OpenStreetMap services. With **Apple Music on the dash** the song is read on the iPhone and
 OpenCfMoto sends it nowhere (no titles, artists or song ids in logs: each song shows as a code that
 changes every time the app starts); the cover of streamed songs is loaded by Apple's MusicKit from
-Apple's servers.
+Apple's servers. Every detail, service by service: [PRIVACY.md](PRIVACY.md#english).
 
 ## FAQ
 

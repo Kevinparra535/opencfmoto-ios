@@ -1,0 +1,217 @@
+# Privacidad · Privacy
+
+*Español primero · [English below](#english)*
+
+Última actualización: 9 de noviembre de 2026. Esta página describe lo que hace la app de iPhone
+**OpenCfMoto para iOS** según el código de este repositorio: la versión para sideload de
+[Releases](https://github.com/Kevinparra535/opencfmoto-ios/releases), las copias de TestFlight que cada
+persona compila para sí y las que se compilan con Xcode.
+
+## En resumen
+
+- **Sin cuentas, sin anuncios, sin telemetría ni analítica, sin rastreo.** La app no lleva SDK de
+  terceros (ni de analítica ni de publicidad) y OpenCfMoto no tiene servidor propio: a nosotros no nos
+  llega nada de tu iPhone.
+- **Tus datos se quedan en tu iPhone** (motos, viajes, lugares, registros) hasta que tú los compartes.
+- **El mapa, las búsquedas, las rutas y los límites de velocidad** salen de servicios públicos basados
+  en OpenStreetMap y, en las pantallas del iPhone, de Apple. Ven tu dirección IP y lo que se les pide,
+  que incluye posiciones (detalle abajo).
+
+## Lo que se queda en tu iPhone
+
+Todo esto se guarda solo en el almacenamiento de la app en tu iPhone. Como cualquier dato de una app,
+entra en las copias de seguridad de tu iPhone (iCloud o el computador) si las usas, y se borra al borrar
+la app.
+
+- **Tus motos** (Garaje): nombre, modelo, nombre de la red Wi-Fi de la moto y lo que el tablero cuenta de
+  sí mismo (modelo, número de serie). La **contraseña Wi-Fi** de cada moto va en el llavero (Keychain)
+  de iOS, solo en este iPhone (no se sincroniza con el llavero de iCloud). La foto de la moto, si eliges
+  una.
+- **Tus viajes** (si dejas activado «Registrar viajes automáticamente»): el recorrido GPS, la distancia,
+  las velocidades y las horas de cada ruta mientras el tablero muestra el mapa.
+- **Tus lugares**: casa, favoritos, marcadores, los últimos destinos y dónde aparcaste.
+- **Tus ajustes**, con tu servidor de mapas y tu clave de openrouteservice si los pones.
+- **Los registros** (Registros): lo que hace la app (pasos de la conexión, errores, el modelo del
+  tablero, el nombre de la red Wi-Fi de la moto, los nombres de los destinos y, a veces, una posición).
+  Una copia, sin contraseñas ni números de serie, se guarda al pasar la app a segundo plano (y cada medio
+  minuto mientras está conectada) para no perderla si iOS la cierra; el siguiente arranque la recupera y
+  la borra. Si iOS entrega a la app el informe de un cierre inesperado (MetricKit), la app lo guarda con
+  los registros.
+- **Las grabaciones del tablero** (Registros ▸ Diagnóstico del enlace ▸ «Grabar el vídeo enviado al
+  tablero»): el vídeo que recibe el tablero, en el que se ve el mapa alrededor de ti. Se borran en el
+  siguiente arranque.
+- **Las teselas del mapa** que ya se descargaron (hasta 512 MB, cada una caduca a los 90 días).
+- **Los archivos que preparas para compartir** (GPX, registros, ajustes): se borran solos poco después
+  (al pasar la app a segundo plano, los que tienen más de 2 minutos) y en el siguiente arranque.
+
+## Permisos y para qué
+
+- **Cámara**: escanear el código QR de emparejamiento que muestra el tablero. Solo mientras el escáner
+  está abierto; no se guardan fotos.
+- **Fotos**: ningún permiso. El selector de fotos de iOS le da a la app solo la foto que eliges (la de tu
+  moto, o una foto del QR).
+- **Ubicación** («Al usar la app», ubicación exacta): el mapa, la navegación giro a giro, la velocidad,
+  los límites de velocidad y los viajes. Con el iPhone bloqueado la app la sigue usando solo mientras
+  está conectada al tablero, graba un viaje o navega; iOS muestra entonces el indicador azul de
+  ubicación. La app nunca pide «Siempre».
+- **Red local**: encontrar el tablero en el Wi-Fi de la moto y enviarle el mapa.
+- **Multimedia y Apple Music** (solo si activas Apple Music en el tablero, en Ajustes): leer la canción
+  que suena en la app Música (título, artista y portada) y controlarla desde el tablero. Las canciones no
+  aparecen en los registros: cada una sale como un código que cambia en cada arranque.
+- **Wi-Fi** (solo en las copias de TestFlight o Xcode con cuenta de pago): unirse sola al Wi-Fi de la
+  moto y leer el nombre de la red Wi-Fi actual. La versión para sideload no puede hacer ninguna de las
+  dos cosas.
+- **Audio en segundo plano** (no es un permiso): los avisos de voz y, solo si activas los botones del
+  manillar, un audio silencioso para recibirlos. La app no usa el micrófono.
+
+## Servicios en línea que usa la app
+
+La app se conecta directamente desde tu iPhone a estos servicios (por los datos móviles mientras estás
+unido al Wi-Fi de la moto, que no tiene internet). Cada uno ve tu **dirección IP** y la hora de la
+petición, y tiene su propia política de privacidad. A los servicios de mapas la app se presenta como
+`OpenCfMoto-iOS/<versión> (moto dash map; +https://github.com/Kevinparra535/opencfmoto-ios)`
+(User-Agent), como piden sus normas de uso; no añade ningún identificador tuyo ni de tu iPhone.
+
+| Servicio | Para qué | Qué recibe |
+|---|---|---|
+| tile.openstreetmap.org (Fundación OpenStreetMap), o el servidor de teselas que pongas en Ajustes | El mapa del tablero y de la Vista de tablero | Las coordenadas de las teselas que muestra el mapa, es decir, la zona en la que estás y la de tu ruta. Con tu propio servidor, también las de la ruta por delante (como máximo 400); a los servidores de OpenStreetMap no se les piden por adelantado. |
+| Photon, photon.komoot.io (komoot); si falla o no hay posición, Nominatim, nominatim.openstreetmap.org (Fundación OpenStreetMap) | Buscar lugares y direcciones | El texto que escribes, mientras lo escribes (desde 2 letras), y tu posición **redondeada a 2 decimales** (cerca de 1 km). |
+| Overpass API, overpass-api.de (FOSSGIS e.V.) | Lugares cercanos (gasolina, café, comida…) | La categoría y tu posición **redondeada a 3 decimales** (cerca de 100 m). |
+| Overpass API, overpass-api.de (FOSSGIS e.V.) | El límite de velocidad de la vía | Mientras la app recibe tu GPS, tu **posición exacta**, como mucho una vez cada 12 segundos (y una vez cada 10 minutos por cada zona de unos 100 m). |
+| Valhalla, valhalla1.openstreetmap.de (FOSSGIS e.V.) y OSRM, router.project-osrm.org (servidor de demostración del proyecto OSRM) | Calcular rutas | El origen (tu **posición exacta**), el destino, los puntos intermedios de las rutas alternativas o de ida y vuelta, y si evitar peajes o autovías. Al recalcular, tu posición de nuevo. |
+| openrouteservice, api.openrouteservice.org (HeiGIT), **solo si pones tu propia clave** en Ajustes | Calcular rutas: primero las que evitan peajes o autovías, y de reserva si los otros fallan | Lo mismo que los de arriba, y tu clave. |
+| Apple Maps (MapKit), de Apple | El mapa de las pantallas Mapa y Viajes del iPhone | Lo que iOS pide a Apple para dibujar ese mapa (la zona que muestras). |
+| Apple Music (MusicKit), de Apple, solo con Apple Music en el tablero | La portada de una canción en streaming que no trae la suya | La petición de esa portada a los servidores de Apple. |
+
+**El tablero de la moto** no es un servicio de internet: la app le habla por el Wi-Fi de la moto y le
+envía el vídeo del mapa (con la canción, si activaste Apple Music en el tablero). Para enlazar le envía lo
+que pide su protocolo: «Apple» y el modelo de tu iPhone (o la marca y el modelo de un teléfono Android si
+activas «Identificarse como teléfono Android»), un identificador y una clave de firma que la app crea de
+nuevo en cada arranque.
+
+Fuera de estos servicios y del tablero, la app no se conecta a nada: ni a GitHub ni a ningún servidor
+nuestro. Los enlaces de la pantalla Acerca de se abren en Safari solo si los tocas.
+
+## Registros e informes de problemas
+
+Los registros y los informes de problemas salen del iPhone **solo si tú los compartes** (con el menú de
+compartir de iOS: eliges la app y a quién). Antes de compartirlos, la app quita las contraseñas Wi-Fi
+(también las que van dentro de un código QR de emparejamiento), los números de serie e identificadores
+del tablero y las claves de API en las direcciones de servidores de mapas, salvo que actives
+**Ajustes ▸ Privacidad y registros ▸ «Incluir secretos en registros compartidos»**. El nombre de la red
+Wi-Fi de la moto, los modelos y los nombres de los destinos sí quedan: léelos antes de publicarlos.
+Si vas a adjuntar registros a una incidencia pública de GitHub, quita también las ubicaciones.
+
+iOS puede enviar a Apple sus propios datos de diagnóstico si lo permitiste en Ajustes ▸ Privacidad y
+seguridad ▸ Análisis y mejoras. Eso lo hace iOS, no la app, y a nosotros no nos llega.
+
+## Contacto
+
+Dudas o problemas: una [incidencia en GitHub](https://github.com/Kevinparra535/opencfmoto-ios/issues/new/choose).
+Fallos de seguridad: en privado, como explica [SECURITY.md](SECURITY.md). Los cambios de esta página quedan
+en el historial del repositorio.
+
+---
+
+## English
+
+Last updated: November 9, 2026. This page describes what the **OpenCfMoto for iOS** iPhone app does,
+according to the code in this repository: the sideload build from
+[Releases](https://github.com/Kevinparra535/opencfmoto-ios/releases), the TestFlight copies each person
+builds for themselves, and builds made with Xcode.
+
+### In short
+
+- **No accounts, no ads, no telemetry or analytics, no tracking.** The app contains no third-party SDKs
+  (no analytics, no advertising), and OpenCfMoto has no server of its own: nothing from your iPhone
+  reaches us.
+- **Your data stays on your iPhone** (bikes, trips, places, logs) until you share it.
+- **The map, search, routing and speed limits** come from public OpenStreetMap-based services and, on
+  the iPhone's own screens, from Apple. They see your IP address and what is asked of them, which
+  includes positions (details below).
+
+### What stays on your iPhone
+
+All of this is kept only in the app's storage on your iPhone. Like any app data, it is part of your
+iPhone's backups (iCloud or a computer) if you use them, and it is deleted with the app.
+
+- **Your bikes** (Garage): name, model, the bike's Wi-Fi network name and what the dash reports about
+  itself (model, serial number). Each bike's **Wi-Fi password** is kept in the iOS Keychain, on this
+  iPhone only (it does not sync to iCloud Keychain). The bike photo, if you choose one.
+- **Your trips** (if "Log trips automatically" stays on): the GPS track, distance, speeds and times of
+  each ride while the dash shows the map.
+- **Your places**: home, favorites, markers, recent destinations and where you parked.
+- **Your settings**, including your tile server and openrouteservice key if you set them.
+- **The logs** (Logs): what the app does (connection steps, errors, the dash model, the bike's Wi-Fi
+  network name, destination names and, at times, a position). A copy without passwords or serial
+  numbers is saved when the app goes to the background (and every half minute while it is connected),
+  so it is not lost if iOS closes the app; the next launch restores it and deletes it. If iOS hands the
+  app a crash report (MetricKit), the app keeps it with the logs.
+- **Dash recordings** (Logs ▸ Link diagnostics ▸ "Record the dash video stream"): the video the dash
+  receives, which shows the map around you. They are deleted at the next launch.
+- **Map tiles** already downloaded (up to 512 MB; each expires after 90 days).
+- **Files you prepare for sharing** (GPX, logs, settings): deleted soon after by themselves (when the app
+  goes to the background, those older than 2 minutes) and at the next launch.
+
+### Permissions and why
+
+- **Camera**: scan the pairing QR code shown on the dash. Only while the scanner is open; no photos are
+  saved.
+- **Photos**: no permission. The iOS photo picker gives the app only the photo you pick (your bike's, or
+  a photo of the QR).
+- **Location** ("While Using the App", precise): the map, turn-by-turn guidance, speed, speed limits and
+  trips. With the iPhone locked the app keeps using it only while it is connected to the dash, recording a
+  trip or navigating; iOS then shows the blue location indicator. The app never asks for "Always".
+- **Local Network**: find the dash on the bike's Wi-Fi and send it the map.
+- **Media & Apple Music** (only if you turn on Apple Music on the dash in Settings): read the song the
+  Music app plays (title, artist and cover) and control it from the dash. Songs do not appear in the
+  logs: each one shows as a code that changes at every launch.
+- **Wi-Fi** (only in TestFlight or Xcode copies with a paid account): join the bike's Wi-Fi by itself and
+  read the name of the current Wi-Fi network. The sideload build can do neither.
+- **Background audio** (not a permission): voice prompts and, only if you turn on the handlebar buttons,
+  a silent audio track to receive them. The app does not use the microphone.
+
+### Online services the app uses
+
+The app connects straight from your iPhone to these services (over cellular data while you are joined
+to the bike's Wi-Fi, which has no internet). Each one sees your **IP address** and the time of the
+request, and has its own privacy policy. To the map services the app introduces itself as
+`OpenCfMoto-iOS/<version> (moto dash map; +https://github.com/Kevinparra535/opencfmoto-ios)`
+(User-Agent), as their usage policies ask; it adds no identifier of you or your iPhone.
+
+| Service | What for | What it receives |
+|---|---|---|
+| tile.openstreetmap.org (OpenStreetMap Foundation), or the tile server you set in Settings | The dash map and the Dash view | The coordinates of the tiles the map shows, that is, the area you are in and the one of your route. With your own server, also those of the route ahead (at most 400); OpenStreetMap's servers are never asked in advance. |
+| Photon, photon.komoot.io (komoot); if it fails or there is no position, Nominatim, nominatim.openstreetmap.org (OpenStreetMap Foundation) | Place and address search | The text you type, as you type it (from 2 letters), and your position **rounded to 2 decimals** (about 1 km). |
+| Overpass API, overpass-api.de (FOSSGIS e.V.) | Nearby places (fuel, cafe, food…) | The category and your position **rounded to 3 decimals** (about 100 m). |
+| Overpass API, overpass-api.de (FOSSGIS e.V.) | The speed limit of the road | While the app gets your GPS, your **exact position**, at most once every 12 seconds (and once every 10 minutes for each area of about 100 m). |
+| Valhalla, valhalla1.openstreetmap.de (FOSSGIS e.V.), and OSRM, router.project-osrm.org (the OSRM project's demo server) | Routing | The start (your **exact position**), the destination, the in-between points of alternative or there-and-back routes, and whether to avoid tolls or highways. When rerouting, your position again. |
+| openrouteservice, api.openrouteservice.org (HeiGIT), **only if you enter your own key** in Settings | Routing: first for routes that avoid tolls or highways, and as a fallback when the others fail | The same as above, and your key. |
+| Apple Maps (MapKit), by Apple | The map on the iPhone's Map and Trips screens | What iOS asks Apple for to draw that map (the area you look at). |
+| Apple Music (MusicKit), by Apple, only with Apple Music on the dash | The cover of a streamed song that has none of its own | The request for that cover to Apple's servers. |
+
+**The bike's dash** is not an internet service: the app talks to it over the bike's Wi-Fi and sends it the
+map video (with the song, if you turned on Apple Music on the dash). To link, it sends what the dash's
+protocol asks for: "Apple" and your iPhone's model (or an Android phone's brand and model if you turn on
+"Identify as an Android phone"), and an identifier and a signing key the app makes anew at every launch.
+
+Apart from these services and the dash, the app connects to nothing: not to GitHub, not to any server of
+ours. The links on the About screen open in Safari only if you tap them.
+
+### Logs and problem reports
+
+Logs and problem reports leave the iPhone **only if you share them** (with the iOS share sheet: you pick
+the app and the recipient). Before sharing, the app removes Wi-Fi passwords (also those inside a pairing
+QR code), the dash's serial numbers and identifiers, and API keys in map server addresses, unless you turn
+on **Settings ▸ Privacy & logs ▸ "Include secrets in shared logs"**. The bike's Wi-Fi network name, the
+models and destination names do stay: read them before you post them. If you attach logs to a public
+GitHub issue, remove locations too.
+
+iOS may send Apple its own diagnostic data if you allowed it in Settings ▸ Privacy & Security ▸
+Analytics & Improvements. That is iOS, not the app, and it does not reach us.
+
+### Contact
+
+Questions or problems: a [GitHub issue](https://github.com/Kevinparra535/opencfmoto-ios/issues/new/choose).
+Security issues: privately, as [SECURITY.md](SECURITY.md) explains. Changes to this page stay in the
+repository's history.
