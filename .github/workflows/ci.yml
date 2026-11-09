@@ -38,7 +38,8 @@ jobs:
   # build_and_sign.sh steps that need no Mac and the TestFlight workflow's own shell blocks, against
   # an in-process fake App Store Connect: no secrets, no network. Failing tests become annotations.
   # Also tools/release/altsource.py (the release workflow's AltStore / SideStore source) on
-  # synthetic IPAs.
+  # synthetic IPAs, and the landing page in site/ (pages.yml deploys it): tools/site/check_site.py
+  # and its tests (nothing loaded from other sites, allowed links, the add-source links).
   testflight-helper:
     name: testflight-helper (Linux)
     runs-on: ubuntu-latest
@@ -52,6 +53,10 @@ jobs:
           python3 --version && openssl version
           python3 tools/testflight/test_asc.py
           python3 tools/release/test_altsource.py
+      - name: Landing page checks (site/)
+        run: |
+          python3 tools/site/test_check_site.py
+          python3 -I tools/site/check_site.py site
 
   # The same tests with what signs the build in the TestFlight workflow on a macOS runner when
   # /usr/bin comes first: Apple's python3 (3.9), /usr/bin/openssl (LibreSSL) and /bin/bash (3.2).

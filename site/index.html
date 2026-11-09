@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OpenCfMoto para iPhone: instalar</title>
+<meta name="description" content="Instala OpenCfMoto en tu iPhone: tu propio mapa, navegación giro a giro y Apple Music en el tablero de tu moto, por el Wi-Fi de la moto. Gratis y de código abierto. / Install OpenCfMoto on your iPhone.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)">
+<meta name="format-detection" content="telephone=no">
+<meta property="og:type" content="website">
+<meta property="og:title" content="OpenCfMoto para iPhone / for iPhone">
+<meta property="og:description" content="Tu propio mapa, navegación giro a giro y Apple Music en el tablero de tu moto. Gratis, código abierto. · Your own map, turn-by-turn guidance and Apple Music on your bike's dash. Free, open source.">
+<meta property="og:url" content="https://kevinparra535.github.io/opencfmoto-ios/">
+<meta property="og:image" content="https://kevinparra535.github.io/opencfmoto-ios/icon-180.png">
+<!-- icon-180.png: App/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png scaled to 180 px. -->
+<link rel="icon" type="image/png" href="icon-180.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --surface: #f6f7f9;
+  --border: #dde1e7;
+  --field-border: #6b7280;
+  --text: #111418;
+  --muted: #4b5563;
+  --accent: #b3410e;
+  --button-bg: #b3410e;
+  --button-text: #ffffff;
+  --callout-bg: #fff4e5;
+  --code-bg: #eef0f3;
+  --focus: #1d63d6;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1116;
+    --surface: #171b22;
+    --border: #2c333f;
+    --field-border: #8a94a3;
+    --text: #f2f5fa;
+    --muted: #9aa4b2;
+    --accent: #ff6a2c;
+    --button-bg: #ff6a2c;
+    --button-text: #0e1116;
+    --callout-bg: #231a12;
+    --code-bg: #1f242e;
+    --focus: #7cb4ff;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 17px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+.wrap {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 0 max(16px, env(safe-area-inset-right)) 48px max(16px, env(safe-area-inset-left));
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, textarea:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+code, textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+code { background: var(--code-bg); border-radius: 4px; padding: 0 4px; font-size: 0.85em; overflow-wrap: anywhere; }
+h1, h2, h3, h4 { line-height: 1.2; }
+p, ul, ol { margin: 0 0 12px; }
+ul, ol { padding-left: 1.25rem; }
+li { margin-bottom: 6px; }
+
+/* Header */
+.top { display: flex; justify-content: flex-end; padding-top: max(12px, env(safe-area-inset-top)); }
+.top a { font-weight: 600; text-decoration: none; padding: 8px 4px; }
+.hero { text-align: center; padding: 8px 0 20px; }
+.hero img { width: 88px; height: 88px; border-radius: 20px; display: block; margin: 0 auto 14px; }
+.hero-title { font-size: 2rem; margin: 0 0 10px; letter-spacing: -0.01em; text-wrap: balance; }
+.lead { font-size: 1.15rem; margin: 0 auto 12px; max-width: 34rem; text-wrap: balance; }
+.claim { font-weight: 700; margin: 0 0 10px; text-wrap: balance; }
+.fine { color: var(--muted); font-size: 0.9rem; text-wrap: balance; }
+
+/* Boxes */
+.callout {
+  background: var(--callout-bg);
+  border-left: 4px solid var(--accent);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 0 0 16px;
+}
+.needs { color: var(--muted); }
+.note { color: var(--muted); font-size: 0.95rem; }
+.tip { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+
+/* Steps */
+.step { border-top: 1px solid var(--border); padding-top: 8px; margin-top: 24px; }
+.step-title { display: flex; align-items: center; gap: 10px; font-size: 1.4rem; margin: 16px 0 12px; }
+.n {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--button-bg);
+  color: var(--button-text);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+.sub-title { font-size: 1.1rem; margin: 22px 0 8px; }
+
+/* Tool cards */
+.cards { display: grid; gap: 12px; margin: 0 0 16px; }
+@media (min-width: 760px) { .cards { grid-template-columns: repeat(3, 1fr); } }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px 6px;
+  font-size: 0.95rem;
+}
+.card.recommended { border: 2px solid var(--accent); }
+.card-title { font-size: 1.15rem; margin: 0 0 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--button-bg);
+  color: var(--button-text);
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+.card ul { padding-left: 1.1rem; }
+.card .site { font-weight: 600; }
+
+/* Buttons */
+.actions { display: grid; gap: 12px; margin: 0 0 12px; }
+@media (min-width: 560px) { .actions { grid-template-columns: 1fr 1fr; } }
+.button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60px;
+  padding: 10px 18px;
+  border-radius: 14px;
+  background: var(--button-bg);
+  color: var(--button-text);
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  text-decoration: none;
+}
+.button .en { font-size: 0.8rem; font-weight: 500; }
+.button.secondary {
+  background: transparent;
+  color: var(--text);
+  border: 2px solid var(--accent);
+  min-height: 52px;
+  margin: 0 0 12px;
+}
+@media (min-width: 560px) { .button.secondary { display: inline-flex; min-width: 16rem; } }
+
+/* Copy the source: the whole address stays visible (3 lines on a phone, 2 on a wide screen). 16 px text,
+   or iOS zooms in when the field gets the focus. */
+.copy { margin: 16px 0 8px; }
+.copy label { display: block; margin-bottom: 6px; }
+.copy textarea {
+  display: block;
+  width: 100%;
+  resize: none;
+  height: calc(3 * 1.4em + 18px);
+  padding: 8px 10px;
+  font-size: 16px;
+  line-height: 1.4;
+  word-break: break-all;
+  color: var(--text);
+  background: var(--code-bg);
+  border: 1px solid var(--field-border);
+  border-radius: 10px;
+}
+@media (max-width: 359px) { .copy textarea { height: calc(4 * 1.4em + 18px); } }
+@media (min-width: 700px) { .copy textarea { height: calc(2 * 1.4em + 18px); } }
+.copy-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 10px; }
+.copy-button {
+  min-height: 44px;
+  padding: 0 22px;
+  border-radius: 10px;
+  border: 2px solid var(--accent);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.copied { margin: 0; color: var(--muted); font-size: 0.95rem; }
+.copied:empty { display: none; }
+
+/* Safety, license, links */
+.legal { border-top: 1px solid var(--border); margin-top: 28px; padding-top: 8px; }
+.safety { font-size: 1.05rem; }
+.links { list-style: none; padding: 0; display: grid; gap: 0 16px; }
+@media (min-width: 560px) { .links { grid-template-columns: 1fr 1fr; } }
+.links li { margin: 0; }
+.links a { display: inline-block; padding: 8px 0; font-weight: 600; }
+
+.english { border-top: 6px solid var(--border); margin-top: 40px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header id="inicio">
+  <nav class="top" aria-label="Idioma / Language"><a href="#english" lang="en" hreflang="en">English ↓</a></nav>
+  <div class="hero">
+    <img src="icon-180.png" width="88" height="88" alt="">
+    <h1 class="hero-title">OpenCfMoto para iPhone</h1>
+    <p class="lead">Tu propio mapa, navegación giro a giro y Apple Music en el tablero de tu moto, por el Wi-Fi de la moto.</p>
+    <p class="claim">Gratis, código abierto, sin cuentas ni anuncios</p>
+    <p class="fine">Para tableros CFMOTO MotoPlay y otros Carbit / EasyConnect. Proyecto comunitario, sin afiliación con CFMOTO.</p>
+  </div>
+</header>
+
+<main>
+<p class="callout"><strong>Abre esta página en Safari en tu iPhone.</strong> Los botones del paso&nbsp;2 solo funcionan ahí (no en el navegador de otras apps ni en un computador).</p>
+<p class="needs">Necesitas un iPhone con iOS 17 o posterior, un Apple ID gratuito (mejor uno secundario, solo para esto) y, para la primera instalación, un computador. OpenCfMoto nunca te pide tu Apple ID: solo lo usa la herramienta de instalación, para firmar la app a tu nombre.</p>
+
+<section class="step" id="paso-1" aria-labelledby="paso-1-titulo">
+  <h2 class="step-title" id="paso-1-titulo"><span class="n" aria-hidden="true">1</span> Elige una herramienta</h2>
+  <p>OpenCfMoto no está en la App Store: una de estas herramientas la instala con tu propio Apple ID. Instálala siguiendo su guía oficial y vuelve aquí.</p>
+  <div class="cards">
+    <article class="card recommended" aria-labelledby="sidestore-es">
+      <h3 class="card-title" id="sidestore-es">SideStore <span class="badge">Recomendada</span></h3>
+      <p>Después de configurarla una vez con un computador, instala y renueva las apps desde el propio iPhone.</p>
+      <ul>
+        <li>Necesita <a href="https://apps.apple.com/app/localdevvpn/id6755608044">LocalDevVPN</a> (App Store) y <a href="https://github.com/nab138/iloader">iloader</a> en Windows, Mac o Linux.</li>
+        <li>Usa la versión 0.7.0-alpha o posterior: con la 0.6.4 y anteriores no se puede iniciar sesión.</li>
+      </ul>
+      <p><a class="site" href="https://sidestore.io">sidestore.io</a></p>
+    </article>
+    <article class="card" aria-labelledby="altstore-es">
+      <h3 class="card-title" id="altstore-es">AltStore Classic</h3>
+      <ul>
+        <li>Se instala con AltServer, en Windows o Mac.</li>
+        <li>Desde la versión 2.3 pide iOS 17.4 o posterior.</li>
+        <li>Puede renovar sin el computador con Remote AltServer y LocalDevVPN.</li>
+        <li>AltStore PAL no sirve: solo instala apps notarizadas por Apple.</li>
+      </ul>
+      <p><a class="site" href="https://altstore.io">altstore.io</a></p>
+    </article>
+    <article class="card" aria-labelledby="sideloadly-es">
+      <h3 class="card-title" id="sideloadly-es">Sideloadly</h3>
+      <ul>
+        <li>En Windows o Mac: arrastras el IPA y lo instala.</li>
+        <li>Hay que repetirlo cada 7 días, con el computador.</li>
+      </ul>
+      <p><a class="site" href="https://sideloadly.io">sideloadly.io</a></p>
+    </article>
+  </div>
+  <p class="callout"><strong>Solo las webs oficiales.</strong> No uses servicios de firma de pago, certificados «enterprise» ni webs que redistribuyen IPA: no son legítimos y ponen en riesgo tu cuenta y tu iPhone.</p>
+</section>
+
+<section class="step" id="paso-2" aria-labelledby="paso-2-titulo">
+  <h2 class="step-title" id="paso-2-titulo"><span class="n" aria-hidden="true">2</span> Añade OpenCfMoto</h2>
+  <p>Con la herramienta ya instalada en este iPhone, toca su botón: se abre con la fuente de OpenCfMoto. Añade la fuente e instala OpenCfMoto desde ella.</p>
+  <div class="actions" id="botones">
+    <a class="button" href="sidestore://source?url=https%3A%2F%2Fgithub.com%2FKevinparra535%2Fopencfmoto-ios%2Freleases%2Flatest%2Fdownload%2Faltstore-source.json">Añadir a SideStore <span class="en" lang="en">Add to SideStore</span></a>
+    <a class="button" href="altstore-classic://source?url=https%3A%2F%2Fgithub.com%2FKevinparra535%2Fopencfmoto-ios%2Freleases%2Flatest%2Fdownload%2Faltstore-source.json">Añadir a AltStore <span class="en" lang="en">Add to AltStore</span></a>
+  </div>
+  <p class="note">¿El botón no hace nada, o Safari dice que la dirección no es válida? Esa herramienta todavía no está instalada en este iPhone: vuelve al paso&nbsp;1.</p>
+  <div class="copy">
+    <label for="fuente">O copia la dirección de la fuente y pégala en la herramienta (<i>Sources</i> ▸ <b>+</b>):</label>
+    <textarea id="fuente" readonly rows="3" spellcheck="false" autocapitalize="off" autocomplete="off">https://github.com/Kevinparra535/opencfmoto-ios/releases/latest/download/altstore-source.json</textarea>
+    <div class="copy-row">
+      <button type="button" class="copy-button" data-copy="fuente" data-done="Dirección copiada." data-failed="No se pudo copiar: mantén pulsada la dirección y elige Copiar." hidden>Copiar</button>
+      <p class="copied" role="status" data-status-for="fuente"></p>
+    </div>
+  </div>
+  <h3 class="sub-title">¿Usas Sideloadly?</h3>
+  <p>En el computador, descarga el IPA de la última versión y arrástralo a Sideloadly.</p>
+  <a class="button secondary" href="https://github.com/Kevinparra535/opencfmoto-ios/releases/latest">Descargar el IPA</a>
+  <p class="note">Descárgalo solo de ahí: es el archivo <code>OpenCfMoto-vX.Y.Z-sideload.ipa</code>. Antes de instalarlo, <a href="https://github.com/Kevinparra535/opencfmoto-ios/blob/main/docs/INSTALAR.md#comprobar-el-sha-256">comprueba su SHA-256</a> con <code>SHA256SUMS.txt</code>, de la misma página.</p>
+</section>
+
+<section class="step" id="paso-3" aria-labelledby="paso-3-titulo">
+  <h2 class="step-title" id="paso-3-titulo"><span class="n" aria-hidden="true">3</span> En el iPhone</h2>
+  <ul>
+    <li><strong>Modo de desarrollador:</strong> Ajustes ▸ Privacidad y seguridad ▸ Modo de desarrollador (el iPhone se reinicia).</li>
+    <li><strong>Confía en tu Apple ID:</strong> Ajustes ▸ General ▸ VPN y gestión de dispositivos ▸ tu Apple ID ▸ Confiar.</li>
+    <li><strong>Renuévala cada 7 días:</strong> con un Apple ID gratuito la app caduca a los 7 días. Hazlo antes desde tu herramienta (en SideStore, con LocalDevVPN conectada: <i>My Apps</i> ▸ <i>Refresh All</i>).</li>
+    <li><strong>Límites del Apple ID gratuito:</strong> como máximo 3 apps instaladas así (SideStore o AltStore cuentan como una) y 10 identificadores de app por semana. OpenCfMoto usa 2: la app y su extensión de espejo.</li>
+    <li><strong>El Wi-Fi de la moto, a mano:</strong> esta versión no puede unirse sola al Wi-Fi de la moto. Al conectar, la app te muestra la red y la contraseña, con un botón para copiarla (la copia dura 2 minutos): únete en Ajustes ▸ Wi-Fi y vuelve a OpenCfMoto.</li>
+  </ul>
+  <p class="tip"><strong>¿Sin moto?</strong> Pruébala en <b>Inicio ▸ Vista de tablero</b>: dibuja la pantalla del tablero con tu GPS real.</p>
+</section>
+
+<section class="legal" id="aviso" aria-labelledby="aviso-titulo">
+  <h2 class="sub-title" id="aviso-titulo">Seguridad y licencia</h2>
+  <p class="safety"><strong>Nunca manipules el teléfono mientras conduces.</strong> Fija la ruta antes de salir, usa un soporte seguro y no dependas de la app para una navegación crítica.</p>
+  <p>OpenCfMoto para iOS es software libre bajo la GNU AGPL v3 o posterior y se ofrece sin ninguna garantía. Es un port para iOS de OpenCfMoto (Android), de Alexandru Popa (zanderp) y la comunidad open-cfmoto. Proyecto comunitario independiente, sin afiliación con CFMOTO, Carbit ni Apple.</p>
+  <ul class="links">
+    <li><a href="https://github.com/Kevinparra535/opencfmoto-ios/blob/main/docs/INSTALAR.md">Guía completa de instalación</a></li>
+    <li><a href="https://github.com/Kevinparra535/opencfmoto-ios/blob/main/PRIVACY.md">Privacidad</a></li>
+    <li><a href="https://github.com/Kevinparra535/opencfmoto-ios">Código fuente</a></li>
+    <li><a href="https://github.com/Kevinparra535/opencfmoto-ios/releases">Versiones publicadas</a></li>
+    <li><a href="https://github.com/Kevinparra535/opencfmoto-ios/issues/new/choose">Informar de un problema</a></li>
+    <li><a href="https://github.com/zanderp/open-cfmoto">¿Tienes Android? OpenCfMoto para Android</a></li>
+  </ul>
+</section>
+
+<section class="english" id="english" lang="en" aria-labelledby="english-title">
+  <nav class="top" aria-label="Language / Idioma"><a href="#inicio" lang="es" hreflang="es">Español ↑</a></nav>
+  <div class="hero">
+    <h2 class="hero-title" id="english-title">OpenCfMoto for iPhone</h2>
+    <p class="lead">Your own map, turn-by-turn guidance and Apple Music on your motorcycle's dash, over the bike's Wi-Fi.</p>
+    <p class="claim">Free, open source, no accounts and no ads</p>
+    <p class="fine">For CFMOTO MotoPlay and other Carbit / EasyConnect dashes. A community project, not affiliated with CFMOTO.</p>
+  </div>
+  <p class="callout"><strong>Open this page in Safari on your iPhone.</strong> The step&nbsp;2 buttons only work there (not in other apps' browsers or on a computer).</p>
+  <p class="needs">You need an iPhone with iOS 17 or later, a free Apple ID (a secondary one, just for this, is best) and, for the first install, a computer. OpenCfMoto never asks for your Apple ID: only the install tool uses it, to sign the app for you.</p>
+
+  <section class="step" id="step-1" aria-labelledby="step-1-title">
+    <h3 class="step-title" id="step-1-title"><span class="n" aria-hidden="true">1</span> Pick an install tool</h3>
+    <p>OpenCfMoto is not on the App Store: one of these tools installs it with your own Apple ID. Install it by following its official guide, then come back here.</p>
+    <div class="cards">
+      <article class="card recommended" aria-labelledby="sidestore-en">
+        <h4 class="card-title" id="sidestore-en">SideStore <span class="badge">Recommended</span></h4>
+        <p>After a one-time setup with a computer, it installs and refreshes apps on the iPhone itself.</p>
+        <ul>
+          <li>Needs <a href="https://apps.apple.com/app/localdevvpn/id6755608044">LocalDevVPN</a> (App Store) and <a href="https://github.com/nab138/iloader">iloader</a> on Windows, Mac or Linux.</li>
+          <li>Use version 0.7.0-alpha or newer: sign-in does not work on 0.6.4 and older.</li>
+        </ul>
+        <p><a class="site" href="https://sidestore.io">sidestore.io</a></p>
+      </article>
+      <article class="card" aria-labelledby="altstore-en">
+        <h4 class="card-title" id="altstore-en">AltStore Classic</h4>
+        <ul>
+          <li>Installed with AltServer, on Windows or Mac.</li>
+          <li>Since version 2.3 it needs iOS 17.4 or later.</li>
+          <li>Can refresh without the computer through Remote AltServer and LocalDevVPN.</li>
+          <li>AltStore PAL will not do: it only installs apps notarized by Apple.</li>
+        </ul>
+        <p><a class="site" href="https://altstore.io">altstore.io</a></p>
+      </article>
+      <article class="card" aria-labelledby="sideloadly-en">
+        <h4 class="card-title" id="sideloadly-en">Sideloadly</h4>
+        <ul>
+          <li>On Windows or Mac: drop the IPA in and it installs it.</li>
+          <li>Repeat it every 7 days, with the computer.</li>
+        </ul>
+        <p><a class="site" href="https://sideloadly.io">sideloadly.io</a></p>
+      </article>
+    </div>
+    <p class="callout"><strong>Official sites only.</strong> Do not use paid signing services, "enterprise" certificates or sites that rehost IPAs: they are not legitimate and put your account and your iPhone at risk.</p>
+  </section>
+
+  <section class="step" id="step-2" aria-labelledby="step-2-title">
+    <h3 class="step-title" id="step-2-title"><span class="n" aria-hidden="true">2</span> Add OpenCfMoto</h3>
+    <p>With the tool installed on this iPhone, tap its button in <a href="#botones">step&nbsp;2 above</a>: «Añadir a SideStore» (Add to SideStore) or «Añadir a AltStore» (Add to AltStore). The tool opens with the OpenCfMoto source: add the source, then install OpenCfMoto from it.</p>
+    <p class="note">Button does nothing, or Safari says the address is invalid? That tool is not installed on this iPhone yet: go back to step&nbsp;1.</p>
+    <div class="copy">
+      <label for="source">Or copy the source address and paste it into the tool (<i>Sources</i> ▸ <b>+</b>):</label>
+      <textarea id="source" readonly rows="3" spellcheck="false" autocapitalize="off" autocomplete="off">https://github.com/Kevinparra535/opencfmoto-ios/releases/latest/download/altstore-source.json</textarea>
+      <div class="copy-row">
+        <button type="button" class="copy-button" data-copy="source" data-done="Address copied." data-failed="Could not copy: press and hold the address and choose Copy." hidden>Copy</button>
+        <p class="copied" role="status" data-status-for="source"></p>
+      </div>
+    </div>
+    <h4 class="sub-title">Using Sideloadly?</h4>
+    <p>On the computer, download the latest release's IPA and drop it into Sideloadly.</p>
+    <a class="button secondary" href="https://github.com/Kevinparra535/opencfmoto-ios/releases/latest">Download the IPA</a>
+    <p class="note">Only download it from there: it is the file <code>OpenCfMoto-vX.Y.Z-sideload.ipa</code>. Before installing it, <a href="https://github.com/Kevinparra535/opencfmoto-ios/blob/main/docs/INSTALAR.md#check-the-sha-256">check its SHA-256</a> against <code>SHA256SUMS.txt</code>, on the same page.</p>
+  </section>
+
+  <section class="step" id="step-3" aria-labelledby="step-3-title">
+    <h3 class="step-title" id="step-3-title"><span class="n" aria-hidden="true">3</span> On the iPhone</h3>
+    <ul>
+      <li><strong>Developer Mode:</strong> Settings ▸ Privacy &amp; Security ▸ Developer Mode (the iPhone restarts).</li>
+      <li><strong>Trust your Apple ID:</strong> Settings ▸ General ▸ VPN &amp; Device Management ▸ your Apple ID ▸ Trust.</li>
+      <li><strong>Refresh it every 7 days:</strong> with a free Apple ID the app expires after 7 days. Refresh it before then with your tool (in SideStore, with LocalDevVPN connected: <i>My Apps</i> ▸ <i>Refresh All</i>).</li>
+      <li><strong>Free Apple ID limits:</strong> at most 3 apps installed this way (SideStore or AltStore counts as one) and 10 app identifiers a week. OpenCfMoto uses 2: the app and its mirror extension.</li>
+      <li><strong>The bike Wi-Fi, by hand:</strong> this build cannot join the bike Wi-Fi by itself. When you connect, the app shows the network and the password, with a copy button (the copy lasts 2 minutes): join it in Settings ▸ Wi-Fi and come back to OpenCfMoto.</li>
+    </ul>
+    <p class="tip"><strong>No bike?</strong> Try it in <b>Home ▸ Dash view</b>: it draws the dash picture with your real GPS.</p>
+  </section>
+
+  <section class="legal" aria-labelledby="notice-title">
+    <h3 class="sub-title" id="notice-title">Safety and license</h3>
+    <p class="safety"><strong>Never handle the phone while riding.</strong> Set the route before you go, use a secure mount and do not rely on the app for critical navigation.</p>
+    <p>OpenCfMoto for iOS is free software under the GNU AGPL v3 or later and comes with no warranty. It is an iOS port of OpenCfMoto (Android) by Alexandru Popa (zanderp) and the open-cfmoto community. An independent community project, not affiliated with CFMOTO, Carbit or Apple.</p>
+    <ul class="links">
+      <li><a href="https://github.com/Kevinparra535/opencfmoto-ios/blob/main/docs/INSTALAR.md#english">Full install guide</a></li>
+      <li><a href="https://github.com/Kevinparra535/opencfmoto-ios/blob/main/PRIVACY.md#english">Privacy</a></li>
+      <li><a href="https://github.com/Kevinparra535/opencfmoto-ios">Source code</a></li>
+      <li><a href="https://github.com/Kevinparra535/opencfmoto-ios/releases">Releases</a></li>
+      <li><a href="https://github.com/Kevinparra535/opencfmoto-ios/issues/new/choose">Report a problem</a></li>
+      <li><a href="https://github.com/zanderp/open-cfmoto">On Android? OpenCfMoto for Android</a></li>
+    </ul>
+  </section>
+</section>
+</main>
+
+</div>
+<script>
+// Copy buttons: shown only when this script runs; without it the address stays visible and selectable.
+(function () {
+  var buttons = document.querySelectorAll("button[data-copy]");
+  for (var i = 0; i < buttons.length; i++) { setUp(buttons[i]); }
+
+  function setUp(button) {
+    var field = document.getElementById(button.getAttribute("data-copy"));
+    var status = document.querySelector('[data-status-for="' + field.id + '"]');
+    if (!field || !status) { return; }
+    button.hidden = false;
+    field.addEventListener("focus", function () { field.setSelectionRange(0, field.value.length); });
+    button.addEventListener("click", function () {
+      var say = function (key) { status.textContent = button.getAttribute(key); };
+      var fallback = function () {
+        field.focus();
+        field.setSelectionRange(0, field.value.length);
+        var copied = false;
+        try { copied = document.execCommand("copy"); } catch (e) { copied = false; }
+        say(copied ? "data-done" : "data-failed");
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(field.value).then(function () { say("data-done"); }, fallback);
+      } else {
+        fallback();
+      }
+    });
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,59 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# GitHub Pages: the install landing page in site/, https://kevinparra535.github.io/opencfmoto-ios/
+# (Spanish then English: pick a tool, then the SideStore / AltStore Classic add-source buttons for the
+# release source). It deploys on every push to main that touches site/ or this file, or by hand from
+# main: Actions ▸ Pages ▸ Run workflow. tools/site/check_site.py checks the pages first (nothing loaded
+# from other sites, allowed links only, the add-source links point at the release source); when it
+# fails nothing is deployed. CI runs the same check and its tests on every push.
+#
+# One-time owner step: Settings ▸ Pages ▸ Build and deployment ▸ Source: «GitHub Actions». Without it
+# configure-pages fails with "Get Pages site failed" (the workflow token cannot turn Pages on).
+#
+# Actions are pinned to commit SHAs (the same checkout as ci.yml; Dependabot keeps them current). Only
+# this job may deploy, and only from main.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Check and deploy the landing page
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write # the deployment
+      id-token: write # deploy-pages proves where the artifact comes from
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check the pages (no external requests, allowed links, add-source links)
+        run: python3 -I tools/site/check_site.py site
+
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

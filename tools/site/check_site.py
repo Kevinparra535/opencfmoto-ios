@@ -1,0 +1,453 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
+"""Checks the GitHub Pages landing page (site/) before it is deployed. Standard library only.
+
+usage: check_site.py [--base /opencfmoto-ios/] SITE_DIR
+
+Every SITE_DIR/**/*.html must:
+- be UTF-8 with <!DOCTYPE html>, parse (html.parser), and have <html lang="…">, <meta charset="utf-8">, a
+  viewport <meta> (width=device-width) and a non-empty <title>;
+- load nothing from another site: src, srcset, poster, background and data of every element, every <link
+  href> and the href of other non-link elements (SVG <image>, <use>), and @import / url(…) in <style> and in
+  style="…" are relative or data: only; no <script src>, <base>, <iframe>, <frame>, <object>, <embed>,
+  <applet>, <form>; no on…="…" event attributes; inline scripts use no network or navigation API (fetch,
+  XMLHttpRequest, sendBeacon, WebSocket, EventSource, Worker, import(), eval, innerHTML, location, …);
+- link (<a> / <area> href, <meta http-equiv="refresh"> url) only to: a #fragment of the page, a relative path
+  that exists under SITE_DIR (and its #fragment), mailto:, an https URL on ALLOWED_LINKS, or the SideStore /
+  AltStore Classic add-source links (sidestore://source?url=…, altstore-classic://source?url=…) whose url is
+  exactly SOURCE, percent-encoded: AltStore and SideStore identify a source by its URL;
+- 404.html: relative references only root-relative ("/opencfmoto-ios/…"): GitHub Pages serves it at any depth.
+The site's index.html also: <html lang="es">, an id="english" element with lang="en", each add-source link
+exactly once, and a read-only field (<textarea readonly> or <input readonly>) showing exactly SOURCE: the copy
+button needs JavaScript, the field does not.
+
+Exit 0 when everything passes; 1 with one ::error annotation per problem; 2 on usage errors.
+"""
+from __future__ import annotations
+
+import argparse
+import html.parser
+import os
+import posixpath
+import re
+import sys
+import urllib.parse
+
+SOURCE = "https://github.com/Kevinparra535/opencfmoto-ios/releases/latest/download/altstore-source.json"
+DEEP_LINK_SCHEMES = ("sidestore", "altstore-classic")
+DEFAULT_BASE = "/opencfmoto-ios/"
+
+# https links the pages may carry: (host, path prefix). The prefix matches whole path segments, so
+# /Kevinparra535/opencfmoto-ios covers …/opencfmoto-ios/releases but not …/opencfmoto-ios-other.
+ALLOWED_LINKS = (
+    ("github.com", "/Kevinparra535/opencfmoto-ios"),
+    ("github.com", "/zanderp/open-cfmoto"),
+    ("github.com", "/nab138/iloader"),
+    ("sidestore.io", "/"),
+    ("docs.sidestore.io", "/"),
+    ("altstore.io", "/"),
+    ("faq.altstore.io", "/"),
+    ("sideloadly.io", "/"),
+    ("apps.apple.com", "/"),
+)
+
+FORBIDDEN_TAGS = {"base", "iframe", "frame", "frameset", "object", "embed", "applet", "form"}
+NAVIGATION_TAGS = {"a", "area"}
+RESOURCE_ATTRIBUTES = {"src", "poster", "background", "data", "action", "formaction"}
+SCRIPT_RISKS = re.compile(
+    r"\b(?:fetch|XMLHttpRequest|sendBeacon|WebSocket|EventSource|SharedWorker|Worker|importScripts|eval|Function"
+    r"|location|innerHTML|outerHTML|insertAdjacentHTML)\b|\bimport\s*\(|document\s*\.\s*write|\.\s*(?:src|srcset|href)\b"
+    r"|\bopen\s*\(")
+CSS_URL = re.compile(r"""url\(\s*(?:"([^"]*)"|'([^']*)'|([^)\s]*))\s*\)""", re.IGNORECASE)
+CSS_IMPORT = re.compile(r"""@import\s+(?:url\(\s*)?["']?([^"')\s;]*)""", re.IGNORECASE)
+REFRESH_URL = re.compile(r"""^\s*\d+(?:\.\d*)?\s*[;,]\s*url\s*=\s*["']?([^"']*)["']?\s*$""", re.IGNORECASE)
+
+
+class Problem:
+    def __init__(self, path: str, line: int, message: str):
+        self.path, self.line, self.message = path, line, message
+
+    def annotation(self, shown_root: str) -> str:
+        where = posixpath.join(shown_root, self.path) if shown_root else self.path
+        text = self.message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+        return f"::error file={where},line={self.line},title=Site check::{text}"
+
+    def __repr__(self) -> str:
+        return f"{self.path}:{self.line}: {self.message}"
+
+
+class Page(html.parser.HTMLParser):
+    """One HTML file: what the checks need, with line numbers."""
+
+    def __init__(self, rel: str):
+        super().__init__(convert_charrefs=True)
+        self.rel = rel
+        self.doctype = False
+        self.html_lang = None
+        self.charset = False
+        self.viewport = False
+        self.title = None
+        self.ids: dict = {}            # id / <a name> -> first line
+        self.duplicate_ids: list = []  # (id, line)
+        self.english_lang = None       # lang of the id="english" element; "" when it has none
+        self.navigation: list = []     # (url, line, what)
+        self.resources: list = []      # (url, line, what)
+        self.scripts: list = []        # (code, line)
+        self.styles: list = []         # (css, line, what)
+        self.readonly_values: list = []  # read-only <input value> / <textarea> text: (value, line)
+        self.field_values: list = []   # every <input value> / <textarea> text: (value, line)
+        self.problems: list = []
+        self._stack_text = None        # "title" / "script" / "style" / "textarea" while inside one
+        self._readonly = False         # the open <textarea> is read-only
+        self._buffer: list = []
+        self._buffer_line = 0
+
+    # ------------------------------------------------------------ parser callbacks
+
+    def handle_decl(self, decl):
+        if decl.strip().lower() == "doctype html":
+            self.doctype = True
+
+    def handle_starttag(self, tag, attrs):
+        line = self.getpos()[0]
+        values: dict = {}
+        for name, value in attrs:
+            values.setdefault(name, value)
+        if tag in FORBIDDEN_TAGS:
+            self.problem(line, f"<{tag}> is not allowed on these pages")
+        for name, value in attrs:
+            if name.startswith("on"):
+                self.problem(line, f"<{tag} {name}=…>: no event attributes; put the code in the inline script")
+            if name == "id" and value:
+                self.add_id(value, line)
+            if name in RESOURCE_ATTRIBUTES and value is not None:
+                self.resources.append((value, line, f"<{tag} {name}>"))
+            if name == "srcset" and value:
+                for candidate in value.split(","):
+                    url = candidate.strip().split(" ")[0] if candidate.strip() else ""
+                    if url:
+                        self.resources.append((url, line, f"<{tag} srcset>"))
+            if name == "style" and value:
+                self.styles.append((value, line, f"<{tag} style>"))
+        href = values.get("href", values.get("xlink:href"))
+        if href is not None:
+            if tag in NAVIGATION_TAGS:
+                self.navigation.append((href, line, f"<{tag} href>"))
+            else:
+                self.resources.append((href, line, f"<{tag} href>"))
+        if tag == "a" and values.get("name"):
+            self.add_id(values["name"], line)
+        if tag == "html":
+            self.html_lang = (values.get("lang") or "").strip()
+        elif tag == "meta":
+            if values.get("charset") is not None:
+                self.charset = values["charset"].strip().lower() == "utf-8"
+            if (values.get("name") or "").lower() == "viewport" and "width=device-width" in (values.get("content") or "").replace(" ", ""):
+                self.viewport = True
+            if (values.get("http-equiv") or "").lower() == "refresh":
+                match = REFRESH_URL.match(values.get("content") or "")
+                if match:
+                    self.navigation.append((match.group(1).strip(), line, "<meta http-equiv=refresh>"))
+                else:
+                    self.problem(line, "<meta http-equiv=refresh> needs content=\"0; url=…\"")
+        elif tag == "script":
+            if values.get("src") is not None:
+                self.problem(line, "<script src>: no external or separate scripts, only a small inline one")
+            self.start_text("script", line)
+        elif tag in ("title", "style", "textarea"):
+            self.start_text(tag, line)
+            self._readonly = tag == "textarea" and "readonly" in values
+        elif tag == "input":
+            value = values.get("value")
+            if value is not None:
+                self.field_values.append((value, line))
+                if "readonly" in values:
+                    self.readonly_values.append((value, line))
+        if values.get("id") == "english":
+            self.english_lang = (values.get("lang") or "").strip()
+
+    def handle_endtag(self, tag):
+        if self._stack_text == tag:
+            text = "".join(self._buffer)
+            if tag == "title":
+                self.title = text.strip()
+            elif tag == "script":
+                self.scripts.append((text, self._buffer_line))
+            elif tag == "style":
+                self.styles.append((text, self._buffer_line, "<style>"))
+            elif tag == "textarea":
+                # The HTML parser drops one newline right after <textarea>; so does this check.
+                text = text[2:] if text.startswith("\r\n") else text[1:] if text.startswith("\n") else text
+                self.field_values.append((text, self._buffer_line))
+                if self._readonly:
+                    self.readonly_values.append((text, self._buffer_line))
+            self._stack_text = None
+            self._buffer = []
+
+    def handle_data(self, data):
+        if self._stack_text:
+            self._buffer.append(data)
+
+    # ------------------------------------------------------------ helpers
+
+    def start_text(self, tag, line):
+        self._stack_text = tag
+        self._buffer = []
+        self._buffer_line = line
+
+    def add_id(self, value, line):
+        if value in self.ids:
+            self.duplicate_ids.append((value, line))
+        else:
+            self.ids[value] = line
+
+    def problem(self, line, message):
+        self.problems.append(Problem(self.rel, line, message))
+
+
+def is_local(url: str) -> bool:
+    """A relative reference (no scheme, no host) or data: — nothing fetched from another site."""
+    parts = urllib.parse.urlsplit(url.strip())
+    if parts.scheme:
+        return parts.scheme.lower() == "data"
+    return not parts.netloc and not url.strip().startswith("//")
+
+
+def allowed_https(url: str) -> bool:
+    parts = urllib.parse.urlsplit(url)
+    try:
+        port = parts.port
+    except ValueError:
+        return False
+    if parts.scheme != "https" or parts.username or parts.password or port is not None:
+        return False
+    host = (parts.hostname or "").lower()
+    # What the browser opens: percent-decoded, dot segments resolved (…/opencfmoto-ios/../x is not ours).
+    path = posixpath.normpath(urllib.parse.unquote(parts.path or "/"))
+    path = "/" + path.lstrip("/")
+    for allowed_host, prefix in ALLOWED_LINKS:
+        if host != allowed_host:
+            continue
+        if prefix == "/" or path == prefix or path.startswith(prefix.rstrip("/") + "/"):
+            return True
+    return False
+
+
+def deep_link_problem(url: str):
+    """None when url is <scheme>://source?url=<SOURCE percent-encoded>, else the reason."""
+    parts = urllib.parse.urlsplit(url)
+    if parts.netloc != "source" or parts.path or parts.fragment:
+        return f"must be {parts.scheme}://source?url=… (the add-source link)"
+    items = urllib.parse.parse_qsl(parts.query, keep_blank_values=True)
+    if len(items) != 1 or items[0][0] != "url":
+        return "needs exactly one query item: url=<the source URL, percent-encoded>"
+    if items[0][1] != SOURCE:
+        return f"its url is «{items[0][1]}», not the release source {SOURCE}"
+    if parts.query != "url=" + urllib.parse.quote(SOURCE, safe=""):
+        return "its url must be percent-encoded (encodeURIComponent): url=" + urllib.parse.quote(SOURCE, safe="")
+    return None
+
+
+class Site:
+    def __init__(self, root: str, base: str = DEFAULT_BASE):
+        self.root = root
+        self.base = "/" + base.strip("/") + "/" if base.strip("/") else "/"
+        self.pages: dict = {}
+        self.problems: list = []
+
+    def problem(self, rel, line, message):
+        self.problems.append(Problem(rel, line, message))
+
+    # ------------------------------------------------------------ files
+
+    def load(self):
+        for directory, dirs, files in os.walk(self.root):
+            dirs.sort()
+            for name in sorted(files):
+                if not name.lower().endswith(".html"):
+                    continue
+                path = os.path.join(directory, name)
+                rel = os.path.relpath(path, self.root).replace(os.sep, "/")
+                try:
+                    with open(path, encoding="utf-8") as fh:
+                        text = fh.read()
+                except UnicodeDecodeError:
+                    self.problem(rel, 1, "not UTF-8")
+                    continue
+                page = Page(rel)
+                try:
+                    page.feed(text)
+                    page.close()
+                except Exception as exc:  # html.parser seldom raises, but never let it pass silently
+                    self.problem(rel, page.getpos()[0], f"does not parse: {exc}")
+                    continue
+                self.pages[rel] = page
+        if "index.html" not in self.pages:
+            self.problem("index.html", 1, "the site has no index.html")
+
+    def target(self, rel: str, path: str):
+        """The site file a relative reference opens (posix, relative to the site), or (None, reason)."""
+        decoded = urllib.parse.unquote(path)
+        if decoded.startswith("/"):
+            if decoded in (self.base, self.base.rstrip("/")):
+                inside = ""
+            elif decoded.startswith(self.base):
+                inside = decoded[len(self.base):]
+            else:
+                return None, f"root-relative path outside the site ({self.base})"
+        else:
+            inside = posixpath.join(posixpath.dirname(rel), decoded)
+        wants_directory = decoded == "" or decoded.endswith("/") or decoded.endswith("/.") or decoded in (".", "..")
+        normal = posixpath.normpath(inside) if inside else "."
+        if normal == ".." or normal.startswith("../") or normal.startswith("/"):
+            return None, "points outside the site"
+        normal = "" if normal == "." else normal
+        full = os.path.join(self.root, *normal.split("/")) if normal else self.root
+        if os.path.isdir(full):
+            index = posixpath.join(normal, "index.html") if normal else "index.html"
+            if os.path.isfile(os.path.join(self.root, *index.split("/"))):
+                return index, None
+            return None, "a folder without index.html"
+        if wants_directory:
+            return None, "no such folder in the site"
+        if os.path.isfile(full):
+            return normal, None
+        return None, "no such file in the site"
+
+    # ------------------------------------------------------------ checks
+
+    def check(self):
+        self.load()
+        for rel, page in sorted(self.pages.items()):
+            self.problems.extend(page.problems)
+            self.check_basics(rel, page)
+            for url, line, what in page.resources:
+                self.check_resource(rel, url, line, what)
+            for css, line, what in page.styles:
+                for match in CSS_URL.finditer(css):
+                    url = next(g for g in match.groups() if g is not None)
+                    self.check_resource(rel, url, line, f"{what} url()")
+                for match in CSS_IMPORT.finditer(css):
+                    self.check_resource(rel, match.group(1), line, f"{what} @import")
+            for code, line in page.scripts:
+                for match in SCRIPT_RISKS.finditer(code):
+                    self.problem(rel, line, f"the inline script uses «{match.group(0)}»: it may only copy text")
+            for url, line, what in page.navigation:
+                self.check_link(rel, page, url, line, what)
+            for value, line in page.field_values:
+                if "altstore-source.json" in value and value.strip() != SOURCE:
+                    self.problem(rel, line, f"a field shows «{value}», not the release source {SOURCE}")
+        index = self.pages.get("index.html")
+        if index is not None:
+            self.check_index(index)
+        return self.problems
+
+    def check_basics(self, rel, page):
+        if not page.doctype:
+            self.problem(rel, 1, "needs <!DOCTYPE html> (without it browsers use quirks mode)")
+        if not page.html_lang:
+            self.problem(rel, 1, "needs <html lang=\"…\">")
+        if not page.charset:
+            self.problem(rel, 1, "needs <meta charset=\"utf-8\">")
+        if not page.viewport:
+            self.problem(rel, 1, "needs <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">")
+        if not page.title:
+            self.problem(rel, 1, "needs a non-empty <title>")
+        for value, line in page.duplicate_ids:
+            self.problem(rel, line, f"the id «{value}» is used twice")
+
+    def check_resource(self, rel, url, line, what):
+        if not is_local(url):
+            self.problem(rel, line, f"{what} loads «{url}» from elsewhere: use a file under site/ or data:")
+            return
+        if url.strip().lower().startswith("data:"):
+            return
+        self.check_local(rel, url.strip(), line, what, page=None)
+
+    def check_local(self, rel, url, line, what, page):
+        parts = urllib.parse.urlsplit(url)
+        if rel == "404.html" and parts.path and not parts.path.startswith("/"):
+            self.problem(rel, line, f"{what} «{url}»: 404.html is served at any depth, so its links must be "
+                                    f"root-relative ({self.base}…)")
+            return
+        if not parts.path:
+            if page is not None and parts.fragment and parts.fragment not in page.ids:
+                self.problem(rel, line, f"{what} «{url}»: no id «{parts.fragment}» on this page")
+            return
+        target, reason = self.target(rel, parts.path)
+        if target is None:
+            self.problem(rel, line, f"{what} «{url}»: {reason}")
+            return
+        if parts.fragment and target in self.pages and parts.fragment not in self.pages[target].ids:
+            self.problem(rel, line, f"{what} «{url}»: no id «{parts.fragment}» in {target}")
+
+    def check_link(self, rel, page, url, line, what):
+        url = url.strip()
+        if not url:
+            self.problem(rel, line, f"{what} is empty")
+            return
+        parts = urllib.parse.urlsplit(url)
+        scheme = parts.scheme.lower()
+        if not scheme and not parts.netloc and not url.startswith("//"):
+            self.check_local(rel, url, line, what, page)
+        elif scheme == "mailto":
+            if not parts.path:
+                self.problem(rel, line, f"{what} «{url}»: mailto: without an address")
+        elif scheme == "https":
+            if not allowed_https(url):
+                self.problem(rel, line, f"{what} «{url}» is not on the allow-list (tools/site/check_site.py ALLOWED_LINKS)")
+        elif scheme in DEEP_LINK_SCHEMES:
+            reason = deep_link_problem(url)
+            if reason:
+                self.problem(rel, line, f"{what} «{url}»: {reason}")
+        else:
+            self.problem(rel, line, f"{what} «{url}»: only #fragments, site paths, mailto:, allowed https links "
+                                    f"and the {' / '.join(s + '://source' for s in DEEP_LINK_SCHEMES)} links")
+
+    def check_index(self, page):
+        rel = page.rel
+        if page.html_lang and page.html_lang != "es":
+            self.problem(rel, 1, f"<html lang=\"{page.html_lang}\">: the page is Spanish first, lang=\"es\"")
+        if "english" not in page.ids:
+            self.problem(rel, 1, "no id=\"english\" section (the English half, linked from the top)")
+        elif page.english_lang != "en":
+            self.problem(rel, page.ids["english"], "the id=\"english\" element needs lang=\"en\"")
+        for scheme in DEEP_LINK_SCHEMES:
+            lines = [line for url, line, _ in page.navigation
+                     if urllib.parse.urlsplit(url.strip()).scheme.lower() == scheme]
+            if len(lines) != 1:
+                where = f" (lines {', '.join(map(str, lines))})" if lines else ""
+                self.problem(rel, lines[1] if len(lines) > 1 else 1,
+                             f"the {scheme}://source link must be on the page exactly once, found {len(lines)}{where}")
+        if not any(value == SOURCE for value, _ in page.readonly_values):
+            self.problem(rel, 1, f"no read-only field (<textarea readonly> or <input readonly value=…>) showing exactly "
+                                 f"{SOURCE}")
+
+
+def check_site(root: str, base: str = DEFAULT_BASE) -> list:
+    """Every problem of the site in root (empty when it passes)."""
+    return Site(root, base).check()
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("site", help="the folder GitHub Pages publishes (site)")
+    parser.add_argument("--base", default=DEFAULT_BASE, help=f"the site's path on github.io (default {DEFAULT_BASE})")
+    args = parser.parse_args(argv)
+    if not os.path.isdir(args.site):
+        parser.error(f"{args.site} is not a folder")
+    problems = check_site(args.site, args.base)
+    shown = args.site.replace(os.sep, "/").rstrip("/")
+    for p in problems:
+        print(p.annotation(shown), flush=True)
+    pages = sum(1 for _d, _s, files in os.walk(args.site) for f in files if f.lower().endswith(".html"))
+    if problems:
+        print(f"site check: {len(problems)} problem(s) in {pages} page(s)", flush=True)
+        return 1
+    print(f"site check: {pages} page(s) OK (no external requests, links allowed, add-source links to {SOURCE})",
+          flush=True)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
