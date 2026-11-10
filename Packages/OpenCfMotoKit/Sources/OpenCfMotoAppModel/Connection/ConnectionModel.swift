@@ -64,6 +64,9 @@
 //   whose link keeps re-arming (the Local Network issue is raised once per such episode).
 // - `isWifiAvailable` includes a local-only Wi-Fi (no internet: path unsatisfied, address on the
 //   interface; field log 1). The rules treat it like any Wi-Fi; the log says so once per network.
+// - UI/UX P0, «no link-lost alarm while stopped»: once a session reached the dash, a link that drops
+//   while the bike is stopped (≤ 5 km/h or no fresh GPS speed: an ignition cycle at a stop) raises no
+//   dialog and reads calm (`linkLossNotice`, LinkLossAlarm.swift); moving, nothing changes.
 
 import Foundation
 import Observation
@@ -151,6 +154,21 @@ public final class ConnectionModel {
     /// re-acquired yet, including while the session is parked waiting for the bike (`wifi=down` in the
     /// `[lock]` line). Read-only.
     public var isBikeWifiLost: Bool { wifiLostAt != nil }
+
+    /// ADDITION (UI/UX P0, «no link-lost alarm while stopped»): how to present a dash link that dropped
+    /// in a session that already reached the dash — calm words and colour while the bike is stopped
+    /// (an ignition cycle at a stop), today's presentation while moving; nil while the link is fine or
+    /// the session is still connecting. Read-only.
+    public var linkLossNotice: LinkLossNotice? {
+        guard isSessionActive, LinkLossAlarmPolicy.isLinkDown(phase) else { return nil }
+        return LinkLossAlarmPolicy.notice(phase: phase, hasReachedDash: sessionEverStreamed,
+                                          bikeWifiLost: wifiLostAt != nil || isParked, stopped: isBikeStopped)
+    }
+
+    /// The bike is stopped as far as the phone can tell (LinkLossAlarmPolicy.isStopped).
+    var isBikeStopped: Bool {
+        LinkLossAlarmPolicy.isStopped(lastFix: ride.lastFix, now: core.services.now())
+    }
 
     /// ADDITION (locked iPhone, Phase 0): called (main actor) whenever a session starts (true) or ends
     /// (false). AppModel clears the unclean-background-exit marker at the session end.
@@ -1082,16 +1100,28 @@ public final class ConnectionModel {
             } else if recovery {
                 setPhase(.error, detail: d)
             } else {
-                endSession(.error, detail: d, issue: unconfirmed ? .dashNotFoundOnUnconfirmedWifi(ssid: s.qr.ssid) : .dashNotFound)
+                endSession(.error, detail: d,
+                           issue: linkLossDialog(unconfirmed ? .dashNotFoundOnUnconfirmedWifi(ssid: s.qr.ssid) : .dashNotFound))
             }
         case .lostLink:
             let d = SessionText.lostLink(l)
-            if recovery { setPhase(.error, detail: d) } else { endSession(.error, detail: d, issue: .lostLink) }
+            if recovery { setPhase(.error, detail: d) } else { endSession(.error, detail: d, issue: linkLossDialog(.lostLink)) }
         case let .other(message):
             Log.e("LINK", "link failed: \(message)")
             let d = SessionText.connectFailed(l)
             endSession(.error, detail: d, issue: .other(d))
         }
+    }
+
+    /// The dialog for a link that is gone (auto-recovery off ends the session) — none when the session
+    /// already reached the dash and the bike is stopped: an ignition cycle at a stop is not an alarm
+    /// (UI/UX P0). The status line still says what happened, and Connect starts again.
+    private func linkLossDialog(_ issue: ConnectionIssue) -> ConnectionIssue? {
+        guard LinkLossAlarmPolicy.allowsLinkLossDialog(hasReachedDash: sessionEverStreamed, stopped: isBikeStopped) else {
+            Log.i("APP", "no dialog: the bike is stopped (ignition cycle?) \u{2014} the status line says it")
+            return nil
+        }
+        return issue
     }
 
     // MARK: - connect() dropped by the system (review POSIX-2)

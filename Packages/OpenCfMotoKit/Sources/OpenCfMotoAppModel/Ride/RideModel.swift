@@ -32,8 +32,10 @@
 //   (+ TripAutoLogPolicy), UI model; `onRawHeading` → `core.navigation.updateHeading` + compass.
 //   Start updates when a ride/link starts or the dash preview is visible; background location
 //   only while a ride is active (`setRideActive`).
-// - Ride Mode (foreground "pocket" mode): `isIdleTimerDisabled = true`, the UI shows a black
-//   overlay; exiting restores the idle timer unless keepScreenOn while linked.
+// - Ride Mode (foreground "pocket" mode, «Modo bolsillo» / "Pocket mode" on screen since the UI/UX
+//   P0): `isIdleTimerDisabled = true`, the UI shows a black overlay; exiting restores the idle timer
+//   unless keepScreenOn while linked. Offered by itself after a Connect / a Go: a 5-s cancellable
+//   countdown (`pocketCountdown`, rules in PocketMode.swift).
 // - Scene phases: inactive → `projection.prepareHoldPicture()`; background →
 //   `projection.enterBackground()`; active → `projection.enterForeground()`.
 // - Encoder parameters: `EncoderPlanner.plan(...)` from the active profile + settings + the
@@ -65,6 +67,8 @@ struct RideTuning {
     var compassModelInterval: TimeInterval = 0.125
     /// After a toast or intent, watch the controller's toast for this long (phone preview redraw).
     var toastWatch: TimeInterval = 3.5
+    /// The «Modo bolsillo» countdown after a Connect / a Go (P0: 5 s).
+    var pocketCountdown: TimeInterval = PocketModePolicy.countdownSeconds
 }
 
 @MainActor
@@ -75,8 +79,31 @@ public final class RideModel {
     @ObservationIgnored let navigation: NavigationModel
     @ObservationIgnored let trips: TripsModel
 
-    /// Foreground pocket mode: screen kept awake, black overlay, dash keeps streaming.
+    /// Foreground pocket mode («Modo bolsillo» / "Pocket mode" on screen): screen kept awake, black
+    /// overlay, dash keeps streaming.
     public private(set) var isRideModeActive = false
+    /// ADDITION (UI/UX P0, UX-01): the running «Modo bolsillo» offer after a Connect / a Go — pocket
+    /// mode starts when it runs out unless the rider taps «Quedarme aquí» (`cancelPocketCountdown()`).
+    /// nil when none runs.
+    public private(set) var pocketCountdown: PocketCountdown?
+    /// ADDITION (UI/UX P0): the phone is in use in a way only the UI can see (the keyboard is up, a
+    /// sheet presented from the root): no pocket-mode offer starts, and a running one ends.
+    public var isPhoneInUse = false {
+        didSet {
+            if isPhoneInUse, !oldValue { endPocketCountdown(reason: "the phone is in use") }
+        }
+    }
+    /// ADDITION (UI/UX P0): the UI's own look at the screen, asked when an offer would start and when
+    /// it runs out: true while a sheet, a cover or an alert is up anywhere (pocket mode is never
+    /// presented over another presentation). nil: nothing to ask.
+    @ObservationIgnored public var isPhoneBusyNow: (() -> Bool)?
+    /// ADDITION (UI/UX P0): false turns the automatic pocket-mode offer off (the E2E and screenshot
+    /// launch modes, whose screens must stay as launched). The pocket-mode buttons still work.
+    @ObservationIgnored public var offersPocketMode = true {
+        didSet {
+            if !offersPocketMode { endPocketCountdown(reason: "offer turned off") }
+        }
+    }
     /// Canvas the dash UI is laid out for (negotiated by the link, else `previewCanvas`).
     public private(set) var canvasSize: DashSize = DashPreviewCanvas.landscape800x384.size
     /// Canvas used for the phone preview while no dash is connected.
@@ -158,6 +185,12 @@ public final class RideModel {
     @ObservationIgnored private var scenePhase: AppScenePhase = .active
     /// Which source the running recording is attached to (true = mirror relay).
     @ObservationIgnored private var dashVideoSourceIsMirror: Bool?
+    /// Ends `pocketCountdown` with pocket mode when it runs out.
+    @ObservationIgnored private var pocketTask: Task<Void, Never>?
+    /// AppModel: what else needs the rider right now (a dialog, the manual Wi-Fi join, an opened file
+    /// waiting for an answer, the dash's "type on the phone" request), for the pocket-mode offer; nil
+    /// when nothing does.
+    @ObservationIgnored var pocketOfferBusyReason: (() -> String?)?
 
     // MARK: Apple Music (iOS addition) — wired by AppModel to MusicModel
 
@@ -229,8 +262,9 @@ public final class RideModel {
 
     public func enterRideMode() {
         guard !isRideModeActive else { return }
+        endPocketCountdown(reason: "pocket mode turned on")
         isRideModeActive = true
-        Log.i("RIDE", "Ride Mode on (screen kept awake)")
+        Log.i("RIDE", "Pocket mode on (screen kept awake)")
         applyIdleTimer()
         updateLoops()
     }
@@ -238,9 +272,76 @@ public final class RideModel {
     public func exitRideMode() {
         guard isRideModeActive else { return }
         isRideModeActive = false
-        Log.i("RIDE", "Ride Mode off")
+        Log.i("RIDE", "Pocket mode off")
         applyIdleTimer()
         updateLoops()
+    }
+
+    // MARK: «Modo bolsillo» offer (UI/UX P0, UX-01)
+
+    /// «Quedarme aquí» / "Stay here": the running countdown ends; nothing else changes.
+    public func cancelPocketCountdown() {
+        endPocketCountdown(reason: "the rider stays on the phone")
+    }
+
+    /// Offers pocket mode with a countdown, if the rules allow it now (PocketModePolicy). A running
+    /// countdown is kept as it is.
+    func offerPocketMode(_ trigger: PocketCountdown.Trigger) {
+        guard pocketCountdown == nil else { return }
+        if let reason = PocketModePolicy.blocker(pocketContext) {
+            Log.d("RIDE", "pocket mode not offered (\(trigger.rawValue)): \(reason)")
+            return
+        }
+        let countdown = PocketCountdown(trigger: trigger, startedAt: clock.now(), duration: tuning.pocketCountdown)
+        pocketCountdown = countdown
+        Log.i("RIDE", "pocket mode in \(Self.seconds(countdown.duration)) s (\(trigger.rawValue)) \u{2014} unless the rider stays")
+        pocketTask?.cancel()
+        let delay = countdown.duration
+        pocketTask = Task { [weak self] in
+            await sleepSeconds(delay)
+            guard !Task.isCancelled, let self, self.pocketCountdown == countdown else { return }
+            self.finishPocketCountdown()
+        }
+    }
+
+    /// The countdown ran out: pocket mode, if the rules still allow it (else the offer just ends).
+    private func finishPocketCountdown() {
+        guard let countdown = pocketCountdown else { return }
+        if let reason = PocketModePolicy.blocker(pocketContext) {
+            endPocketCountdown(reason: reason)
+            return
+        }
+        pocketTask = nil
+        pocketCountdown = nil
+        Log.i("RIDE", "pocket mode by the countdown (\(countdown.trigger.rawValue))")
+        enterRideMode()
+    }
+
+    /// Ends a running countdown without pocket mode.
+    private func endPocketCountdown(reason: String) {
+        pocketTask?.cancel()
+        pocketTask = nil
+        guard pocketCountdown != nil else { return }
+        pocketCountdown = nil
+        Log.i("RIDE", "pocket mode countdown ended: \(reason)")
+    }
+
+    private var pocketContext: PocketModePolicy.Context {
+        PocketModePolicy.Context(isEnabled: offersPocketMode, isProjecting: isProjecting,
+                                 isSceneActive: scenePhase == .active, isPocketModeActive: isRideModeActive,
+                                 busyReason: pocketBusyReason)
+    }
+
+    /// The phone is in use (UI flags, something presented on screen) or something in the model waits
+    /// for the rider; nil when nothing does.
+    private var pocketBusyReason: String? {
+        if isPhoneInUse { return "the phone is in use" }
+        if isPhoneBusyNow?() == true { return "something is open on the phone" }
+        return pocketOfferBusyReason?()
+    }
+
+    private static func seconds(_ value: TimeInterval) -> String {
+        value == value.rounded() ? String(Int(value)) : String(format: "%.1f", value)
     }
 
     // MARK: Dash video recording (diagnostics)
@@ -382,6 +483,12 @@ public final class RideModel {
         }
         evaluateTripAutoLog()
         applyIdleTimer()
+        // «Modo bolsillo» (P0, UX-01): the dash is live → offer pocket mode; it is not → no offer.
+        if active {
+            offerPocketMode(.connected)
+        } else {
+            endPocketCountdown(reason: "the dash is not showing the map")
+        }
     }
 
     /// REQ 16 negotiated a canvas.
@@ -460,6 +567,8 @@ public final class RideModel {
         let projection = core.services.projection
         let previous = scenePhase
         scenePhase = phase
+        // A countdown never runs out of sight (lock, app switcher, call): pocket mode needs the app open.
+        if phase != .active { endPocketCountdown(reason: "the app left the foreground") }
         switch phase {
         case .inactive:
             // Leaving the foreground (not coming back from the background): pre-encode the hold
@@ -618,7 +727,9 @@ public final class RideModel {
     private func navSnapshotChanged(_ snap: NavSnapshot) {
         let guidanceChanged = Self.needsGuidanceFixes(snap) != Self.needsGuidanceFixes(navSnapshot)
             || snap.mode.isNavigating != navSnapshot.mode.isNavigating
+        let guidanceStarted = PocketModePolicy.guidanceStarted(from: navSnapshot.mode, to: snap.mode)
         navSnapshot = snap
+        if guidanceStarted { offerPocketMode(.guidance) } // «Modo bolsillo» after a Go (P0, UX-01)
         if guidanceChanged { applyLocationPolicy() }
         let key = Self.routeKey(snap.route)
         if key != lastRouteKey {
@@ -887,7 +998,7 @@ public final class RideModel {
 
     /// "Keep screen on while projecting" (session-network §11.4) holds only while the dash can be
     /// linked: not while the session is parked waiting for the bike (§11.6, the iOS battery park)
-    /// or sits in an error. Ride Mode always keeps the screen awake.
+    /// or sits in an error. Pocket mode (Ride Mode) always keeps the screen awake.
     private func applyIdleTimer() {
         let linked = sessionActive && linkPhase != .waitingForBike && linkPhase != .error
         let keepAwake = isRideModeActive || (linked && cachedSettings.keepScreenOn)
@@ -1062,6 +1173,7 @@ public final class RideModel {
     /// "Type on your phone" (DashRemote.requestTypeOnPhone): focus the phone search field, buzz,
     /// and tell the rider by voice when the request came from the dash.
     private func requestTypeOnPhone(announce: Bool) {
+        endPocketCountdown(reason: "the dash asks to type on the phone")
         navigation.requestTypeOnPhone()
         guard announce else { return }
         core.services.system.hapticTap()

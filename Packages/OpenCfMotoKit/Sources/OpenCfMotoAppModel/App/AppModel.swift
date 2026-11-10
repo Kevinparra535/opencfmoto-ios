@@ -13,10 +13,12 @@
 //   `connection.maybeAutoConnect()` if onboarding is complete.
 // - `scenePhaseChanged`: forward to ride + connection; on `.active` refresh permissions and retry
 //   auto-connect (Android onResume).
-// - `handleOpenURL`: `.gpx` files → `navigation.loadGpx`; opencfmoto pairing URLs / Wi-Fi URLs
-//   → `garage.pair(rawQR:)`; settings / map packs (`.json` with format "opencfmoto.settings" /
-//   "opencfmoto.map") → `pendingImport`, applied only by `confirmPendingImport()`. The copy iOS
-//   puts in Documents/Inbox is deleted once read. Returns a localized message for a toast.
+// - `handleOpenURL`: `.gpx` files → `navigation.previewGpx` (UI/UX P0, UX-17: a preview with
+//   «Seguir este track» / «Cancelar» — an opened track never replaces the route silently); opencfmoto
+//   pairing URLs / Wi-Fi URLs → `garage.pair(rawQR:)`; settings / map packs (`.json` with format
+//   "opencfmoto.settings" / "opencfmoto.map") → `pendingImport`, applied only by
+//   `confirmPendingImport()`. The copy iOS puts in Documents/Inbox is deleted once read. Returns a
+//   localized message for a toast.
 //
 // Ported from OpenCfMoto (Android) OpenCfMotoApp.kt (process start) and MainActivity.kt
 // (onCreate / onResume / intent handling).
@@ -276,6 +278,7 @@ public final class AppModel {
         connection.onSessionActiveChange = { [weak self] active in
             if !active { self?.clearBackgroundMarker() }
         }
+        ride.pocketOfferBusyReason = { [weak self] in self?.pocketOfferBusyReason() }
         wireMusic()
     }
 
@@ -297,6 +300,18 @@ public final class AppModel {
         music.setDashActive(ride.isDashUIActive)
     }
 
+    /// What needs the rider on the phone right now, for the «Modo bolsillo» offer (P0, UX-01): no
+    /// countdown starts — and none ends in pocket mode — over a dialog, the manual Wi-Fi join, an
+    /// opened file waiting for an answer or the dash's "type on the phone" request.
+    func pocketOfferBusyReason() -> String? {
+        if let issue = connection.issue, issue != .noBikePaired { return "a connection dialog is open" }
+        if connection.manualJoin != nil { return "the manual Wi-Fi join is open" }
+        if pendingImport != nil { return "an opened settings file waits for an answer" }
+        if navigation.pendingGpx != nil { return "an opened GPX track waits for an answer" }
+        if navigation.typeOnPhoneRequested { return "the dash asks to type on the phone" }
+        return nil
+    }
+
     // MARK: - Opened files
 
     private func openURLMessage(_ url: URL) -> String? {
@@ -313,11 +328,14 @@ public final class AppModel {
             return SessionText.cannotReadFile(l)
         }
         if ext == "gpx" || Self.looksLikeGPX(data) {
+            // A preview first (UX-17): the Map hub shows the track with «Seguir este track» /
+            // «Cancelar», and nothing is replaced until the rider follows it. No banner: the preview is
+            // the answer (an unreadable file is reported instead).
             let errorBefore = navigation.lastError
-            navigation.loadGpx(data: data, fileName: url.lastPathComponent)
+            navigation.previewGpx(data: data, fileName: url.lastPathComponent)
             if let err = navigation.lastError, err != errorBefore { return err }
-            Log.i("APP", "open: GPX \(url.lastPathComponent)")
-            return SessionText.gpxLoaded(url.deletingPathExtension().lastPathComponent, l)
+            Log.i("APP", "open: GPX \(url.lastPathComponent) \u{2014} waiting for the rider (preview)")
+            return nil
         }
         let text = String(decoding: data, as: UTF8.self)
         // Packs overwrite the bike tuning / map data: like Settings ▸ Import, they wait for the rider's

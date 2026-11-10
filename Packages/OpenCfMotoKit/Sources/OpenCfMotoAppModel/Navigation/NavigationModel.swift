@@ -18,6 +18,9 @@
 //   (`isSearching` while in flight; cancel stale requests). Empty query → clear results.
 // - `searchNearby(chip)` → `core.navigation.searchNearby`.
 // - `loadGpx(data:fileName:)` → `core.navigation.loadGpx(data:fileName:)`; errors → `lastError`.
+// - UI/UX P0 (UX-17): `previewGpx(data:fileName:)` parses an opened / picked GPX file into
+//   `pendingGpx` and changes nothing else; `followPendingGpx()` («Seguir este track») loads it,
+//   `cancelPendingGpx()` («Cancelar») drops it. A route being navigated is never replaced silently.
 // - `typeOnPhoneRequested` is set by RideModel when the dash asks the rider to type on the phone
 //   (DashIntent.typeOnPhone / openSearch); the Navigate screen focuses its search field and calls
 //   `acknowledgeTypeOnPhone()`.
@@ -66,6 +69,9 @@ public final class NavigationModel {
     public private(set) var lastError: String?
     /// The dash asked to type the search on the phone.
     public private(set) var typeOnPhoneRequested = false
+    /// ADDITION (UI/UX P0, UX-17): an opened / picked GPX track waiting for «Seguir este track» or
+    /// «Cancelar» (the Map hub shows it as a preview). Nothing changed yet.
+    public private(set) var pendingGpx: GpxPreview?
 
     // Tunables (tests shorten them).
     /// Live-suggestion debounce (Android 350 ms).
@@ -151,11 +157,13 @@ public final class NavigationModel {
     /// free-ride `parkHere()` it never toggles an existing parked pin away.
     public func arrivalParkHere() { core.navigation.arrivalParkHere() }
 
-    /// GPX file picked in Files / opened with the app.
+    /// GPX file picked in Files / opened with the app: followed at once. The app's own entries (a file
+    /// opened from another app, the Map hub's file picker) go through `previewGpx` instead.
     public func loadGpx(data: Data, fileName: String) {
         gpxGeneration &+= 1
         let generation = gpxGeneration
         lastError = nil
+        pendingGpx = nil
         let session = core.navigation
         if data.count <= synchronousGpxLimit {
             do {
@@ -176,6 +184,76 @@ public final class NavigationModel {
             }
         }
         lifetime.replace("gpx", with: task)
+    }
+
+    // MARK: Opened GPX preview (UI/UX P0, UX-17)
+
+    /// Parses a GPX file opened from another app or picked in the Map hub and holds it as `pendingGpx`
+    /// for «Seguir este track» / «Cancelar»; nothing else changes. An unreadable or empty file sets
+    /// `lastError` (and leaves an earlier preview as it was). Files over `synchronousGpxLimit` are
+    /// parsed off the main actor; a newer file wins.
+    public func previewGpx(data: Data, fileName: String) {
+        gpxGeneration &+= 1
+        let generation = gpxGeneration
+        lastError = nil
+        if data.count <= synchronousGpxLimit {
+            do {
+                let track = try GpxParser.importTrack(data, fileName: fileName)
+                offerGpx(track, fileName: fileName, generation: generation)
+            } catch {
+                reportGpxFailure(error, fileName: fileName)
+            }
+            return
+        }
+        let task = Task.detached(priority: .userInitiated) { [weak self] in
+            do {
+                let track = try GpxParser.importTrack(data, fileName: fileName)
+                await self?.gpxParsedForPreview(track, fileName: fileName, generation: generation)
+            } catch {
+                await self?.gpxFailed(error, fileName: fileName, generation: generation)
+            }
+        }
+        lifetime.replace("gpx", with: task)
+    }
+
+    /// «Seguir este track»: the previewed track becomes the route (the dash follows it); a route or
+    /// track being followed is replaced now, at the rider's word.
+    public func followPendingGpx() {
+        guard let preview = pendingGpx else { return }
+        pendingGpx = nil
+        gpxGeneration &+= 1 // a file still being parsed must not replace the track just chosen
+        lifetime.replace("gpx", with: nil)
+        Log.i("NAV", "[GPX] following the previewed track (\(preview.track.points.count) pts, \(preview.track.waypoints.count) wpt)")
+        core.navigation.loadGpx(preview.track, displayName: preview.name)
+    }
+
+    /// «Cancelar»: the previewed track is dropped; nothing changed.
+    public func cancelPendingGpx() {
+        guard pendingGpx != nil else { return }
+        pendingGpx = nil
+        Log.i("NAV", "[GPX] previewed track dismissed \u{2014} nothing changed")
+    }
+
+    /// The preview card's second line: "12.4 km · 3 waypoints" in the rider's units.
+    public func summary(of preview: GpxPreview) -> String {
+        var parts: [String] = []
+        if preview.lengthMeters > 0 {
+            parts.append(navStrings.distance(preview.lengthMeters, core.currentSettings.map.units))
+        }
+        let waypoints = preview.track.waypoints.count
+        if waypoints > 0 || parts.isEmpty { parts.append(strings.gpxWaypoints(waypoints)) }
+        return parts.joined(separator: " \u{00B7} ")
+    }
+
+    /// What «Seguir este track» would replace right now ("Replaces the route to Home"), nil in free
+    /// ride: the preview never hides that a route is being followed.
+    public var pendingGpxReplaces: String? {
+        guard pendingGpx != nil else { return nil }
+        switch snapshot.mode {
+        case .freeRide: return nil
+        case let .navTo(place): return strings.gpxReplacesRoute(place.name)
+        case let .gpx(name): return strings.gpxReplacesTrack(name)
+        }
     }
 
     // MARK: Places
@@ -343,6 +421,16 @@ public final class NavigationModel {
     // MARK: Private — GPX
 
     private func isCurrentGpx(_ generation: UInt64) -> Bool { generation == gpxGeneration }
+
+    private func gpxParsedForPreview(_ track: GpxTrack, fileName: String, generation: UInt64) {
+        guard generation == gpxGeneration else { return }
+        offerGpx(track, fileName: fileName, generation: generation)
+    }
+
+    private func offerGpx(_ track: GpxTrack, fileName: String, generation: UInt64) {
+        pendingGpx = GpxPreview(id: generation, fileName: fileName, track: track)
+        Log.i("NAV", "[GPX] \(fileName): \(track.points.count) pts, \(track.waypoints.count) wpt \u{2014} shown as a preview, nothing replaced yet")
+    }
 
     private func gpxFailed(_ error: Error, fileName: String, generation: UInt64) {
         guard generation == gpxGeneration else { return }
