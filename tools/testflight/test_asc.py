@@ -3985,7 +3985,10 @@ class WorkflowTextTest(ScriptTest):
         with open(SCRIPT_PATH, encoding="utf-8") as fh:
             script = fh.read()
         self.assertIn(f'FINISH_JOB="{asc.FINISH_JOB}"', script)
-        for name, content in (("testflight.yml", text), ("build_and_sign.sh", script)):
+        with open(os.path.join(REPO, "docs", "TESTFLIGHT.md"), encoding="utf-8") as fh:
+            guide = fh.read()
+        self.assertIn(asc.FINISH_JOB, guide)
+        for name, content in (("testflight.yml", text), ("build_and_sign.sh", script), ("TESTFLIGHT.md", guide)):
             self.assertNotIn("Processing, TestFlight group, revoke the certificate", content, name)
 
     def test_the_build_summary_says_an_accepted_builds_certificate_stays(self):
