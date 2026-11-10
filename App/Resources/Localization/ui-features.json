@@ -327,7 +327,7 @@
   "The distance and time recorded so far are thrown away. Nothing is saved.": "Se descartan la distancia y el tiempo grabados hasta ahora. No se guarda nada.",
   "The report includes the app version, the active bike profile, the link state and the recent log.": "El informe incluye la versión de la app, el perfil de la moto activa, el estado del enlace y el registro reciente.",
   "The template needs {z}, {x} and {y} and must start with https://": "La plantilla necesita {z}, {x} y {y} y debe empezar por https://",
-  "This app renders and encodes live video — it always draws power and warms the phone. Keep it on the bike's USB charger and use Ride Mode while riding (the dash keeps streaming). Auto lowers the frame rate when the phone gets hot.": "Esta app dibuja y codifica vídeo en directo: siempre consume energía y calienta el teléfono. Tenlo en el cargador USB de la moto y usa el Modo ruta mientras conduces (el tablero sigue recibiendo imagen). Auto baja los fps cuando el teléfono se calienta.",
+  "This app renders and encodes live video — it always draws power and warms the phone. Keep it on the bike's USB charger and use Pocket mode while riding (the dash stays live). Auto lowers the frame rate when the phone gets hot.": "Esta app dibuja y codifica video en vivo: siempre consume energía y calienta el teléfono. Tenlo en el cargador USB de la moto y usa el Modo bolsillo mientras vas en la moto (el tablero sigue en vivo). Auto baja los fps cuando el teléfono se calienta.",
   "Throws this recording away without saving it": "Descarta esta grabación sin guardarla",
   "Tile URL template": "Plantilla de URL de teselas",
   "Time": "Tiempo",
@@ -387,5 +387,8 @@
   "＋ Marker": "＋ Marcador",
   "Identify as an Android phone": "Identificarse como teléfono Android",
   "Sends an Android phone's brand and model to the dash instead of \"Apple / iPhone\". Everything else is already identical to the Android app. Turn on only if your dash refuses to connect or keeps dropping the link. Applies on the next connect.": "Envía al tablero la marca y el modelo de un teléfono Android en lugar de «Apple / iPhone». Todo lo demás ya es idéntico a la app de Android. Actívalo solo si tu tablero no se conecta o corta el enlace a menudo. Se aplica en la próxima conexión.",
-  "Compatibility": "Compatibilidad"
+  "Compatibility": "Compatibilidad",
+  "Track preview": "Vista previa del track",
+  "Follow this track": "Seguir este track",
+  "Nothing changes": "No cambia nada"
 }

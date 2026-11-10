@@ -2,8 +2,11 @@
 // Ported from OpenCfMoto (Android) MainActivity.kt + res/layout/activity_main.xml
 // (app-features §7.1–§7.3, §7.5): header, status card, Connect ⇄ Stop, Dash view | Controls,
 // Scan | Map | Mirror tiles, Setup · Garage / Trips · Logs, destination search and the tips card.
-// iOS: no Android Auto phases; a Ride Mode button while projecting; a demo badge; link
-// diagnostics while live. Portrait = one column, landscape (compact height) = two columns.
+// iOS: no Android Auto phases; a «Modo bolsillo» / Pocket mode button while projecting; a demo
+// badge; link diagnostics while live. Portrait = one column, landscape (compact height) = two columns.
+// UI/UX P0: the Map tile works in every link state (UX-04: planning never waits for the bike), Stop
+// is a neutral button with red words instead of Connect's orange (UX-11), text on the orange fills is
+// dark (UX-06), and a link that drops while the bike is stopped reads calm (no alarm at a stop).
 
 import SwiftUI
 import OpenCfMotoAppModel
@@ -108,12 +111,12 @@ private struct HomeStatusCard: View {
     var body: some View {
         let connection = model.connection
         let phase = connection.phase
-        let tint = Theme.tint(for: phase)
+        let tint = MainStrings.statusTint(connection)
         HStack(alignment: .center, spacing: 14) {
             ZStack {
                 Circle().fill(tint.opacity(0.16))
                 Circle().strokeBorder(tint.opacity(0.55), lineWidth: 2)
-                Image(systemName: MainStrings.phaseSymbol(phase))
+                Image(systemName: MainStrings.statusSymbol(connection))
                     .font(.system(size: circleSize * 0.4, weight: .semibold))
                     .foregroundStyle(tint)
             }
@@ -121,7 +124,7 @@ private struct HomeStatusCard: View {
             .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(MainStrings.phaseLabel(phase))
+                Text(MainStrings.statusLabel(connection))
                     .font(.title2.bold())
                     .foregroundStyle(Theme.text)
                     .fixedSize(horizontal: false, vertical: true)
@@ -164,30 +167,40 @@ private struct HomeConnectButton: View {
         // session instead of ending it (review finding CL-1). `toggle()` stops in that case too.
         let showsStop = connection.isSessionActive || phase.showsStop
         VStack(spacing: 10) {
-            Button {
-                connection.toggle()
-            } label: {
-                Group {
-                    if showsStop {
-                        Label("Stop", systemImage: "stop.fill")
-                    } else if let name = model.garage.selected?.name {
-                        Label {
-                            Text("Connect to \(name)")
-                        } icon: {
-                            Image(systemName: "power")
-                        }
-                    } else {
-                        Label("Connect", systemImage: "power")
-                    }
+            // Stop never looks like Connect (UX-11): a neutral button with red words; Connect is orange.
+            if showsStop {
+                Button {
+                    connection.toggle()
+                } label: {
+                    Label("Stop", systemImage: "stop.fill")
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .padding(.horizontal, 12)
                 }
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .padding(.horizontal, 12)
+                .buttonStyle(StopButtonStyle())
+                .accessibilityHint(Text("Stops the dash link and everything it projects"))
+            } else {
+                Button {
+                    connection.toggle()
+                } label: {
+                    Group {
+                        if let name = model.garage.selected?.name {
+                            Label {
+                                Text("Connect to \(name)")
+                            } icon: {
+                                Image(systemName: "power")
+                            }
+                        } else {
+                            Label("Connect", systemImage: "power")
+                        }
+                    }
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .padding(.horizontal, 12)
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .accessibilityHint(Text("Joins the bike Wi-Fi and shows the OpenCfMoto map on the dash"))
             }
-            .buttonStyle(PrimaryButtonStyle())
-            .accessibilityHint(showsStop
-                               ? Text("Stops the dash link and everything it projects")
-                               : Text("Joins the bike Wi-Fi and shows the OpenCfMoto map on the dash"))
 
             if phase == .error && connection.isSessionActive {
                 Button {
@@ -213,6 +226,7 @@ private struct HomeConnectButton: View {
     }
 }
 
+/// «Modo bolsillo» / Pocket mode by hand (it is also offered by itself after Connect and Go).
 private struct HomeRideModeButton: View {
     @Environment(AppModel.self) private var model
 
@@ -220,10 +234,10 @@ private struct HomeRideModeButton: View {
         Button {
             MainRideMode.enter(model.ride)
         } label: {
-            Label("Ride Mode", systemImage: "moon.zzz.fill")
+            Label("Pocket mode", systemImage: "moon.zzz.fill")
         }
         .buttonStyle(TonalButtonStyle())
-        .accessibilityHint(Text("Black screen that keeps the dash streaming. Long-press to exit."))
+        .accessibilityHint(Text("Black screen that keeps the dash live. Press and hold to exit."))
     }
 }
 
@@ -251,8 +265,9 @@ private struct HomeTiles: View {
 
     var body: some View {
         let phase = model.connection.phase
-        // Android: Scan iff !busy; Map and Mirror iff (!busy || live) so the rider can switch
-        // what the dash shows while live.
+        // Android: Scan iff !busy; Mirror iff (!busy || live) so the rider can switch what the dash
+        // shows while live. The Map is never gated by the link (UI/UX P0, UX-04): planning and search
+        // work while joining, linking, reconnecting or waiting for the bike at a stop.
         let canScan = !phase.isBusy
         let canSwitch = !phase.isBusy || phase.isLive
         HStack(spacing: 12) {
@@ -267,7 +282,6 @@ private struct HomeTiles: View {
             NavigationLink(value: MainRoute.navigate) {
                 HomeTileLabel(title: "Map", systemImage: "map")
             }
-            .disabled(!canSwitch)
             .accessibilityHint(Text("Search places, plan a route or load a GPX track"))
 
             NavigationLink(value: MainRoute.mirror) {
@@ -378,9 +392,9 @@ private struct HomeTipsCard: View {
     /// bike Wi-Fi in Settings (review NEWCOMER-3). Two whole strings, so each is translated as a unit.
     private var tips: Text {
         if model.flavor == .free {
-            return Text("• Connect — shows the bike Wi-Fi name and password to join in Settings ▸ Wi-Fi, then the OpenCfMoto map on the dash (becomes Stop while linked).\n• Map — search places, plan routes and load GPX tracks; the dash follows.\n• Mirror — shows the whole iPhone screen on the dash (no touch back).\n• Dash view & Controls — the live dash picture on the phone and the handlebar pad.\n• Ride Mode — a black screen that keeps the dash streaming with the iPhone unlocked.")
+            return Text("• Connect — shows the bike Wi-Fi name and password to join in Settings ▸ Wi-Fi, then the OpenCfMoto map on the dash (becomes Stop while linked).\n• Map — search places, plan routes and load GPX tracks, even while connecting; the dash follows.\n• Mirror — shows the whole iPhone screen on the dash (no touch back).\n• Dash view & Controls — the live dash picture on the phone and the handlebar pad.\n• Pocket mode — a black screen that keeps the dash live with the iPhone unlocked. It starts by itself 5 s after Connect or Go; tap Stay here to keep using the phone.")
         }
-        return Text("• Connect — joins the bike Wi-Fi and shows the OpenCfMoto map on the dash (becomes Stop while linked).\n• Map — search places, plan routes and load GPX tracks; the dash follows.\n• Mirror — shows the whole iPhone screen on the dash (no touch back).\n• Dash view & Controls — the live dash picture on the phone and the handlebar pad.\n• Ride Mode — a black screen that keeps the dash streaming with the iPhone unlocked.")
+        return Text("• Connect — joins the bike Wi-Fi and shows the OpenCfMoto map on the dash (becomes Stop while linked).\n• Map — search places, plan routes and load GPX tracks, even while connecting; the dash follows.\n• Mirror — shows the whole iPhone screen on the dash (no touch back).\n• Dash view & Controls — the live dash picture on the phone and the handlebar pad.\n• Pocket mode — a black screen that keeps the dash live with the iPhone unlocked. It starts by itself 5 s after Connect or Go; tap Stay here to keep using the phone.")
     }
 }
 

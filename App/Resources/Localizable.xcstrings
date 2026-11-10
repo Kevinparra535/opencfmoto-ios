@@ -781,6 +781,16 @@
         }
       }
     },
+    "Bike off · reconnects by itself": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moto apagada · se reconecta sola"
+          }
+        }
+      }
+    },
     "Bike out of range — waiting…": {
       "localizations": {
         "es": {
@@ -811,12 +821,12 @@
         }
       }
     },
-    "Bike search open — long-press to exit Ride Mode, then type your search": {
+    "Bike search open — press and hold to leave pocket mode, then type your search": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Búsqueda de la moto abierta: mantén pulsado para salir del modo ruta y escribe tu búsqueda"
+            "value": "Búsqueda de la moto abierta: mantén presionado para salir del Modo bolsillo y escribe tu búsqueda"
           }
         }
       }
@@ -851,12 +861,12 @@
         }
       }
     },
-    "Black screen that keeps the dash streaming. Long-press to exit.": {
+    "Black screen that keeps the dash live. Press and hold to exit.": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pantalla negra que mantiene la transmisión al tablero. Mantén pulsado para salir."
+            "value": "Pantalla negra que mantiene el tablero en vivo. Mantén presionado para salir."
           }
         }
       }
@@ -1721,12 +1731,12 @@
         }
       }
     },
-    "Exit Ride Mode": {
+    "Exit pocket mode": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Salir del modo ruta"
+            "value": "Salir del Modo bolsillo"
           }
         }
       }
@@ -1887,6 +1897,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Seguir el teléfono"
+          }
+        }
+      }
+    },
+    "Follow this track": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seguir este track"
           }
         }
       }
@@ -2481,6 +2501,16 @@
         }
       }
     },
+    "Keeps this screen; the dash stays live": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Te quedas en esta pantalla; el tablero sigue en vivo"
+          }
+        }
+      }
+    },
     "Knob back (previous item)": {
       "localizations": {
         "es": {
@@ -2767,16 +2797,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Registros"
-          }
-        }
-      }
-    },
-    "Long-press to exit": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mantén pulsado para salir"
           }
         }
       }
@@ -3311,6 +3331,16 @@
         }
       }
     },
+    "Nothing changes": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No cambia nada"
+          }
+        }
+      }
+    },
     "Notifications appear on the dash too — turn on a Focus (for example Driving) to keep them private.": {
       "localizations": {
         "es": {
@@ -3791,6 +3821,36 @@
         }
       }
     },
+    "Pocket mode": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modo bolsillo"
+          }
+        }
+      }
+    },
+    "Pocket mode in %lld s": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modo bolsillo en %lld s"
+          }
+        }
+      }
+    },
+    "Pocket mode in %lld seconds. Put the phone away: the dash stays live.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modo bolsillo en %lld segundos. Guarda el teléfono: el tablero sigue en vivo."
+          }
+        }
+      }
+    },
     "Point the camera at the bike's MotoPlay QR\n\nIf it won't scan — try the iOS / CarPlay QR, or enter Wi-Fi manually (TRK).": {
       "localizations": {
         "es": {
@@ -3871,6 +3931,16 @@
         }
       }
     },
+    "Press and hold to exit": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantén presionado para salir"
+          }
+        }
+      }
+    },
     "Preview": {
       "localizations": {
         "es": {
@@ -3927,6 +3997,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Valor del perfil"
+          }
+        }
+      }
+    },
+    "Put the phone away: the dash stays live.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guarda el teléfono: el tablero sigue en vivo."
           }
         }
       }
@@ -4217,16 +4297,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reintentar ahora"
-          }
-        }
-      }
-    },
-    "Ride Mode": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Modo ruta"
           }
         }
       }
@@ -5051,6 +5121,16 @@
         }
       }
     },
+    "Stay here": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quedarme aquí"
+          }
+        }
+      }
+    },
     "Step %lld of %lld": {
       "localizations": {
         "es": {
@@ -5241,6 +5321,26 @@
         }
       }
     },
+    "The dash stays live.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El tablero sigue en vivo."
+          }
+        }
+      }
+    },
+    "The dash stays live. If you switch the bike off, it reconnects by itself.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El tablero sigue en vivo. Si apagas la moto, se reconecta sola."
+          }
+        }
+      }
+    },
     "The dash stopped answering after 20 reconnect attempts. Check that the bike is on and the dash shows MotoPlay, then tap Connect.": {
       "localizations": {
         "es": {
@@ -5321,12 +5421,12 @@
         }
       }
     },
-    "This app renders and encodes live video — it always draws power and warms the phone. Keep it on the bike's USB charger and use Ride Mode while riding (the dash keeps streaming). Auto lowers the frame rate when the phone gets hot.": {
+    "This app renders and encodes live video — it always draws power and warms the phone. Keep it on the bike's USB charger and use Pocket mode while riding (the dash stays live). Auto lowers the frame rate when the phone gets hot.": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esta app dibuja y codifica vídeo en directo: siempre consume energía y calienta el teléfono. Tenlo en el cargador USB de la moto y usa el Modo ruta mientras conduces (el tablero sigue recibiendo imagen). Auto baja los fps cuando el teléfono se calienta."
+            "value": "Esta app dibuja y codifica video en vivo: siempre consume energía y calienta el teléfono. Tenlo en el cargador USB de la moto y usa el Modo bolsillo mientras vas en la moto (el tablero sigue en vivo). Auto baja los fps cuando el teléfono se calienta."
           }
         }
       }
@@ -5461,6 +5561,16 @@
         }
       }
     },
+    "Track preview": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vista previa del track"
+          }
+        }
+      }
+    },
     "Tries the bike again right away instead of waiting for the automatic retry": {
       "localizations": {
         "es": {
@@ -5591,12 +5701,12 @@
         }
       }
     },
-    "Turn the bike on, then tap Connect on the home screen. During a ride keep OpenCfMoto open: Ride Mode keeps the iPhone screen dark while the dash keeps streaming.": {
+    "Turn the bike on, then tap Connect on the home screen. During a ride keep OpenCfMoto open: Pocket mode keeps the iPhone screen dark while the dash stays live. It starts by itself 5 s after Connect or Go.": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enciende la moto y toca Conectar en la pantalla de inicio. Durante la ruta mantén OpenCfMoto abierta: el modo ruta deja la pantalla del iPhone en negro mientras el tablero sigue recibiendo la imagen."
+            "value": "Enciende la moto y toca Conectar en la pantalla de inicio. Durante el viaje mantén OpenCfMoto abierta: el Modo bolsillo deja la pantalla del iPhone en negro mientras el tablero sigue en vivo. Se activa solo 5 s después de Conectar o Ir."
           }
         }
       }
@@ -5777,6 +5887,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Esperando al GPS…"
+          }
+        }
+      }
+    },
+    "Waiting for the dash · reconnects by itself": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esperando el tablero · se reconecta sola"
           }
         }
       }
@@ -6101,22 +6221,22 @@
         }
       }
     },
-    "• Connect — joins the bike Wi-Fi and shows the OpenCfMoto map on the dash (becomes Stop while linked).\n• Map — search places, plan routes and load GPX tracks; the dash follows.\n• Mirror — shows the whole iPhone screen on the dash (no touch back).\n• Dash view & Controls — the live dash picture on the phone and the handlebar pad.\n• Ride Mode — a black screen that keeps the dash streaming with the iPhone unlocked.": {
+    "• Connect — joins the bike Wi-Fi and shows the OpenCfMoto map on the dash (becomes Stop while linked).\n• Map — search places, plan routes and load GPX tracks, even while connecting; the dash follows.\n• Mirror — shows the whole iPhone screen on the dash (no touch back).\n• Dash view & Controls — the live dash picture on the phone and the handlebar pad.\n• Pocket mode — a black screen that keeps the dash live with the iPhone unlocked. It starts by itself 5 s after Connect or Go; tap Stay here to keep using the phone.": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "• Conectar: se une al Wi-Fi de la moto y muestra el mapa de OpenCfMoto en el tablero (se convierte en Detener mientras está vinculado).\n• Mapa: busca lugares, planifica rutas y carga tracks GPX; el tablero lo sigue.\n• Espejo: muestra toda la pantalla del iPhone en el tablero (sin control táctil).\n• Vista de tablero y Controles: la imagen del tablero en directo en el teléfono y el mando del manillar.\n• Modo ruta: una pantalla negra que mantiene la transmisión al tablero con el iPhone desbloqueado."
+            "value": "• Conectar: se une al Wi-Fi de la moto y muestra el mapa de OpenCfMoto en el tablero (se convierte en Detener mientras está vinculado).\n• Mapa: busca lugares, planifica rutas y carga tracks GPX, también mientras se conecta; el tablero lo sigue.\n• Espejo: muestra toda la pantalla del iPhone en el tablero (sin control táctil).\n• Vista de tablero y Controles: la imagen del tablero en vivo en el teléfono y el mando del manillar.\n• Modo bolsillo: una pantalla negra que mantiene el tablero en vivo con el iPhone desbloqueado. Se activa solo 5 s después de Conectar o Ir; toca Quedarme aquí para seguir usando el teléfono."
           }
         }
       }
     },
-    "• Connect — shows the bike Wi-Fi name and password to join in Settings ▸ Wi-Fi, then the OpenCfMoto map on the dash (becomes Stop while linked).\n• Map — search places, plan routes and load GPX tracks; the dash follows.\n• Mirror — shows the whole iPhone screen on the dash (no touch back).\n• Dash view & Controls — the live dash picture on the phone and the handlebar pad.\n• Ride Mode — a black screen that keeps the dash streaming with the iPhone unlocked.": {
+    "• Connect — shows the bike Wi-Fi name and password to join in Settings ▸ Wi-Fi, then the OpenCfMoto map on the dash (becomes Stop while linked).\n• Map — search places, plan routes and load GPX tracks, even while connecting; the dash follows.\n• Mirror — shows the whole iPhone screen on the dash (no touch back).\n• Dash view & Controls — the live dash picture on the phone and the handlebar pad.\n• Pocket mode — a black screen that keeps the dash live with the iPhone unlocked. It starts by itself 5 s after Connect or Go; tap Stay here to keep using the phone.": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "• Conectar: te muestra el nombre y la contraseña del Wi-Fi de la moto para unirte en Ajustes ▸ Wi-Fi y luego el mapa de OpenCfMoto en el tablero (se convierte en Detener mientras está vinculado).\n• Mapa: busca lugares, planifica rutas y carga tracks GPX; el tablero lo sigue.\n• Espejo: muestra toda la pantalla del iPhone en el tablero (sin control táctil).\n• Vista de tablero y Controles: la imagen del tablero en directo en el teléfono y el mando del manillar.\n• Modo ruta: una pantalla negra que mantiene la transmisión al tablero con el iPhone desbloqueado."
+            "value": "• Conectar: te muestra el nombre y la contraseña del Wi-Fi de la moto para unirte en Ajustes ▸ Wi-Fi y luego el mapa de OpenCfMoto en el tablero (se convierte en Detener mientras está vinculado).\n• Mapa: busca lugares, planifica rutas y carga tracks GPX, también mientras se conecta; el tablero lo sigue.\n• Espejo: muestra toda la pantalla del iPhone en el tablero (sin control táctil).\n• Vista de tablero y Controles: la imagen del tablero en vivo en el teléfono y el mando del manillar.\n• Modo bolsillo: una pantalla negra que mantiene el tablero en vivo con el iPhone desbloqueado. Se activa solo 5 s después de Conectar o Ir; toca Quedarme aquí para seguir usando el teléfono."
           }
         }
       }

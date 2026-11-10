@@ -5,7 +5,7 @@
 // taps / drags / long-presses are dash touches in canvas pixels, the keypad sends handlebar keys,
 // and GPS runs while the view is open so the map moves. "Type on phone" from the dash search shows
 // a search field here when this screen is the visible one (MainTypeOnPhone.swift) — also when the
-// request arrived while the phone was locked or under Ride Mode, once that ends.
+// request arrived while the phone was locked or under pocket mode, once that ends.
 
 import SwiftUI
 import UIKit
@@ -59,11 +59,13 @@ struct DashPreviewScreen: View {
                 } label: {
                     Label("Map", systemImage: "map")
                 }
+                // «Modo bolsillo» by name (UI/UX P0: the unlabelled moon icon read as "night mode").
                 Button {
                     MainRideMode.enter(model.ride)
                 } label: {
-                    Label("Ride Mode", systemImage: "moon.zzz.fill")
+                    Text("Pocket mode")
                 }
+                .accessibilityHint(Text("Black screen that keeps the dash live. Press and hold to exit."))
             }
         }
         .task(id: scenePhase == .active) { @MainActor in
@@ -232,7 +234,7 @@ struct DashPreviewScreen: View {
         searchFocused = true
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         // The field is inserted by this very update (and the screen may only just be back from the
-        // lock screen or Ride Mode): SwiftUI can drop that first focus, so ask once more.
+        // lock screen or pocket mode): SwiftUI can drop that first focus, so ask once more.
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(300))
             if showsDashSearch, !searchFocused { searchFocused = true }

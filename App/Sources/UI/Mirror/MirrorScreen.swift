@@ -173,7 +173,7 @@ struct MirrorScreen: View {
             } label: {
                 Label("Stop", systemImage: "stop.fill")
             }
-            .buttonStyle(TonalButtonStyle())
+            .buttonStyle(StopButtonStyle()) // the same Stop as Home (UI/UX P0, UX-11)
             Text("To end the screen broadcast, tap the red indicator in the status bar or use Control Center.")
                 .font(.footnote)
                 .foregroundStyle(Theme.textSecondary)

@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// CONTRACT FILE (wave 2, UI) — shared look of the phone app. Both UI agents use it; do not edit,
-// add your own helpers in your own folders instead.
+// Shared look of the phone app: the dark "cockpit" theme of the Android app (docs/spec/app-features.md
+// §7.1 palette). Every screen uses it; screen-specific helpers live in their own folders.
 //
-// Dark "cockpit" theme of the Android app (docs/spec/app-features.md §7.1 palette).
+// UI/UX P0: text and icons on the orange, green and red fills are dark (`onAccent`, 6.2–8.5:1 —
+// white was 2.2–3.1:1, under WCAG AA, and those buttons are read outdoors at the bike), and the
+// session's Stop is a neutral button with red words (`StopButtonStyle`), never the orange of Connect.
 
 import SwiftUI
 import OpenCfMotoAppModel
@@ -22,6 +24,9 @@ enum Theme {
     static let idle = Color(hex: 0x8A93A3)
     /// Monospaced log text.
     static let logText = Color(hex: 0x9CDCFE)
+    /// Text and icons on the orange (`brand`), green (`live`), red (`error`) and amber (`busy`) fills:
+    /// 6.6:1 on orange, 8.5:1 on green, 6.2:1 on red (white was 2.9, 2.2 and 3.1:1).
+    static let onAccent = Color(hex: 0x0E1116)
 
     static let cornerRadius: CGFloat = 16
     static let padding: CGFloat = 16
@@ -63,16 +68,32 @@ extension View {
     func cardStyle(highlighted: Bool = false) -> some View { modifier(CardStyle(highlighted: highlighted)) }
 }
 
-/// Full-width primary action (brand orange).
+/// Full-width primary action (brand orange, or `tint`), dark text on the fill.
 struct PrimaryButtonStyle: ButtonStyle {
     var tint: Color = Theme.brand
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.headline)
-            .foregroundStyle(.white)
+            .foregroundStyle(Theme.onAccent)
             .frame(maxWidth: .infinity, minHeight: 52)
             .background(tint.opacity(configuration.isPressed ? 0.75 : 1),
                         in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+}
+
+/// Stop of a running session (UI/UX P0, UX-11): as big as Connect, so it is never hunted for, but
+/// neutral with red words and an outline, so it never looks like the orange Connect it replaces.
+/// Red text on the raised surface: 5.1:1.
+struct StopButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.headline)
+            .foregroundStyle(Theme.error)
+            .frame(maxWidth: .infinity, minHeight: 52)
+            .background(Theme.surfaceHigh.opacity(configuration.isPressed ? 0.7 : 1),
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Theme.error.opacity(0.6), lineWidth: 1.5))
     }
 }
 

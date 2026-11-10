@@ -10,10 +10,12 @@
 // - route preview card (route chips → selectRoute, Go, Cancel/Done, Circuit, ★ Save, Home, Marker),
 //   active navigation card (cue + metrics, End, Recalc), arrival card, free-ride bar (Free ride,
 //   Park here, Go Home, Set Home here, parked bike, GPX import);
-// - GPX import (.fileImporter → security-scoped read off the main actor → loadGpx);
+// - GPX import (.fileImporter → security-scoped read off the main actor → previewGpx): like a file
+//   opened from another app, the track is first shown as a preview with «Seguir este track» /
+//   «Cancelar» (UI/UX P0, UX-17) and replaces nothing until followed;
 // - the dash's "type on the phone" request focuses the search field (highlight + haptic) and is
 //   acknowledged — only while this screen is the visible one (not under the Dash view it pushed,
-//   Ride Mode or the lock screen: MainTypeOnPhone.swift); toasts / last error are shown as banners
+//   pocket mode or the lock screen: MainTypeOnPhone.swift); toasts / last error are shown as banners
 //   (VoiceOver announces toasts);
 // - "Show dash" opens the phone preview of the dash picture.
 
@@ -46,6 +48,7 @@ struct NavigateScreen: View {
         NavigateMapLayer(snapshot: snapshot,
                          results: panelVisible || selectedPlace != nil ? navigation.results : [],
                          saved: [navigation.home, navigation.parked].compactMap { $0 },
+                         gpxPreview: navigation.pendingGpx,
                          camera: $camera,
                          selection: $selectedPlace)
             .safeAreaInset(edge: .top, spacing: 0) { header }
@@ -64,7 +67,9 @@ struct NavigateScreen: View {
             .onAppear {
                 isVisible = true
                 lease.acquire(model)
-                if snapshot.preview != nil {
+                if navigation.pendingGpx != nil {
+                    fitGpxPreview()
+                } else if snapshot.preview != nil {
                     fitPreview()
                 } else if snapshot.mode.isNavigating {
                     followRider()
@@ -79,6 +84,16 @@ struct NavigateScreen: View {
             }
             .onChange(of: NavigatePreviewFraming(snapshot.preview)) { _, framing in
                 if framing != nil { fitPreview() }
+            }
+            .onChange(of: navigation.pendingGpx?.id) { _, id in
+                if id != nil {
+                    // An opened track is the question on screen: its card replaces the search list.
+                    searchFocused = false
+                    showingNearby = false
+                    selectedPlace = nil
+                    panelDismissed = true
+                    fitGpxPreview()
+                }
             }
             .onChange(of: snapshot.mode.isNavigating) { _, navigating in
                 if navigating && snapshot.preview == nil { followRider() }
@@ -209,7 +224,10 @@ struct NavigateScreen: View {
                                action: { model.permissions.openAppSettings() })
             }
             if !panelVisible {
-                if let place = selectedPlace {
+                if let gpx = navigation.pendingGpx {
+                    // UX-17: an opened / picked GPX track waits here; nothing replaced until followed.
+                    NavigateGpxPreviewCard(preview: gpx)
+                } else if let place = selectedPlace {
                     NavigatePlaceCard(place: place, onClose: { selectedPlace = nil })
                 } else if let preview = snapshot.preview {
                     NavigatePreviewCard(preview: preview)
@@ -322,7 +340,7 @@ struct NavigateScreen: View {
                 do {
                     let data = try await FeatureFileReader.read(url, maxBytes: 64 * 1024 * 1024)
                     importError = nil
-                    navigation.loadGpx(data: data, fileName: url.lastPathComponent)
+                    navigation.previewGpx(data: data, fileName: url.lastPathComponent)
                 } catch {
                     importError = FeatureErrorText.describe(error)
                 }
@@ -340,6 +358,15 @@ struct NavigateScreen: View {
         guard let preview = snapshot.preview else { return }
         let rider = snapshot.puck ?? model.ride.lastFix?.point
         guard let rect = NavigateGeometry.previewRect(preview, rider: rider) else { return }
+        withAnimation(.easeInOut(duration: 0.4)) {
+            camera = .rect(rect)
+        }
+    }
+
+    /// Frames an opened GPX track waiting as a preview (UX-17).
+    private func fitGpxPreview() {
+        guard let gpx = model.navigation.pendingGpx,
+              let rect = NavigateGeometry.framingRect(NavigateGeometry.coordinates(gpx.outline, maxPoints: 300)) else { return }
         withAnimation(.easeInOut(duration: 0.4)) {
             camera = .rect(rect)
         }

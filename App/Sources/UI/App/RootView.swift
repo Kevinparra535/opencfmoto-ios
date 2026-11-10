@@ -7,13 +7,19 @@
 // - the onboarding gate (`permissions.hasCompletedOnboarding`),
 // - the app-wide overlays: transient banner, ConnectionIssue alerts, the "Import settings?"
 //   confirmation of a pack opened from another app, the manual Wi-Fi join sheet, the root QR
-//   scanner sheet and the Ride Mode full-screen cover,
-// - the dash's "type on phone" request when the top screen has no search field (back to Home).
+//   scanner sheet and the pocket-mode («Modo bolsillo») full-screen cover,
+// - the dash's "type on phone" request when the top screen has no search field (back to Home),
+// - UI/UX P0: the «Modo bolsillo» countdown card after Connect / Go (PocketCountdownCard.swift) and
+//   what only the UI knows about it — the keyboard or a root sheet is up, or the rider moved to
+//   another screen: the phone is in use, so no countdown runs then (UX-01); an opened GPX track
+//   opens the Map hub, which shows it as a preview (UX-17).
 // Alerts are attached to exactly one level at a time (the root when nothing is presented, else
 // inside the presented sheet / cover) because a view that is already presenting cannot present an
 // alert on iOS.
 
 import SwiftUI
+import UIKit
+import Combine
 import OpenCfMotoAppModel
 import OpenCfMotoCore
 
@@ -55,6 +61,9 @@ struct RootView: View {
         .overlay(alignment: .top) {
             RootBannerOverlay()
         }
+        .overlay(alignment: .bottom) {
+            PocketCountdownOverlay()
+        }
         .connectionIssueAlert(isActive: !isRootPresenting)
         .pendingImportAlert(isActive: !isRootPresenting)
         .sheet(item: $router.scanRequest, onDismiss: runScanFollowUp) { request in
@@ -79,7 +88,9 @@ struct RootView: View {
         .onChange(of: model.permissions.hasCompletedOnboarding) { _, completed in
             // Settings ▸ "Show onboarding again": show it right away instead of under the stack.
             if !completed { router.path.removeAll() }
+            if completed { showPendingGpx() }
         }
+        .modifier(RootP0Hooks(router: router, showPendingGpx: showPendingGpx))
         .onChange(of: model.connection.issue, initial: true) { _, issue in
             // Android: Connect without a saved bike opens the QR scanner (§7.5.4).
             guard issue == .noBikePaired else { return }
@@ -107,10 +118,12 @@ struct RootView: View {
 
     // MARK: - Launch arguments (CI screenshots)
 
-    /// Opens the `-uiScreen` destination once, after the first layout pass.
+    /// Opens the `-uiScreen` destination once, after the first layout pass. A launched screen stays
+    /// as launched: no «Modo bolsillo» countdown covers it (CI screenshots).
     private func applyLaunchOptions() async {
         guard !launchApplied, launchScreen != nil || launchLandscape else { return }
         launchApplied = true
+        if launchScreen != nil { model.ride.offersPocketMode = false }
         try? await Task.sleep(for: .milliseconds(400))
         if launchLandscape { RootLaunchOrientation.applyLandscape() }
         guard let screen = launchScreen else { return }
@@ -130,7 +143,25 @@ struct RootView: View {
         case .ride:
             Log.i("UI", "-uiScreen ride")
             MainRideMode.enter(model.ride)
+        case .gpxPreview:
+            Log.i("UI", "-uiScreen gpx")
+            openDemoGpxPreview()
         }
+    }
+
+    /// `-uiScreen gpx`: the demo loop opened as a GPX file while a route to Home runs, as when a track
+    /// arrives from Files or AirDrop mid-ride — the Map hub shows it as a preview, nothing replaced.
+    private func openDemoGpxPreview() {
+        if let home = model.navigation.home { model.navigation.navigate(to: home) }
+        let points = DemoRoutePlayer.defaultRoute.map { TrackPoint(lat: $0.lat, lon: $0.lon) }
+        var waypoints: [TrackPoint] = []
+        if let first = points.first { waypoints.append(TrackPoint(lat: first.lat, lon: first.lon, name: "Start")) }
+        if points.count > 2 {
+            let middle = points[points.count / 2]
+            waypoints.append(TrackPoint(lat: middle.lat, lon: middle.lon, name: "Café"))
+        }
+        let track = GpxTrack(name: "Demo loop", points: points, waypoints: waypoints)
+        model.navigation.previewGpx(data: Data(GpxWriter.write(track).utf8), fileName: "Demo loop.gpx")
     }
 
     /// `-uiDashSheet music`: once the Dash view shows music on the dash (≤ 5 s), open the dash's
@@ -183,6 +214,12 @@ struct RootView: View {
         router.scanRequest != nil || model.connection.manualJoin != nil || model.ride.isRideModeActive
     }
 
+    /// Brings the Map hub up for a GPX track waiting as a preview (after the onboarding).
+    private func showPendingGpx() {
+        guard model.navigation.pendingGpx != nil, model.permissions.hasCompletedOnboarding else { return }
+        if router.path.last != .navigate { router.path.append(.navigate) }
+    }
+
     /// The manual join prompt: shown while the model has one; a swipe-down means Cancel.
     private var manualJoinBinding: Binding<ManualWifiJoinPrompt?> {
         Binding(
@@ -218,6 +255,65 @@ struct RootView: View {
         case .mirror:
             model.connection.startMirror()
         }
+    }
+}
+
+/// UI/UX P0 hooks of the root: an opened GPX track brings the Map hub up (UX-17), and what only the UI
+/// knows about the «Modo bolsillo» countdown (UX-01) — the keyboard or the root scanner sheet is up, or
+/// the rider moved to another screen — goes to the model, which ends a running countdown then.
+private struct RootP0Hooks: ViewModifier {
+    @Environment(AppModel.self) private var model
+    let router: MainRouter
+    let showPendingGpx: () -> Void
+    /// The software keyboard is on screen (the rider is typing).
+    @State private var keyboardVisible = false
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: model.navigation.pendingGpx?.id, initial: true) { _, id in
+                // A GPX track opened from Files / AirDrop / Mail: the Map hub shows it as a preview with
+                // «Seguir este track» / «Cancelar»; nothing is replaced before that.
+                if id != nil { showPendingGpx() }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+                keyboardVisible = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                keyboardVisible = false
+            }
+            .onChange(of: isPhoneInUse, initial: true) { _, inUse in
+                model.ride.isPhoneInUse = inUse
+            }
+            .onChange(of: router.path) { _, _ in
+                // Another screen during the countdown: the rider is using the phone.
+                if model.ride.pocketCountdown != nil { model.ride.cancelPocketCountdown() }
+            }
+            .onAppear {
+                // Asked when an offer would start and when it runs out: a sheet, cover or alert opened
+                // by any screen (file picker, share sheet…) — the pocket cover never goes over one.
+                model.ride.isPhoneBusyNow = { RootPresentationProbe.isAnythingPresented() }
+            }
+    }
+
+    /// Typing, or the root scanner sheet (the model knows its own dialogs and the manual join).
+    private var isPhoneInUse: Bool {
+        keyboardVisible || router.scanRequest != nil
+    }
+}
+
+/// Whether UIKit shows a presentation (sheet, cover, alert) in the foreground window right now.
+@MainActor
+enum RootPresentationProbe {
+    static func isAnythingPresented() -> Bool {
+        for scene in UIApplication.shared.connectedScenes {
+            guard let windowScene = scene as? UIWindowScene, windowScene.activationState == .foregroundActive else {
+                continue
+            }
+            for window in windowScene.windows where !window.isHidden {
+                if window.rootViewController?.presentedViewController != nil { return true }
+            }
+        }
+        return false
     }
 }
 

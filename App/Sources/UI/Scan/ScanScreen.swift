@@ -131,7 +131,7 @@ struct ScanScreen: View {
                         Image(systemName: "exclamationmark.triangle.fill")
                     }
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Theme.onAccent)
                     .padding(12)
                     .background(Theme.error.opacity(0.9), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .padding(12)
@@ -214,7 +214,7 @@ struct ScanScreen: View {
                             Text(verbatim: label)
                                 .font(.subheadline.weight(.bold))
                                 .frame(maxWidth: .infinity, minHeight: 36)
-                                .foregroundStyle(abs(zoom - factor) < 0.01 ? Color.white : Theme.text)
+                                .foregroundStyle(abs(zoom - factor) < 0.01 ? Theme.onAccent : Theme.text)
                                 .background(abs(zoom - factor) < 0.01 ? Theme.brand : Theme.surfaceHigh,
                                             in: Capsule())
                         }

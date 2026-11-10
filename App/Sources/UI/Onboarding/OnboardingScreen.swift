@@ -3,7 +3,7 @@
 // welcome → location (When-In-Use) → Local Network → pair the bike (QR / manual Wi-Fi, or skip)
 // → done. The steps come from `PermissionsModel.step`. Every exit from the pair-bike step
 // (Continue, "Skip for now", a scanner / manual entry that paired) only `advance()`s to the "done"
-// page — "You're all set", the ride-safety note and the Ride Mode advice (review finding UI-3).
+// page — "You're all set", the ride-safety note and the pocket mode advice (review finding UI-3).
 // Only its "Start riding" calls `completeOnboarding()`, which persists the onboarding flag; RootView
 // then switches to Home (which auto-connects if enabled).
 
@@ -174,7 +174,7 @@ struct OnboardingScreen: View {
                     requestLocalNetwork()
                 } label: {
                     if isRequestingLocalNetwork {
-                        ProgressView().tint(.white)
+                        ProgressView().tint(Theme.onAccent)
                     } else {
                         Label("Allow local network access", systemImage: "network")
                     }
@@ -228,7 +228,7 @@ struct OnboardingScreen: View {
     private var done: some View {
         VStack(alignment: .leading, spacing: 18) {
             stepHeader(systemImage: "checkmark.seal.fill", title: "You're all set")
-            Text("Turn the bike on, then tap Connect on the home screen. During a ride keep OpenCfMoto open: Ride Mode keeps the iPhone screen dark while the dash keeps streaming.")
+            Text("Turn the bike on, then tap Connect on the home screen. During a ride keep OpenCfMoto open: Pocket mode keeps the iPhone screen dark while the dash stays live. It starts by itself 5 s after Connect or Go.")
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             note(systemImage: "exclamationmark.triangle",

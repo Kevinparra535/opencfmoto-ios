@@ -45,7 +45,7 @@ struct DashPreviewKeypad: View {
                         .font(.headline)
                 }
             }
-            .foregroundStyle(key == .enter ? Color.white : Theme.text)
+            .foregroundStyle(key == .enter ? Theme.onAccent : Theme.text)
             .frame(width: keySize, height: keySize)
             .background(key == .enter ? Theme.brand : Theme.surfaceHigh,
                         in: RoundedRectangle(cornerRadius: 14, style: .continuous))
