@@ -44,7 +44,7 @@ la app.
   minuto mientras está conectada) para no perderla si iOS la cierra; el siguiente arranque la recupera y
   la borra. Si iOS entrega a la app el informe de un cierre inesperado (MetricKit), la app lo guarda con
   los registros.
-- **Las grabaciones del tablero** (Registros ▸ Diagnóstico del enlace ▸ «Grabar el vídeo enviado al
+- **Las grabaciones del tablero** (Registros ▸ Diagnóstico del enlace ▸ «Grabar el video enviado al
   tablero»): el vídeo que recibe el tablero: el mapa alrededor de ti o, en el modo Espejo, todo lo que
   muestra la pantalla del iPhone (también otras apps y avisos). Se borran en el siguiente arranque.
 - **Las teselas del mapa** que ya se descargaron (hasta 512 MB, cada una caduca a los 90 días).

@@ -61,8 +61,13 @@ permiso de red local, el codificador de video del teléfono y el comportamiento 
    Prueba también **Vista de tablero** en el iPhone, que muestra lo mismo que ve el tablero.
 5. Navega a un destino desde el iPhone (**Mapa** → busca → **Ir**) y comprueba en el tablero el cartel
    de giro, las distancias, la hora de llegada y la voz en el iPhone o el casco.
-6. Para rodar: pulsa **Modo ruta**. La pantalla queda negra, el teléfono no se bloquea y el tablero
-   sigue recibiendo el mapa. Para salir, mantén pulsado 1,5 s.
+6. Para rodar: guarda el teléfono en **Modo bolsillo**. La app lo ofrece sola: 5 s después de
+   **Conectar** o de **Ir** aparece la cuenta atrás «Modo bolsillo en 5 s · Guarda el teléfono: el
+   tablero sigue en vivo» y entra, salvo que toques **Quedarme aquí** (también está el botón **Modo
+   bolsillo** en la pantalla de inicio). La pantalla queda negra, el teléfono no se bloquea y el
+   tablero sigue recibiendo el mapa. Para salir, mantén presionado 1,5 s.
+7. En una parada, apaga la moto un minuto y vuelve a encenderla: el iPhone no debe mostrar ninguna
+   alarma. El estado dice «Moto apagada · se reconecta sola» y el mapa vuelve al tablero solo.
 
 ## Apple Music en el tablero
 
@@ -129,7 +134,7 @@ En la moto, parada y segura, con el contacto puesto:
 
 4. Conecta y espera a ver el mapa en el tablero, sin menú ni hoja abierta (abajo a la derecha se ve
    la hora).
-5. En Registros ▸ «Diagnóstico del enlace», activa «Grabar el vídeo enviado al tablero» (si ya está
+5. En Registros ▸ «Diagnóstico del enlace», activa «Grabar el video enviado al tablero» (si ya está
    activado, desactívalo y vuelve a activarlo: así empieza una grabación nueva). A los 5 segundos,
    bloquea el iPhone con el botón lateral y apunta la hora.
 6. Mira el tablero a los 30 s, a los 2 min y a los 10 min. Con la moto parada el mapa en vivo no
@@ -140,7 +145,7 @@ En la moto, parada y segura, con el contacto puesto:
    - el mapa sin aviso y la hora no avanza (imagen congelada);
    - sin imagen o desconectado.
 7. Desbloquea. ¿Vuelve el mapa en menos de 5 s? Enseguida, antes de volver a bloquear y en este orden:
-   - desactiva «Grabar el vídeo enviado al tablero» si sigue activado (se desactiva solo al llegar a
+   - desactiva «Grabar el video enviado al tablero» si sigue activado (se desactiva solo al llegar a
      los 600 fotogramas) y toca **«Compartir la grabación»**: la app solo ofrece la última grabación,
      y compartir antes el registro puede borrarla;
    - después, Registros ▸ **Compartir**.
@@ -166,13 +171,13 @@ Qué significa cada resultado (con el iPhone bloqueado):
   no muestra el vídeo nuevo; el registro lo dice.
 - **Sin imagen o desconectado**: iOS cortó el Wi-Fi del tablero o paró la app. Repite con el iPhone
   cargando (condición A).
-- Para rodar, **Modo ruta** sigue siendo lo fiable: pantalla negra y el teléfono no se bloquea.
+- Para rodar, **Modo bolsillo** sigue siendo lo fiable: pantalla negra y el teléfono no se bloquea.
 
 ## Si algo falla
 
 - **Comparte los registros**: Registros ▸ **Compartir**. Los datos sensibles van ocultos por defecto.
   Para un fallo concreto usa **Informar de un problema**, que adjunta el diagnóstico.
-- **Graba lo que se envía al tablero**: Registros ▸ **«Grabar el vídeo enviado al tablero»**.
+- **Graba lo que se envía al tablero**: Registros ▸ **«Grabar el video enviado al tablero»**.
   Actívalo y reproduce el problema; si sigue activado, desactívalo (se desactiva solo al llegar a los
   600 fotogramas). Luego toca **«Compartir la grabación»** para enviar el archivo `.h264`. Se puede
   analizar con ffmpeg.
@@ -203,7 +208,7 @@ Qué significa cada resultado (con el iPhone bloqueado):
   Conectar). Para detenerla, vuelve a pulsar.
 - **El tablero muestra «Teléfono bloqueado»**: lo esperado si bloqueas el iPhone, salvo que iOS le
   dé a la app un codificador por software (ver «Qué significa cada resultado» en la prueba de
-  diagnóstico de arriba). Para rodar, usa **Modo ruta** en lugar de bloquear.
+  diagnóstico de arriba). Para rodar, usa **Modo bolsillo** en lugar de bloquear.
 
 ## Qué me ayuda saber de tu prueba
 
