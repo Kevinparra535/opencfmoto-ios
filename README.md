@@ -212,9 +212,12 @@ Sigue la guía paso a paso [docs/PRUEBA-EN-LA-MOTO.md](docs/PRUEBA-EN-LA-MOTO.md
 
 ## Limitaciones conocidas
 
-- **Modo ruta en primer plano**: iOS solo garantiza el codificador de vídeo por hardware y el
-  Wi-Fi con la app en primer plano. Durante la ruta deja la app abierta en **Modo ruta** (pantalla
-  negra, el teléfono no se bloquea) y con el iPhone cargando.
+- **Modo bolsillo en primer plano**: iOS solo garantiza el codificador de vídeo por hardware y el
+  Wi-Fi con la app en primer plano. Durante la ruta deja la app abierta en **Modo bolsillo**
+  (pantalla negra, el teléfono no se bloquea) y con el iPhone cargando. La app lo ofrece sola: 5 s
+  después de **Conectar** o de **Ir** cuenta hacia atrás y entra, salvo que toques **Quedarme
+  aquí**. Si apagas la moto en una parada no salta ninguna alarma: la app espera y se reconecta
+  sola.
 - **Teléfono bloqueado**: en segundo plano iOS no deja usar el codificador de vídeo por hardware;
   el tablero mantiene una imagen fija («Mapa en pausa», sin números; el manillar no hace nada).
   La build actual es de **diagnóstico**: con el teléfono bloqueado prueba si iOS da un codificador
@@ -222,7 +225,7 @@ Sigue la guía paso a paso [docs/PRUEBA-EN-LA-MOTO.md](docs/PRUEBA-EN-LA-MOTO.md
   el enlace, el GPS y la brújula siguen vivos, y cuánta CPU gasta (guía en
   [docs/PRUEBA-EN-LA-MOTO.md](docs/PRUEBA-EN-LA-MOTO.md)). No promete el mapa en vivo, y el enlace
   solo sigue mientras iOS conserve el Wi-Fi, lo que no está garantizado con la pantalla bloqueada.
-  **Modo ruta** sigue siendo el modo fiable.
+  **Modo bolsillo** sigue siendo el modo fiable.
 - **Permiso de red local**: iOS lo pide la primera vez que la app busca el tablero; si lo
   deniegas, actívalo en Ajustes ▸ OpenCfMoto ▸ Red local.
 - **Botones del manillar**: solo llegan a la app que está «reproduciendo» (Now Playing). La
@@ -517,16 +520,18 @@ no Wi-Fi or dash, and a demo GPS route so you can watch the dash UI on the phone
 
 ## Known limitations
 
-- **Foreground Ride Mode**: iOS only guarantees the hardware video encoder and the Wi-Fi while the
-  app is in the foreground. During a ride keep the app open in **Ride Mode** (black screen, the
-  phone does not auto-lock) with the iPhone charging.
+- **Foreground Pocket mode**: iOS only guarantees the hardware video encoder and the Wi-Fi while
+  the app is in the foreground. During a ride keep the app open in **Pocket mode** (black screen,
+  the phone does not auto-lock) with the iPhone charging. The app offers it by itself: 5 s after
+  **Connect** or **Go** it counts down and goes in, unless you tap **Stay here**. Switching the bike
+  off at a stop raises no alarm: the app waits and reconnects by itself.
 - **Locked phone**: iOS takes the hardware video encoder away in the background; the dash keeps a
   still "hold" picture ("Map paused", no numbers; the handlebar does nothing). The current build is a
   **diagnostics** build: while the phone is locked it tries whether iOS gives it a software encoder
   (if so, the map keeps moving) and logs whether the process, the Wi-Fi, the link, GPS and heading
   stay alive and how much CPU it uses (guide in [docs/PRUEBA-EN-LA-MOTO.md](docs/PRUEBA-EN-LA-MOTO.md),
   Spanish). It does not promise a live map, and the link only lasts as long as iOS keeps the Wi-Fi,
-  which is not guaranteed while locked. **Ride Mode** remains the reliable mode.
+  which is not guaranteed while locked. **Pocket mode** remains the reliable mode.
 - **Local Network permission**: iOS asks for it the first time the app looks for the dash; if you
   deny it, turn it on in Settings ▸ OpenCfMoto ▸ Local Network.
 - **Handlebar buttons**: they only reach the app that is "playing" (Now Playing). The option is

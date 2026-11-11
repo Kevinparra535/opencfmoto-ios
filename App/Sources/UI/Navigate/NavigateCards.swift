@@ -5,8 +5,9 @@
 // Bottom cards of the Map hub (docs/spec/navigation-dash.md §11.6–§11.8, §14): the phone shows the
 // same states as the dash because both read the ONE navigation session (NavigationModel):
 // route preview (chips → selectRoute, Go, Cancel/Done, Circuit, ★ Save, Home, Marker),
-// active navigation (cue + TIME / ARRIVE / LEFT / ALT + status, End, Recalc), arrival
-// (Park here / Find parking / Done) and the free-ride action bar.
+// an opened GPX track (Follow this track / Cancel, UI/UX P0), active navigation (cue + TIME /
+// ARRIVE / LEFT / ALT + status, End, Recalc), arrival (Park here / Find parking / Done) and the
+// free-ride action bar. Text on the green and red fills is dark (UX-06).
 
 import SwiftUI
 import OpenCfMotoCore
@@ -94,13 +95,75 @@ struct NavigatePreviewCard: View {
             Text(verbatim: label)
                 .font(.footnote.weight(.bold))
                 .monospacedDigit()
-                .foregroundStyle(selected ? Color.white : Theme.textSecondary)
+                .foregroundStyle(selected ? Theme.onAccent : Theme.textSecondary)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(selected ? Theme.live.opacity(0.85) : Theme.surfaceHigh, in: Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+// MARK: - Opened GPX track (UI/UX P0, UX-17)
+
+/// A GPX track opened from another app or picked here, shown before it replaces anything: its name,
+/// length and waypoints, what following it would replace, and «Seguir este track» / «Cancelar».
+@MainActor
+struct NavigateGpxPreviewCard: View {
+    @Environment(AppModel.self) private var model
+    let preview: GpxPreview
+
+    var body: some View {
+        let navigation = model.navigation
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
+                    .font(.title2)
+                    .foregroundStyle(Theme.live)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Track preview")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                    Text(verbatim: preview.name)
+                        .font(.headline)
+                        .foregroundStyle(Theme.text)
+                    Text(verbatim: navigation.summary(of: preview))
+                        .font(.subheadline)
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.textSecondary)
+                    if let replaces = navigation.pendingGpxReplaces {
+                        Label {
+                            Text(verbatim: replaces)
+                        } icon: {
+                            Image(systemName: "arrow.triangle.swap")
+                        }
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Theme.busy)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                Spacer(minLength: 0)
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    navigation.followPendingGpx()
+                } label: {
+                    Label("Follow this track", systemImage: "location.fill")
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+                .buttonStyle(PrimaryButtonStyle())
+
+                Button("Cancel") { navigation.cancelPendingGpx() }
+                    .buttonStyle(TonalButtonStyle())
+                    .accessibilityHint(Text("Nothing changes"))
+            }
+        }
+        .cardStyle()
     }
 }
 

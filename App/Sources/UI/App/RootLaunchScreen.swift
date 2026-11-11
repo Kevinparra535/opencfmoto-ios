@@ -17,12 +17,14 @@ enum RootLaunchScreen: Equatable {
     case onboarding
     /// The root QR scanner sheet.
     case scan
-    /// The Ride Mode cover.
+    /// The pocket-mode («Modo bolsillo») cover.
     case ride
+    /// The Map hub with a demo GPX track opened as a preview over a route to Home (UI/UX P0, UX-17).
+    case gpxPreview
 
     /// The names accepted by `-uiScreen` (lower-case).
     static let names = ["home", "dash", "navigate", "trips", "settings", "controls", "logs", "garage", "about",
-                        "mirror", "onboarding", "scan", "ride"]
+                        "mirror", "onboarding", "scan", "ride", "gpx"]
 
     init?(name: String?) {
         guard let name else { return nil }
@@ -40,6 +42,7 @@ enum RootLaunchScreen: Equatable {
         case "onboarding": self = .onboarding
         case "scan": self = .scan
         case "ride": self = .ride
+        case "gpx": self = .gpxPreview
         default: return nil
         }
     }

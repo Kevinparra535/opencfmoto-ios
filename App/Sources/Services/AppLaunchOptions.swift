@@ -14,12 +14,14 @@
 // | `-e2eMusic`                      | e2e: a fake Apple Music (3 songs with covers) + the dash music script |
 // | `-e2eBackgroundCycle <s>:<d>`    | e2e: simulated lock `s` s after the first STREAMING, for `d` s (scene inactive → background → inactive → active) |
 // | `-e2eBackgroundEncoder <policy>` | the locked-phone policy: `auto`, `vtsw`, `cpu`, `hold`, `cpu-always` (overrides the build default and any stored value) |
-// | `-uiScreen <name>`               | open that screen after launch (RootLaunchScreen names)              |
+// | `-uiScreen <name>`               | open that screen after launch (RootLaunchScreen names; `gpx` = a demo GPX preview) |
 // | `-uiOrientation landscape`       | rotate the interface to landscape after launch                      |
 // | `-uiDashSheet music`             | with `-uiScreen dash`: open the dash's Music sheet once it shows music |
 // | `-uiSettingsAnchor music`        | with `-uiScreen settings`: scroll to "Apple Music on the dash"      |
 //
 // An invalid `-e2eBackgroundCycle` / `-e2eBackgroundEncoder` value is ignored with a warning in the log.
+// `-e2eFakeDash` and `-uiScreen` turn the automatic «Modo bolsillo» countdown after Connect / Go off,
+// so the launched screen stays on screen (`-uiScreen ride` still shows the pocket screen itself).
 
 import Foundation
 import OpenCfMotoCore

@@ -3,8 +3,8 @@
 // (status rendering rules, app-features §7.2–§7.3).
 //
 // Shared, localized wording of the ui-main screens. Everything here returns LocalizedStringKey /
-// localized String so Home, Mirror and Ride Mode show the same words; translations live in
-// App/Resources/Localization/ui-main.json.
+// localized String so Home, Mirror and the pocket screen («Modo bolsillo») show the same words;
+// translations live in App/Resources/Localization/ui-main.json.
 
 import SwiftUI
 import OpenCfMotoAppModel
@@ -41,6 +41,34 @@ enum MainStrings {
         }
     }
 
+    /// The status label of a connection: the phase, or — for a dash link that dropped while the bike
+    /// is stopped (an ignition cycle at a stop) — calm words instead of an alarm (UI/UX P0).
+    @MainActor
+    static func statusLabel(_ connection: ConnectionModel) -> LocalizedStringKey {
+        switch connection.linkLossNotice {
+        case .bikeOffWhileStopped?: return "Bike off · reconnects by itself"
+        case .dashAwayWhileStopped?: return "Waiting for the dash · reconnects by itself"
+        case .droppedWhileMoving?, nil: return phaseLabel(connection.phase)
+        }
+    }
+
+    /// SF Symbol of the status circle (calm while stopped, like `statusLabel`).
+    @MainActor
+    static func statusSymbol(_ connection: ConnectionModel) -> String {
+        switch connection.linkLossNotice {
+        case .bikeOffWhileStopped?: return "pause.circle"
+        case .dashAwayWhileStopped?: return "hourglass"
+        case .droppedWhileMoving?, nil: return phaseSymbol(connection.phase)
+        }
+    }
+
+    /// Status colour: neutral for the calm notices (never the amber / red of an alarm), else the phase's.
+    @MainActor
+    static func statusTint(_ connection: ConnectionModel) -> Color {
+        if connection.linkLossNotice?.isQuiet == true { return Theme.idle }
+        return Theme.tint(for: connection.phase)
+    }
+
     /// Second status line (§7.3): the phase detail if any, else the paired / no-bike hint.
     static func statusDetail(detail: String, bikeName: String?) -> Text {
         let trimmed = detail.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -67,7 +95,7 @@ enum MainStrings {
         }
     }
 
-    /// SF Symbol for a maneuver (Ride Mode cue).
+    /// SF Symbol for a maneuver (pocket screen cue).
     static func turnSymbol(_ dir: TurnDir) -> String {
         switch dir {
         case .left, .sharpLeft: return "arrow.turn.up.left"

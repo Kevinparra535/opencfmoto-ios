@@ -78,7 +78,7 @@ vacía. Para pasar lo tuyo:
 - **Tus motos:** vuelve a escanear el QR del tablero (**Inicio ▸ Escanear**). Las contraseñas Wi-Fi no
   pasan de una app a otra.
 - **El ajuste de cada moto** (perfil, calidad de vídeo, ajuste de pantalla, márgenes, botones…): en la
-  versión para sideload, **Ajustes ▸ Compartir configuración ▸ Compartir JSON** y guárdalo en Archivos;
+  versión para sideload, **Ajustes ▸ Compartir ajustes ▸ Compartir JSON** y guárdalo en Archivos;
   en la de TestFlight, con esa moto ya añadida, **Importar…** en el mismo sitio. No lleva contraseñas,
   nombres de red ni números de serie.
 - **Tus lugares y las preferencias del mapa** (casa, favoritos, marcadores, historial y dónde

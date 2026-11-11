@@ -6,6 +6,8 @@
 // candidates (selected green, alternatives grey), the dashed rider → destination line while no
 // road route exists, the destination / previewed place, saved pins, search results and the
 // snapped puck. Pins, results and the destination are selectable (they open the place card).
+// UI/UX P0 (UX-17): an opened GPX track waiting as a preview is drawn dashed green over the rest,
+// with its end flagged; the route being followed stays visible under it.
 
 import SwiftUI
 import MapKit
@@ -18,6 +20,8 @@ struct NavigateMapLayer: View {
     let results: [Place]
     /// Home and the parked bike (always pinned).
     let saved: [Place]
+    /// An opened GPX track waiting for «Seguir este track» / «Cancelar» (nil when none).
+    var gpxPreview: GpxPreview? = nil
     @Binding var camera: MapCameraPosition
     @Binding var selection: Place?
 
@@ -46,6 +50,21 @@ struct NavigateMapLayer: View {
                        coordinate: NavigateGeometry.coordinate(preview.place))
                     .tint(Theme.brand)
                     .tag(preview.place)
+            }
+
+            // An opened GPX track shown as a preview (nothing replaced yet): dashed green, end flagged.
+            if let gpx = gpxPreview {
+                let outline = gpx.outline
+                if outline.count > 1 {
+                    MapPolyline(coordinates: NavigateGeometry.coordinates(outline))
+                        .stroke(Theme.live, style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round,
+                                                               dash: [12, 8]))
+                }
+                if let last = outline.last {
+                    Marker(gpx.name, systemImage: "flag.checkered",
+                           coordinate: CLLocationCoordinate2D(latitude: last.lat, longitude: last.lon))
+                        .tint(Theme.live)
+                }
             }
 
             // NAV_TO without a road route yet: dashed yellow rider → destination line.

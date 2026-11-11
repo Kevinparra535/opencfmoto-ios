@@ -135,6 +135,18 @@ extension LogicData {
         func gpxUnreadable(_ detail: String) -> String {
             t("Couldn't read that GPX file: \(detail)", "No se pudo leer el archivo GPX: \(detail)")
         }
+        /// Opened-GPX preview card (UI/UX P0, UX-17): "3 waypoints".
+        func gpxWaypoints(_ count: Int) -> String {
+            count == 1 ? t("1 waypoint", "1 punto de paso") : t("\(count) waypoints", "\(count) puntos de paso")
+        }
+        /// What «Seguir este track» replaces: the route being navigated…
+        func gpxReplacesRoute(_ name: String) -> String {
+            t("Replaces the route to \(name)", "Reemplaza la ruta a \(name)")
+        }
+        /// …or the track being followed.
+        func gpxReplacesTrack(_ name: String) -> String {
+            t("Replaces the track \u{201C}\(name)\u{201D}", "Reemplaza el track \u{00AB}\(name)\u{00BB}")
+        }
 
         /// User-facing text for a routing / search failure (Android `AppHttp` messages, localized).
         func serviceError(_ error: Error, fallback: String) -> String {

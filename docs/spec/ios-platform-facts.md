@@ -1107,7 +1107,8 @@ performance level, which avoids changes in thermal headroom over time. It is not
 
 ## Design recommendations
 
-1. **Make foreground "Ride Mode" the primary operating mode.** Keep the app frontmost during a ride:
+1. **Make foreground "Ride Mode" the primary operating mode** (shown as «Modo bolsillo» / "Pocket mode"
+   since the UI/UX P0, offered by a 5-s countdown after Connect and Go). Keep the app frontmost during a ride:
    - `isIdleTimerDisabled = true` (Apple explicitly allows it for mapping apps)
    - a black, touch-swallowing pocket overlay
    - lowered `UIScreen.brightness`, restored by the system at lock

@@ -119,8 +119,10 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(h.model.handleOpenURL(url), SessionText.cannotReadFile(h.language))
     }
 
+    /// UI/UX P0 (UX-17) changed this on purpose: an opened GPX used to replace the navigation at once
+    /// with a "Loaded GPX" banner; it is now a preview waiting for «Seguir este track» (GpxPreviewTests).
     @MainActor
-    func testOpeningAGPXHandsItToNavigation() async throws {
+    func testOpeningAGPXHandsItToNavigationAsAPreview() async throws {
         let h = AppTestHarness()
         let gpx = """
         <?xml version="1.0" encoding="UTF-8"?>
@@ -130,7 +132,10 @@ final class AppModelTests: XCTestCase {
         """
         let url = try tempFile("Loop.gpx", gpx)
         let message = h.model.handleOpenURL(url)
-        XCTAssertEqual(message, h.model.navigation.lastError ?? SessionText.gpxLoaded("Loop", h.language))
+        XCTAssertNil(message)
+        XCTAssertNil(h.model.navigation.lastError)
+        XCTAssertEqual(h.model.navigation.pendingGpx?.name, "Loop")
+        XCTAssertEqual(h.core.navigation.snapshot.mode, .freeRide, "nothing replaced before the rider follows it")
     }
 
     // MARK: Opened packs wait for confirmation (SPEC:CL-11), Inbox copies are deleted (IOS:IOS-6)

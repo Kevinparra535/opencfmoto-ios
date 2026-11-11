@@ -221,7 +221,7 @@ struct SettingsScreen: View {
         } header: {
             Text("Battery & power")
         } footer: {
-            FeatureNote("This app renders and encodes live video — it always draws power and warms the phone. Keep it on the bike's USB charger and use Ride Mode while riding (the dash keeps streaming). Auto lowers the frame rate when the phone gets hot.")
+            FeatureNote("This app renders and encodes live video — it always draws power and warms the phone. Keep it on the bike's USB charger and use Pocket mode while riding (the dash stays live). Auto lowers the frame rate when the phone gets hot.")
         }
         .featureRowBackground()
     }

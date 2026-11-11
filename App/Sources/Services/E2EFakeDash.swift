@@ -6,7 +6,8 @@
 // VideoToolbox + DashRenderer + TileImageCache, the internet client for tiles. Simulated: the bike
 // Wi-Fi (a port that is "already joined" with the fake dash as gateway, local-only like the dash's
 // access point in the field), GPS (DemoRoutePlayer), speech, handlebar, mirror. The garage holds one bike whose pairing QR matches the fakedash model
-// (`-e2eDash`), the onboarding is done and auto-connect starts the session right after launch.
+// (`-e2eDash`), the onboarding is done and auto-connect starts the session right after launch. The
+// automatic «Modo bolsillo» offer is off, so the phone screens stay as launched.
 //
 // `-e2eMusic` adds a fake Apple Music (DemoSeed.music: three songs with drawn covers, playing) and a
 // script that drives the dash's Music sheet from the first own-UI frame on: +9 s open, +15 s next
@@ -195,6 +196,9 @@ final class E2EFakeDashHarness {
     /// Wires the model (call right after creating it, before `AppModel.start()`).
     func attach(to model: AppModel) {
         model.connection.applyTestingOverrides(.loopback())
+        // The phone screens of an E2E run stay as launched (Home or `-uiScreen`): no «Modo bolsillo»
+        // countdown when the fake dash streams (UI/UX P0; the offer is unit-tested in the AppModel).
+        model.ride.offersPocketMode = false
         let player = DemoRoutePlayer(location: location, now: services.now)
         player.start()
         self.player = player

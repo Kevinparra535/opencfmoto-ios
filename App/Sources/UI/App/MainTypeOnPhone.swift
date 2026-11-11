@@ -5,10 +5,10 @@
 // The dash's request to type the search on the phone (`NavigationModel.typeOnPhoneRequested`: the
 // dash search pill, the ASSISTANT key or the search sheet's "Type on phone") is taken by the screen
 // the rider can SEE — Home's search field, the Map hub or the Dash view — and only while the scene
-// is active and nothing covers that screen (Ride Mode, the scanner or manual-join sheet). Otherwise
+// is active and nothing covers that screen (pocket mode, the scanner or manual-join sheet). Otherwise
 // it stays pending and is picked up as soon as that holds: the rider unlocks the phone or comes
 // back to the app (iOS cannot bring an app to the front; "when the rider opens the app, focus the
-// search field"), leaves Ride Mode (its overlay shows a hint meanwhile), closes the sheet, or the
+// search field"), leaves pocket mode (its overlay shows a hint meanwhile), closes the sheet, or the
 // screen appears. RootView sends other screens (Settings, Trips, Controls…) back to Home, whose
 // field then takes it. Review findings UI-1, UI-2, UI-4, CL-3.
 
@@ -18,7 +18,7 @@ import OpenCfMotoAppModel
 /// Shared rule for the screens that can show the dash's "type on phone" request.
 @MainActor
 enum MainTypeOnPhone {
-    /// Seconds a request may wait under Ride Mode (the overlay shows a hint meanwhile) before it is
+    /// Seconds a request may wait under pocket mode (the overlay shows a hint meanwhile) before it is
     /// dropped as stale — the rider answers a dash prompt at a stop, not at the end of the ride.
     static let rideModeLifetime: TimeInterval = 120
 
@@ -34,7 +34,7 @@ enum MainTypeOnPhone {
 
 extension View {
     /// Calls `perform` whenever the dash's "type on phone" request is pending and this screen can show
-    /// it (`isVisible`, the scene active, no Ride Mode cover or root sheet) — on arrival, and again
+    /// it (`isVisible`, the scene active, no pocket-mode cover or root sheet) — on arrival, and again
     /// when any of those becomes true later. `perform` must acknowledge the request.
     func mainTypeOnPhone(isVisible: Bool, perform: @escaping () -> Void) -> some View {
         modifier(MainTypeOnPhoneTrigger(isVisible: isVisible, perform: perform))

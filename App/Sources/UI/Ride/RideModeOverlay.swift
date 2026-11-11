@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Ride Mode — the iOS "pocket mode" (docs/spec/ios-platform-facts.md, design recommendation 1):
-// the app stays frontmost with the idle timer disabled (RideModel), the screen is black (OLED
-// pixels off) and swallows touches, and the dash keeps streaming. Minimal, static large text:
-// connection phase, speed, the next maneuver. No animations. Long-press 1.5 s to exit.
+// «Modo bolsillo» / Pocket mode (called Ride Mode before the UI/UX P0; the code keeps the RideMode
+// names) — the iOS pocket mode (docs/spec/ios-platform-facts.md, design recommendation 1): the app
+// stays frontmost with the idle timer disabled (RideModel), the screen is black (OLED pixels off)
+// and swallows touches, and the dash keeps streaming. Minimal, static large text: the connection,
+// speed, the next maneuver. No animations. Press and hold 1.5 s to exit. Offered by itself after
+// Connect and Go (a 5-s countdown, PocketCountdownCard.swift). A link that drops while the bike is
+// stopped reads calm — «Moto apagada · se reconecta sola» — never as an alarm (UI/UX P0).
 // The screen brightness is lowered while the overlay is up ("lowered UIScreen.brightness, restored
 // by the system at lock" — review finding UI-6): on LCD iPhones black is a lit backlight, and on
 // OLED the large text would stay at full brightness for the whole ride, adding heat to the encoder,
@@ -18,10 +21,10 @@ import UIKit
 import OpenCfMotoAppModel
 import OpenCfMotoCore
 
-/// Ride Mode's dimmed screen: saves the brightness, lowers it, and puts it back.
+/// The pocket screen's dimmed brightness: saves the brightness, lowers it, and puts it back.
 @MainActor
 final class RideModeBrightness {
-    /// Brightness while Ride Mode is on screen (a darker screen is never brightened).
+    /// Brightness while pocket mode is on screen (a darker screen is never brightened).
     static let level: CGFloat = 0.15
 
     private weak var screen: UIScreen?
@@ -55,7 +58,7 @@ final class RideModeBrightness {
     }
 }
 
-/// Enter / leave Ride Mode without the cover's slide animation.
+/// Enter / leave pocket mode («Modo bolsillo») without the cover's slide animation.
 enum MainRideMode {
     @MainActor
     static func enter(_ ride: RideModel) {
@@ -79,21 +82,27 @@ struct RideModeOverlay: View {
     @State private var brightness = RideModeBrightness()
 
     var body: some View {
-        let phase = model.connection.phase
+        let connection = model.connection
         let ride = model.ride
         let cue = model.navigation.snapshot.cue
         ZStack {
             Color.black.ignoresSafeArea()
             VStack(spacing: 22) {
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(Theme.tint(for: phase))
-                        .frame(width: 10, height: 10)
-                    Text(MainStrings.phaseLabel(phase))
-                        .font(.headline)
-                        .foregroundStyle(Color.white.opacity(0.6))
-                        .lineLimit(2)
-                        .multilineTextAlignment(.center)
+                VStack(spacing: 10) {
+                    Text("Pocket mode")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.white.opacity(0.45))
+                        .accessibilityAddTraits(.isHeader)
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(MainStrings.statusTint(connection))
+                            .frame(width: 10, height: 10)
+                        Text(MainStrings.statusLabel(connection))
+                            .font(.headline)
+                            .foregroundStyle(Color.white.opacity(0.6))
+                            .lineLimit(2)
+                            .multilineTextAlignment(.center)
+                    }
                 }
 
                 Spacer(minLength: 0)
@@ -140,7 +149,7 @@ struct RideModeOverlay: View {
 
                 if model.navigation.typeOnPhoneRequested {
                     // The dash asked to type the search on the phone: the field is under this cover.
-                    Label("Bike search open — long-press to exit Ride Mode, then type your search",
+                    Label("Bike search open — press and hold to leave pocket mode, then type your search",
                           systemImage: "keyboard")
                         .font(.headline)
                         .foregroundStyle(Theme.brand)
@@ -148,7 +157,20 @@ struct RideModeOverlay: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Label("Long-press to exit", systemImage: "hand.tap")
+                // What the rider may wonder about with the phone in a pocket: the dash, and a stop.
+                Group {
+                    if model.settings.current.autoRecovery {
+                        Text("The dash stays live. If you switch the bike off, it reconnects by itself.")
+                    } else {
+                        Text("The dash stays live.")
+                    }
+                }
+                .font(.footnote)
+                .foregroundStyle(Color.white.opacity(0.45))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+                Label("Press and hold to exit", systemImage: "hand.tap")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(Color.white.opacity(0.4))
             }
@@ -160,12 +182,12 @@ struct RideModeOverlay: View {
             MainRideMode.exit(model.ride)
         }
         .task(id: model.navigation.typeOnPhoneRequested) { @MainActor in
-            // A request left unanswered under Ride Mode goes stale: drop it so leaving Ride Mode at
+            // A request left unanswered under pocket mode goes stale: drop it so leaving pocket mode at
             // the end of the ride does not pop the keyboard out of context.
             guard model.navigation.typeOnPhoneRequested else { return }
             try? await Task.sleep(for: .seconds(MainTypeOnPhone.rideModeLifetime))
             guard !Task.isCancelled, model.navigation.typeOnPhoneRequested, model.ride.isRideModeActive else { return }
-            Log.i("UI", "type-on-phone request expired under Ride Mode")
+            Log.i("UI", "type-on-phone request expired under pocket mode")
             model.navigation.acknowledgeTypeOnPhone()
         }
         .onAppear {
@@ -185,7 +207,7 @@ struct RideModeOverlay: View {
         }
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
-        .accessibilityAction(named: Text("Exit Ride Mode")) {
+        .accessibilityAction(named: Text("Exit pocket mode")) {
             MainRideMode.exit(model.ride)
         }
     }

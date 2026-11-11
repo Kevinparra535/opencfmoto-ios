@@ -16,7 +16,8 @@ struct BroadcastPickerButton: UIViewRepresentable {
         picker.preferredExtension = extensionBundleID
         picker.showsMicrophoneButton = false
         picker.backgroundColor = .clear
-        picker.tintColor = .white
+        // Dark glyph on the orange circle behind it (UI/UX P0, UX-06: 6.6:1; white was 2.9:1).
+        picker.tintColor = UIColor(red: 0x0E / 255.0, green: 0x11 / 255.0, blue: 0x16 / 255.0, alpha: 1)
         return picker
     }
 
