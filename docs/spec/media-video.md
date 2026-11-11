@@ -928,7 +928,7 @@ iOS takes the hardware encoder away in the background (ios-platform-facts.md §d
   unanswered one is accepted only with a probe IDR), and `H264StreamCheck` finds nothing wrong (4-byte start
   codes; NAL types 1, 5, 7, 8; `[7, 8, 5…]` IDRs; Baseline, the level the canvas needs, exactly the canvas,
   no cropping, frame MBs only, POC 0 or 2, ≤ 2 references, no reorder, ids 0, CAVLC, one slice group, I/P
-  slices). The last rung is the pre-encoded **hold picture** ("Phone locked").
+  slices). The last rung is the pre-encoded **hold picture** ("Map paused").
 - **Demotion:** 3 encode failures within 10 s, or 3 s without output after an accepted submission, moves to
   the next rung with the full acceptance again; a hold reached by a demotion is retried 60 s later, at most
   3 times per background period.

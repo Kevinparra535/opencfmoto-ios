@@ -149,7 +149,7 @@ the owner, signatures are frozen). Spanish strings: each UI agent writes its own
    conforms): in the foreground the VideoToolbox hardware session; at `.background` a **ladder** of
    background encoders (pure rules in `OpenCfMotoCore/Video/BackgroundEncoding.swift`): a VideoToolbox
    software session (pre-warmed at `.inactive`), then a bundled CPU encoder (Phase 1; none in the Phase 0
-   build), then the pre-encoded hold picture ("Phone locked"). A rung is used only after a probe IDR
+   build), then the pre-encoded hold picture ("Map paused"). A rung is used only after a probe IDR
    passed `H264StreamCheck` (nothing of a rejected encoder reaches the dash); a failing encoder is demoted
    to the next rung; every encoder change happens at an IDR (gate closed, `EncodedFrame.encoderTag`
    changes only on IDRs). A timed-out pull is answered with the live background encoder's last IDR, then
