@@ -100,13 +100,17 @@ final class DashSVGExporterTests: XCTestCase {
 
     func testTilePlaceholders() {
         var list = DashDisplayList(size: size, background: .black)
-        list.commands = [.tile(z: 16, x: 37452, y: 23541, rect: DashRect(x: 0, y: 0, width: 256, height: 256), invert: false),
-                         .tile(z: 16, x: 37453, y: 23541, rect: DashRect(x: 256, y: 0, width: 256, height: 256), invert: true)]
+        list.commands = [.tile(z: 16, x: 37452, y: 23541, rect: DashRect(x: 0, y: 0, width: 256, height: 256), treatment: .normal),
+                         .tile(z: 16, x: 37453, y: 23541, rect: DashRect(x: 256, y: 0, width: 256, height: 256), treatment: .inverted),
+                         .tile(z: 16, x: 37454, y: 23541, rect: DashRect(x: 0, y: 256, width: 256, height: 256), treatment: .mutedDay),
+                         .tile(z: 16, x: 37455, y: 23541, rect: DashRect(x: 256, y: 256, width: 256, height: 256), treatment: .mutedNight)]
         let svg = DashSVGExporter().svg(list)
         XCTAssertTrue(svg.contains(">16/37452/23541</text>"))
         XCTAssertTrue(svg.contains(">16/37453/23541</text>"))
-        XCTAssertTrue(svg.contains("fill=\"#F2EFE9\"")) // light day placeholder
+        XCTAssertTrue(svg.contains("fill=\"#F2EFE9\"")) // light day placeholder (classic)
         XCTAssertTrue(svg.contains("fill=\"#1B1E24\"")) // dark (inverted) placeholder
+        XCTAssertTrue(svg.contains("fill=\"#E5E4E0\"")) // muted day ground (P0, D05)
+        XCTAssertTrue(svg.contains("fill=\"#16191D\"")) // muted night ground
     }
 
     func testHitRegionOverlay() {

@@ -51,15 +51,39 @@ public enum HandlebarPresets {
     public static let androidDefaults: [ButtonGesture: ButtonAction] =
         Dictionary(uniqueKeysWithValues: ButtonGesture.allCases.map { ($0, $0.defaultAction) })
 
-    /// iOS default mapping (input-controls.md §9.1 cluster C): identical to Android except
-    /// `navFwdDouble` → `home` (replaces the unobservable ★ hold) and `selectLong` → `none`
-    /// (★ hold is never observable on iOS: play/pause commands carry no press duration).
+    /// iOS default mapping (input-controls.md §9.1 cluster C): singles as Android (◀ / ▶ = knob ∓1,
+    /// ★ = select), `selectLong` → `none` (★ hold is never observable on iOS: play/pause commands carry no
+    /// press duration) and — P0 (D02) — every double → `none`. With snappy singles a double always fired its
+    /// single first (★★ = activate, then Back; ▶▶ = move, then the menu; ◀◀ = −2), and a double pressed a bit
+    /// slowly became two singles: a mistimed double meant something else. Now a quick second press is
+    /// swallowed (the double's action is `none`) and a slow one is a second single — never a different action.
+    /// The double-tap window stays 300 ms. What only a double reached stays reachable with singles: BACK
+    /// (close a sheet, dismiss the arrival card, cancel a preview) through each one's own close / Done /
+    /// Cancel control; HOME (the menu) through the map's Menu FAB; ◀◀'s D-pad left is ◀ again.
     public static let iosDefaultMapping: [ButtonGesture: ButtonAction] = {
+        var m = androidDefaults
+        m[.selectDouble] = ButtonAction.none
+        m[.navFwdDouble] = ButtonAction.none
+        m[.navBackDouble] = ButtonAction.none
+        m[.selectLong] = ButtonAction.none
+        return m
+    }()
+
+    /// The iOS default mapping of builds before P0: ▶▶ Home, ◀◀ D-pad left, ★★ Back, ★ hold none.
+    public static let iosDefaultMappingBeforeP0: [ButtonGesture: ButtonAction] = {
         var m = androidDefaults
         m[.navFwdDouble] = .home
         m[.selectLong] = ButtonAction.none
         return m
     }()
+
+    /// P0 (D02) migration, applied when a map is read: a map stored exactly as the pre-P0 iOS default
+    /// (what applying the 5-way or MODE / ENT preset wrote on earlier builds) reads as today's
+    /// `iosDefaultMapping`, so the unmapped doubles reach those riders too. Any other map — one gesture
+    /// changed by the rider, an Android import, BACK / SET, the single-button option — is returned as is.
+    public static func migratingLegacyDefault(_ map: [ButtonGesture: ButtonAction]) -> [ButtonGesture: ButtonAction] {
+        completed(map, fallback: iosDefaultMapping) == iosDefaultMappingBeforeP0 ? iosDefaultMapping : map
+    }
 
     /// Android `ButtonClusterPreset.mapping()` (all nine gestures).
     public static func androidMapping(for preset: ButtonClusterPreset) -> [ButtonGesture: ButtonAction] {

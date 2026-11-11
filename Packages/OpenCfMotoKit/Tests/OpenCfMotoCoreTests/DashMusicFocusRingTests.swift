@@ -3,6 +3,8 @@
 // close of the Music sheet, so on the tile it has no fill and is stroked OUTSIDE the cover (the artwork
 // stays clean). On every supported canvas and map state the outset ring stays inside the canvas and the
 // safe area and clear of every other widget: hit regions and drawings (FABs, clock, cards, toasts).
+// P0 (D09): that outset ring is now the ring of every control — the same 5-dp footprint, black with a white
+// core instead of orange.
 import XCTest
 @testable import OpenCfMotoCore
 
@@ -48,17 +50,27 @@ final class DashMusicFocusRingTests: XCTestCase {
         var inner: DashRect { path.insetBy(dx: width / 2, dy: width / 2) }
     }
 
+    /// The rings' footprints: the black band (its white core is checked to share its path).
     private func rings(_ list: DashDisplayList) -> [Ring] {
-        list.commands.compactMap {
-            guard case let .stroke(p, s) = $0, s.color == DashPalette.focusStroke, let b = p.controlPointBounds else { return nil }
+        let cores = Set(list.commands.compactMap { cmd -> DashPath? in
+            if case let .stroke(p, s) = cmd, s.color == DashPalette.focusStroke, s.join == .round, s.cap == .butt { return p }
+            return nil
+        })
+        return list.commands.compactMap {
+            guard case let .stroke(p, s) = $0, s.color == DashPalette.focusEdge, let b = p.controlPointBounds else { return nil }
+            XCTAssertTrue(cores.contains(p), "the white core runs on the black band")
             return Ring(path: b, width: s.width)
         }
     }
 
-    private func focusFills(_ list: DashDisplayList) -> [DashRect] {
+    /// Fills in the focus colours that wash the focused control `r` (covering at least half of it): none,
+    /// ever. The controls' own white glyphs (icons, the progress bar) are much smaller and do not count.
+    private func focusFills(_ list: DashDisplayList, over r: DashRect) -> [DashRect] {
         list.commands.compactMap {
-            if case let .fill(p, c, _) = $0, c == DashPalette.focusFill { return p.controlPointBounds }
-            return nil
+            guard case let .fill(p, c, _) = $0, c == DashPalette.focusStroke || c == DashPalette.focusEdge,
+                  let b = p.controlPointBounds else { return nil }
+            let w = min(b.maxX, r.maxX) - max(b.minX, r.minX), h = min(b.maxY, r.maxY) - max(b.minY, r.minY)
+            return w > 0 && h > 0 && w * h >= 0.5 * r.width * r.height ? b : nil
         }
     }
 
@@ -114,12 +126,12 @@ final class DashMusicFocusRingTests: XCTestCase {
                         continue
                     }
                     // no wash over the cover, one ring whose inner edge is the cover's edge
-                    XCTAssertEqual(focusFills(list), [], tag)
+                    XCTAssertEqual(focusFills(list, over: tile), [], tag)
                     let found = rings(list)
                     XCTAssertEqual(found.count, 1, tag)
                     guard let ring = found.first else { continue }
                     let ctx = DashLayoutContext(model: m, measurer: ApproximateTextMeasurer())
-                    XCTAssertEqual(ring.width, ctx.dp(DashPalette.focusStrokeWidth), accuracy: 1e-9, tag)
+                    XCTAssertEqual(ring.width, ctx.dp(DashPalette.focusEdgeWidth), accuracy: 1e-9, tag)
                     XCTAssertTrue(same(ring.inner, tile), "\(tag): ring inner edge \(ring.inner) ≠ cover \(tile)")
                     // inside the canvas and the safe area
                     let canvas = DashRect(x: 0, y: 0, width: size.width, height: size.height)
@@ -142,7 +154,7 @@ final class DashMusicFocusRingTests: XCTestCase {
                     }
                     for cmd in chrome(list) {
                         guard let p = painted(cmd), !within(p, tile) else { continue }
-                        if case let .stroke(_, s) = cmd, s.color == DashPalette.focusStroke { continue }
+                        if case let .stroke(_, s) = cmd, s.color == DashPalette.focusStroke || s.color == DashPalette.focusEdge { continue }
                         XCTAssertFalse(ring.outer.intersects(p), "\(tag): ring \(ring.outer) on a drawing \(p): \(cmd)")
                     }
                     let edges = [ring.outer.minY - m.safeRect.minY, m.safeRect.maxX - ring.outer.maxX, m.safeRect.maxY - ring.outer.maxY]
@@ -157,21 +169,29 @@ final class DashMusicFocusRingTests: XCTestCase {
         }
     }
 
-    func testOtherFocusRingsKeepTheirFillAndInsetStroke() {
-        // FABs (circular) and rectangular controls are unchanged: fill + stroke inside the control.
+    func testEveryFocusRingIsAnOutlineOutsideTheControl() {
+        // P0 (D09): FABs (circular) and rectangular controls get the tile's ring — no fill over the control,
+        // the band starts at its edge (Android: a 40 % orange fill and a stroke inside the control).
         let ui = DashUIController()
         ui.update(DashFixtures.withMusic(DashFixtures.navigating(), DashFixtures.song()))
-        let end = ui.displayList(now: t0) // default focus: End
-        let endRect = try! XCTUnwrap(end.hitRegions.last { $0.id == "metrics.end" }?.rect)
-        XCTAssertEqual(focusFills(end).count, 1)
-        XCTAssertTrue(within(try! XCTUnwrap(rings(end).first).outer, endRect))
-        _ = ui.handle(.knob(-2), now: t0) // ◀◀ → fab.menu
+        let recenter = ui.displayList(now: t0) // default focus while navigating: Recenter (P0, D01)
+        XCTAssertEqual(ui.state.focusedId, "fab.recenter")
+        let recenterRect = try! XCTUnwrap(recenter.hitRegions.last { $0.id == "fab.recenter" }?.rect)
+        XCTAssertEqual(focusFills(recenter, over: recenterRect), [])
+        XCTAssertTrue(same(try! XCTUnwrap(rings(recenter).first).inner, recenterRect))
+        _ = ui.handle(.knob(-2), now: t0) // ◀◀ → the tile → fab.menu
         XCTAssertEqual(ui.state.focusedId, "fab.menu")
         let fab = ui.displayList(now: t0)
         let fabRect = try! XCTUnwrap(fab.hitRegions.last { $0.id == "fab.menu" }?.rect)
-        XCTAssertEqual(focusFills(fab).count, 1)
-        XCTAssertTrue(same(try! XCTUnwrap(focusFills(fab).first), fabRect))
-        XCTAssertTrue(within(try! XCTUnwrap(rings(fab).first).outer, fabRect))
+        XCTAssertEqual(focusFills(fab, over: fabRect), [])
+        XCTAssertTrue(same(try! XCTUnwrap(rings(fab).first).inner, fabRect))
+        // a rectangular control: the menu's first item
+        _ = ui.handle(.key(.enter), now: t0 + 1)
+        XCTAssertEqual(ui.state.focusedId, "menu.recalc")
+        let menu = ui.displayList(now: t0 + 1)
+        let item = try! XCTUnwrap(menu.hitRegions.last { $0.id == "menu.recalc" }?.rect)
+        XCTAssertEqual(focusFills(menu, over: item), [])
+        XCTAssertTrue(same(try! XCTUnwrap(rings(menu).first).inner, item))
     }
 
     func testTheCoverIsNotWashedOutAfterTheSheetCloses() {
@@ -191,15 +211,19 @@ final class DashMusicFocusRingTests: XCTestCase {
         for t in [t0 + 7.2, t0 + 62] {
             let list = ui.displayList(now: t)
             let tile = try! XCTUnwrap(list.hitRegions.last { $0.id == "music.tile" }).rect
-            XCTAssertEqual(focusFills(list), [], "t+\(t - t0)")
-            // exactly one stroke: the cover's rounded rect (radius 10 dp) grown by half the 5-dp width, so
-            // the band starts at the cover's edge and follows its corners
-            let sw = DashPalette.focusStrokeWidth
-            let expected = DashDrawCommand.stroke(DashPath.roundedRect(tile.insetBy(dx: -sw / 2, dy: -sw / 2),
-                                                                       radius: DashDimens.musicTileRadius + sw / 2),
-                                                  DashStroke(width: sw, color: DashPalette.focusStroke, cap: .butt, join: .round))
-            XCTAssertEqual(list.commands.filter { if case let .stroke(_, s) = $0 { return s.color == DashPalette.focusStroke }; return false },
-                           [expected], "t+\(t - t0)")
+            XCTAssertEqual(focusFills(list, over: tile), [], "t+\(t - t0)")
+            // exactly the ring's two strokes: the cover's rounded rect (radius 10 dp) grown by half the 5-dp
+            // band, so the band starts at the cover's edge and follows its corners — black, then its white core
+            let sw = DashPalette.focusEdgeWidth
+            let path = DashPath.roundedRect(tile.insetBy(dx: -sw / 2, dy: -sw / 2), radius: DashDimens.musicTileRadius + sw / 2)
+            let expected: [DashDrawCommand] = [
+                .stroke(path, DashStroke(width: sw, color: DashPalette.focusEdge, cap: .butt, join: .round)),
+                .stroke(path, DashStroke(width: DashPalette.focusStrokeWidth, color: DashPalette.focusStroke, cap: .butt, join: .round)),
+            ]
+            XCTAssertEqual(list.commands.filter {
+                if case let .stroke(_, s) = $0 { return (s.color == DashPalette.focusStroke || s.color == DashPalette.focusEdge) && s.join == .round && s.cap == .butt }
+                return false
+            }, expected, "t+\(t - t0)")
             XCTAssertTrue(same(try! XCTUnwrap(rings(list).first).inner, tile))
         }
     }

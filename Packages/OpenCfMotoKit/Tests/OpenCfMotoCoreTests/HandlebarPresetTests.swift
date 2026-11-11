@@ -47,11 +47,14 @@ final class HandlebarPresetTests: XCTestCase {
     func testIOSDefaultMapping() {
         let m = HandlebarPresets.iosDefaultMapping
         XCTAssertEqual(m.count, 9)
-        XCTAssertEqual(m[.navFwdDouble], .home)         // replaces the unobservable ★ hold
+        // P0 (D02): doubles unmapped (were ▶▶ Home, ◀◀ D-pad left, ★★ Back): a mistimed double is only singles
+        XCTAssertEqual(m[.navFwdDouble], ButtonAction.none)
+        XCTAssertEqual(m[.navBackDouble], ButtonAction.none)
+        XCTAssertEqual(m[.selectDouble], ButtonAction.none)
         XCTAssertEqual(m[.selectLong], ButtonAction.none)
-        XCTAssertEqual(m[.navBackDouble], .left)
-        XCTAssertEqual(m[.selectDouble], .back)
         XCTAssertEqual(m[.navBack], .knobBack)
+        XCTAssertEqual(m[.navFwd], .knobFwd)
+        XCTAssertEqual(m[.selectPress], .select)
         XCTAssertEqual(HandlebarPresets.iosMapping(for: .fiveWay), m)
         XCTAssertEqual(HandlebarPresets.iosMapping(for: .modeEnt), m)
         let single = HandlebarPresets.iosSingleButtonMapping

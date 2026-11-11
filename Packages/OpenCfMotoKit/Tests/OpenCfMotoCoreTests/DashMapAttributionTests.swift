@@ -136,14 +136,15 @@ final class DashMapAttributionTests: XCTestCase {
         // menu: under the dimmer
         var list = frame(DashFixtures.navigating()) { ui in _ = ui.perform(.openMenu, now: 100) }
         XCTAssertLessThan(try XCTUnwrap(index(list, text: Self.credit)), try XCTUnwrap(cover(list, DashPalette.dimmer)))
-        // search: under the sheet
+        // search: under the sheet (white by day)
         list = frame(DashFixtures.freeRide()) { ui in _ = ui.perform(.openSearch, now: 100) }
-        XCTAssertLessThan(try XCTUnwrap(index(list, text: Self.credit)), try XCTUnwrap(cover(list, DashPalette.sheetBackground)))
-        // hold picture: dimmed with the rest of the map
+        XCTAssertLessThan(try XCTUnwrap(index(list, text: Self.credit)), try XCTUnwrap(cover(list, DashPalette.searchDay.sheetBackground)))
+        // hold picture (P0, D17): a clean card, no map — so no credit either
         let ui = DashUIController()
         ui.update(DashFixtures.navigating())
         list = ui.displayList(forHoldScreen: "Paused", now: 100)
-        XCTAssertLessThan(try XCTUnwrap(index(list, text: Self.credit)), try XCTUnwrap(cover(list, DashPalette.holdDimmer)))
+        XCTAssertNil(index(list, text: Self.credit))
+        XCTAssertFalse(list.commands.contains { if case .tile = $0 { return true }; return false })
         // Music sheet: no map, no credit
         list = frame(DashFixtures.withMusic(DashFixtures.navigating()), now: DashFixtures.musicNow) { ui in
             _ = ui.perform(.openMusic, now: DashFixtures.musicNow)

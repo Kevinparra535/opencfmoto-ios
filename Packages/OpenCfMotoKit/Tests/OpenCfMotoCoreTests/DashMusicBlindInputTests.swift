@@ -6,13 +6,13 @@
 // navigating and in free ride, with the song staying, gone for one built frame, or gone for good (F2):
 // no sequence of 1–3 ★ / BACK presses returns `.endNavigation`. (The vanishes are what the dash model
 // sees: one reading without a song never gets there — MusicModel holds the song 2 s — and an open sheet
-// outlasts a short vanish, review round 3.) Knob steps (◀ ▶) are not blind-safe:
-// End is a stop of the map's list, and from where a vanish parked the focus a knob step lands on other
-// neighbours than from the vanished control. The shortest sequences to End are documented here (a vanish
-// adds only the Recenter FAB's trade-off), and so are the other actions a knob step reaches (review
-// round 3): the pill's Lap / Stop in free ride and Record in the menu. From a control that is not a Music
-// control nothing parks or returns: a knob step meant for the tile or "Music" lands on its neighbour while
-// it is not listed, and the dash is then one without music (`testFromEndTheTileMustBeListed`,
+// outlasts a short vanish, review round 3.) Since P0 (D01) End is not on the map any more and the menu's
+// «End route…» only opens a confirmation focused on «Keep going»: no sequence of up to three presses, knob
+// steps included, ends navigation from any of these states (before P0 a knob step reached End: it was a stop
+// of the map's list). The other actions a knob step reaches are documented (review round 3): the pill's
+// Lap / Stop in free ride, Go home and Park here in the menu. From a control that is not a Music control
+// nothing parks or returns: a knob step meant for the tile or "Music" lands on its neighbour while it is not
+// listed, and the dash is then one without music (`testFromRecenterTheTileMustBeListed`,
 // `testFromAControlThatIsNotAMusicControlAVanishIsADashWithoutMusic`).
 import Foundation
 import XCTest
@@ -178,38 +178,26 @@ final class DashMusicBlindInputTests: XCTestCase {
         XCTAssertEqual(framed, Self.everyKey)
     }
 
-    // MARK: Knob paths to End, documented
+    // MARK: Paths to End, documented
 
-    /// Navigating. The map's list is End, Recenter, Zoom in, Zoom out, Compass, Menu, the tile (◀ ▶ wrap);
-    /// the sheet's ⏮ ⏯ ⏭ ✕; the menu's End … Circuit, Music, Follow … ✕.
-    /// - tile: ▶★ (▶ wraps from the tile to End); ◀★★ (◀ is the Menu FAB, ★ opens the menu on End);
-    ///   ◀B★ / ▶B★ (BACK at idle on a control the rider moved to: End, Android); B▶★ (BACK keeps the tile).
-    /// - sheet ⏮ ⏯ ⏭: B▶★ (BACK closes the sheet onto the tile); ✕ also ★▶★ (★ on ✕ closes it too).
-    /// - menu Music: ◀★★ (◀ is Circuit, whose ★ closes the menu onto End); ◀B★ / ▶B★ (BACK from Circuit /
-    ///   Follow closes the menu onto End, Android); B▶★ (BACK from Music closes it onto the tile).
-    /// - Recenter, where a vanish parked the focus (gone for good, from the tile or the sheet): ◀★, B◀★,
-    ///   ★◀★ — Recenter follows End in the list, and BACK / ★ there keep the focus parked: the trade-off of
-    ///   the safe target (★ there only recenters; ▶★ from the tile is the same two presses) — and ◀B★ /
-    ///   ▶B★ as above.
-    /// - Circuit, where a vanish parked the menu's focus (gone for good): B◀★ / ★◀★ (BACK or ★ there
-    ///   close the menu onto Recenter, parked again, then the trade-off); ◀B★ / ▶B★ as above.
+    /// Navigating, P0 (D01). The map's list is Recenter, Zoom in, Zoom out, Compass, Menu, the tile (◀ ▶ wrap);
+    /// the sheet's ⏮ ⏯ ⏭ ✕; the menu's Recenter / reroute, Music, Circuit, Go home, Park here, Record, Set home,
+    /// End route…, Follow … Zoom in. End is the menu's eighth item and only opens «End the route?» on «Keep
+    /// going» (▶ ★ there ends it): no path of up to three presses from any start. Before P0 End was the map
+    /// list's first stop and the menu's first item: ▶★ from the tile, ◀★★ via the Menu FAB, B▶★ after BACK, and
+    /// the Recenter trade-off (◀★, B◀★, ★◀★) where a vanish parked the focus all ended navigation.
     private static let navigatingEnds: [String: Set<String>] = [
-        "tile": ["▶★", "◀★★", "◀B★", "▶B★", "B▶★"],
-        "sheet": ["B▶★"],
-        "sheet ✕": ["B▶★", "★▶★"],
-        "menu Music": ["◀★★", "◀B★", "▶B★", "B▶★"],
-        "parked Recenter": ["◀★", "B◀★", "★◀★", "◀B★", "▶B★"],
-        "parked Circuit": ["B◀★", "★◀★", "◀B★", "▶B★"],
+        "tile": [], "sheet": [], "sheet ✕": [], "menu Music": [], "parked Recenter": [], "parked Circuit": [],
     ]
 
-    /// Free ride: no End on the map. ◀★★ from the tile is the Menu FAB, then the menu's first item "End
-    /// navigation", which the session answers with "already free ride". Nothing else.
+    /// Free ride: no End anywhere (the menu lists it only while navigating, P0).
     private static let freeRideEnds: [String: Set<String>] = [
-        "tile": ["◀★★"], "sheet": [], "sheet ✕": [], "menu Music": [], "parked Recenter": [], "parked Circuit": [],
+        "tile": [], "sheet": [], "sheet ✕": [], "menu Music": [], "parked Recenter": [], "parked Circuit": [],
     ]
 
-    /// The only paths a vanish adds (navigating, the song gone for good): ◀ from where it parked the focus.
-    private static let recenterTradeOff: Set<String> = ["◀★", "B◀★", "★◀★"]
+    /// The paths a vanish may add (navigating, the song gone for good): none since P0 (it was the Recenter
+    /// trade-off, ◀★ / B◀★ / ★◀★, when Recenter followed End in the map's list).
+    private static let recenterTradeOff: Set<String> = []
 
     /// Where the knob is when the presses start, and its documented row.
     private static func expected(_ c: Config) -> (focus: String, row: String) {
@@ -272,7 +260,7 @@ final class DashMusicBlindInputTests: XCTestCase {
         }
     }
 
-    func testKnobPathsToEndAreDocumentedAndAVanishAddsOnlyTheRecenterTradeOff() {
+    func testNoPathOfUpToThreePressesEndsNavigationAndAVanishAddsNone() {
         let all = Self.everyKey
         for (c, o) in all {
             let (focus, row) = Self.expected(c)
@@ -351,25 +339,27 @@ final class DashMusicBlindInputTests: XCTestCase {
         return box.all
     }
 
-    /// Navigating: from the menu's Music, ◀◀★ is Record (two items up); where a vanish parked the menu's
-    /// focus (Circuit, the item above Music), ◀★. Nothing else within three presses.
+    /// Navigating: from the menu's Music (P0: right after the default Recenter / reroute), ▶▶★ is Go home (a
+    /// preview of Home; its Go asks before it replaces the running route); where a vanish parked the menu's
+    /// focus (Circuit, the item below Music), ▶★ Go home and ▶▶★ Park here (it only sets the spot, P0 D22).
+    /// Nothing else within three presses. (Before P0: ◀◀★ / ◀★ were Record.)
     private static let navigatingOther: [String: [String: String]] = [
         "tile": [:], "sheet": [:], "sheet ✕": [:],
-        "menu Music": ["◀◀★": "Record"],
+        "menu Music": ["▶▶★": "Go home"],
         "parked Recenter": [:],
-        "parked Circuit": ["◀★": "Record"],
+        "parked Circuit": ["▶★": "Go home", "▶▶★": "Park here"],
     ]
 
     /// Free ride: the map's list is the pill, its Circuit, its Lap / Stop, then Recenter … Menu and the tile.
-    /// Where a vanish parked the focus, Recenter's ◀ neighbour is the pill's Lap (End while navigating): ◀★,
-    /// B◀★ / ★◀★ (BACK and ★ keep the focus parked), ◀B★ (BACK at idle in free ride keeps Lap) press Lap /
-    /// Stop — the free-ride side of the Recenter trade-off. In the menu as navigating, plus Circuit's B◀★ /
-    /// ★◀★ (BACK or ★ there close the menu onto Recenter, parked again).
+    /// Where a vanish parked the focus, Recenter's ◀ neighbour is the pill's Lap: ◀★, B◀★ / ★◀★ (BACK and ★
+    /// keep the focus parked), ◀B★ (BACK at idle in free ride keeps Lap) press Lap / Stop — the free-ride
+    /// trade-off of the parked Recenter. In the menu as navigating, plus Circuit's B◀★ / ★◀★ (BACK or ★ there
+    /// close the menu onto Recenter, parked again).
     private static let freeRideOther: [String: [String: String]] = [
         "tile": [:], "sheet": [:], "sheet ✕": [:],
-        "menu Music": ["◀◀★": "Record"],
+        "menu Music": ["▶▶★": "Go home"],
         "parked Recenter": ["◀★": "Lap", "B◀★": "Lap", "★◀★": "Lap", "◀B★": "Lap"],
-        "parked Circuit": ["◀★": "Record", "B◀★": "Lap", "★◀★": "Lap"],
+        "parked Circuit": ["▶★": "Go home", "▶▶★": "Park here", "B◀★": "Lap", "★◀★": "Lap"],
     ]
 
     func testOtherActionsAKnobStepReachesAreDocumented() {
@@ -385,58 +375,52 @@ final class DashMusicBlindInputTests: XCTestCase {
         XCTAssertEqual(Self.otherOutcomes(frames: true), all, "a frame between the presses changes nothing")
     }
 
-    // MARK: From End or the Menu FAB (the field guide's ◀ ★ ★), the tile must be listed
+    // MARK: From Recenter or the Menu FAB (the field guide's ◀ ★ ★), the tile must be listed
 
-    /// The tile closes the map's list, one knob step back from End (the field guide: ◀ to the tile, ★ the
-    /// sheet, ★ play / pause). From a control that is not a Music control nothing parks or returns: while
-    /// the tile is not listed — gone, or gone at the very knob step and back before the ★ (a gap that
-    /// outlasted MusicModel's 2-s hold) — ◀ is the Menu FAB and ◀★★ Android's path to End (the menu opens
-    /// on End); ▶★ from the Menu FAB too.
-    func testFromEndTheTileMustBeListed() {
+    /// The tile closes the map's list, one knob step back from the default item — Recenter while navigating
+    /// since P0 (Android's End left the map) — the field guide: ◀ to the tile, ★ the sheet, ★ play / pause. From
+    /// a control that is not a Music control nothing parks or returns: while the tile is not listed — gone, or
+    /// gone at the very knob step and back before the ★ (a gap that outlasted MusicModel's 2-s hold) — ◀ is
+    /// the Menu FAB, and ◀★★ opens the menu and picks its harmless first item, Recenter / reroute (it picked
+    /// "End navigation" before P0); ▶★ from the Menu FAB wraps to Recenter.
+    func testFromRecenterTheTileMustBeListed() {
         let base = DashFixtures.navigating()
         let with = DashFixtures.withMusic(base, DashFixtures.song(.paused))
         for gap in ["tile shown", "no music", "gone", "blink at the knob step"] {
             let ui = DashUIController()
             ui.update(gap == "no music" ? base : with)
             _ = ui.displayList(now: Self.t0)
-            XCTAssertEqual(ui.state.focusedId, DashFocusEngine.endId)
+            XCTAssertEqual(ui.state.focusedId, DashFocusEngine.recenterId)
             if gap == "gone" || gap == "blink at the knob step" { ui.update(base) }
             _ = ui.handle(.knob(-1), now: Self.t0 + 1)
             if gap == "blink at the knob step" { ui.update(with); _ = ui.displayList(now: Self.t0 + 1.2) }
             let a = ui.handle(.key(.enter), now: Self.t0 + 1.5)
             let b = ui.handle(.key(.enter), now: Self.t0 + 2)
-            XCTAssertEqual(a + b, gap == "tile shown" ? [.openMusic, .musicPlayPause] : [.openMenu, .endNavigation], gap)
+            XCTAssertEqual(a + b, gap == "tile shown" ? [.openMusic, .musicPlayPause] : [.openMenu, .recalc], gap)
         }
         for gone in [false, true] {
             let ui = DashUIController()
             ui.update(with)
-            _ = ui.handle(.knob(-2), now: Self.t0) // End → the tile → the Menu FAB
+            _ = ui.handle(.knob(-2), now: Self.t0) // Recenter → the tile → the Menu FAB
             if gone { ui.update(base) }
             _ = ui.handle(.knob(1), now: Self.t0 + 1)
-            XCTAssertEqual(ui.handle(.key(.enter), now: Self.t0 + 1.5), gone ? [.endNavigation] : [.openMusic], "gone=\(gone)")
+            XCTAssertEqual(ui.handle(.key(.enter), now: Self.t0 + 1.5), gone ? [.recenter] : [.openMusic], "gone=\(gone)")
         }
     }
 
     // MARK: From any control that is not a Music control (review round 4)
 
     /// A vanish under a focus that is not a Music control parks nothing and returns nothing: the map's list
-    /// only loses the tile (between the Menu FAB and End) and the menu its "Music" (between Circuit and
-    /// Follow), so a knob step meant for them lands on that neighbour, where ★ and BACK keep Android's rules
-    /// (while navigating BACK at idle or in the menu → End, and ★ on Circuit closes the menu onto End). These
-    /// are the shortest sequences that reach an action of consequence with the song gone but not with it
-    /// shown; all are knob paths, and every other start has none within three presses. Longer ones first
-    /// reach one of these starts (B◀★★ and ★◀B★: BACK in the menu and ★ on Circuit close it onto End; ◀◀B★
-    /// from Recenter) or add knob steps (◀★▶★ Park here from End or the free-ride pill, ▶▶▶★ Lap from the
-    /// free-ride Menu FAB).
+    /// only loses the tile (between the Menu FAB and Recenter) and the menu its "Music" (between Recenter /
+    /// reroute and Circuit), so a knob step meant for them lands on that neighbour, where ★ and BACK keep
+    /// Android's rules (BACK at idle or in the menu → the default item, Recenter while navigating since P0).
+    /// These are the shortest sequences that reach an action of consequence with the song gone but not with
+    /// it shown; all are knob paths, and every other start has none within three presses: from the menu's
+    /// default item ▶▶★ is Go home (a preview) instead of Circuit. Before P0 End was a stop of the map's list
+    /// and the menu's first item, and five starts reached it this way (◀★★ from End, ▶★ from the Menu FAB…).
     private static let notMusicOther: [Mode: [String: [String: String]]] = [
-        .navigating: [
-            "metrics.end": ["◀★★": "End", "◀B★": "End"],
-            "fab.compass": ["▶▶★": "End"],
-            "fab.menu": ["▶★": "End", "▶B★": "End"],
-            "menu.circuit": ["▶B★": "End"],
-            "menu.follow": ["◀B★": "End", "◀★★": "End", "◀◀★": "Record"],
-        ],
-        .freeRide: ["menu.follow": ["◀◀★": "Record"]],
+        .navigating: ["menu.recalc": ["▶▶★": "Go home"]],
+        .freeRide: ["menu.recalc": ["▶▶★": "Go home"]],
     ]
 
     /// From every map and menu control that is not a Music control (navigating and in free ride), the song
@@ -504,7 +488,7 @@ final class DashMusicBlindInputTests: XCTestCase {
             }
             box.lock.lock(); box.added[n] = added; box.notAndroid += notAndroid; box.lock.unlock()
         }
-        XCTAssertEqual(starts.count, 82)
+        XCTAssertEqual(starts.count, 80) // P0: no End on the map, nor in the free-ride menu
         XCTAssertEqual(box.notAndroid, [], "the song gone is a dash without music")
         for (n, s) in starts.enumerated() {
             let added = box.added[n] ?? [:]

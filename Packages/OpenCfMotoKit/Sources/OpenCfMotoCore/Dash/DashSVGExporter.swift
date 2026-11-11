@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Exports a `DashDisplayList` as SVG for visual review (docs/screenshots/dash) and debugging.
 // Text is laid out with `DashTextLayout` (same wrapping / ellipsis as the renderer); raster tiles
-// become checkerboard placeholders labelled z/x/y (dark when inverted for night mode).
+// become checkerboard placeholders labelled z/x/y in the colours of their treatment (classic beige /
+// inverted dark, muted light grey by day and dark grey at night — P0, D05).
 
 import Foundation
 
@@ -100,8 +101,8 @@ public struct DashSVGExporter: Sendable {
                 out.append(a + "/>")
             case let .text(s, rect, style):
                 out.append(contentsOf: text(s, rect, style))
-            case let .tile(z, x, y, rect, invert):
-                out.append(tile(z: z, x: x, y: y, rect: rect, invert: invert))
+            case let .tile(z, x, y, rect, treatment):
+                out.append(tile(z: z, x: x, y: y, rect: rect, treatment: treatment))
             case let .image(id, rect, radius):
                 guard !rect.isEmpty, rect.x.isFinite, rect.y.isFinite, rect.width.isFinite, rect.height.isFinite else { continue }
                 clipId += 1
@@ -244,11 +245,18 @@ public struct DashSVGExporter: Sendable {
         return out
     }
 
-    private func tile(z: Int, x: Int, y: Int, rect r: DashRect, invert: Bool) -> String {
-        let base = invert ? "#1B1E24" : "#F2EFE9"
-        let alt = invert ? "#23272E" : "#E8E3DA"
-        let line = invert ? "#30353D" : "#D6D0C4"
-        let label = invert ? "#5A626E" : "#A39C90"
+    /// Placeholder colours (base, alternate square, outline, label) of a tile treatment.
+    static func tileColors(_ t: DashTileTreatment) -> (base: String, alt: String, line: String, label: String) {
+        switch t {
+        case .normal: return ("#F2EFE9", "#E8E3DA", "#D6D0C4", "#A39C90")
+        case .inverted: return ("#1B1E24", "#23272E", "#30353D", "#5A626E")
+        case .mutedDay: return ("#E5E4E0", "#DCDBD6", "#C9CBCF", "#9EA3AA")
+        case .mutedNight: return ("#16191D", "#1A1D22", "#252A31", "#4E555E")
+        }
+    }
+
+    private func tile(z: Int, x: Int, y: Int, rect r: DashRect, treatment: DashTileTreatment) -> String {
+        let (base, alt, line, label) = Self.tileColors(treatment)
         var parts: [String] = []
         parts.append("<g>")
         parts.append("<rect x=\"\(Self.n(r.x))\" y=\"\(Self.n(r.y))\" width=\"\(Self.n(r.width))\" height=\"\(Self.n(r.height))\" fill=\"\(base)\"/>")

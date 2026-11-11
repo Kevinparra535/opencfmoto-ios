@@ -7,9 +7,12 @@
 // filter is a hue- and saturation-preserving HSL LIGHTNESS inversion (L' = 1 − L, then dimmed ×0.9)
 // so parks stay green and water blue; osmdroid's INVERT_COLORS (R' = 255 − R, G' = 255 − G,
 // B' = 255 − B, A' = A — parks turn magenta, water orange) is `nightStyle = .rgbInvert`.
+// P0 (D05): the dash map draws the MUTED treatments (`DashTileTreatment.mutedDay` / `.mutedNight`):
+// desaturated, flattened greys, so only the route, the puck and the pins carry colour; the classic
+// variants (`.normal`, `.inverted`) stay available.
 //
-// Layers: memory LRU of decoded CGImages (day images + night variants keyed by their exact filter,
-// ~256 entries; night variants are never written to disk) → disk cache
+// Layers: memory LRU of decoded CGImages (day images + their variants keyed by their exact filter,
+// ~256 entries; variants are never written to disk) → disk cache
 // Caches/tiles/<source>/z/x/y.png (expiry by download date, LRU purge by last access) → network
 // through the injected HTTPClient (cellular-preferring on iOS). Stale tiles are served when the
 // network is unavailable and refreshed in the background when it is back.
@@ -390,6 +393,108 @@ enum TileNightInversion {
     }
 }
 
+/// The muted dash map (P0, D05) as pure functions (platform-neutral, unit-tested on Linux; the Apple tile
+/// cache runs them over each decoded 256×256 tile once per treatment and caches the result). Both keep a
+/// little of the colour (`saturation` of the chroma around the luma) and remap the luma (Rec. 709 weights)
+/// through a table, aiming at the proposal's map tokens:
+/// - day: `ink + (1 − ink)·y^2.8` — OSM's land #F2EFE9 → ≈ #E4E4E2 (token #E5E4E0), white roads stay white,
+///   the #BBBBBB road casings → ≈ #A0A0A0 (≈ 2:1 against the land; token #9EA3AA), black labels → ≈ #5C5C5C
+///   (token #5E646C: still ≈ 5:1, but recessive next to the route, the puck and the pins);
+/// - night: a V around the land's luma (0.94) — land → ≈ #161615 (token #16191D), white roads a step lighter
+///   (≈ #383838; tokens #252A31…#3C434C), everything darker than the land (labels, water, woods, casings)
+///   folded towards a mid grey (black labels ≈ #858585, #222 ones ≈ #757575; token #737B85).
+enum TileMutedFilter {
+    static let daySaturation = 0.20
+    static let dayGamma = 2.8, dayInk = 0.36
+    static let nightSaturation = 0.15
+    static let nightKnee = 0.94, nightGround = 0.085, nightRoad = 0.22, nightInk = 0.52
+
+    /// Luma → output level tables (0…255).
+    static let dayTable: [UInt8] = (0 ... 255).map { y in
+        let f = dayInk + (1 - dayInk) * pow(Double(y) / 255, dayGamma)
+        return UInt8(min(255, max(0, (255 * f).rounded())))
+    }
+    static let nightTable: [UInt8] = (0 ... 255).map { y8 in
+        let y = Double(y8) / 255
+        let f = y >= nightKnee
+            ? nightGround + (y - nightKnee) / (1 - nightKnee) * (nightRoad - nightGround)
+            : nightGround + (nightKnee - y) / nightKnee * (nightInk - nightGround)
+        return UInt8(min(255, max(0, (255 * f).rounded())))
+    }
+    /// The saturation as a /256 factor.
+    static func saturation256(night: Bool) -> Int { Int(((night ? nightSaturation : daySaturation) * 256).rounded()) }
+
+    /// Rec. 709 luma of 8-bit channels (weights /256: 54, 183, 19).
+    @inline(__always) static func luma(_ r: Int, _ g: Int, _ b: Int) -> Int { (54 * r + 183 * g + 19 * b + 128) >> 8 }
+
+    /// One opaque 8-bit colour through the filter.
+    @inline(__always) static func filtered(_ r: Int, _ g: Int, _ b: Int, table: [UInt8], sat: Int) -> (Int, Int, Int) {
+        let y = luma(r, g, b)
+        let base = Int(table[y])
+        func ch(_ c: Int) -> Int { min(255, max(0, base + ((sat * (c - y)) >> 8))) }
+        return (ch(r), ch(g), ch(b))
+    }
+
+    /// An opaque 0xRRGGBB colour through the day or night filter.
+    static func apply(rgb: UInt32, night: Bool) -> UInt32 {
+        let (r, g, b) = filtered(Int((rgb >> 16) & 0xFF), Int((rgb >> 8) & 0xFF), Int(rgb & 0xFF),
+                                 table: night ? nightTable : dayTable, sat: saturation256(night: night))
+        return (UInt32(r) << 16) | (UInt32(g) << 8) | UInt32(b)
+    }
+
+    /// The filter over premultiplied 4-byte pixels, in place. `alphaIndex` / `redIndex` / `greenIndex` /
+    /// `blueIndex` = byte offsets inside a pixel (defaults: BGRA in memory, i.e. CoreGraphics
+    /// premultipliedFirst + byteOrder32Little). Transparent pixels stay as they are; translucent ones are
+    /// filtered un-premultiplied.
+    static func applyPremultiplied(_ buffer: UnsafeMutableRawBufferPointer, width: Int, height: Int, bytesPerRow: Int,
+                                   night: Bool, alphaIndex: Int = 3, redIndex: Int = 2, greenIndex: Int = 1, blueIndex: Int = 0) {
+        let offsets = [alphaIndex, redIndex, greenIndex, blueIndex]
+        guard width > 0, height > 0, bytesPerRow >= width * 4, offsets.allSatisfy({ (0 ..< 4).contains($0) }),
+              Set(offsets).count == 4, buffer.count >= bytesPerRow * (height - 1) + width * 4 else { return }
+        let table = night ? nightTable : dayTable
+        let sat = saturation256(night: night)
+        for row in 0 ..< height {
+            var i = row * bytesPerRow
+            let end = i + width * 4
+            while i < end {
+                let a = Int(buffer[i + alphaIndex])
+                if a == 255 {
+                    let (r, g, b) = filtered(Int(buffer[i + redIndex]), Int(buffer[i + greenIndex]), Int(buffer[i + blueIndex]),
+                                             table: table, sat: sat)
+                    buffer[i + redIndex] = UInt8(r); buffer[i + greenIndex] = UInt8(g); buffer[i + blueIndex] = UInt8(b)
+                } else if a > 0 {
+                    func un(_ c: UInt8) -> Int { min(255, (min(Int(c), a) * 255 + a / 2) / a) }
+                    func pre(_ c: Int) -> UInt8 { UInt8((c * a + 127) / 255) }
+                    let (r, g, b) = filtered(un(buffer[i + redIndex]), un(buffer[i + greenIndex]), un(buffer[i + blueIndex]),
+                                             table: table, sat: sat)
+                    buffer[i + redIndex] = pre(r); buffer[i + greenIndex] = pre(g); buffer[i + blueIndex] = pre(b)
+                }
+                i += 4
+            }
+        }
+    }
+}
+
+/// A tile variant's recipe — the cache identity of a variant built from the decoded day image (P0, D05).
+enum TileVariantFilter: Hashable, Sendable {
+    /// The classic night map (`DashTileTreatment.inverted`) with the cache's night style.
+    case night(TileNightFilter)
+    case mutedDay
+    case mutedNight
+
+    /// Applies the filter in place to premultiplied BGRA pixels (alpha byte 3).
+    func apply(to buffer: UnsafeMutableRawBufferPointer, width: Int, height: Int, bytesPerRow: Int) {
+        switch self {
+        case let .night(f):
+            f.apply(to: buffer, width: width, height: height, bytesPerRow: bytesPerRow, alphaIndex: 3)
+        case .mutedDay:
+            TileMutedFilter.applyPremultiplied(buffer, width: width, height: height, bytesPerRow: bytesPerRow, night: false)
+        case .mutedNight:
+            TileMutedFilter.applyPremultiplied(buffer, width: width, height: height, bytesPerRow: bytesPerRow, night: true)
+        }
+    }
+}
+
 // MARK: - Tile cache (Apple platforms)
 
 #if canImport(CoreGraphics) && canImport(ImageIO)
@@ -406,15 +511,17 @@ public struct TileCacheStats: Sendable, Equatable {
     public var downloadFailures = 0
     public var bytesDownloaded: Int64 = 0
     public var nightVariantsBuilt = 0
+    /// Muted day / night variants built (P0, D05).
+    public var mutedVariantsBuilt = 0
     public var prefetchQueued = 0
     public var memoryCount = 0
     public var diskBytes: Int64 = 0
     public init() {}
 }
 
-/// Memory + disk + network raster tile cache. Thread-safe. `image(z:x:y:night:)` is a fast
-/// synchronous memory lookup for the render loop; `request` loads asynchronously and reports
-/// through `onTileLoaded` (re-render trigger).
+/// Memory + disk + network raster tile cache. Thread-safe. `image(z:x:y:treatment:)` is a fast
+/// synchronous memory lookup for the render loop (a variant is built once from the decoded day image and
+/// kept); `request` loads asynchronously and reports through `onTileLoaded` (re-render trigger).
 public final class TileImageCache: @unchecked Sendable {
     public struct Configuration: Sendable {
         /// Raster tile URL template with {z}/{x}/{y} (BikeSettings.tileURLTemplate).
@@ -465,9 +572,9 @@ public final class TileImageCache: @unchecked Sendable {
 
     private struct MemoryKey: Hashable {
         let tile: TileCacheKey
-        /// nil = the decoded day image; else the exact filter the night variant was built with, so
-        /// variants of different styles / dimmings never mix (night variants live in memory only).
-        let night: TileNightFilter?
+        /// nil = the decoded day image; else the exact filter the variant was built with, so variants of
+        /// different treatments, night styles or dimmings never mix (variants live in memory only).
+        let variant: TileVariantFilter?
     }
 
     public let configuration: Configuration
@@ -562,7 +669,7 @@ public final class TileImageCache: @unchecked Sendable {
             let filter = TileNightFilter(style: newValue, dimming: configuration.nightDimming)
             guard filter != nightFilter else { return }
             nightFilter = filter
-            memory.removeAll { $0.night != nil }
+            memory.removeAll { if case .night = $0.variant { return true } else { return false } }
         }
     }
 
@@ -576,12 +683,17 @@ public final class TileImageCache: @unchecked Sendable {
 
     // MARK: lookup (render thread)
 
-    /// The decoded tile from memory, or nil. A night variant is built from the day image once (with
-    /// the current `nightStyle`) and cached. Never touches disk or network (call `request` for a
-    /// missing tile).
+    /// The classic day tile (`night` false) or its night variant (`.inverted`): `image(z:x:y:treatment:)`.
     public func image(z: Int, x: Int, y: Int, night: Bool) -> CGImage? {
+        image(z: z, x: x, y: y, treatment: night ? .inverted : .normal)
+    }
+
+    /// The decoded tile from memory with `treatment`, or nil. A variant is built from the day image once
+    /// (the night one with the current `nightStyle`) and cached. Never touches disk or network (call
+    /// `request` for a missing tile).
+    public func image(z: Int, x: Int, y: Int, treatment: DashTileTreatment) -> CGImage? {
         let key = TileCacheKey(z: z, x: x, y: y)
-        if let img = lookup(key, night: night) {
+        if let img = lookup(key, treatment: treatment) {
             lock.lock(); _stats.memoryHits += 1; lock.unlock()
             return img
         }
@@ -589,14 +701,19 @@ public final class TileImageCache: @unchecked Sendable {
         return nil
     }
 
-    /// The best cached ancestor of a missing tile, cropped to the tile's area (drawn scaled up
-    /// while the tile loads), or nil.
+    /// `fallbackImage(z:x:y:treatment:maxLevels:)` for the classic day / night tiles.
     public func fallbackImage(z: Int, x: Int, y: Int, night: Bool, maxLevels: Int = 4) -> CGImage? {
+        fallbackImage(z: z, x: x, y: y, treatment: night ? .inverted : .normal, maxLevels: maxLevels)
+    }
+
+    /// The best cached ancestor of a missing tile with `treatment`, cropped to the tile's area (drawn
+    /// scaled up while the tile loads), or nil.
+    public func fallbackImage(z: Int, x: Int, y: Int, treatment: DashTileTreatment, maxLevels: Int = 4) -> CGImage? {
         let key = TileCacheKey(z: z, x: x, y: y)
         guard key.isValid else { return nil }
         for levels in 1 ... max(1, maxLevels) {
             guard let parent = key.ancestor(levels: levels) else { break }
-            guard let img = lookup(parent, night: night) else { continue }
+            guard let img = lookup(parent, treatment: treatment) else { continue }
             let n = Double(1 << levels)
             let subW = Double(img.width) / n
             let subH = Double(img.height) / n
@@ -608,18 +725,28 @@ public final class TileImageCache: @unchecked Sendable {
         return nil
     }
 
-    private func lookup(_ key: TileCacheKey, night: Bool) -> CGImage? {
+    /// The variant recipe of a treatment (nil: the decoded image as is). Lock held.
+    private func variantLocked(_ treatment: DashTileTreatment) -> TileVariantFilter? {
+        switch treatment {
+        case .normal: return nil
+        case .inverted: return .night(nightFilter)
+        case .mutedDay: return .mutedDay
+        case .mutedNight: return .mutedNight
+        }
+    }
+
+    private func lookup(_ key: TileCacheKey, treatment: DashTileTreatment) -> CGImage? {
         lock.lock()
-        let filter = night ? nightFilter : nil
-        if let img = memory.get(MemoryKey(tile: key, night: filter)) { lock.unlock(); return img }
-        guard let filter, let day = memory.get(MemoryKey(tile: key, night: nil)) else { lock.unlock(); return nil }
+        let filter = variantLocked(treatment)
+        if let img = memory.get(MemoryKey(tile: key, variant: filter)) { lock.unlock(); return img }
+        guard let filter, let day = memory.get(MemoryKey(tile: key, variant: nil)) else { lock.unlock(); return nil }
         let gen = generation
         lock.unlock()
-        guard let variant = Self.nightImage(day, filter: filter) else { return nil }
+        guard let variant = Self.variantImage(day, filter: filter) else { return nil }
         lock.lock()
-        if gen == generation, filter == nightFilter {
-            memory.set(MemoryKey(tile: key, night: filter), variant)
-            _stats.nightVariantsBuilt += 1
+        if gen == generation, filter == variantLocked(treatment) {
+            memory.set(MemoryKey(tile: key, variant: filter), variant)
+            if case .night = filter { _stats.nightVariantsBuilt += 1 } else { _stats.mutedVariantsBuilt += 1 }
         }
         lock.unlock()
         return variant
@@ -634,7 +761,7 @@ public final class TileImageCache: @unchecked Sendable {
         guard key.isValid else { return }
         let now = ProcessInfo.processInfo.systemUptime
         lock.lock()
-        if memory.contains(MemoryKey(tile: key, night: nil)) || diskPending.contains(key) || netPending.contains(key) {
+        if memory.contains(MemoryKey(tile: key, variant: nil)) || diskPending.contains(key) || netPending.contains(key) {
             lock.unlock()
             return
         }
@@ -737,7 +864,7 @@ public final class TileImageCache: @unchecked Sendable {
                     try? fileManager.setAttributes([.modificationDate: Date()], ofItemAtPath: file.path) // LRU access
                     lock.lock()
                     if gen == generation {
-                        memory.set(MemoryKey(tile: key, night: nil), image)
+                        memory.set(MemoryKey(tile: key, variant: nil), image)
                         _stats.diskHits += 1
                         if stale { _stats.staleServed += 1 }
                         loaded = true
@@ -944,8 +1071,8 @@ public final class TileImageCache: @unchecked Sendable {
         netPending.remove(key)
         if gen == generation {
             if let o = outcome {
-                memory.set(MemoryKey(tile: key, night: nil), o.image)
-                memory.removeAll { $0.tile == key && $0.night != nil } // refreshed: rebuild the night variant
+                memory.set(MemoryKey(tile: key, variant: nil), o.image)
+                memory.removeAll { $0.tile == key && $0.variant != nil } // refreshed: rebuild its variants
                 _stats.downloads += 1
                 _stats.bytesDownloaded += Int64(o.data.count)
                 consecutiveNetworkErrors = 0
@@ -974,15 +1101,18 @@ public final class TileImageCache: @unchecked Sendable {
         guard !data.isEmpty, let source = CGImageSourceCreateWithData(data as CFData, nil),
               CGImageSourceGetCount(source) > 0,
               let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
-        return redraw(image, night: nil)
+        return redraw(image, filter: nil)
     }
 
     /// The night variant of a (decoded) day tile.
-    static func nightImage(_ image: CGImage, filter: TileNightFilter) -> CGImage? { redraw(image, night: filter) }
+    static func nightImage(_ image: CGImage, filter: TileNightFilter) -> CGImage? { redraw(image, filter: .night(filter)) }
+
+    /// A variant (night, muted day / night) of a (decoded) day tile.
+    static func variantImage(_ image: CGImage, filter: TileVariantFilter) -> CGImage? { redraw(image, filter: filter) }
 
     /// Decodes into a 32BGRA premultiplied bitmap (forces decoding off the render thread) and
-    /// optionally runs a night filter over its pixels (alpha is byte 3 of each little-endian BGRA pixel).
-    private static func redraw(_ image: CGImage, night: TileNightFilter?) -> CGImage? {
+    /// optionally runs a variant filter over its pixels (BGRA in memory, alpha byte 3).
+    private static func redraw(_ image: CGImage, filter: TileVariantFilter?) -> CGImage? {
         let w = image.width, h = image.height
         guard w > 0, h > 0, w <= 2_048, h <= 2_048,
               let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
@@ -990,9 +1120,9 @@ public final class TileImageCache: @unchecked Sendable {
         ctx.interpolationQuality = .none
         ctx.setBlendMode(.copy)
         ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
-        if let night, let data = ctx.data {
-            night.apply(to: UnsafeMutableRawBufferPointer(start: data, count: ctx.bytesPerRow * h),
-                        width: w, height: h, bytesPerRow: ctx.bytesPerRow, alphaIndex: 3)
+        if let filter, let data = ctx.data {
+            filter.apply(to: UnsafeMutableRawBufferPointer(start: data, count: ctx.bytesPerRow * h),
+                         width: w, height: h, bytesPerRow: ctx.bytesPerRow)
         }
         return ctx.makeImage()
     }

@@ -10,13 +10,13 @@
 // - Owns ONE `DashUIController(measurer: services.projection.textMeasurer)`. Builds `DashModel`
 //   from: canvas (negotiated by the link, else `previewCanvas.size`), effective margins
 //   (CanvasFit.effectiveMargins(settings.screenMargins, profileDefault:)), the NavSnapshot, the
-//   last fix + compass, MapPreferences, night (DashFormat.isNight / NightModePolicy, re-evaluated
-//   ≥ every 60 s), wall clock, `DashLanguage` from `core.language`, places, dash search state
+//   last fix + compass, MapPreferences, night (NightModePolicy: AUTO follows the sun at the last fix,
+//   P0 D06; re-evaluated ≥ every 60 s), wall clock, `DashLanguage` from `core.language`, places, dash search state
 //   (NavigationModel results when the dash search sheet is open), recording/lap state, link
 //   banner text, hold message. Calls `ui.update(model)` whenever an input changes, coalesced.
 // - Projection: `services.projection.setDisplayListProvider { now in ui.displayList(now: now) }`
 //   (DashUIController is thread-safe), hold provider = `ui.displayList(forHoldScreen:now:)`
-//   with a localized "Phone locked — unlock to update the map" message; `invalidate()` after
+//   with the dash's own card ("Map paused", P0 D17); `invalidate()` after
 //   every `ui.update`; `requestTiles(ui.visibleTiles())` after camera changes; corridor prefetch
 //   when a route is applied; `onTileLoaded` → invalidate. A ~10 Hz main-actor timer calls
 //   `ui.tick(now:)` (long-press + toasts) and performs returned intents.
@@ -411,15 +411,27 @@ public final class RideModel {
         pushEncoderPlan(force: false)
     }
 
-    /// Ghost-filtered dash touch (canvas pixels).
+    /// P0 (D17): while the dash shows the hold picture (the app in the background without a background
+    /// encoder, or the phone locked), the rider sees no live controls: dash keys and touches act on nothing.
+    var dashShowsHoldPicture: Bool { core.services.projection.stats.mode == "hold" }
+
+    /// Ghost-filtered dash touch (canvas pixels). Ignored while the hold picture shows (P0, D17).
     func handleDashTouch(_ touch: DashTouch) {
+        guard !dashShowsHoldPicture else {
+            Log.d("RIDE", "[dash] touch ignored: the dash shows the hold picture")
+            return
+        }
         let intents = ui.handle(.touch(touch), now: clock.now())
         perform(intents, fromDash: true)
         uiChanged()
     }
 
-    /// Handlebar command (ControlsModel) or other input.
+    /// Handlebar command (ControlsModel) or other input. Ignored while the hold picture shows (P0, D17).
     func handleDashInput(_ input: DashInput) {
+        guard !dashShowsHoldPicture else {
+            Log.d("RIDE", "[dash] input ignored: the dash shows the hold picture")
+            return
+        }
         let intents = ui.handle(input, now: clock.now())
         perform(intents, fromDash: true)
         uiChanged()
@@ -512,8 +524,8 @@ public final class RideModel {
         let projection = core.services.projection
         let ui = self.ui
         projection.setDisplayListProvider { now in ui.displayList(now: now) }
-        let hold = SessionText.holdMessage(core.language)
-        projection.setHoldDisplayListProvider { now in ui.displayList(forHoldScreen: hold, now: now) }
+        // P0 (D17): the dash's own hold card — "Map paused", no stale numbers, honest copy.
+        projection.setHoldDisplayListProvider { now in ui.displayList(forHoldScreen: nil, now: now) }
         let pending = tileRefreshPending
         projection.onTileLoaded = { [weak self, weak projection] in
             projection?.invalidate()
@@ -688,7 +700,7 @@ public final class RideModel {
                               lowPowerMode: core.services.system.isLowPowerModeEnabled) {
             pushEncoderPlan(force: false)
         }
-        // The system port also reports appearance changes here: theme AUTO follows dark mode.
+        // The system port also reports appearance changes here (the dash no longer follows dark mode: P0, D06).
         setNeedsModelUpdate()
     }
 
@@ -717,9 +729,9 @@ public final class RideModel {
         let profileDefault = (identifiedProfile ?? earlyProfile).defaultMargins
         let margins = CanvasFit.effectiveMargins(s.screenMargins, profileDefault: profileDefault)
         let wall = core.services.now()
-        // AUTO = phone in dark mode OR 19:00–06:59 (navigation-dash §10.3, app-features §2.2).
-        let night = nightMonitor.evaluate(theme: s.map.theme, phoneDarkMode: core.services.system.isSystemDarkMode,
-                                          date: wall, now: clock.now())
+        // AUTO = the sun below the horizon at the last fix (P0, D06: computed on the phone, the phone's dark mode
+        // plays no part); no fix yet → 19:00–06:59.
+        let night = nightMonitor.evaluate(theme: s.map.theme, position: lastFix?.point, date: wall, now: clock.now())
         let lap = core.navigation.lapCard().map { DashLapTimer(title: $0.current, meta: $0.meta) }
         // The clock chip shows HH:mm: a minute-aligned date keeps the model stable within a minute.
         let minute = Date(timeIntervalSince1970: (wall.timeIntervalSince1970 / 60).rounded(.down) * 60)

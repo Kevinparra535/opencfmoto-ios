@@ -97,6 +97,23 @@ final class PlatformAudioTests: XCTestCase {
         XCTAssertEqual(m.durationSeconds, 3600)
     }
 
+    /// P0 (D02): the doubles left the iOS default map, so the pill names only the singles — the proposal's
+    /// «◀ ▶ mover · ★ elegir» in ASCII — in the dash's language, and never a double (`**`, `>>`, `<<`).
+    func testNowPlayingHintNamesOnlyTheSingles() {
+        XCTAssertEqual(HandlebarNowPlayingMetadata(language: .es).artist, "< > mover  * elegir")
+        XCTAssertEqual(HandlebarNowPlayingMetadata(language: .en).artist, "< > move  * select")
+        XCTAssertEqual(HandlebarNowPlayingMetadata().artist, HandlebarNowPlayingMetadata.hint(.en))
+        for language in DashLanguage.allCases {
+            let m = HandlebarNowPlayingMetadata(language: language)
+            XCTAssertEqual(m.title, "OpenCfMoto")
+            XCTAssertEqual(m.durationSeconds, 3600)
+            for text in [m.title, m.artist, m.album] {
+                XCTAssertTrue(text.unicodeScalars.allSatisfy { (0x20 ... 0x7E).contains($0.value) }, "not printable ASCII: \(text)")
+            }
+            for double in ["**", ">>", "<<"] { XCTAssertFalse(m.artist.contains(double), "\(language): \(m.artist)") }
+        }
+    }
+
     // MARK: Emitter
 
     func testEmitterStampsMonotonicTimeAndFansOut() async {

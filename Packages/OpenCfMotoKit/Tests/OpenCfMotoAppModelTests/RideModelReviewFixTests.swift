@@ -342,31 +342,40 @@ final class RideModelReviewFixTests: XCTestCase {
         LocationFix(lat: lat, lon: lon, speedMps: 0, courseDeg: nil, accuracyM: 5, altitudeM: 2600, timeMs: 1_790_000_000_000)
     }
 
-    /// The invert flags of the map tiles in a display list (night = inverted tiles).
-    private func tileInverts(_ list: DashDisplayList) -> Set<Bool> {
-        Set(list.commands.compactMap { if case let .tile(_, _, _, _, invert) = $0 { return invert }; return nil })
+    /// The treatments of the map tiles in a display list (night = the muted night treatment, P0 D05).
+    private func tileTreatments(_ list: DashDisplayList) -> Set<DashTileTreatment> {
+        Set(list.commands.compactMap { if case let .tile(_, _, _, _, treatment) = $0 { return treatment }; return nil })
     }
 
+    /// P0 (D06): AUTO follows the sun at the rider's fix, computed on the phone — the phone's dark mode no
+    /// longer decides (a phone in dark mode used to get a night map at noon). Bogotá (the fix below), 2026-01-15:
+    /// 12:00 local (17:00 UTC) is day, 22:00 local (03:00 UTC the next day) is night.
     @MainActor
-    func testThemeAutoFollowsTheSystemDarkMode() async throws {
-        var noonParts = DateComponents()
-        noonParts.year = 2026; noonParts.month = 1; noonParts.day = 15; noonParts.hour = 12
-        let noon = try XCTUnwrap(Calendar.current.date(from: noonParts)) // local time: the clock says day
-        let h = AppTestHarness { $0.now = { noon } }
+    func testThemeAutoFollowsTheSunAtTheFixNotTheDarkMode() async throws {
+        let noonUTC = Date(timeIntervalSince1970: 1_768_496_400) // 2026-01-15 17:00 UTC = 12:00 in Bogotá
+        let wall = Locked(noonUTC)
+        let mono = MusicTestClock()
+        let h = AppTestHarness { $0.now = { wall.current }; $0.clock = mono }
         XCTAssertEqual(h.core.currentSettings.map.theme, .auto)
         h.location.emit(fix())
         h.ride.flushModel()
         let clock = h.core.services.clock
-        let day = await eventually { self.tileInverts(h.ride.displayList(now: clock.now())) == [false] }
-        XCTAssertTrue(day, "noon, light appearance: day tiles")
-        // Appearance → Dark (or Automatic after sunset): the system port reports it.
+        let day = await eventually { self.tileTreatments(h.ride.displayList(now: clock.now())) == [.mutedDay] }
+        XCTAssertTrue(day, "noon at the fix: the muted day map")
+        // Appearance → Dark: ignored now.
         h.system.isSystemDarkMode = true
         h.system.onPowerStateChange?()
-        let night = await eventually { self.tileInverts(h.ride.displayList(now: clock.now())) == [true] }
-        XCTAssertTrue(night, "AUTO = dark mode OR 19:00–06:59")
-        // An explicit DAY theme ignores the phone appearance.
+        h.ride.flushModel()
+        XCTAssertEqual(tileTreatments(h.ride.displayList(now: clock.now())), [.mutedDay], "dark mode does not darken the dash at noon")
+        // 22:00 at the fix (the monitor re-evaluates at least every 60 s of the monotonic clock).
+        wall.set(noonUTC.addingTimeInterval(10 * 3600))
+        mono.advance(61)
+        h.ride.flushModel()
+        let night = await eventually { self.tileTreatments(h.ride.displayList(now: clock.now())) == [.mutedNight] }
+        XCTAssertTrue(night, "22:00 at the fix: the muted night map")
+        // An explicit DAY theme wins.
         h.core.settings.update(forBike: nil) { $0.map.theme = .day }
-        let forcedDay = await eventually { self.tileInverts(h.ride.displayList(now: clock.now())) == [false] }
+        let forcedDay = await eventually { self.tileTreatments(h.ride.displayList(now: clock.now())) == [.mutedDay] }
         XCTAssertTrue(forcedDay)
     }
 

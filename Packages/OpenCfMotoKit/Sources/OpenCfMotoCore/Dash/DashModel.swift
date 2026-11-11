@@ -98,8 +98,11 @@ public struct DashModel: Sendable, Equatable {
     /// Smoothed device heading (degrees, 0…360) — used while stopped in heading-up mode.
     public var compassHeadingDeg: Double?
     public var preferences: MapPreferences
-    /// Night = tiles inverted (see `DashFormat.isNight`). Chrome is unchanged.
+    /// Night (`NightModePolicy`; AUTO follows the sun at the fix, P0 D06): the night tile treatment, the dark
+    /// search pill and search sheet, the night route and puck colours.
     public var isNight: Bool
+    /// The map's tile look (P0, D05): muted greys (default) or the classic OpenStreetMap colours.
+    public var mapStyle: DashMapStyle
     /// Wall clock for the clock chip.
     public var date: Date
     public var timeZone: TimeZone
@@ -115,8 +118,9 @@ public struct DashModel: Sendable, Equatable {
     public var toastText: String?
     /// Link state banner, e.g. "Reconnecting…" (nil = hidden).
     public var linkBanner: String?
-    /// When set, every frame is the "hold" picture (dimmed scene + this message card), e.g.
-    /// while the app is going to the background and VideoToolbox may stop encoding.
+    /// When set, every frame is the "hold" picture with this title (P0, D17: a card on the plain chrome
+    /// colour, no map and no numbers), and dash input is ignored. The app leaves it nil and serves the hold
+    /// picture through the projection's hold provider instead (`displayList(forHoldScreen:now:)`).
     public var holdMessage: String?
     /// Small HH:mm clock chip (iOS addition).
     public var showClock: Bool
@@ -140,7 +144,7 @@ public struct DashModel: Sendable, Equatable {
                 recording: Bool = false, lapTimer: DashLapTimer? = nil, toastText: String? = nil, linkBanner: String? = nil,
                 holdMessage: String? = nil, showClock: Bool = true, handlebarFocus: Bool = true,
                 maxTileZoom: Int = MapProjection.defaultMaxTileZoom, music: DashNowPlaying? = nil,
-                mapAttribution: String? = nil) {
+                mapAttribution: String? = nil, mapStyle: DashMapStyle = .muted) {
         self.canvas = canvas
         self.margins = margins
         self.densityDpiOverride = densityDpiOverride
@@ -164,6 +168,7 @@ public struct DashModel: Sendable, Equatable {
         self.maxTileZoom = maxTileZoom
         self.music = music
         self.mapAttribution = mapAttribution
+        self.mapStyle = mapStyle
     }
 
     /// Canvas size for a negotiated `VideoCanvas`.
@@ -206,4 +211,9 @@ public struct DashModel: Sendable, Equatable {
     public var offersMusicSheet: Bool { music != nil && !inPreview && !showsArrival }
     /// The rider position for the map: snapped puck from the nav engine, else the raw fix.
     public var riderPosition: GeoPoint? { nav.puck ?? fix?.point }
+    /// The raster tile treatment for this frame (`mapStyle` at day / night).
+    public var tileTreatment: DashTileTreatment { DashTileTreatment.of(night: isNight, style: mapStyle) }
+    /// A route runs under the picture (NAV_TO or GPX), also behind a preview: what End would stop and what
+    /// Go over a preview would replace (P0, D01).
+    public var routeRunning: Bool { nav.mode.isNavigating }
 }

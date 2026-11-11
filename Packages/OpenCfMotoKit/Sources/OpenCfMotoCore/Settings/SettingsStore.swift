@@ -183,9 +183,7 @@ public final class SettingsStore: @unchecked Sendable {
         s.powerMode = scopedString(K.powerMode, b).flatMap(PowerMode.init(rawValue:)) ?? .balanced
         s.profileOverride = scopedString(K.profileOverride, b).flatMap(BikeProfileID.init(rawValue:))
         s.handlebarControl = scopedBool(K.controlAa, b) ?? true
-        s.buttonMap = Dictionary(uniqueKeysWithValues: ButtonGesture.allCases.map { g in
-            (g, scopedString(K.buttonMap(g), b).flatMap(ButtonAction.init(rawValue:)) ?? defaultButtonMap[g]!)
-        })
+        s.buttonMap = HandlebarPresets.migratingLegacyDefault(storedButtonMapLocked(b))
         s.clusterPreset = scopedString(K.clusterPreset, b).flatMap(ButtonClusterPreset.init(rawValue:))
         // global
         s.forceNonTouch = store.bool(forKey: K.forceNonTouch) ?? false
@@ -271,6 +269,23 @@ public final class SettingsStore: @unchecked Sendable {
     /// The three saved places.
     public var savedPlaces: [SavedPlaceSlot] { (0 ..< 3).map(savedPlace) }
 
+    /// The bike's map as stored (scoped → global → default), before the P0 legacy-default migration.
+    private func storedButtonMapLocked(_ b: String?) -> [ButtonGesture: ButtonAction] {
+        Dictionary(uniqueKeysWithValues: ButtonGesture.allCases.map { g in
+            (g, scopedString(SettingsKeys.buttonMap(g), b).flatMap(ButtonAction.init(rawValue:)) ?? defaultButtonMap[g]!)
+        })
+    }
+
+    /// Before one gesture of a migrated legacy map is written, the migrated map is pinned to the bike:
+    /// otherwise the stored pre-P0 doubles would come back as soon as the map stops matching the legacy
+    /// default (`HandlebarPresets.migratingLegacyDefault`).
+    private func pinMigratedButtonMapLocked(_ b: String?) {
+        let stored = storedButtonMapLocked(b)
+        let migrated = HandlebarPresets.migratingLegacyDefault(stored)
+        guard migrated != stored else { return }
+        for g in ButtonGesture.allCases { store.set(migrated[g]!.rawValue, forKey: key(SettingsKeys.buttonMap(g), b)) }
+    }
+
     /// True when every gesture of the bike's map equals the default map.
     public func isButtonMapDefault(forBike b: String?) -> Bool {
         settings(forBike: b).buttonMap == defaultButtonMap
@@ -308,6 +323,7 @@ public final class SettingsStore: @unchecked Sendable {
         if new.handlebarControl != old.handlebarControl { store.set(new.handlebarControl, forKey: key(K.controlAa, b)) }
         let newMap = HandlebarPresets.completed(new.buttonMap, fallback: defaultButtonMap)
         let oldMap = HandlebarPresets.completed(old.buttonMap, fallback: defaultButtonMap)
+        if newMap != oldMap { pinMigratedButtonMapLocked(b) }
         for g in ButtonGesture.allCases where newMap[g] != oldMap[g] {
             store.set(newMap[g]!.rawValue, forKey: key(K.buttonMap(g), b))
         }
@@ -415,7 +431,10 @@ public final class SettingsStore: @unchecked Sendable {
     }
 
     public func setButtonAction(_ action: ButtonAction, for gesture: ButtonGesture, forBike b: String?) {
-        write { store.set(action.rawValue, forKey: key(SettingsKeys.buttonMap(gesture), b)) }
+        write {
+            pinMigratedButtonMapLocked(b)
+            store.set(action.rawValue, forKey: key(SettingsKeys.buttonMap(gesture), b))
+        }
     }
 
     /// Resets the bike's map (removes its scoped gesture keys → global/default apply).

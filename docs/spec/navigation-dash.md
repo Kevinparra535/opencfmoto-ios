@@ -1545,6 +1545,45 @@ updates `DashModel.music` only on meaningful changes (song, state, seek / drift)
 
 ---
 
+### P0 safety and legibility (iOS, UI/UX proposal)
+
+Changes to today's layouts, no new slot layout (that is P1). Pinned by `DashSafetyRulesTests` over every
+dash state the tests build, on eight canvases.
+
+- **No destructive default (D01).** While navigating the default focus is the Recenter FAB, not End.
+  End left the metrics card; the menu lists «End route…» last in its Ride section (only while a route
+  runs) and opens on «Recenter / reroute». «End route…» opens a confirm card «End the route?» with the
+  consequence line and [Keep going*][End route]; Go over a preview while a route runs asks «Change
+  route?» the same way (the card stands in for the preview card). The safe option is the default, the
+  card closes after 8 s without input committing nothing, and closes when its question no longer applies.
+  No destructive or route-replacing item is the default or one knob step from it, except the confirm
+  card's own action.
+- **Doubles (D02).** The iOS default map leaves ★★, ▶▶ and ◀◀ unmapped (input-controls.md §9.1).
+- **Speed and limit never covered (D03, D19).** The gauge and the limit sign are the scene's last drawing,
+  over the menu, the search and Music sheets and every card; the limit sign's room is always reserved
+  (the gauge does not jump and the metrics card does not reflow when a limit appears). Scroll containers
+  under it scroll the focused control clear of it and get end padding.
+- **Focus ring (D09).** Outline only: white 3 dp on a black 5-dp band, 0–5 dp outside the control (the
+  music tile's ring of fix F3, for every control). Never a fill over the control.
+- **Map (D05).** `tile(…, treatment:)` replaced `tile(…, invert:)`: `normal`, `inverted` (classic night),
+  `mutedDay`, `mutedNight` (the default `DashMapStyle.muted`). TileImageCache builds each variant once per
+  tile and caches it. The route is cased (10 dp over 17 dp: blue on white by day, light blue on near-black
+  at night); the puck is a white chevron with a dark outline over a halo (dark by day, white at night).
+- **Night (D06).** AUTO = the sun below −0.833° (sunset to sunrise) at the last fix, computed on the phone
+  (`SunPosition`, `NightModePolicy.isNight(theme:position:date:)`); without a fix yet 19:00–06:59; the
+  phone's dark mode plays no part. At night the search pill and the search sheet are dark.
+- **Type and cards (D11, D12).** Turn distance 48 sp (portrait 52), road 26 (28), speed 44 (48, shrunk to
+  fit three digits); cards, gauge, clock and FABs are opaque with a 1.5-dp edge; ALT left the metrics card.
+- **Hold picture (D17).** A card on the plain chrome colour — «Map paused», «Voice keeps guiding» while a
+  route runs with the voice on, «Resumes when you open the app, stopped» — no map and no numbers; dash
+  keys and touches are ignored while it shows (the controller with `holdMessage`, RideModel while the
+  projection is in hold mode).
+- **Arrival (D22).** [Done*][Park here][Find parking], the same labels on every canvas; Park here only sets
+  the parked spot (the menu's toggle that cleared a pin within 40 m is gone).
+- **Copy (D23).** Neutral Latin-American Spanish (estacionar, autopista, viaje, gasolinera, cajero
+  automático; «Llegaste»), no shouting capitals, verb labels on the menu toggles («Pan the map», «Put north
+  up», «Mute voice»…).
+
 ## 16. Open questions / risks
 
 * **R1 — Arrival logic.** The shipping Android code appears never to show the Arrived sheet (§4.8). Confirm intent with maintainers / a ride log (`[GPX] near dest at nav start`) before choosing iOS semantics.
@@ -1554,7 +1593,7 @@ updates `DashModel.music` only on meaningful changes (song, state, seek / drift)
 * **R5 — ORS key.** Android bakes an optional default key at build time; decide how iOS supplies one (user-entered only?).
 * **R6 — Portrait canvas.** The 800×944 layout is shipping code but not visible in the repo's hardware footage; pixel estimates in §11.4 are derived.
 * **R7 — Text-dependent layout.** Wrap-content cards make exact geometry font-dependent (Roboto vs SF Pro); the gauge can overlap the metrics card on 800×384 (§11.3).
-* **R8 — Night mode.** No solar algorithm exists; AUTO = phone dark mode or 19:00–06:59. Decide whether iOS adds a real sunrise/sunset calculation (parity says no).
+* **R8 — Night mode.** No solar algorithm exists; AUTO = phone dark mode or 19:00–06:59. Decide whether iOS adds a real sunrise/sunset calculation (parity says no). iOS P0 decided yes: AUTO follows the sun at the fix (§15, P0).
 * **R9 — Puck vs bottom card.** Look-ahead at high zoom puts the puck behind the metrics card on 384-px-tall dashes (§4.9).
 * **R10 — Dead/legacy features.** Fun circuit length, ORS round-trip, `circuitWaypoints`, `laneHintFromText`, region packs, hidden Fit/Mute FABs and the hub "Circuit" button (sets FUN mode, then cannot build a circuit without a previewed place) — decide whether to port.
 * **R11 — Off-dash pan.** Android has no pan-suspends-follow; dash panning is effectively unusable while moving. UX decision for iOS.

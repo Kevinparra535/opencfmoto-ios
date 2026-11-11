@@ -384,7 +384,6 @@ final class AppModelTests: XCTestCase {
             (SessionText.mirrorUnavailable(.en), SessionText.mirrorUnavailable(.es)),
             (SessionText.mirrorNeedsLocation(.en), SessionText.mirrorNeedsLocation(.es)),
             (SessionText.phoneHotspotUnsupported(.en), SessionText.phoneHotspotUnsupported(.es)),
-            (SessionText.holdMessage(.en), SessionText.holdMessage(.es)),
             (SessionText.reconnectingBanner(.en), SessionText.reconnectingBanner(.es)),
             (SessionText.waitingForWifiBanner(.en), SessionText.waitingForWifiBanner(.es)),
             (SessionText.recordingRide(.en), SessionText.recordingRide(.es)),

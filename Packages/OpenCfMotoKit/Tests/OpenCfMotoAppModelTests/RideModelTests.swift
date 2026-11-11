@@ -252,8 +252,35 @@ final class RideModelTests: XCTestCase {
         XCTAssertEqual(h.projection.currentDisplayList(now: now), h.ride.displayList(now: now))
         let hold = h.projection.currentHoldDisplayList(now: now)
         XCTAssertNotNil(hold)
-        XCTAssertTrue(texts(hold ?? h.ride.displayList(now: now)).contains(SessionText.holdMessage(h.language)))
+        // P0 (D17): the dash's own hold card — "Map paused" / «Mapa en pausa», no map, no numbers.
+        let holdTexts = texts(hold ?? h.ride.displayList(now: now))
+        XCTAssertTrue(holdTexts.contains(DashText.holdTitle.en) || holdTexts.contains(DashText.holdTitle.es), "\(holdTexts)")
         XCTAssertGreaterThan(h.projection.invalidations, 0)
+    }
+
+    /// P0 (D17): while the projection serves the hold picture the dash shows no live controls, so its keys,
+    /// the knob and touches act on nothing — back in the foreground they act again.
+    @MainActor
+    func testDashInputIsIgnoredWhileTheHoldPictureShows() async {
+        let h = AppTestHarness()
+        h.ride.flushModel()
+        let clock = h.core.services.clock
+        let before = h.ride.dashUIState
+        XCTAssertEqual(before.sheet, .none)
+        h.projection.enterBackground()
+        XCTAssertTrue(h.ride.dashShowsHoldPicture)
+        h.ride.handleDashInput(.knob(1))
+        h.ride.handleDashInput(.key(.enter))
+        h.ride.handleDashInput(.key(.home))
+        let p = h.ride.displayList(now: clock.now()).hitRegions.first { $0.focusable }?.rect.center ?? DashPoint(10, 10)
+        h.ride.handleDashTouch(DashTouch(action: .down, x: Int(p.x), y: Int(p.y), time: clock.now()))
+        h.ride.handleDashTouch(DashTouch(action: .up, x: Int(p.x), y: Int(p.y), time: clock.now() + 0.05))
+        XCTAssertEqual(h.ride.dashUIState.sheet, .none, "nothing opened")
+        XCTAssertEqual(h.ride.dashUIState.focusedId, before.focusedId, "the focus did not move")
+        h.projection.enterForeground()
+        XCTAssertFalse(h.ride.dashShowsHoldPicture)
+        h.ride.handleDashInput(.key(.home))
+        XCTAssertEqual(h.ride.dashUIState.sheet, .menu, "in the foreground the keys act again")
     }
 
     @MainActor

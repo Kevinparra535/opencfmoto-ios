@@ -106,8 +106,8 @@ final class VideoTileCacheAppleTests: XCTestCase {
         let renderer = DashRenderer(tileCache: cache)
         let pb = try XCTUnwrap(PixelBufferFactory.makeStandaloneBuffer(width: 128, height: 64))
         renderer.render(DashDisplayList(size: DashSize(width: 128, height: 64), background: .black, commands: [
-            .tile(z: 16, x: 100, y: 200, rect: DashRect(x: 0, y: 0, width: 64, height: 64), invert: false),
-            .tile(z: 16, x: 100, y: 200, rect: DashRect(x: 64, y: 0, width: 64, height: 64), invert: true),
+            .tile(z: 16, x: 100, y: 200, rect: DashRect(x: 0, y: 0, width: 64, height: 64), treatment: .normal),
+            .tile(z: 16, x: 100, y: 200, rect: DashRect(x: 64, y: 0, width: 64, height: 64), treatment: .inverted),
         ]), into: pb)
         XCTAssertEqual(renderer.stats.tilesDrawn, 2)
         return pb
@@ -134,6 +134,36 @@ final class VideoTileCacheAppleTests: XCTestCase {
         XCTAssertEqual(cache.stats.nightVariantsBuilt, 1)
         XCTAssertEqual(server.requests.count, 1)
         XCTAssertEqual(cache.nightStyle, .lightnessInvert)
+    }
+
+    /// P0 (D05): the dash map's muted treatments, built once per tile from the decoded image (red top, blue
+    /// bottom) through `TileMutedFilter` and cached; the classic variants stay available beside them.
+    func testMutedDayAndNightVariantsAreBuiltOnceAndDrawn() throws {
+        let server = FakeTileServer()
+        let (cache, loaded) = makeCache(server, dir: tempDir())
+        cache.request(z: 16, x: 100, y: 200)
+        XCTAssertTrue(pollUntil { loaded.current.contains(TileCacheKey(z: 16, x: 100, y: 200)) })
+        let renderer = DashRenderer(tileCache: cache)
+        let pb = try XCTUnwrap(PixelBufferFactory.makeStandaloneBuffer(width: 128, height: 64))
+        let list = DashDisplayList(size: DashSize(width: 128, height: 64), background: .black, commands: [
+            .tile(z: 16, x: 100, y: 200, rect: DashRect(x: 0, y: 0, width: 64, height: 64), treatment: .mutedDay),
+            .tile(z: 16, x: 100, y: 200, rect: DashRect(x: 64, y: 0, width: 64, height: 64), treatment: .mutedNight),
+        ])
+        renderer.render(list, into: pb)
+        XCTAssertEqual(renderer.stats.tilesDrawn, 2)
+        // TileMutedFilter.apply of pure red / blue: a fifth (day) or less (night) of the colour is left
+        assertRGB(rgb(pb, 32, 10), [134, 83, 83], tolerance: 2, "muted day red")
+        assertRGB(rgb(pb, 32, 54), [88, 88, 139], tolerance: 2, "muted day blue")
+        assertRGB(rgb(pb, 96, 10), [137, 99, 99], tolerance: 2, "muted night red")
+        assertRGB(rgb(pb, 96, 54), [121, 121, 159], tolerance: 2, "muted night blue")
+        XCTAssertEqual(cache.stats.mutedVariantsBuilt, 2)
+        XCTAssertEqual(cache.stats.nightVariantsBuilt, 0)
+        renderer.render(list, into: pb) // cached: nothing rebuilt
+        XCTAssertEqual(cache.stats.mutedVariantsBuilt, 2)
+        XCTAssertNotNil(cache.image(z: 16, x: 100, y: 200, treatment: .mutedDay))
+        XCTAssertNotNil(cache.image(z: 16, x: 100, y: 200, night: true)) // the classic night variant still builds
+        XCTAssertEqual(cache.stats.nightVariantsBuilt, 1)
+        XCTAssertEqual(server.requests.count, 1)
     }
 
     func testNightStylesOnOSMColoursAndSwitchingNeverMixesVariants() throws {
@@ -250,8 +280,8 @@ final class VideoTileCacheAppleTests: XCTestCase {
         let pb = try XCTUnwrap(PixelBufferFactory.makeStandaloneBuffer(width: 64, height: 64))
         let renderer = DashRenderer(tileCache: cache)
         renderer.render(DashDisplayList(size: DashSize(width: 64, height: 64), background: .black, commands: [
-            .tile(z: 16, x: 100, y: 200, rect: DashRect(x: 0, y: 0, width: 32, height: 64), invert: false),
-            .tile(z: 16, x: 100, y: 201, rect: DashRect(x: 32, y: 0, width: 32, height: 64), invert: false),
+            .tile(z: 16, x: 100, y: 200, rect: DashRect(x: 0, y: 0, width: 32, height: 64), treatment: .normal),
+            .tile(z: 16, x: 100, y: 201, rect: DashRect(x: 32, y: 0, width: 32, height: 64), treatment: .normal),
         ]), into: pb)
         XCTAssertEqual(rgb(pb, 16, 32), [255, 0, 0], "top-left child is entirely in the red half")
         XCTAssertEqual(rgb(pb, 48, 32), [0, 0, 255], "bottom-left child is entirely in the blue half")

@@ -3,11 +3,13 @@
 // (map overlays) and the presentation_gpx layouts — docs/spec/navigation-dash.md §11.
 //
 // Builds one dash frame as draw commands + hit-testable widgets + the handlebar focus order.
-// Z-order (back → front, Android XML order): map (+ its tile credit, iOS) · search pill · lap card · nav
-// card · metrics card · speed chip · preview card · arrive card · FAB column · (now-playing tile) ·
-// (clock) · dimmer · search sheet / menu sheet. The Apple Music sheet (iOS addition) is opaque: only
-// the sheet and, while navigating, the nav card on top of it are drawn. The controller adds the focus
-// ring, toasts, link banner and hold card on top.
+// Z-order (back → front): map (+ its tile credit, iOS) · search pill · lap card · nav card · metrics card ·
+// preview card · arrive card · FAB column · (now-playing tile) · (clock) · dimmer · search sheet / menu
+// sheet / confirm card · SPEED CHIP. P0 (D03, D19): the speed gauge and its limit sign are drawn last, over
+// the menu and every sheet — speed and limit are never covered (Android drew them under the preview, the
+// menu and the sheets). The Apple Music sheet (iOS addition) is opaque: the sheet, while navigating the nav
+// card on top of it, then the speed chip. The controller adds the focus ring, toasts and the link banner on
+// top, and builds the hold card itself.
 
 import Foundation
 
@@ -16,6 +18,16 @@ public enum DashSheet: String, Sendable, Equatable {
     case none, menu, search
     /// Apple Music (iOS addition).
     case music
+    /// The confirm card (P0, D01): "End the route?" / "Change route?" with the safe option focused.
+    case confirm
+}
+
+/// What the confirm card asks (P0, D01).
+public enum DashConfirmKind: String, Sendable, Equatable {
+    /// The menu's "End route…": its action ends the navigation.
+    case endRoute
+    /// Go on a preview while a route runs: its action replaces that route.
+    case changeRoute
 }
 
 /// A hit-testable element of a built frame.
@@ -45,6 +57,8 @@ struct DashScrollContainer: Sendable {
     var viewport: DashRect
     var axis: Axis
     var contentLength: Double
+    /// Drawn over part of the viewport (the speed chip, P0 D03): a focused control is scrolled clear of it.
+    var obstacle: DashRect? = nil
     var maxOffset: Double { max(0, contentLength - (axis == .vertical ? viewport.height : viewport.width)) }
 }
 
@@ -56,6 +70,8 @@ struct DashScene: Sendable {
     /// Bottom of the top chrome (pill / nav card / banner) — toasts go below it.
     var topChromeBottom: Double = 0
     var fabs: [DashRect] = []
+    /// The speed chip (gauge + limit room) as drawn — the last thing the scene draws (P0, D03).
+    var speedChip: DashRect?
     /// Apple Music: what the time-dependent drawing (progress, times) was built for
     /// (`DashSceneBuilder.musicTimeKey`); nil = nothing in this scene moves with time.
     var musicTimeKey: Int?
@@ -83,6 +99,8 @@ struct DashSceneInput: Sendable {
     var handlebarReachesSettings: Bool
     /// The time the Apple Music progress / times are drawn for (same clock as `positionAt`).
     var musicNow: TimeInterval = 0
+    /// What the confirm card asks while `sheet == .confirm` (P0, D01).
+    var confirm: DashConfirmKind? = nil
 }
 
 struct DashSceneBuilder {
@@ -192,9 +210,20 @@ struct DashSceneBuilder {
             navFrame = drawNavCard()
             if let metrics { drawMetrics(metrics) }
         }
-        let speedFrame = drawSpeedChip(navigating: navigating, metrics: metrics, bannerBottom: navFrame?.maxY,
-                                       coveringCard: preview?.frame ?? arrive?.frame)
-        if let preview, let p = model.nav.preview { drawPreview(preview, p) }
+        // The speed chip's place (drawn last): beside / above the metrics card, never under a card.
+        var speed = Self.speedChipLayout(model, c, metrics: metrics, bannerBottom: navFrame?.maxY,
+                                         covering: [preview?.frame, arrive?.frame].compactMap { $0 })
+        var confirm: DashConfirmCardLayout?
+        if input.sheet == .confirm, let kind = input.confirm {
+            let l = confirmLayout(kind, speed: speed, metrics: metrics)
+            if l.frame.intersects(speed.frame) {
+                speed = Self.speedChipLayout(model, c, metrics: metrics, bannerBottom: navFrame?.maxY,
+                                             covering: [preview?.frame, arrive?.frame, l.frame].compactMap { $0 })
+            }
+            confirm = l
+        }
+        // The confirm card stands in for the preview card it asks about («Change route?»): one card at a time.
+        if let preview, let p = model.nav.preview, confirm == nil { drawPreview(preview, p) }
         if let arrive { drawArrive(arrive) }
         // FAB lane (no sheet): FABs, the Apple Music now-playing tile under them, the clock chip.
         var tile: DashMusicTileLayout?
@@ -202,7 +231,7 @@ struct DashSceneBuilder {
         if input.sheet == .none {
             let clock = model.showClock ? clockChip(fabs) : nil
             if model.music != nil {
-                let cards = [metrics?.frame, speedFrame, preview?.frame, arrive?.frame, lapFrame].compactMap { $0 }
+                let cards = [metrics?.frame, speed.frame, preview?.frame, arrive?.frame, lapFrame].compactMap { $0 }
                 tile = DashLayout.musicTile(c, fabs: fabs, clock: clock?.rect, avoiding: cards)
             }
             drawFabs(fabs)
@@ -214,7 +243,7 @@ struct DashSceneBuilder {
         // Map credit ("© OpenStreetMap" on OSMF tiles, iOS addition): in the map layer, under every piece of
         // chrome and sheet, and clear of all the chrome drawn on the map (navigation-dash.md §10.4).
         if mapDrawn, let credit = model.mapAttribution {
-            let chrome = [pillFrame, navFrame, lapFrame, metrics?.frame, speedFrame, preview?.frame, arrive?.frame]
+            let chrome = [pillFrame, navFrame, lapFrame, metrics?.frame, speed.frame, preview?.frame, arrive?.frame]
                 .compactMap { $0 } + lane
             if let l = DashLayout.mapAttribution(c, text: credit, avoiding: chrome,
                                                  topLimit: navFrame?.maxY ?? pillFrame?.maxY ?? c.safe.minY) {
@@ -224,16 +253,19 @@ struct DashSceneBuilder {
 
         switch input.sheet {
         case .menu:
-            drawMenu()
+            drawMenu(speed: speed.frame)
         case .search:
-            drawSearch()
+            drawSearch(speed: speed.frame)
+        case .confirm:
+            if let confirm, let kind = input.confirm { drawConfirm(confirm, kind) }
         case .music, .none:
             break // .music without a song: nothing to show (the controller closes the sheet)
         }
+        drawSpeedChip(speed) // last: over the menu and every sheet (P0, D03)
         if let tile, model.music?.knownDuration != nil { scene.musicTileBarWidth = tile.progressRect.width }
         scene.musicTimeKey = Self.musicTimeKey(model.music, sheetOpen: false, tileBarWidth: scene.musicTileBarWidth,
                                                now: input.musicNow)
-        scene.focusOrder = focusOrder(navigating: navigating, pillVisible: pillFrame != nil, tileVisible: tile != nil)
+        scene.focusOrder = focusOrder(pillVisible: pillFrame != nil, tileVisible: tile != nil)
         return scene
     }
 
@@ -304,13 +336,37 @@ struct DashSceneBuilder {
         return path
     }
 
+    /// A route line, optionally over a wider casing (P0, D05: the remaining route, the preview routes).
     private mutating func strokeRoute(_ pts: ArraySlice<TrackPoint>, proj: MapProjection, cull: DashRect, color: DashColor,
-                                      widthDp: Double, dash: [Double] = []) {
+                                      widthDp: Double, casing: DashColor? = nil, casingWidthDp: Double = 0, dash: [Double] = []) {
         guard pts.count >= 2 else { return }
         let path = Self.polyline(pts, proj: proj, cull: cull)
         guard !path.isEmpty else { return }
+        if let casing, casingWidthDp > widthDp {
+            scene.commands.append(.stroke(path, DashStroke(width: c.dp(casingWidthDp), color: casing, cap: .round, join: .round)))
+        }
         scene.commands.append(.stroke(path, DashStroke(width: c.dp(widthDp), color: color, cap: .round, join: .round,
                                                        dash: dash.map { c.dp($0) })))
+    }
+
+    /// The rider puck (P0, D05): a halo disc (dark by day, white at night) under a white chevron with a
+    /// 3-dp dark outline, `size` px wide, rotated by `rotation` radians (clockwise) about `center`.
+    static func puckCommands(center: DashPoint, size: Double, rotation: Double, night: Bool) -> [DashDrawCommand] {
+        let r = size / 2
+        let k = size / DashPalette.puckSize // px per design unit
+        // Chevron in a 56-unit design around the centre (the mockups' puck): tip up, notch at the back.
+        let design: [(Double, Double)] = [(0, -25), (18, 19), (0, 9), (-18, 19)]
+        let cs = cos(rotation), sn = sin(rotation)
+        let pts = design.map { p -> DashPoint in
+            let x = p.0 * k, y = p.1 * k
+            return DashPoint(center.x + x * cs - y * sn, center.y + x * sn + y * cs)
+        }
+        let chevron = DashPath.polyline(pts, closed: true)
+        return [
+            .fill(DashPath.circle(center: center, radius: r), DashPalette.puckHalo(night: night), .nonZero),
+            .fill(chevron, DashPalette.puckFill, .nonZero),
+            .stroke(chevron, DashStroke(width: DashPalette.puckEdgeWidth * k, color: DashPalette.puckEdge, cap: .round, join: .round)),
+        ]
     }
 
     /// The tile credit: a rounded plate with its text centred (map layer, no hit region: touches reach the map).
@@ -326,8 +382,9 @@ struct DashSceneBuilder {
         guard let proj = input.camera.projection(viewport: m.canvas, anchor: input.anchor, tileSize: m.tileSize) else { return false }
         scene.commands.append(.save)
         scene.commands.append(.transform(proj.mapToScreen))
+        let treatment = m.tileTreatment
         for t in proj.visibleTiles(maxTileZoom: m.maxTileZoom) {
-            scene.commands.append(.tile(z: t.z, x: t.x, y: t.y, rect: t.rect, invert: m.isNight))
+            scene.commands.append(.tile(z: t.z, x: t.x, y: t.y, rect: t.rect, treatment: treatment))
         }
         // Visible map-local box, padded so round caps / wide lines never pop at the edges.
         let corners = [DashPoint(0, 0), DashPoint(m.canvas.width, 0), DashPoint(m.canvas.width, m.canvas.height),
@@ -338,28 +395,32 @@ struct DashSceneBuilder {
         let cull = DashRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
         let rider = input.puck
 
+        let night = m.isNight
+        let casing = DashPalette.routeCasing(night: night)
         if let preview = m.nav.preview {
             if !preview.pinMode, !preview.routes.isEmpty {
                 let sel = min(max(0, preview.selectedIndex), preview.routes.count - 1)
                 // Alternatives (≤ 4) under the selected green route.
                 let alternatives = preview.routes.enumerated().filter { $0.offset != sel }.prefix(4)
                 for alt in alternatives {
-                    strokeRoute(alt.element.points[...], proj: proj, cull: cull, color: DashPalette.routeAlternative,
-                                widthDp: DashPalette.routeAlternativeWidth)
+                    strokeRoute(alt.element.points[...], proj: proj, cull: cull, color: DashPalette.routeAlternative(night: night),
+                                widthDp: DashPalette.routeAlternativeWidth, casing: casing,
+                                casingWidthDp: DashPalette.routeAlternativeCasingWidth)
                 }
                 strokeRoute(preview.routes[sel].points[...], proj: proj, cull: cull, color: DashPalette.routePreview,
-                            widthDp: DashPalette.routePreviewWidth)
+                            widthDp: DashPalette.routePreviewWidth, casing: casing, casingWidthDp: DashPalette.routePreviewCasingWidth)
             }
         } else if let route = m.nav.route, route.points.count >= 2 {
+            let remain = DashPalette.routeRemain(night: night)
             if let k0 = m.nav.progress?.nearestIndex {
                 let k = min(max(0, k0), route.points.count - 1)
-                strokeRoute(route.points[0 ... k], proj: proj, cull: cull, color: DashPalette.routeDone,
+                strokeRoute(route.points[0 ... k], proj: proj, cull: cull, color: DashPalette.routeDone(night: night),
                             widthDp: DashPalette.routeDoneWidth)
-                strokeRoute(route.points[k...], proj: proj, cull: cull, color: DashPalette.routeRemain,
-                            widthDp: DashPalette.routeRemainWidth)
+                strokeRoute(route.points[k...], proj: proj, cull: cull, color: remain,
+                            widthDp: DashPalette.routeRemainWidth, casing: casing, casingWidthDp: DashPalette.routeCasingWidth)
             } else {
-                strokeRoute(route.points[...], proj: proj, cull: cull, color: DashPalette.routeRemain,
-                            widthDp: DashPalette.routeRemainWidth)
+                strokeRoute(route.points[...], proj: proj, cull: cull, color: remain,
+                            widthDp: DashPalette.routeRemainWidth, casing: casing, casingWidthDp: DashPalette.routeCasingWidth)
             }
         }
         // Dashed rider → destination line (preview without a road route yet / NAV_TO without route).
@@ -389,9 +450,8 @@ struct DashSceneBuilder {
         if let me = rider {
             let s = proj.screenPoint(me)
             if screen.contains(s) {
-                let size = c.dp(48)
                 let rot = (input.puckBearingDeg - input.camera.bearingDeg) * .pi / 180
-                icon(.navArrow, in: DashRect(x: s.x - size / 2, y: s.y - size / 2, width: size, height: size), rotation: rot)
+                scene.commands += Self.puckCommands(center: s, size: c.dp(DashPalette.puckSize), rotation: rot, night: m.isNight)
             }
         }
         let dest = m.nav.preview?.place ?? m.nav.destination
@@ -407,15 +467,31 @@ struct DashSceneBuilder {
 
     // MARK: Chrome
 
+    /// The search pill / sheet colours: white by day, dark at night (P0, D06).
+    private var searchColors: DashPalette.SearchSurface { DashPalette.search(night: model.isNight) }
+
+    /// A card: the opaque card fill with its edge (P0, D12).
+    private mutating func card(_ r: DashRect, radius: Double, fill color: DashColor = DashPalette.cardFill,
+                               corners: (Double, Double, Double, Double)? = nil) {
+        roundRect(r, radius: radius, fill: color, stroke: DashPalette.cardEdge, strokeWidth: c.dp(DashPalette.cardEdgeWidth),
+                  corners: corners)
+    }
+
     private mutating func drawSearchPill() -> DashRect {
         let lapLabel = (model.lapTimer != nil ? DashText.lapStop : DashText.lap).localized(L)
         let pill = DashLayout.searchPill(c, circuitLabel: DashText.circuit.localized(L), lapLabel: lapLabel)
-        roundRect(pill.frame, radius: c.dp(DashPalette.searchPillRadius), fill: DashPalette.searchPillFill)
-        icon(.search, in: pill.iconRect, tint: DashPalette.searchPillIcon)
+        let col = searchColors
+        if model.isNight {
+            roundRect(pill.frame, radius: c.dp(DashPalette.searchPillRadius), fill: col.pillFill, stroke: DashPalette.cardEdge,
+                      strokeWidth: c.dp(DashPalette.cardEdgeWidth))
+        } else {
+            roundRect(pill.frame, radius: c.dp(DashPalette.searchPillRadius), fill: col.pillFill)
+        }
+        icon(.search, in: pill.iconRect, tint: col.pillIcon)
         let label = model.nav.preview?.place.name ?? DashText.searchHere.localized(L)
-        text(label, pill.textRect, pill.textFont, DashPalette.searchPillText)
-        text(DashText.circuit.localized(L), pill.circuitRect, pill.labelFont, DashPalette.searchPillAccent, align: .center)
-        text(lapLabel, pill.lapRect, pill.labelFont, DashPalette.searchPillAccent, align: .center)
+        text(label, pill.textRect, pill.textFont, col.pillText)
+        text(DashText.circuit.localized(L), pill.circuitRect, pill.labelFont, col.pillAccent, align: .center)
+        text(lapLabel, pill.lapRect, pill.labelFont, col.pillAccent, align: .center)
         widget("pill", pill.frame, .control(.openSearch))
         widget("pill.circuit", pill.circuitRect, .control(.startCircuit))
         widget("pill.lap", pill.lapRect, .control(.toggleLapTimer))
@@ -424,7 +500,7 @@ struct DashSceneBuilder {
 
     private mutating func drawLapCard(_ l: DashLapCardLayout) {
         let r = c.dp(DashPalette.cardRadius)
-        roundRect(l.frame, radius: r, fill: DashPalette.bottomBarFill, corners: (r, r, 0, 0))
+        card(l.frame, radius: r, fill: DashPalette.bottomBarFill, corners: (r, r, 0, 0))
         text(model.lapTimer?.title ?? "", l.titleRect, l.titleFont, DashPalette.primaryText)
         text(model.lapTimer?.meta ?? "", l.metaRect, l.metaFont, DashPalette.statusText)
         widget("lap.card", l.frame, .blocker)
@@ -433,13 +509,16 @@ struct DashSceneBuilder {
     /// The cue to show while navigating (seeded when the nav engine has none yet).
     private var effectiveCue: HudCue {
         if let cue = model.nav.cue, !cue.text.isEmpty || !cue.distanceText.isEmpty { return cue }
-        let name: String
+        return HudCue(dir: .arrive, distanceText: "GPS", text: DashStrings.toDestination(Self.routeName(model), L))
+    }
+
+    /// The name of the running route: the GPX track or the destination ("" in free ride).
+    static func routeName(_ model: DashModel) -> String {
         switch model.nav.mode {
-        case let .gpx(n): name = n
-        case let .navTo(p): name = model.nav.destination?.name ?? p.name
-        case .freeRide: name = model.nav.destination?.name ?? ""
+        case let .gpx(n): return n
+        case let .navTo(p): return model.nav.destination?.name ?? p.name
+        case .freeRide: return model.nav.destination?.name ?? ""
         }
-        return HudCue(dir: .arrive, distanceText: "GPS", text: DashStrings.toDestination(name, L))
     }
 
     private mutating func drawNavCard() -> DashRect {
@@ -447,9 +526,9 @@ struct DashSceneBuilder {
         let l = DashLayout.navCard(c, cue: cue)
         let r = c.dp(DashPalette.cardRadius)
         if l.isBanner {
-            roundRect(l.frame, radius: r, fill: DashPalette.topBannerFill, corners: (0, 0, r, r))
+            card(l.frame, radius: r, fill: DashPalette.topBannerFill, corners: (0, 0, r, r))
         } else {
-            roundRect(l.frame, radius: r, fill: DashPalette.cardFill)
+            card(l.frame, radius: r)
         }
         icon(DashIcons.icon(for: cue.dir), in: l.iconRect, tint: DashPalette.primaryText)
         text(l.distanceText, l.distanceRect, l.distanceFont, DashPalette.primaryText)
@@ -462,10 +541,10 @@ struct DashSceneBuilder {
         return l.frame
     }
 
+    /// TIME, ARRIVE, LEFT (P0, D12: ALT left the strip).
     static func metricsLabels(_ model: DashModel) -> [String] {
         let L = model.language
-        return [DashText.time.localized(L), DashText.arrive.localized(L), DashText.left.localized(L),
-                DashStrings.altLabel(unit: model.nav.metrics.altUnit, L)]
+        return [DashText.time.localized(L), DashText.arrive.localized(L), DashText.left.localized(L)]
     }
 
     /// The speed-limit sign text, nil when hidden (blank or "—").
@@ -475,28 +554,28 @@ struct DashSceneBuilder {
     }
 
     static func stacksSpeedChip(_ model: DashModel, _ c: DashLayoutContext) -> Bool {
-        DashLayout.speedChipStacksAboveMetrics(c, labels: metricsLabels(model), endLabel: DashText.end.localized(model.language))
+        DashLayout.speedChipStacksAboveMetrics(c, labels: metricsLabels(model))
     }
 
-    /// The metrics card / bar for a navigating model (shared with the camera's look-ahead cap).
+    /// The metrics card / bar for a navigating model (shared with the camera's look-ahead cap). Its right edge
+    /// never depends on the speed limit: the chip's limit room is always reserved (P0, D19).
     static func metricsLayout(_ model: DashModel, _ c: DashLayoutContext) -> DashMetricsLayout {
         let mt = model.nav.metrics
         var maxRight = c.safe.maxX - c.dp(DashDimens.fabLane)
         if c.isLandscape && !stacksSpeedChip(model, c) {
-            let chip = DashLayout.speedChip(c, hasLimit: speedLimitLabel(model) != nil, navigating: true)
+            let chip = DashLayout.speedChip(c, hasLimit: true, navigating: true)
             maxRight = min(maxRight, chip.frame.minX - c.dp(DashDimens.edge))
         }
-        return DashLayout.metricsCard(c, labels: metricsLabels(model), values: [mt.time, mt.arrive, mt.left, mt.alt],
-                                      endLabel: DashText.end.localized(model.language), maxRight: maxRight,
+        return DashLayout.metricsCard(c, labels: metricsLabels(model), values: [mt.time, mt.arrive, mt.left], maxRight: maxRight,
                                       landscapeStatus: mt.statusWarning ? mt.status : nil)
     }
 
     private mutating func drawMetrics(_ l: DashMetricsLayout) {
         let r = c.dp(DashPalette.cardRadius)
         if l.isBar {
-            roundRect(l.frame, radius: r, fill: DashPalette.bottomBarFill, corners: (r, r, 0, 0))
+            card(l.frame, radius: r, fill: DashPalette.bottomBarFill, corners: (r, r, 0, 0))
         } else {
-            roundRect(l.frame, radius: r, fill: DashPalette.cardFill)
+            card(l.frame, radius: r)
         }
         for col in l.columns {
             text(col.label, col.labelRect, col.labelFont, DashPalette.metricLabel, align: .center)
@@ -507,29 +586,46 @@ struct DashSceneBuilder {
             text(mt.status, sr, l.statusFont, mt.statusWarning ? DashPalette.statusWarning : DashPalette.statusText)
         }
         widget("metrics.card", l.frame, .blocker)
-        roundRect(l.endRect, radius: c.dp(DashPalette.endPillRadius), fill: DashPalette.endPillFill,
-                  stroke: DashPalette.endPillStroke, strokeWidth: c.dp(1))
-        text(DashText.end.localized(L), l.endRect, l.endFont, DashPalette.endText, align: .center)
-        widget(DashFocusEngine.endId, l.endRect, .control(.endNavigation))
     }
 
-    /// Returns the chip's frame.
-    @discardableResult
-    private mutating func drawSpeedChip(navigating: Bool, metrics: DashMetricsLayout?, bannerBottom: Double?,
-                                        coveringCard: DashRect?) -> DashRect {
-        let limit = Self.speedLimitLabel(model)
-        let stackY: Double? = (c.isLandscape && navigating && Self.stacksSpeedChip(model, c)) ? metrics?.frame.minY : nil
-        var l = DashLayout.speedChip(c, hasLimit: limit != nil, navigating: navigating, belowY: bannerBottom, stackAboveY: stackY)
-        // iOS: never leave the gauge hidden under a (94 % opaque) preview / arrive card.
-        if let card = coveringCard, l.frame.intersects(card), !(navigating && !c.isLandscape) {
-            l = DashLayout.speedChip(c, hasLimit: limit != nil, navigating: navigating, belowY: bannerBottom, stackAboveY: card.minY)
+    /// Where the speed chip goes in this state: beside the metrics card (stacked above it on narrow canvases),
+    /// lifted above a card that would cover it (preview, arrival, confirm), its limit room always reserved.
+    /// The Music sheet keeps the place of the map underneath (constant geometry, P0 D19).
+    static func speedChipLayout(_ model: DashModel, _ c: DashLayoutContext, metrics: DashMetricsLayout?, bannerBottom: Double?,
+                                covering: [DashRect]) -> DashSpeedChipLayout {
+        let navigating = model.navigating
+        let hasLimit = speedLimitLabel(model) != nil
+        let stackY: Double? = (c.isLandscape && navigating && stacksSpeedChip(model, c)) ? metrics?.frame.minY : nil
+        var l = DashLayout.speedChip(c, hasLimit: hasLimit, navigating: navigating, belowY: bannerBottom, stackAboveY: stackY)
+        // iOS: never leave the gauge hidden under (nor drawn over) a preview / arrive / confirm card.
+        let covers = covering.filter { l.frame.intersects($0) }
+        if let top = covers.map(\.minY).min(), !(navigating && !c.isLandscape) {
+            l = DashLayout.speedChip(c, hasLimit: hasLimit, navigating: navigating, belowY: bannerBottom, stackAboveY: top)
         }
+        return l
+    }
+
+    /// The speed text's font: the chip's size, shrunk to fit the gauge for three-digit speeds (P0, D11:
+    /// 44 sp would ellipsise "120").
+    static func speedFont(_ text: String, _ l: DashSpeedChipLayout, _ c: DashLayoutContext) -> DashFont {
+        let inner = l.gaugeRect.width - 2 * c.dp(6)
+        let w = c.width(text, l.speedFont)
+        guard w > inner, w > 0 else { return l.speedFont }
+        var f = l.speedFont
+        f.size = (f.size * inner / w * 100).rounded(.down) / 100
+        return f
+    }
+
+    /// The speed gauge and the limit sign — the scene's last commands and last widget (P0, D03).
+    private mutating func drawSpeedChip(_ l: DashSpeedChipLayout) {
+        let limit = Self.speedLimitLabel(model)
         circle(l.gaugeRect, fill: DashPalette.gaugeFill, stroke: DashPalette.gaugeStroke, strokeWidth: c.dp(DashPalette.gaugeStrokeWidth))
         let speed = model.fix == nil ? "—" : DashFormat.speed(mps: model.fix?.speedMps ?? 0, units: model.units)
+        let font = Self.speedFont(speed, l, c)
         let sh = c.lineHeight(l.speedFont), uh = c.lineHeight(l.unitFont)
         let top = l.gaugeRect.midY - (sh + uh) / 2
         let inner = l.gaugeRect.insetBy(dx: c.dp(4), dy: 0)
-        text(speed, DashRect(x: inner.minX, y: top, width: inner.width, height: sh), l.speedFont, DashPalette.primaryText, align: .center)
+        text(speed, DashRect(x: inner.minX, y: top, width: inner.width, height: sh), font, DashPalette.primaryText, align: .center)
         text(DashFormat.speedUnit(model.units), DashRect(x: inner.minX, y: top + sh, width: inner.width, height: uh), l.unitFont,
              DashPalette.secondaryText, align: .center)
         if let lr = l.limitRect, let limit {
@@ -538,12 +634,12 @@ struct DashSceneBuilder {
             circle(lr.insetBy(dx: inset, dy: inset), fill: DashPalette.limitInner)
             text(limit, lr.insetBy(dx: inset, dy: 0), l.limitFont, DashPalette.limitText, align: .center)
         }
+        scene.speedChip = l.frame
         widget("speed.chip", l.frame, .blocker)
-        return l.frame
     }
 
     private mutating func drawPreview(_ l: DashPreviewCardLayout, _ p: RoutePreview) {
-        roundRect(l.frame, radius: c.dp(DashPalette.cardRadius), fill: DashPalette.cardFill)
+        card(l.frame, radius: c.dp(DashPalette.cardRadius))
         widget("preview.card", l.frame, .blocker)
         text(p.place.name, l.nameRect, l.nameFont, DashPalette.primaryText)
         text(p.meta, l.metaRect, l.metaFont, DashPalette.secondaryText)
@@ -586,22 +682,68 @@ struct DashSceneBuilder {
         }
     }
 
+    /// The arrival card (P0, D22): Done is the primary (blue) button and the default focus; Park here only
+    /// sets the parked spot; the same labels on every canvas.
     private mutating func drawArrive(_ l: DashArriveCardLayout) {
         guard let a = model.nav.arrival else { return }
-        roundRect(l.frame, radius: c.dp(DashPalette.cardRadius), fill: DashPalette.cardFill)
+        card(l.frame, radius: c.dp(DashPalette.cardRadius))
         widget("arrive.card", l.frame, .blocker)
         text(a.title, l.titleRect, l.titleFont, DashPalette.primaryText)
         text(a.meta, l.metaRect, l.metaFont, DashPalette.secondaryText, maxLines: 2)
-        roundRect(l.parkRect, radius: c.dp(DashPalette.blueActionRadius), fill: DashPalette.blueAction)
+        roundRect(l.doneRect, radius: c.dp(DashPalette.blueActionRadius), fill: DashPalette.blueAction)
+        text(DashText.done.localized(L), l.doneRect, l.buttonFont, DashPalette.primaryText, align: .center)
+        widget("arrive.done", l.doneRect, .control(.dismissArrival))
+        roundRect(l.parkRect, radius: c.dp(DashPalette.routeChipRadius), fill: DashPalette.routeChipFill,
+                  stroke: DashPalette.routeChipStroke, strokeWidth: c.dp(1))
         text(DashText.parkHere.localized(L), l.parkRect, l.buttonFont, DashPalette.primaryText, align: .center)
         widget("arrive.park", l.parkRect, .control(.markArrivalParking))
         roundRect(l.findRect, radius: c.dp(DashPalette.routeChipRadius), fill: DashPalette.routeChipFill,
                   stroke: DashPalette.routeChipStroke, strokeWidth: c.dp(1))
         text(DashText.findParking.localized(L), l.findRect, l.buttonFont, DashPalette.primaryText, align: .center)
         widget("arrive.find", l.findRect, .control(.findParking))
-        let doneLabel = (c.isLandscape ? DashText.done : DashText.doneFreeRide).localized(L)
-        text(doneLabel, l.doneRect, l.doneFont, DashPalette.secondaryText, align: .center)
-        widget("arrive.done", l.doneRect, .control(.dismissArrival))
+    }
+
+    // MARK: Confirm card (P0, D01)
+
+    /// The confirm card's texts for `kind`: question, consequence, safe option, action.
+    static func confirmTexts(_ kind: DashConfirmKind, _ model: DashModel) -> (question: String, consequence: String, keep: String, act: String) {
+        let L = model.language
+        switch kind {
+        case .endRoute:
+            return (DashText.confirmEndQuestion.localized(L), DashStrings.endConsequence(routeName(model), L),
+                    DashText.confirmKeep.localized(L), DashText.confirmEndAction.localized(L))
+        case .changeRoute:
+            return (DashText.confirmChangeQuestion.localized(L),
+                    DashStrings.changeConsequence(from: routeName(model), to: model.nav.preview?.place.name ?? "", L),
+                    DashText.confirmKeep.localized(L), DashText.confirmChangeAction.localized(L))
+        }
+    }
+
+    /// Landscape: over the metrics card's corner, left of the speed chip. Portrait: above the metrics bar, so the
+    /// trip numbers stay in view.
+    private func confirmLayout(_ kind: DashConfirmKind, speed: DashSpeedChipLayout, metrics: DashMetricsLayout?) -> DashConfirmCardLayout {
+        let t = Self.confirmTexts(kind, model)
+        let maxRight: Double? = c.isLandscape ? min(c.safe.maxX - c.dp(DashDimens.fabLane), speed.frame.minX - c.dp(DashDimens.edge)) : nil
+        let bottom: Double? = c.isLandscape ? nil : metrics.map { $0.frame.minY - c.dp(DashDimens.edge) }
+        return DashLayout.confirmCard(c, question: t.question, consequence: t.consequence, keepLabel: t.keep, actLabel: t.act,
+                                      maxRight: maxRight, bottom: bottom)
+    }
+
+    /// The safe option is a plain secondary button; the action is red text on dark red (it acts only here).
+    private mutating func drawConfirm(_ l: DashConfirmCardLayout, _ kind: DashConfirmKind) {
+        let t = Self.confirmTexts(kind, model)
+        card(l.frame, radius: c.dp(DashPalette.cardRadius))
+        widget("confirm.card", l.frame, .blocker)
+        text(t.question, l.questionRect, l.questionFont, DashPalette.primaryText, maxLines: l.questionLines)
+        text(t.consequence, l.consequenceRect, l.consequenceFont, DashPalette.secondaryText, maxLines: l.consequenceLines)
+        roundRect(l.keepRect, radius: c.dp(DashPalette.menuButtonRadius), fill: DashPalette.menuButtonFill,
+                  stroke: DashPalette.menuButtonStroke, strokeWidth: c.dp(1))
+        text(t.keep, l.keepRect, l.buttonFont, DashPalette.menuButtonText, align: .center)
+        widget(DashFocusEngine.confirmKeepId, l.keepRect, .control(.closeSheets))
+        roundRect(l.actRect, radius: c.dp(DashPalette.menuButtonRadius), fill: DashPalette.destructiveFill,
+                  stroke: DashPalette.destructiveStroke, strokeWidth: c.dp(1))
+        text(t.act, l.actRect, l.buttonFont, DashPalette.endText, align: .center)
+        widget(DashFocusEngine.confirmActId, l.actRect, .control(kind == .endRoute ? .endNavigation : .go))
     }
 
     private mutating func drawFabs(_ fabs: [DashRect]) {
@@ -638,7 +780,7 @@ struct DashSceneBuilder {
 
     private mutating func drawClock(_ clock: ClockChip) {
         let r = clock.rect
-        roundRect(r, radius: r.height / 2, fill: DashPalette.cardFill)
+        card(r, radius: r.height / 2)
         text(clock.text, r, clock.font, DashPalette.primaryText, align: .center)
         widget("clock", r, .blocker)
     }
@@ -690,18 +832,22 @@ struct DashSceneBuilder {
 
     /// The Music sheet is opaque: nothing of the map or its chrome is drawn under it. While
     /// navigating the nav card is drawn again on top (guidance is never hidden) and the layout keeps
-    /// clear of it.
+    /// clear of it; then the speed chip, at its place on the map underneath (P0, D03: speed and limit
+    /// stay visible; the sheet's text and controls keep clear of it).
     private mutating func buildMusicSheet(_ music: DashNowPlaying, navigating: Bool) {
-        let reserved = navigating ? DashLayout.navCard(c, cue: effectiveCue).frame : nil
-        drawMusicSheet(music, reserved: reserved)
+        let navLayout = navigating ? DashLayout.navCard(c, cue: effectiveCue) : nil
+        let metrics: DashMetricsLayout? = navigating ? Self.metricsLayout(model, c) : nil
+        let speed = Self.speedChipLayout(model, c, metrics: metrics, bannerBottom: navLayout?.frame.maxY, covering: [])
+        drawMusicSheet(music, reserved: navLayout?.frame, avoid: speed.frame)
         let navFrame = navigating ? drawNavCard() : nil
+        drawSpeedChip(speed)
         scene.topChromeBottom = (navFrame?.maxY ?? c.safe.minY) + c.dp(8)
         scene.musicTimeKey = Self.musicTimeKey(music, sheetOpen: true, tileBarWidth: nil, now: input.musicNow)
-        scene.focusOrder = focusOrder(navigating: navigating, pillVisible: false, tileVisible: false)
+        scene.focusOrder = focusOrder(pillVisible: false, tileVisible: false)
     }
 
-    private mutating func drawMusicSheet(_ music: DashNowPlaying, reserved: DashRect?) {
-        let l = DashLayout.musicSheet(c, music: music, language: L, reserved: reserved)
+    private mutating func drawMusicSheet(_ music: DashNowPlaying, reserved: DashRect?, avoid: DashRect?) {
+        let l = DashLayout.musicSheet(c, music: music, language: L, reserved: reserved, avoid: avoid)
         fill(DashPath.rect(l.sheet), DashPalette.musicSheet)
         widget("music.sheet", l.sheet, .blocker)
         if l.arrangement != .textOnly { drawArtwork(l.artworkRect, radius: l.artworkRadius, artworkId: music.artworkId) }
@@ -776,27 +922,41 @@ struct DashSceneBuilder {
     }
 
     /// Menu focus order (input-controls.md §6.6) — settings segments optionally appended (iOS).
-    /// "menu.music" (iOS addition) only exists while Apple Music shows on the dash: the order is
-    /// filtered by the buttons actually drawn.
-    static let menuFocusBase = ["menu.end", "menu.park", "menu.goHome", "menu.setHome", "menu.recalc", "menu.record",
-                                "menu.circuit", "menu.music", "menu.follow", "menu.heading", "menu.voice", "menu.zoomOut",
+    /// "menu.music" (iOS addition) only exists while Apple Music shows on the dash, "menu.end" only while a
+    /// route runs: the order is filtered by the buttons actually drawn. P0 (D01): harmless items first — the
+    /// menu opens on Recenter / reroute — and "End route…" (which opens the confirm card) last of the Ride
+    /// section.
+    static let menuFocusBase = ["menu.recalc", "menu.music", "menu.circuit", "menu.goHome", "menu.park", "menu.record",
+                                "menu.setHome", "menu.end", "menu.follow", "menu.heading", "menu.voice", "menu.zoomOut",
                                 "menu.zoomIn"]
 
     private func menuContent() -> DashMenuContent {
         DashMenuContent(language: L, follow: input.camera.follow, headingUp: input.camera.headingUp,
-                        recording: model.recording, preferences: model.preferences, showsMusic: model.offersMusicSheet)
+                        recording: model.recording, preferences: model.preferences, showsMusic: model.offersMusicSheet,
+                        showsEnd: model.navigating)
     }
 
-    private mutating func drawMenu() {
+    /// Where the speed chip covers a vertical scroll viewport (P0, D03): the focused control is scrolled clear
+    /// of it, and the content gets the room its last items need to get above a chip at the bottom.
+    private func speedObstacle(_ viewport: DashRect, _ speed: DashRect) -> (obstacle: DashRect?, endPadding: Double) {
+        guard viewport.intersects(speed) else { return (nil, 0) }
+        let below = speed.midY > viewport.midY
+        return (speed, below ? max(0, viewport.maxY - (speed.minY - c.dp(8))) : 0)
+    }
+
+    private mutating func drawMenu(speed: DashRect) {
         // Dimmer (tap → close)
         let full = DashRect(x: 0, y: 0, width: model.canvas.width, height: model.canvas.height)
         fill(DashPath.rect(full), DashPalette.dimmer)
         widget("dimmer", full, .control(.closeSheets))
-        let layout = DashLayout.menu(c, content: menuContent())
+        var layout = DashLayout.menu(c, content: menuContent())
         let panel = layout.panel
+        let (obstacle, endPadding) = speedObstacle(panel, speed)
+        if endPadding > 0 { layout = DashLayout.menu(c, content: menuContent(), endPadding: endPadding) }
         fill(DashPath.rect(DashRect(x: panel.minX, y: 0, width: panel.width, height: model.canvas.height)), DashPalette.menuSheet)
         widget("menu.panel", panel, .scrollArea, container: "menu")
-        scene.containers["menu"] = DashScrollContainer(id: "menu", viewport: panel, axis: .vertical, contentLength: layout.contentHeight)
+        scene.containers["menu"] = DashScrollContainer(id: "menu", viewport: panel, axis: .vertical, contentLength: layout.contentHeight,
+                                                       obstacle: obstacle)
         let scroll = min(max(0, input.menuScroll), layout.maxScroll)
         let dy = panel.minY - scroll
         scene.commands.append(.save)
@@ -842,25 +1002,31 @@ struct DashSceneBuilder {
 
     private var searchFocus: [String] = []
 
-    private mutating func drawSearch() {
-        let l = DashLayout.searchSheet(c, search: model.search, places: model.places, language: L,
+    private mutating func drawSearch(speed: DashRect) {
+        let col = searchColors
+        var l = DashLayout.searchSheet(c, search: model.search, places: model.places, language: L,
                                        chipScroll: input.searchChipScroll)
-        fill(DashPath.rect(l.sheet), DashPalette.sheetBackground)
+        let (obstacle, endPadding) = speedObstacle(l.listViewport, speed)
+        if endPadding > 0 {
+            l = DashLayout.searchSheet(c, search: model.search, places: model.places, language: L,
+                                       chipScroll: input.searchChipScroll, endPadding: endPadding)
+        }
+        fill(DashPath.rect(l.sheet), col.sheetBackground)
         widget("search.sheet", l.sheet, .blocker)
         // Header
-        text("←", l.backRect, l.backFont, DashPalette.searchPillText, align: .center)
+        text("←", l.backRect, l.backFont, col.pillText, align: .center)
         widget("search.back", l.backRect, .control(.closeSheets))
-        roundRect(l.inputRect, radius: c.dp(DashPalette.searchPillRadius), fill: DashPalette.poiChipFill,
-                  stroke: DashPalette.sheetDivider, strokeWidth: c.dp(1))
+        roundRect(l.inputRect, radius: c.dp(DashPalette.searchPillRadius), fill: col.poiChipFill,
+                  stroke: col.sheetDivider, strokeWidth: c.dp(1))
         let q = model.search.query
         if q.isEmpty {
-            text(DashText.typeOnPhoneHint.localized(L), l.inputTextRect, l.inputFont, DashPalette.sheetHint)
+            text(DashText.typeOnPhoneHint.localized(L), l.inputTextRect, l.inputFont, col.sheetHint)
         } else {
-            text(q, l.inputTextRect, l.inputFont, DashPalette.sheetInput)
+            text(q, l.inputTextRect, l.inputFont, col.sheetInput)
         }
         let iconSize = l.goRect.width - 2 * c.dp(9)
         icon(.search, in: DashRect(x: l.goRect.midX - iconSize / 2, y: l.goRect.midY - iconSize / 2, width: iconSize, height: iconSize),
-             tint: DashPalette.searchPillIcon)
+             tint: col.pillIcon)
         widget("search.input", l.inputRect, .control(.typeOnPhone))
         // POI chips
         widget("search.chips", l.chipsViewport, .scrollArea, container: "search.chips")
@@ -869,9 +1035,9 @@ struct DashSceneBuilder {
         scene.commands.append(.save)
         scene.commands.append(.clip(DashPath.rect(l.chipsViewport)))
         for (i, r) in l.chipRects.enumerated() where r.maxX >= l.chipsViewport.minX && r.minX <= l.chipsViewport.maxX {
-            roundRect(r, radius: c.dp(DashPalette.poiChipRadius), fill: DashPalette.poiChipFill, stroke: DashPalette.poiChipStroke,
+            roundRect(r, radius: c.dp(DashPalette.poiChipRadius), fill: col.poiChipFill, stroke: col.poiChipStroke,
                       strokeWidth: c.dp(1))
-            text(l.chipLabels[i], r, l.chipFont, DashPalette.poiChipText, align: .center)
+            text(l.chipLabels[i], r, l.chipFont, col.poiChipText, align: .center)
         }
         scene.commands.append(.restore)
         var focus: [String] = []
@@ -881,13 +1047,13 @@ struct DashSceneBuilder {
             focus.append(id)
         }
         // Status
-        text(l.statusText, l.statusRect, l.statusFont, l.statusAccent ? DashPalette.searchPillAccent : DashPalette.sheetStatus,
+        text(l.statusText, l.statusRect, l.statusFont, l.statusAccent ? col.pillAccent : col.sheetStatus,
              maxLines: 2)
         // List
         let vp = l.listViewport
         widget("search.list", vp, .scrollArea, container: "search.list")
         scene.containers["search.list"] = DashScrollContainer(id: "search.list", viewport: vp, axis: .vertical,
-                                                              contentLength: l.listContentHeight)
+                                                              contentLength: l.listContentHeight, obstacle: obstacle)
         let scroll = min(max(0, input.searchListScroll), l.maxListScroll)
         let dy = vp.minY - scroll
         scene.commands.append(.save)
@@ -895,21 +1061,22 @@ struct DashSceneBuilder {
         for row in l.rows {
             let r = row.rect.offsetBy(dx: 0, dy: dy)
             guard r.maxY >= vp.minY && r.minY <= vp.maxY else { continue }
-            fill(DashPath.rect(r), DashPalette.sheetRow)
+            fill(DashPath.rect(r), col.sheetRow)
             switch row.kind {
             case .typeOnPhone:
                 text(DashText.typeOnPhoneRow.localized(L), row.nameRect.offsetBy(dx: 0, dy: dy), l.typeOnPhoneFont,
-                     DashPalette.searchPillAccent)
+                     col.pillAccent)
             case let .place(place, _):
-                text(place.name, row.nameRect.offsetBy(dx: 0, dy: dy), l.nameFont, DashPalette.sheetName)
+                text(place.name, row.nameRect.offsetBy(dx: 0, dy: dy), l.nameFont, col.sheetName)
                 if let sr = row.subtitleRect {
-                    text(row.subtitle, sr.offsetBy(dx: 0, dy: dy), l.subtitleFont, DashPalette.sheetSubtitle)
+                    text(row.subtitle, sr.offsetBy(dx: 0, dy: dy), l.subtitleFont, col.sheetSubtitle)
                 }
                 for a in row.actions {
-                    text(a.label, a.rect.offsetBy(dx: 0, dy: dy), l.actionFont, a.color, align: .center)
+                    let tint = a.id.hasSuffix(".delete") ? col.sheetDelete : col.sheetAction
+                    text(a.label, a.rect.offsetBy(dx: 0, dy: dy), l.actionFont, tint, align: .center)
                 }
             }
-            fill(DashPath.rect(DashRect(x: r.minX, y: r.maxY, width: r.width, height: 1)), DashPalette.sheetDivider)
+            fill(DashPath.rect(DashRect(x: r.minX, y: r.maxY, width: r.width, height: 1)), col.sheetDivider)
         }
         scene.commands.append(.restore)
         for row in l.rows {
@@ -936,7 +1103,7 @@ struct DashSceneBuilder {
 
     // MARK: Focus order (top-most interactive layer first)
 
-    private func focusOrder(navigating: Bool, pillVisible: Bool, tileVisible: Bool) -> [String] {
+    private func focusOrder(pillVisible: Bool, tileVisible: Bool) -> [String] {
         switch input.sheet {
         case .menu:
             let base = Self.menuFocusBase.filter { menuFocus.contains($0) }
@@ -949,11 +1116,15 @@ struct DashSceneBuilder {
             return searchFocus
         case .music:
             return musicFocus
+        case .confirm:
+            // The safe option first (the default), the action one deliberate ▶ away (P0, D01).
+            return input.confirm == nil ? [] : [DashFocusEngine.confirmKeepId, DashFocusEngine.confirmActId]
         case .none:
             break
         }
         if model.showsArrival {
-            return ["arrive.park", "arrive.find", "arrive.done"]
+            // P0 (D22): Done first — the default — then Park here (sets the parked spot) and Find parking.
+            return ["arrive.done", "arrive.park", "arrive.find"]
         }
         if let p = model.nav.preview {
             var ids: [String] = []
@@ -963,8 +1134,9 @@ struct DashSceneBuilder {
             if !p.pinMode { ids += p.chipLabels.indices.map { "preview.chip.\($0)" } }
             return ids
         }
+        // The map. P0 (D01): no End here any more (Android's metrics card listed it first, the default while
+        // navigating); Recenter is the default while navigating.
         var ids: [String] = []
-        if navigating { ids.append(DashFocusEngine.endId) }
         if pillVisible {
             ids += ["pill", "pill.circuit"]
             if input.lapReachableByHandlebar { ids.append("pill.lap") }

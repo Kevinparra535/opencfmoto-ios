@@ -21,6 +21,7 @@ final class HandlebarAdapter: HandlebarRemoteProviding {
 
     init(clock: MonotonicClock) {
         remote = HandlebarRemote(clock: clock)
+        remote.metadata = HandlebarNowPlayingMetadata(language: .system) // «< > mover  * elegir» (P0, D02)
         remote.onEvent = { [weak self] event in
             let signal = HandlebarSignal(event: event.raw, time: event.time, steps: event.steps)
             Task { @MainActor [weak self] in self?.onSignal?(signal) }

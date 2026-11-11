@@ -2,7 +2,9 @@
 // Ported from OpenCfMoto (Android) GpxDashUi.kt, DashMapController.kt, res/drawable/bg_*.xml,
 // res/values/colors.xml, VideoPipeline.kt (density) — docs/spec/navigation-dash.md §11.1-§11.2.
 //
-// The dash chrome has ONE palette for day and night (night only inverts the map tiles, §10.3).
+// Android: ONE chrome palette for day and night (night only inverts the map tiles, §10.3). iOS P0 (the UI/UX
+// proposal's quick wins): opaque near-black cards with an edge, a white outline-only focus ring, a cased
+// route and a white puck, muted map tiles, and dark search surfaces at night (D05, D06, D09, D12).
 
 import Foundation
 
@@ -19,13 +21,17 @@ public enum DashPalette {
 
     // MARK: Cards (bg_nav_card / bg_nav_top_edge / bg_nav_bottom_edge)
 
-    /// 94 % #1A2332 — nav card (landscape), metrics card, preview, arrive.
-    public static let cardFill = DashColor(argb: 0xF01A_2332)
+    /// Opaque #0B0D10 (P0, D12: Android's 94 % #1A2332 let the map show through the numbers) — nav card
+    /// (landscape), metrics card, preview, arrive, confirm, lap card, clock, speed gauge.
+    public static let cardFill = DashColor(argb: 0xFF0B_0D10)
+    /// The cards' 1.5-dp edge, so a near-black card still reads on the dark night map.
+    public static let cardEdge = DashColor(argb: 0xFF26_2B32)
+    public static let cardEdgeWidth: Double = 1.5
     public static let cardRadius: Double = 14
     /// Portrait nav banner (opaque, bottom corners only).
-    public static let topBannerFill = DashColor(argb: 0xFF1A_2332)
+    public static let topBannerFill = DashColor(argb: 0xFF0B_0D10)
     /// Portrait metrics bar and lap card (top corners only).
-    public static let bottomBarFill = DashColor(argb: 0xF01A_2332)
+    public static let bottomBarFill = DashColor(argb: 0xFF0B_0D10)
 
     // MARK: Text
 
@@ -43,12 +49,13 @@ public enum DashPalette {
     /// Status line when off route > 80 m.
     public static let statusWarning = DashColor(argb: 0xFFFF_8A80)
 
-    // MARK: End pill (bg_end_pill)
+    // MARK: Destructive action (the menu's "End route…" and the confirm card's End / Change; P0 D01)
 
-    public static let endPillFill = DashColor(argb: 0x33FF_5A52)
-    public static let endPillStroke = DashColor(argb: 0x55FF_5A52)
+    /// Red text for an action that ends or replaces the route (it only acts after a confirm).
     public static let endText = DashColor(argb: 0xFFFF_8A80)
-    public static let endPillRadius: Double = 12
+    /// The confirm card's destructive button: red text on a dark red fill.
+    public static let destructiveFill = DashColor(argb: 0xFF3A_1614)
+    public static let destructiveStroke = DashColor(argb: 0xFF5C_2420)
 
     // MARK: Blue action (bg_go_button) — Go, Park here
 
@@ -67,7 +74,8 @@ public enum DashPalette {
 
     // MARK: FAB (bg_fab_circle)
 
-    public static let fabFill = DashColor(argb: 0xF01E_2430)
+    /// Opaque (P0): the map no longer shows through the buttons.
+    public static let fabFill = DashColor(argb: 0xFF16_191E)
     public static let fabStroke = DashColor(argb: 0x33FF_FFFF)
     public static let fabIcon = DashColor(argb: 0xFFFF_FFFF)
     /// Compass FAB alpha in north-up mode.
@@ -75,7 +83,7 @@ public enum DashPalette {
 
     // MARK: Speed gauge (bg_speed_gauge) and limit sign (bg_speed_limit_sign)
 
-    public static let gaugeFill = DashColor(argb: 0xF01A_2332)
+    public static let gaugeFill = DashColor(argb: 0xFF0B_0D10)
     public static let gaugeStroke = DashColor(argb: 0x66FF_FFFF)
     public static let gaugeStrokeWidth: Double = 3
     public static let limitRed = DashColor(argb: 0xFFE5_3935)
@@ -84,34 +92,54 @@ public enum DashPalette {
     /// White inner disc inset of the 56-dp sign (40-dp variant: 4).
     public static let limitInset: Double = 5
 
-    // MARK: Search pill (bg_search_pill)
+    // MARK: Search pill (bg_search_pill) and search sheet — day (Android) / night (P0, D06)
 
-    public static let searchPillFill = DashColor(argb: 0xF2FF_FFFF)
     public static let searchPillRadius: Double = 28
-    public static let searchPillText = DashColor(argb: 0xFF3C_4043)
-    public static let searchPillIcon = DashColor(argb: 0xFF5F_6368)
-    /// "Circuit" / "Lap" labels and the "Type on PHONE" status.
-    public static let searchPillAccent = DashColor(argb: 0xFFE6_5100)
-
-    // MARK: Search sheet
-
-    public static let sheetBackground = DashColor(argb: 0xF8FF_FFFF)
-    public static let sheetInput = DashColor(argb: 0xFF20_2124)
-    public static let sheetHint = DashColor(argb: 0xFF80_868B)
-    public static let sheetStatus = DashColor(argb: 0xFF5F_6368)
-    public static let sheetRow = DashColor(argb: 0xFFFF_FFFF)
-    public static let sheetName = DashColor(argb: 0xFF20_2124)
-    public static let sheetSubtitle = DashColor(argb: 0xFF5F_6368)
-    public static let sheetAction = DashColor(argb: 0xFF1A_73E8)
-    public static let sheetDelete = DashColor(argb: 0xFFD9_3025)
-    public static let sheetDivider = DashColor(argb: 0xFFDA_DCE0)
-
-    // MARK: POI chip (bg_chip_pill)
-
-    public static let poiChipFill = DashColor(argb: 0xFFF1_F3F4)
-    public static let poiChipStroke = DashColor(argb: 0xFFDA_DCE0)
-    public static let poiChipText = DashColor(argb: 0xFF3C_4043)
     public static let poiChipRadius: Double = 18
+
+    /// The colours of the search pill, the search sheet and its POI chips. Android draws them white by day
+    /// and night; at night (P0, D06) they are dark: no white surface on the dash after dark.
+    public struct SearchSurface: Sendable, Equatable {
+        public var pillFill: DashColor
+        public var pillText: DashColor
+        public var pillIcon: DashColor
+        /// "Circuit" / "Lap" labels and the "Type on the phone" status.
+        public var pillAccent: DashColor
+        public var sheetBackground: DashColor
+        public var sheetInput: DashColor
+        public var sheetHint: DashColor
+        public var sheetStatus: DashColor
+        public var sheetRow: DashColor
+        public var sheetName: DashColor
+        public var sheetSubtitle: DashColor
+        public var sheetAction: DashColor
+        public var sheetDelete: DashColor
+        public var sheetDivider: DashColor
+        public var poiChipFill: DashColor
+        public var poiChipStroke: DashColor
+        public var poiChipText: DashColor
+    }
+
+    public static let searchDay = SearchSurface(
+        pillFill: DashColor(argb: 0xF2FF_FFFF), pillText: DashColor(argb: 0xFF3C_4043), pillIcon: DashColor(argb: 0xFF5F_6368),
+        pillAccent: DashColor(argb: 0xFFE6_5100),
+        sheetBackground: DashColor(argb: 0xF8FF_FFFF), sheetInput: DashColor(argb: 0xFF20_2124), sheetHint: DashColor(argb: 0xFF80_868B),
+        sheetStatus: DashColor(argb: 0xFF5F_6368), sheetRow: DashColor(argb: 0xFFFF_FFFF), sheetName: DashColor(argb: 0xFF20_2124),
+        sheetSubtitle: DashColor(argb: 0xFF5F_6368), sheetAction: DashColor(argb: 0xFF1A_73E8), sheetDelete: DashColor(argb: 0xFFD9_3025),
+        sheetDivider: DashColor(argb: 0xFFDA_DCE0),
+        poiChipFill: DashColor(argb: 0xFFF1_F3F4), poiChipStroke: DashColor(argb: 0xFFDA_DCE0), poiChipText: DashColor(argb: 0xFF3C_4043))
+
+    /// Night: the card colours, dimmed whites (#E9ECEF), grey secondary text, light accents.
+    public static let searchNight = SearchSurface(
+        pillFill: DashColor(argb: 0xFF16_191E), pillText: DashColor(argb: 0xFFE9_ECEF), pillIcon: DashColor(argb: 0xFFA2_A9B2),
+        pillAccent: DashColor(argb: 0xFFFF_B74D),
+        sheetBackground: DashColor(argb: 0xFF0B_0D10), sheetInput: DashColor(argb: 0xFFE9_ECEF), sheetHint: DashColor(argb: 0xFF7C_848E),
+        sheetStatus: DashColor(argb: 0xFFA2_A9B2), sheetRow: DashColor(argb: 0xFF16_191E), sheetName: DashColor(argb: 0xFFE9_ECEF),
+        sheetSubtitle: DashColor(argb: 0xFFA2_A9B2), sheetAction: DashColor(argb: 0xFF8A_B4F8), sheetDelete: DashColor(argb: 0xFFFF_8A80),
+        sheetDivider: DashColor(argb: 0xFF26_2B32),
+        poiChipFill: DashColor(argb: 0xFF16_191E), poiChipStroke: DashColor(argb: 0xFF26_2B32), poiChipText: DashColor(argb: 0xFFE9_ECEF))
+
+    public static func search(night: Bool) -> SearchSurface { night ? searchNight : searchDay }
 
     // MARK: Dimmer, menu, segments
 
@@ -138,27 +166,40 @@ public enum DashPalette {
     public static let previewCircuit = DashColor(argb: 0xFFFF_B74D)
     public static let previewCancel = DashColor(argb: 0xFFB0_B8C0)
 
-    // MARK: Handlebar focus ring
+    // MARK: Handlebar focus ring (P0, D09)
 
-    public static let focusFill = DashColor(argb: 0x66FF_9800)
-    public static let focusStroke = DashColor(argb: 0xFFFF_9800)
-    public static let focusStrokeWidth: Double = 5
+    /// Outline only, never a fill over the control — the music tile's outset ring (fix F3) for every control,
+    /// in white: a 5-dp band just outside the control (0…5 dp, the footprint F3 validated against every
+    /// neighbour and the safe-area edge on all canvases), black with a 3-dp white core — a 1-dp black edge on
+    /// each side, so it reads on a light map and around a white pill. White is reserved for focus; orange no
+    /// longer means focus.
+    public static let focusStroke = DashColor(argb: 0xFFFF_FFFF)
+    public static let focusEdge = DashColor(argb: 0xFF00_0000)
+    public static let focusStrokeWidth: Double = 3
+    public static let focusEdgeWidth: Double = 5
+    /// Distance from the control's edge to the ring's centre line (dp): the ring covers 0…5 dp outside.
+    public static let focusOutset: Double = 2.5
     public static let focusRadius: Double = 12
 
-    // MARK: Map overlays (DashMapController.kt:57-102)
+    // MARK: Map overlays (DashMapController.kt:57-102; P0 D05: cased lines, day / night colours)
 
-    /// Remaining route, 7 dp.
-    public static let routeRemain = DashColor(argb: 0xFF1A_73E8)
-    public static let routeRemainWidth: Double = 7
-    /// Completed route, 5.5 dp, alpha 200/255.
-    public static let routeDone = DashColor(argb: 0xC89A_A0A6)
-    public static let routeDoneWidth: Double = 5.5
-    /// Selected preview route, 6.5 dp, alpha 220/255.
-    public static let routePreview = DashColor(argb: 0xDC34_A853)
-    public static let routePreviewWidth: Double = 6.5
-    /// Alternative preview routes (≤ 4, under the preview), 5 dp, alpha 160/255.
-    public static let routeAlternative = DashColor(argb: 0xA09A_A0A6)
-    public static let routeAlternativeWidth: Double = 5
+    /// Remaining route: 10 dp over a 17-dp casing — blue on white by day, light blue on near-black at night —
+    /// so it stands out from the muted map and from water and transit symbols (Android: 7 dp #1A73E8, no casing).
+    public static func routeRemain(night: Bool) -> DashColor { DashColor(argb: night ? 0xFF4C_8DFF : 0xFF1A_66E0) }
+    public static func routeCasing(night: Bool) -> DashColor { DashColor(argb: night ? 0xFF07_090B : 0xFFFF_FFFF) }
+    public static let routeRemainWidth: Double = 10
+    public static let routeCasingWidth: Double = 17
+    /// Completed route: grey, 8 dp, no casing.
+    public static func routeDone(night: Bool) -> DashColor { DashColor(argb: night ? 0xFF4A_5058 : 0xFF8C_929A) }
+    public static let routeDoneWidth: Double = 8
+    /// Selected preview route: green, 8 dp over a 13-dp casing.
+    public static let routePreview = DashColor(argb: 0xFF34_A853)
+    public static let routePreviewWidth: Double = 8
+    public static let routePreviewCasingWidth: Double = 13
+    /// Alternative preview routes (≤ 4, under the preview): grey, 7 dp over a 12-dp casing.
+    public static func routeAlternative(night: Bool) -> DashColor { DashColor(argb: night ? 0xFF5A_626C : 0xFF8A_9099) }
+    public static let routeAlternativeWidth: Double = 7
+    public static let routeAlternativeCasingWidth: Double = 12
     /// Rider → destination straight line, 3.5 dp, dashed 8 on / 6 off.
     public static let routeToDestination = DashColor(argb: 0xFFFB_BC04)
     public static let routeToDestinationWidth: Double = 3.5
@@ -166,10 +207,18 @@ public enum DashPalette {
     /// Destination / saved-place pin (ic_dest_pin).
     public static let pinRed = DashColor(argb: 0xFFE5_3935)
     public static let pinInner = DashColor(argb: 0xFFFF_FFFF)
-    /// Puck (ic_nav_arrow).
+    /// Android puck (ic_nav_arrow): kept for the icon set; the dash map draws the P0 puck below.
     public static let puckShadow = DashColor(argb: 0x6600_0000)
     public static let puckBlue = DashColor(argb: 0xFF1A_73E8)
     public static let puckWhite = DashColor(argb: 0xFFFF_FFFF)
+    /// The rider puck (P0, D05): a white chevron with a 3-dp dark outline over a halo disc — dark by day,
+    /// white at night. Never route blue.
+    public static let puckFill = DashColor(argb: 0xFFFF_FFFF)
+    public static let puckEdge = DashColor(argb: 0xFF0B_0D10)
+    public static let puckEdgeWidth: Double = 3
+    public static func puckHalo(night: Bool) -> DashColor { DashColor(argb: night ? 0x29FF_FFFF : 0x2E0B_0D10) }
+    /// The puck's box (dp): the halo's diameter.
+    public static let puckSize: Double = 56
 
     // MARK: Apple Music (iOS addition): now-playing tile and Music sheet
 
@@ -208,7 +257,8 @@ public enum DashPalette {
     public static let toastText = DashColor(argb: 0xFFFF_FFFF)
     public static let bannerFill = DashColor(argb: 0xF0FF_B020)
     public static let bannerText = DashColor(argb: 0xFF20_2124)
-    public static let holdDimmer = DashColor(argb: 0xB300_0000)
+    /// The hold card's secondary lines (P0, D17: the card sits on the plain chrome colour, no map).
+    public static let holdSecondary = DashColor(argb: 0xFFA2_A9B2)
 }
 
 /// Dash density (navigation-dash.md §11.1, input-controls.md §3.2): the Android VirtualDisplay

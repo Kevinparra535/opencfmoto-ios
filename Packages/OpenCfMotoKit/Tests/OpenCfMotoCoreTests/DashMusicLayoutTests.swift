@@ -141,31 +141,31 @@ final class DashMusicLayoutTests: XCTestCase {
         SheetRow(w: 800, h: 384, top: 0, nav: false, arrangement: .sideBySide, art: [432, 784, 16, 368],
                  prevX: [92, 156], playX: [176, 256], nextX: [276, 340], playY: [215, 295], close: [728, 776, 24, 72]),
         SheetRow(w: 800, h: 384, top: 0, nav: true, arrangement: .sideBySide, art: [432, 784, 16, 368],
-                 prevX: [92, 156], playX: [176, 256], nextX: [276, 340], playY: [272, 352], close: [728, 776, 24, 72]),
+                 prevX: [92, 156], playX: [176, 256], nextX: [276, 340], playY: [288, 368], close: [728, 776, 24, 72]),
         SheetRow(w: 800, h: 400, top: 0, nav: false, arrangement: .sideBySide, art: [416, 784, 16, 384],
                  prevX: [84, 148], playX: [168, 248], nextX: [268, 332], playY: [223, 303], close: [728, 776, 24, 72]),
         SheetRow(w: 800, h: 400, top: 0, nav: true, arrangement: .sideBySide, art: [416, 784, 16, 384],
-                 prevX: [84, 148], playX: [168, 248], nextX: [268, 332], playY: [280, 360], close: [728, 776, 24, 72]),
+                 prevX: [84, 148], playX: [168, 248], nextX: [268, 332], playY: [296, 376], close: [728, 776, 24, 72]),
         SheetRow(w: 800, h: 944, top: 0, nav: false, arrangement: .stacked, art: [54, 746, 16, 708],
                  prevX: [276, 340], playX: [360, 440], nextX: [460, 524], playY: [848, 928], close: [690, 738, 24, 72]),
-        SheetRow(w: 800, h: 944, top: 0, nav: true, arrangement: .stacked, art: [106, 694, 120, 708],
-                 prevX: [276, 340], playX: [360, 440], nextX: [460, 524], playY: [848, 928], close: [638, 686, 128, 176]),
+        SheetRow(w: 800, h: 944, top: 0, nav: true, arrangement: .stacked, art: [123, 677, 154, 708],
+                 prevX: [276, 340], playX: [360, 440], nextX: [460, 524], playY: [848, 928], close: [621, 669, 162, 210]),
         SheetRow(w: 720, h: 704, top: 22, nav: false, arrangement: .stacked, art: [144, 576, 38, 470],
                  prevX: [236, 300], playX: [320, 400], nextX: [420, 484], playY: [608, 688], close: [520, 568, 46, 94]),
-        SheetRow(w: 720, h: 704, top: 22, nav: true, arrangement: .sideBySide, art: [332, 704, 177, 549],
-                 prevX: [42, 106], playX: [126, 206], nextX: [226, 290], playY: [456, 536], close: [648, 696, 185, 233], titleLines: 2),
+        SheetRow(w: 720, h: 704, top: 22, nav: true, arrangement: .sideBySide, art: [332, 704, 184, 556],
+                 prevX: [42, 106], playX: [126, 206], nextX: [226, 290], playY: [472, 552], close: [648, 696, 192, 240], titleLines: 2),
         SheetRow(w: 544, h: 512, top: 0, nav: false, arrangement: .stacked, art: [141, 403, 16, 278],
                  prevX: [148, 212], playX: [232, 312], nextX: [332, 396], playY: [416, 496], close: [347, 395, 24, 72]),
-        SheetRow(w: 544, h: 512, top: 0, nav: true, arrangement: .sideBySide, art: [332, 528, 158, 354],
-                 prevX: [42, 106], playX: [126, 206], nextX: [226, 290], playY: [349, 429], close: [472, 520, 166, 214], titleLines: 2),
+        SheetRow(w: 544, h: 512, top: 0, nav: true, arrangement: .sideBySide, art: [332, 528, 162, 358],
+                 prevX: [42, 106], playX: [126, 206], nextX: [226, 290], playY: [365, 445], close: [472, 520, 170, 218], titleLines: 2),
         SheetRow(w: 1024, h: 464, top: 0, nav: false, arrangement: .sideBySide, art: [578, 1006, 18, 446],
                  prevX: [148, 221], playX: [244, 335], nextX: [357, 430], playY: [258, 349], close: [942, 997, 27, 82]),
         SheetRow(w: 1024, h: 464, top: 0, nav: true, arrangement: .sideBySide, art: [578, 1006, 18, 446],
-                 prevX: [148, 221], playX: [244, 335], nextX: [357, 430], playY: [323, 414], close: [942, 997, 27, 82]),
+                 prevX: [148, 221], playX: [244, 335], nextX: [357, 430], playY: [341, 432], close: [942, 997, 27, 82]),
         SheetRow(w: 1280, h: 576, top: 0, nav: false, arrangement: .sideBySide, art: [727, 1257, 23, 553],
                  prevX: [187, 278], playX: [306, 420], nextX: [449, 540], playY: [320, 434], close: [1177, 1246, 34, 103]),
         SheetRow(w: 1280, h: 576, top: 0, nav: true, arrangement: .sideBySide, art: [727, 1257, 23, 553],
-                 prevX: [187, 278], playX: [306, 420], nextX: [449, 540], playY: [402, 516], close: [1177, 1246, 34, 103]),
+                 prevX: [187, 278], playX: [306, 420], nextX: [449, 540], playY: [424.5, 538.5], close: [1177, 1246, 34, 103]),
     ]
 
     private func sheet(_ row: SheetRow, song: DashNowPlaying = DashFixtures.song(), cue: HudCue = DashFixtures.navCue,
@@ -227,24 +227,25 @@ final class DashMusicLayoutTests: XCTestCase {
         assertEdges(free.remainingRect, [216, 416, 184, 201], "remaining")
         assertEdges(free.previousRect, [92, 156, 223, 287], "⏮")
         assertEdges(free.nextRect, [276, 340, 223, 287], "⏭")
-        // navigating (column 16–416 × 131–368): title 147–173 · artist 177–197 · album 199–217 · bar 231–237 · times 241–258
+        // navigating, under the P0 nav card (48 / 26 sp, D11) (column 16–416 × 162–368): title 162–189 · artist 193–213 ·
+        // album 215–233 · bar 247–253 · times 257–274
         let (_, nav, reserved) = sheet(sheetRows[1])
-        assertEdges(reserved, [8, 274, 8, 119], "nav card")
-        assertEdges(nav.titleRect, [16, 416, 147, 173], "nav title")
-        assertEdges(nav.artistRect, [16, 416, 177, 197], "nav artist")
-        assertEdges(nav.albumRect, [16, 416, 199, 217], "nav album")
-        assertEdges(nav.progressRect, [16, 416, 231, 237], "nav bar")
-        assertEdges(nav.elapsedRect, [16, 216, 241, 258], "nav elapsed")
-        assertEdges(nav.remainingRect, [216, 416, 241, 258], "nav remaining")
+        assertEdges(reserved, [8, 340, 8, 150], "nav card")
+        assertEdges(nav.titleRect, [16, 416, 162, 189], "nav title")
+        assertEdges(nav.artistRect, [16, 416, 193, 213], "nav artist")
+        assertEdges(nav.albumRect, [16, 416, 215, 233], "nav album")
+        assertEdges(nav.progressRect, [16, 416, 247, 253], "nav bar")
+        assertEdges(nav.elapsedRect, [16, 216, 257, 274], "nav elapsed")
+        assertEdges(nav.remainingRect, [216, 416, 257, 274], "nav remaining")
         // portrait stacked: title 24 sp, 720–749; times 817–834
         let (_, port, _) = sheet(sheetRows[5])
         assertEdges(port.titleRect, [16, 784, 720, 749], "portrait title")
         assertEdges(port.artistRect, [16, 784, 753, 773], "portrait artist")
         assertEdges(port.progressRect, [16, 784, 807, 813], "portrait bar")
         assertEdges(port.elapsedRect, [16, 400, 817, 834], "portrait elapsed")
-        // 720×704 navigating: 2-line title 304–357
+        // 720×704 navigating: 2-line title 320–373
         let (_, nk, _) = sheet(sheetRows[7])
-        assertEdges(nk.titleRect, [16, 316, 304, 357], "720 title")
+        assertEdges(nk.titleRect, [16, 316, 320, 373], "720 title")
     }
 
     func testStressTallNavCardAndLongTitle() {
@@ -268,16 +269,17 @@ final class DashMusicLayoutTests: XCTestCase {
                 XCTAssertNil(l.albumRect, "\(tag): step 1 drops the album")
             }
         }
-        // 800×384: the 601-px card pushes the artwork below it: 568–784 × 152–368 (216), title 2 lines
+        // 800×384: the 704-px P0 card (48 / 26 sp, D11) pushes the artwork below it: 609–784 × 193–368 (175);
+        // the block left of it compresses to step 3 (1-line title, no album, 64-px ⏯)
         let c = ctx(800, 384)
         let reserved = DashLayout.navCard(c, cue: DashFixtures.longNavCue).frame
-        assertEdges(reserved, [8, 609, 8, 140], "stress nav card")
+        assertEdges(reserved, [8, 712, 8, 181], "stress nav card")
         let l = DashLayout.musicSheet(c, music: song, language: .en, reserved: reserved)
         XCTAssertEqual(l.arrangement, .sideBySide)
-        assertEdges(l.artworkRect, [568, 784, 152, 368], "stress artwork")
-        XCTAssertEqual(l.compressionStep, 1)
-        XCTAssertEqual(l.titleMaxLines, 2)
-        XCTAssertEqual(l.playPauseRect.width, 80, accuracy: 1e-9)
+        assertEdges(l.artworkRect, [609, 784, 193, 368], "stress artwork")
+        XCTAssertEqual(l.compressionStep, 3)
+        XCTAssertEqual(l.titleMaxLines, 1)
+        XCTAssertEqual(l.playPauseRect.width, 64, accuracy: 1e-9)
     }
 
     func testUnknownDurationDropsBarAndTimes() {
@@ -380,7 +382,7 @@ final class DashMusicLayoutTests: XCTestCase {
 
     // MARK: Menu entry
 
-    func testMenuEntryAfterCircuitOnlyWithMusic() {
+    func testMenuEntryRightAfterRerouteOnlyWithMusic() {
         let c = ctx(800, 384)
         func ids(_ music: Bool, _ L: DashLanguage = .en) -> [String] {
             DashLayout.menu(c, content: DashMenuContent(language: L, follow: true, headingUp: true, recording: false,
@@ -388,7 +390,9 @@ final class DashMusicLayoutTests: XCTestCase {
         }
         XCTAssertFalse(ids(false).contains("menu.music"))
         let with = ids(true)
-        XCTAssertEqual(with.firstIndex(of: "menu.music"), with.firstIndex(of: "menu.circuit").map { $0 + 1 })
+        // P0 (D01): the menu opens on Recenter / reroute; Music is its harmless next neighbour (was after Circuit)
+        XCTAssertEqual(with.firstIndex(of: "menu.music"), with.firstIndex(of: "menu.recalc").map { $0 + 1 })
+        XCTAssertEqual(with.firstIndex(of: "menu.circuit"), with.firstIndex(of: "menu.music").map { $0 + 1 })
         XCTAssertEqual(with.filter { $0 != "menu.music" }, ids(false))
         let es = DashLayout.menu(c, content: DashMenuContent(language: .es, follow: true, headingUp: true, recording: false,
                                                              preferences: MapPreferences(), showsMusic: true))

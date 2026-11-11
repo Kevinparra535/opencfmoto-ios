@@ -36,7 +36,7 @@ final class DashUIControllerTests: XCTestCase {
 
     private func hasFocusRing(_ list: DashDisplayList) -> Bool {
         list.commands.contains { cmd in
-            if case let .stroke(_, st) = cmd { return st.color == DashPalette.focusStroke && st.width == 5 }
+            if case let .stroke(_, st) = cmd { return st.color == DashPalette.focusEdge && st.width == DashPalette.focusEdgeWidth }
             return false
         }
     }
@@ -185,12 +185,8 @@ final class DashUIControllerTests: XCTestCase {
     func testPuckDrawnUprightInHeadingUp() throws {
         let ui = controller(DashFixtures.freeRide())
         let list = ui.displayList(now: 0)
-        // the puck's blue chevron tip (24,6 in its 48-viewport) points straight up in heading-up
-        let blue = list.commands.compactMap { cmd -> DashPath? in
-            if case let .fill(p, c, _) = cmd, c == DashPalette.puckBlue { return p }
-            return nil
-        }
-        let chevron = try XCTUnwrap(blue.first)
+        // the puck's white chevron tip points straight up in heading-up
+        let chevron = try XCTUnwrap(DashFixtures.drawnPuck(list)?.chevron)
         guard case let .move(tip)? = chevron.elements.first else { return XCTFail("no tip") }
         let b = try XCTUnwrap(chevron.controlPointBounds)
         XCTAssertEqual(tip.x, b.midX, accuracy: 0.01)
@@ -286,15 +282,18 @@ final class DashUIControllerTests: XCTestCase {
 
     func testMenuViaHandlebar() {
         let ui = controller(DashFixtures.navigating())
-        XCTAssertEqual(ui.state.focusedId, "metrics.end") // navigating → End first
+        XCTAssertEqual(ui.state.focusedId, "fab.recenter") // navigating → Recenter first (P0, D01; Android: End)
         XCTAssertEqual(ui.handle(.key(.home), now: 1), [.openMenu])
         XCTAssertEqual(ui.state.sheet, .menu)
-        XCTAssertEqual(ui.state.focusedId, "menu.end")
+        XCTAssertEqual(ui.state.focusedId, "menu.recalc") // the menu opens on a harmless item (Android: End)
         XCTAssertEqual(ui.handle(.knob(1), now: 2), [])
+        XCTAssertEqual(ui.state.focusedId, "menu.circuit")
+        let park = try! XCTUnwrap(ui.state.focusOrder.firstIndex(of: "menu.park"))
+        XCTAssertEqual(ui.handle(.knob(park - 1), now: 2.5), [])
         XCTAssertEqual(ui.state.focusedId, "menu.park")
         XCTAssertEqual(ui.handle(.key(.enter), now: 3), [.parkHere])
         XCTAssertEqual(ui.state.sheet, .none) // Park here closes the menu
-        XCTAssertEqual(ui.state.focusedId, "metrics.end")
+        XCTAssertEqual(ui.state.focusedId, "fab.recenter")
     }
 
     func testMenuFocusWrapsAndScrollsIntoView() {
@@ -315,9 +314,10 @@ final class DashUIControllerTests: XCTestCase {
         let ui = controller(DashFixtures.freeRide())
         _ = ui.handle(.key(.home), now: 1)
         let order = ui.state.focusOrder
-        // "menu.music" (Apple Music, iOS addition) is only listed while music shows on the dash
-        let base = DashSceneBuilder.menuFocusBase.filter { $0 != "menu.music" }
-        XCTAssertEqual(Array(order.prefix(12)), base)
+        // "menu.music" (Apple Music, iOS addition) is only listed while music shows on the dash, "menu.end" only
+        // while navigating (P0, D01)
+        let base = DashSceneBuilder.menuFocusBase.filter { $0 != "menu.music" && $0 != "menu.end" }
+        XCTAssertEqual(Array(order.prefix(base.count)), base)
         XCTAssertTrue(order.contains("menu.units.imperial"))
         XCTAssertEqual(order.last, "menu.close")
         let steps = order.firstIndex(of: "menu.units.imperial")!
@@ -335,10 +335,11 @@ final class DashUIControllerTests: XCTestCase {
     func testMenuDragScrollsAndDimmerCloses() {
         let ui = controller(DashFixtures.navigating())
         _ = ui.perform(.openMenu, now: 1)
-        _ = touch(ui, .down, DashPoint(660, 300), 2)
-        _ = touch(ui, .move, DashPoint(660, 250), 2.05)
-        _ = touch(ui, .move, DashPoint(660, 200), 2.1)
-        XCTAssertEqual(touch(ui, .up, DashPoint(660, 200), 2.15), []) // a drag is not a tap
+        // (above the speed chip, drawn over the menu from y 292: P0 D03 — a touch on the chip reaches no item)
+        _ = touch(ui, .down, DashPoint(660, 260), 2)
+        _ = touch(ui, .move, DashPoint(660, 210), 2.05)
+        _ = touch(ui, .move, DashPoint(660, 160), 2.1)
+        XCTAssertEqual(touch(ui, .up, DashPoint(660, 160), 2.15), []) // a drag is not a tap
         XCTAssertEqual(ui.state.menuScroll, 100, accuracy: 1e-9)
         XCTAssertEqual(ui.state.sheet, .menu)
         XCTAssertEqual(tap(ui, DashPoint(200, 200), at: 3), [.closeSheets]) // dimmer
@@ -492,7 +493,7 @@ final class DashUIControllerTests: XCTestCase {
         XCTAssertEqual(tapRegion(ui, "preview.marker", at: 2), [.addMarker])
     }
 
-    func testNavigationStartFocusesEndAndFollows() {
+    func testNavigationStartFocusesRecenterAndFollows() {
         let ui = controller(DashFixtures.freeRide())
         ui.update(DashFixtures.preview())
         ui.update(DashFixtures.navigating())
@@ -500,9 +501,10 @@ final class DashUIControllerTests: XCTestCase {
         XCTAssertTrue(st.camera.follow)
         XCTAssertTrue(st.camera.headingUp)
         XCTAssertTrue(st.camera.speedZoom)
-        XCTAssertEqual(st.focusedId, "metrics.end")
-        XCTAssertEqual(st.focusOrder, ["metrics.end", "fab.recenter", "fab.zoomIn", "fab.zoomOut", "fab.compass", "fab.menu"])
-        XCTAssertEqual(ui.handle(.key(.enter), now: 1), [.endNavigation])
+        // P0 (D01): Recenter, never End (Android focused its End button: a ★ ended the route)
+        XCTAssertEqual(st.focusedId, "fab.recenter")
+        XCTAssertEqual(st.focusOrder, ["fab.recenter", "fab.zoomIn", "fab.zoomOut", "fab.compass", "fab.menu"])
+        XCTAssertEqual(ui.handle(.key(.enter), now: 1), [.recenter])
         let list = ui.displayList(now: 1)
         XCTAssertNil(list.hitRegions.first { $0.id == "pill" }) // search pill hidden while navigating
         XCTAssertNotNil(list.hitRegions.first { $0.id == "nav.card" })
@@ -551,10 +553,12 @@ final class DashUIControllerTests: XCTestCase {
     func testArrivalCardFocusAndActions() {
         let ui = controller(DashFixtures.navigating())
         ui.update(DashFixtures.arrival())
-        XCTAssertEqual(ui.state.focusOrder, ["arrive.park", "arrive.find", "arrive.done"])
-        XCTAssertEqual(ui.state.focusedId, "arrive.park")
+        // P0 (D22): «Done» first and focused (Android: Park here, so ★ marked a parked spot)
+        XCTAssertEqual(ui.state.focusOrder, ["arrive.done", "arrive.park", "arrive.find"])
+        XCTAssertEqual(ui.state.focusedId, "arrive.done")
         XCTAssertEqual(ui.handle(.key(.back), now: 1), [.dismissArrival])
-        _ = ui.handle(.knob(1), now: 2)
+        _ = ui.handle(.knob(2), now: 2)
+        XCTAssertEqual(ui.state.focusedId, "arrive.find")
         XCTAssertEqual(ui.handle(.key(.enter), now: 3), [.findParking])
         XCTAssertEqual(ui.state.sheet, .search) // Find parking opens the search sheet
         let ui2 = controller(DashFixtures.arrival())
@@ -617,24 +621,50 @@ final class DashUIControllerTests: XCTestCase {
         XCTAssertTrue(list.hitRegions.isEmpty)
         XCTAssertTrue(texts(list).contains("Paused — open the app"))
         XCTAssertEqual(tap(ui, DashPoint(400, 200), at: 1), [])
+        // P0 (D17): keys and the knob act on nothing either; no map, no gauge, no stale numbers
+        XCTAssertEqual(ui.handle(.key(.enter), now: 2), [])
+        XCTAssertEqual(ui.handle(.knob(1), now: 2.1), [])
+        XCTAssertEqual(ui.handle(.key(.home), now: 2.2), [])
+        XCTAssertEqual(ui.state.sheet, .none)
+        XCTAssertFalse(list.commands.contains { if case .tile = $0 { return true }; return false })
+        XCTAssertFalse(texts(list).contains("47"), "no speed")
+        XCTAssertFalse(texts(list).contains("350 m"), "no turn distance")
+        XCTAssertFalse(texts(list).contains("14:23"), "no arrival time")
         let explicit = controller(DashFixtures.freeRide()).displayList(forHoldScreen: nil, now: 0)
-        XCTAssertTrue(texts(explicit).contains("Open OpenCfMoto on your phone to resume the map"))
+        XCTAssertEqual(texts(explicit), ["Map paused", "Resumes when you open the app, stopped"])
+        // the voice line only while a route runs with the voice on
+        XCTAssertEqual(texts(controller(DashFixtures.navigating()).displayList(forHoldScreen: nil, now: 0)),
+                       ["Map paused", "Voice keeps guiding", "Resumes when you open the app, stopped"])
+        var muted = DashFixtures.navigating()
+        muted.preferences.voiceOn = false
+        muted.language = .es
+        XCTAssertEqual(texts(controller(muted).displayList(forHoldScreen: nil, now: 0)),
+                       ["Mapa en pausa", "Se reanuda al abrir la app, detenido"])
     }
 
     // MARK: Map content
 
-    func testNightInvertsTilesOnly() {
+    func testTileTreatmentFollowsNightAndStyle() {
+        // P0 (D05): the muted treatments by default; the classic style keeps the tiles as downloaded by day and
+        // inverted at night
         var m = DashFixtures.navigating()
-        let day = controller(m).displayList(now: 0)
-        m.isNight = true
-        let night = controller(m).displayList(now: 0)
-        func inverts(_ l: DashDisplayList) -> [Bool] {
-            l.commands.compactMap { if case let .tile(_, _, _, _, inv) = $0 { return inv }; return nil }
+        func treatments(_ m: DashModel) -> Set<DashTileTreatment> {
+            Set(controller(m).displayList(now: 0).commands.compactMap { if case let .tile(_, _, _, _, t) = $0 { return t }; return nil })
         }
-        XCTAssertFalse(inverts(day).isEmpty)
-        XCTAssertTrue(inverts(day).allSatisfy { !$0 })
-        XCTAssertTrue(inverts(night).allSatisfy { $0 })
-        XCTAssertEqual(day.background, night.background) // chrome unchanged at night
+        XCTAssertEqual(treatments(m), [.mutedDay])
+        m.isNight = true
+        XCTAssertEqual(treatments(m), [.mutedNight])
+        m.mapStyle = .classic
+        XCTAssertEqual(treatments(m), [.inverted])
+        m.isNight = false
+        XCTAssertEqual(treatments(m), [.normal])
+        XCTAssertEqual(DashTileTreatment.of(night: true), .mutedNight)
+        XCTAssertTrue(DashTileTreatment.inverted.isNight && DashTileTreatment.mutedNight.isNight)
+        XCTAssertFalse(DashTileTreatment.normal.isNight || DashTileTreatment.mutedDay.isNight)
+        var night = DashFixtures.navigating()
+        night.isNight = true
+        XCTAssertEqual(controller(DashFixtures.navigating()).displayList(now: 0).background,
+                       controller(night).displayList(now: 0).background) // chrome background unchanged at night
     }
 
     func testRouteLinesStyles() {
@@ -643,14 +673,26 @@ final class DashUIControllerTests: XCTestCase {
             if case let .stroke(_, s) = cmd { return s }
             return nil
         }
-        XCTAssertTrue(strokes.contains { $0.color == DashPalette.routeRemain && $0.width == 7 && $0.cap == .round })
-        XCTAssertTrue(strokes.contains { $0.color == DashPalette.routeDone && $0.width == 5.5 })
+        // P0 (D05): the remaining route over its casing (white by day), the travelled part grey
+        let remain = try! XCTUnwrap(strokes.firstIndex { $0.color == DashPalette.routeRemain(night: false) && $0.width == 10 && $0.cap == .round })
+        let casing = try! XCTUnwrap(strokes.firstIndex { $0.color == DashPalette.routeCasing(night: false) && $0.width == 17 })
+        XCTAssertLessThan(casing, remain, "the casing under the line")
+        XCTAssertTrue(strokes.contains { $0.color == DashPalette.routeDone(night: false) && $0.width == 8 })
         let preview = controller(DashFixtures.preview()).displayList(now: 0).commands.compactMap { cmd -> DashStroke? in
             if case let .stroke(_, s) = cmd { return s }
             return nil
         }
-        XCTAssertTrue(preview.contains { $0.color == DashPalette.routePreview && $0.width == 6.5 })
-        XCTAssertTrue(preview.contains { $0.color == DashPalette.routeAlternative && $0.width == 5 })
+        XCTAssertTrue(preview.contains { $0.color == DashPalette.routePreview && $0.width == 8 })
+        XCTAssertTrue(preview.contains { $0.color == DashPalette.routeAlternative(night: false) && $0.width == 7 })
+        XCTAssertTrue(preview.contains { $0.color == DashPalette.routeCasing(night: false) && $0.width == 13 })
+        var nightModel = DashFixtures.navigating()
+        nightModel.isNight = true
+        let night = controller(nightModel).displayList(now: 0).commands.compactMap { cmd -> DashStroke? in
+            if case let .stroke(_, s) = cmd { return s }
+            return nil
+        }
+        XCTAssertTrue(night.contains { $0.color == DashPalette.routeRemain(night: true) && $0.width == 10 })
+        XCTAssertTrue(night.contains { $0.color == DashPalette.routeCasing(night: true) && $0.width == 17 })
         // preview without routes yet: dashed yellow rider → destination line
         var loading = DashFixtures.preview()
         loading.nav.preview?.routes = []
@@ -716,8 +758,10 @@ final class DashUIControllerTests: XCTestCase {
         let ui = controller(nav)
         _ = ui.perform(.openMenu, now: 0)
         let menu = texts(ui.displayList(now: 0))
-        XCTAssertTrue(menu.contains("Finalizar navegación"))
-        XCTAssertTrue(menu.contains("Conducir"))
+        // P0 (D23): neutral Latin-American Spanish (was «Finalizar navegación», «Conducir»)
+        XCTAssertTrue(menu.contains("Terminar la ruta…"), "\(menu)")
+        XCTAssertTrue(menu.contains("Viaje"), "\(menu)")
+        XCTAssertFalse(menu.contains("Conducir"))
     }
 
     func testFirstFixPositionsCameraEvenWhenNotFollowing() {
@@ -805,7 +849,7 @@ final class DashNavTransitionTests: XCTestCase {
         m.nav.destination = other
         ui.update(m)
         XCTAssertTrue(ui.state.camera.follow)
-        XCTAssertEqual(ui.state.focusedId, "metrics.end")
+        XCTAssertEqual(ui.state.focusedId, "fab.recenter")
     }
 
     func testNavIdentity() {

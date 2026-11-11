@@ -62,7 +62,40 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(kv.string(forKey: "button_map.selectDouble#b58cde373"), "assistant")
         XCTAssertEqual(Set(kv.allKeys()), ["power_mode#b58cde373", "button_map.selectDouble#b58cde373"])
         XCTAssertEqual(s.settings(forBike: bike).buttonMap[.selectDouble], .assistant)
-        XCTAssertEqual(s.settings(forBike: other).buttonMap[.selectDouble], .back)
+        XCTAssertEqual(s.settings(forBike: other).buttonMap[.selectDouble], ButtonAction.none) // P0 (D02) default
+    }
+
+    func testAPreP0DefaultMapReadsAsTodaysDefaultAndStaysSoAfterAnEdit() {
+        // P0 (D02): applying 5-way on an earlier build wrote the nine gestures of the old iOS default
+        // (★★ Back, ▶▶ Home, ◀◀ D-pad left); that map now reads as today's default (doubles unmapped).
+        let (s, kv) = make()
+        for (g, a) in HandlebarPresets.iosDefaultMappingBeforeP0 { kv.set(a.rawValue, forKey: "button_map.\(g.rawValue)#b58cde373") }
+        kv.set("five_way", forKey: "button_cluster_preset.active#b58cde373")
+        XCTAssertEqual(s.settings(forBike: bike).buttonMap, HandlebarPresets.iosDefaultMapping)
+        XCTAssertTrue(s.isButtonMapDefault(forBike: bike))
+        XCTAssertEqual(s.settings(forBike: bike).clusterPreset, .fiveWay)
+        // one gesture changed later: the other doubles stay unmapped (the migrated map is pinned first)
+        s.setButtonAction(.home, for: .navFwdLong, forBike: bike)
+        var m = s.settings(forBike: bike).buttonMap
+        XCTAssertEqual(m[.navFwdLong], .home)
+        for g in [ButtonGesture.selectDouble, .navFwdDouble, .navBackDouble] { XCTAssertEqual(m[g], ButtonAction.none, "\(g)") }
+        XCTAssertEqual(kv.string(forKey: "button_map.selectDouble#b58cde373"), "none")
+        // the same through update(forBike:)
+        let (s2, kv2) = make()
+        for (g, a) in HandlebarPresets.iosDefaultMappingBeforeP0 { kv2.set(a.rawValue, forKey: "button_map.\(g.rawValue)#b58cde373") }
+        s2.update(forBike: bike) { $0.buttonMap[.navBackLong] = .assistant }
+        m = s2.settings(forBike: bike).buttonMap
+        XCTAssertEqual(m[.navBackLong], .assistant)
+        for g in [ButtonGesture.selectDouble, .navFwdDouble, .navBackDouble] { XCTAssertEqual(m[g], ButtonAction.none, "\(g)") }
+        // a map the rider changed (or any other map) is never rewritten
+        let (s3, kv3) = make()
+        var custom = HandlebarPresets.iosDefaultMappingBeforeP0
+        custom[.navBackLong] = .assistant
+        for (g, a) in custom { kv3.set(a.rawValue, forKey: "button_map.\(g.rawValue)#b58cde373") }
+        XCTAssertEqual(s3.settings(forBike: bike).buttonMap, custom)
+        XCTAssertEqual(HandlebarPresets.migratingLegacyDefault(HandlebarPresets.androidDefaults), HandlebarPresets.androidDefaults)
+        XCTAssertEqual(HandlebarPresets.migratingLegacyDefault(HandlebarPresets.iosSingleButtonMapping), HandlebarPresets.iosSingleButtonMapping)
+        XCTAssertEqual(HandlebarPresets.migratingLegacyDefault(HandlebarPresets.iosMapping(for: .backSet)), HandlebarPresets.iosMapping(for: .backSet))
     }
 
     func testProfileOverrideAutoRemovesScopedKey() {

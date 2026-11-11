@@ -116,20 +116,34 @@ final class HandlebarEventEmitter: @unchecked Sendable {
 
 /// What the dash's AVRCP "now playing" widget shows (Android: title/artist/album, 1 h duration).
 /// ASCII only: the dash draws the text in its own font, which showed ◀ ▶ as empty boxes (field test 2,
-/// 450MT: "OpenCfMoto ▯ ▯ mov"; ★ and · never caught on camera). The pill scrolls title + artist (another
-/// photo shows "oup" of "Group"): most-used keys first.
+/// 450MT: "OpenCfMoto ▯ ▯ mov"; ★ and · never caught on camera). The pill scrolls title + artist.
+/// P0 (D02): the doubles are gone from the default mapping, so the hint is the proposal's «◀ ▶ mover · ★ elegir»
+/// in ASCII: "< > mover  * elegir" (English "< > move  * select").
 public struct HandlebarNowPlayingMetadata: Sendable, Equatable {
     public var title: String
     public var artist: String
     public var album: String
     public var durationSeconds: Double
 
-    public init(title: String = "OpenCfMoto", artist: String = "< > move  * OK  ** Back  >> Menu  << Group",
+    public init(title: String = "OpenCfMoto", artist: String = HandlebarNowPlayingMetadata.hint(.en),
                 album: String = "OpenCfMoto", durationSeconds: Double = 3600) {
         self.title = title
         self.artist = artist
         self.album = album
         self.durationSeconds = durationSeconds
+    }
+
+    /// The default widget text in the dash's language.
+    public init(language: DashLanguage) {
+        self.init(artist: Self.hint(language))
+    }
+
+    /// The handlebar hint (printable ASCII): the keys and what they do.
+    public static func hint(_ language: DashLanguage) -> String {
+        switch language {
+        case .en: return "< > move  * select"
+        case .es: return "< > mover  * elegir"
+        }
     }
 }
 #endif

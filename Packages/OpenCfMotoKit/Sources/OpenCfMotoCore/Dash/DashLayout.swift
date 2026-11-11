@@ -14,6 +14,10 @@
 //   widths, value font) and, on narrow canvases, the chip stacks above the card instead.
 // - The portrait gauge sits under the measured nav banner (Android assumes a 100-dp banner).
 // - The lap card sits above whatever bottom-left card is visible.
+// - P0 (the UI/UX proposal's quick wins, inside today's geometry): larger turn distance / road / speed
+//   (D11), a metrics card of TIME / ARRIVE / LEFT without ALT and without End (D12, D01), the speed chip's
+//   limit room always reserved (D03, D19), the arrival card led by Done (D22), a menu whose first items are
+//   harmless and whose "End route…" opens a confirm card (D01), and that confirm card.
 
 import Foundation
 
@@ -136,9 +140,8 @@ public struct DashMetricsLayout: Sendable, Equatable {
     public var frame: DashRect
     /// Portrait full-width bottom bar (top corners only) vs landscape card.
     public var isBar: Bool
+    /// TIME, ARRIVE, LEFT (P0: ALT and the End button left the strip, D12 / D01).
     public var columns: [DashMetricColumnLayout]
-    public var endRect: DashRect
-    public var endFont: DashFont
     /// Portrait status line (hidden in landscape).
     public var statusRect: DashRect?
     public var statusFont: DashFont
@@ -179,6 +182,8 @@ public struct DashPreviewCardLayout: Sendable, Equatable {
     public var actionFont: DashFont
 }
 
+/// The arrival card (P0, D22): Done first — the default focus and the primary button — then Park here (it
+/// only sets the parked spot) and Find parking; the same labels on every canvas.
 public struct DashArriveCardLayout: Sendable, Equatable {
     public var frame: DashRect
     public var titleRect: DashRect
@@ -237,12 +242,14 @@ public struct DashMenuContent: Sendable, Equatable {
     public var headingUp: Bool
     public var recording: Bool
     public var preferences: MapPreferences
-    /// The Ride section ends with "Music" (Apple Music now playing; iOS addition).
+    /// The Ride section lists "Music" after its first item (Apple Music now playing; iOS addition).
     public var showsMusic: Bool
+    /// The Ride section ends with "End route…" (a route runs, no preview over it; it opens the confirm card).
+    public var showsEnd: Bool
     public init(language: DashLanguage, follow: Bool, headingUp: Bool, recording: Bool, preferences: MapPreferences,
-                showsMusic: Bool = false) {
+                showsMusic: Bool = false, showsEnd: Bool = true) {
         self.language = language; self.follow = follow; self.headingUp = headingUp; self.recording = recording
-        self.preferences = preferences; self.showsMusic = showsMusic
+        self.preferences = preferences; self.showsMusic = showsMusic; self.showsEnd = showsEnd
     }
 }
 
@@ -312,6 +319,22 @@ public struct DashMapAttributionLayout: Sendable, Equatable {
     public var font: DashFont
     /// 6 dp.
     public var cornerRadius: Double
+}
+
+/// The confirm card (P0, D01): a question, its consequence, then the safe option (focused) and the action.
+/// Bottom-left like the arrival card, clear of the speed chip; full width in portrait.
+public struct DashConfirmCardLayout: Sendable, Equatable {
+    public var frame: DashRect
+    public var questionRect: DashRect
+    public var questionFont: DashFont
+    public var questionLines: Int
+    public var consequenceRect: DashRect
+    public var consequenceFont: DashFont
+    public var consequenceLines: Int
+    /// The safe option ("Keep going") and the action ("End route" / "Change"), in focus order.
+    public var keepRect: DashRect
+    public var actRect: DashRect
+    public var buttonFont: DashFont
 }
 
 public struct DashSearchRowLayout: Sendable, Equatable {
@@ -418,14 +441,19 @@ public enum DashLayout {
     // MARK: Nav card / banner
 
     /// Landscape: top-left card (x 8, y 8, max right W − 88), padding L18 T14 R22 B14, icon
-    /// 64×64 + 14 + column [distance 30 sp bold / road 18 sp bold ≤ 2 lines, max width
+    /// 64×64 + 14 + column [distance 48 sp bold / road 26 sp bold ≤ 2 lines, max width
     /// 24 × line height (maxEms) / lanes 16 sp bold, letter-spacing 0.12, top 4].
     /// Portrait: full-width top banner, padding L16 T10 R16 B12 (+ margins), content centred,
-    /// distance 32 sp, road 20 sp (maxEms 20), lanes 18 sp (top 2).
+    /// distance 52 sp, road 28 sp (maxEms 20), lanes 18 sp (top 2).
+    /// P0 (D11): the distance and the road grew from Android's 30 / 18 (portrait 32 / 20) sp, the first type
+    /// bump inside today's card.
+    public static let navDistanceSp = (landscape: 48.0, portrait: 52.0)
+    public static let navRoadSp = (landscape: 26.0, portrait: 28.0)
+
     public static func navCard(_ c: DashLayoutContext, cue: HudCue) -> DashNavCardLayout {
         let land = c.isLandscape
-        let distFont = c.font(land ? 30 : 32, .bold)
-        let roadFont = c.font(land ? 18 : 20, .bold)
+        let distFont = c.font(land ? navDistanceSp.landscape : navDistanceSp.portrait, .bold)
+        let roadFont = c.font(land ? navRoadSp.landscape : navRoadSp.portrait, .bold)
         let lanesFont = c.font(land ? 16 : 18, .bold)
         let icon = c.dp(DashDimens.maneuverIcon), gap = c.dp(DashDimens.maneuverGap)
         let roadTop = land ? c.dp(2) : 0
@@ -486,75 +514,72 @@ public enum DashLayout {
 
     /// Reference values used to decide (per canvas / language) whether the landscape speed chip
     /// must stack above the metrics card.
-    static let referenceValues = ["0h00m", "00:00", "000.0 km", "0000"]
+    static let referenceValues = ["0h00m", "00:00", "000.0 km"]
 
     /// Landscape: bottom-left card (x 8, bottom H − 8), padding L22 T14 R22 B14, columns TIME
-    /// (26 sp, min 80, gap 20), ARRIVE (26, 80, 20), LEFT (30, 90, 20), ALT (26, 80, 24), labels
-    /// 13 sp, value top 4, then End (margin 8, padding-x 22, min h 48, 17 sp bold). Compressed to
-    /// end at `maxRight`. Portrait: full-width bottom bar, 4 weighted columns (1, 1, 1.2, 1),
-    /// labels 11 sp, values 22 sp (LEFT 24), row 2: status (13 sp) + End (h 40, 15 sp).
+    /// (26 sp, min 80, gap 20), ARRIVE (26, 80, 20), LEFT (30, 90), labels 13 sp, value top 4. Compressed
+    /// to end at `maxRight`. Portrait: full-width bottom bar, 3 weighted columns (1, 1, 1.2), labels 11 sp,
+    /// values 22 sp (LEFT 24), row 2: the status line (13 sp).
+    /// P0 (D12, D01): Android's ALT column and End button left the strip — the card is a glance of the
+    /// trip, End lives in the menu behind a confirm card.
     /// - Parameter landscapeStatus: landscape only — a status row (14 sp, top 2) under the
     ///   columns. Android hides the landscape status line; the controller passes the status here
     ///   only for the off-route warning (> 80 m) so landscape riders see it too (iOS addition).
-    public static func metricsCard(_ c: DashLayoutContext, labels: [String], values: [String], endLabel: String,
+    public static func metricsCard(_ c: DashLayoutContext, labels: [String], values: [String],
                                    maxRight: Double? = nil, landscapeStatus: String? = nil) -> DashMetricsLayout {
-        precondition(labels.count == 4 && values.count == 4, "TIME, ARRIVE, LEFT, ALT")
+        precondition(labels.count == 3 && values.count == 3, "TIME, ARRIVE, LEFT")
         return c.isLandscape
-            ? landscapeMetrics(c, labels: labels, values: values, endLabel: endLabel,
+            ? landscapeMetrics(c, labels: labels, values: values,
                                maxRight: maxRight ?? c.safe.maxX - c.dp(DashDimens.fabLane), status: landscapeStatus)
-            : portraitMetrics(c, labels: labels, values: values, endLabel: endLabel)
+            : portraitMetrics(c, labels: labels, values: values)
     }
+
+    private static let landscapeValueSp: [Double] = [26, 26, 30]
+    private static let landscapeMinWidthDp: [Double] = [80, 80, 90]
+    /// Gaps after TIME and ARRIVE (LEFT ends at the padding).
+    private static let landscapeGapDp: [Double] = [20, 20, 0]
 
     /// Natural (uncompressed) and minimal (gaps 8, min widths dropped) landscape widths.
-    static func landscapeMetricsWidths(_ c: DashLayoutContext, labels: [String], values: [String],
-                                       endLabel: String) -> (natural: Double, minimal: Double) {
+    static func landscapeMetricsWidths(_ c: DashLayoutContext, labels: [String], values: [String]) -> (natural: Double, minimal: Double) {
         let labelFont = c.font(13)
-        let valueSp: [Double] = [26, 26, 30, 26]
-        let minW: [Double] = [80, 80, 90, 80]
-        let gaps: [Double] = [20, 20, 20, 24]
-        var natural = 0.0, minimal = 0.0
-        for i in 0 ..< 4 {
-            let content = max(c.width(labels[i], labelFont), c.width(values[i], c.font(valueSp[i], .bold)))
-            natural += max(c.dp(minW[i]), content) + c.dp(gaps[i])
-            minimal += content + c.dp(8)
+        var natural = 2 * c.dp(22), minimal = 2 * c.dp(22)
+        for i in 0 ..< 3 {
+            let content = max(c.width(labels[i], labelFont), c.width(values[i], c.font(landscapeValueSp[i], .bold)))
+            natural += max(c.dp(landscapeMinWidthDp[i]), content) + c.dp(landscapeGapDp[i])
+            minimal += content + (i < 2 ? c.dp(8) : 0)
         }
-        let end = c.dp(8) + 2 * c.dp(22) + c.width(endLabel, c.font(17, .bold)) + 2 * c.dp(22)
-        return (natural + end, minimal + end)
+        return (natural, minimal)
     }
 
-    /// Whether the landscape speed chip (with a limit sign) cannot sit beside the metrics card on
+    /// Whether the landscape speed chip (with its limit room) cannot sit beside the metrics card on
     /// this canvas even when the card is compressed — then the chip stacks above the card.
-    public static func speedChipStacksAboveMetrics(_ c: DashLayoutContext, labels: [String], endLabel: String) -> Bool {
+    public static func speedChipStacksAboveMetrics(_ c: DashLayoutContext, labels: [String]) -> Bool {
         guard c.isLandscape else { return false }
         let x = c.safe.minX + c.dp(DashDimens.edge)
         let chipLeft = c.safe.maxX - c.dp(DashDimens.fabLane)
             - c.dp(DashDimens.gaugeLandscape + DashDimens.limitGap + DashDimens.limitSign)
         let available = chipLeft - c.dp(DashDimens.edge) - x
-        return landscapeMetricsWidths(c, labels: labels, values: referenceValues, endLabel: endLabel).minimal > available
+        return landscapeMetricsWidths(c, labels: labels, values: referenceValues).minimal > available
     }
 
-    private static func landscapeMetrics(_ c: DashLayoutContext, labels: [String], values: [String], endLabel: String,
+    private static func landscapeMetrics(_ c: DashLayoutContext, labels: [String], values: [String],
                                          maxRight: Double, status: String?) -> DashMetricsLayout {
         let x = c.safe.minX + c.dp(DashDimens.edge)
         let bottom = c.safe.maxY - c.dp(DashDimens.edge)
         let padL = c.dp(22), padR = c.dp(22), padT = c.dp(14), padB = c.dp(14)
         let labelFont = c.font(13)
-        let baseValueSp: [Double] = [26, 26, 30, 26]
-        let minW: [Double] = [80, 80, 90, 80].map { c.dp($0) }
-        let naturalGaps: [Double] = [20, 20, 20, 24].map { c.dp($0) }
-        let endFont = c.font(17, .bold)
-        let endW = 2 * c.dp(22) + c.width(endLabel, endFont)
-        let endGap = c.dp(8)
+        let minW = landscapeMinWidthDp.map { c.dp($0) }
+        let naturalGaps = landscapeGapDp.map { c.dp($0) }
         let maxW = max(c.dp(120), maxRight - x)
 
         func columnWidths(valueScale: Double, useMin: Bool) -> [Double] {
-            (0 ..< 4).map { i in
-                let content = max(c.width(labels[i], labelFont), c.width(values[i], c.font(baseValueSp[i] * valueScale, .bold)))
+            (0 ..< 3).map { i in
+                let content = max(c.width(labels[i], labelFont), c.width(values[i], c.font(landscapeValueSp[i] * valueScale, .bold)))
                 return useMin ? max(minW[i], content) : content
             }
         }
         func total(_ cols: [Double], _ gaps: [Double]) -> Double {
-            padL + cols.reduce(0, +) + gaps.reduce(0, +) + endGap + endW + padR
+            padL + cols.reduce(0, +) + gaps.reduce(0, +) + padR
         }
         var valueScale = 1.0
         var gaps = naturalGaps
@@ -562,9 +587,9 @@ public enum DashLayout {
         if total(cols, gaps) > maxW {
             // 1. shrink the gaps (down to 8 dp)
             let excess = total(cols, gaps) - maxW
-            let room = gaps.map { $0 - c.dp(8) }.reduce(0, +)
+            let room = gaps.map { max(0, $0 - c.dp(8)) }.reduce(0, +)
             let f = room > 0 ? max(0, 1 - excess / room) : 0
-            gaps = gaps.map { c.dp(8) + ($0 - c.dp(8)) * f }
+            gaps = gaps.map { $0 > 0 ? c.dp(8) + ($0 - c.dp(8)) * f : 0 }
         }
         if total(cols, gaps) > maxW {
             // 2. drop the minimum widths
@@ -579,25 +604,25 @@ public enum DashLayout {
         }
         if total(cols, gaps) > maxW {
             // 4. last resort: share the remaining width proportionally (values get ellipsised)
-            let avail = max(c.dp(40), maxW - (padL + gaps.reduce(0, +) + endGap + endW + padR))
+            let avail = max(c.dp(40), maxW - (padL + gaps.reduce(0, +) + padR))
             let sum = cols.reduce(0, +)
             cols = cols.map { $0 * avail / sum }
         }
-        let valueFonts = baseValueSp.map { c.font($0 * valueScale, .bold) }
+        let valueFonts = landscapeValueSp.map { c.font($0 * valueScale, .bold) }
         let labelH = c.lineHeight(labelFont)
         let colH = valueFonts.map { labelH + c.dp(4) + c.lineHeight($0) }
-        let endH = max(c.dp(48), c.lineHeight(endFont))
-        let rowH = max(colH.max() ?? 0, endH)
+        let rowH = colH.max() ?? 0
         let statusFont = c.font(14)
         let hasStatus = !(status ?? "").isEmpty
         let statusH = hasStatus ? c.dp(2) + c.lineHeight(statusFont) : 0
         let h = padT + rowH + statusH + padB
-        let w = total(cols, gaps)
+        var w = total(cols, gaps)
+        if hasStatus, let st = status { w = min(maxW, max(w, padL + c.width(st, statusFont) + padR)) }
         let frame = DashRect(x: x, y: bottom - h, width: w, height: h)
         let rowTop = frame.minY + padT
         var cx = frame.minX + padL
         var columns: [DashMetricColumnLayout] = []
-        for i in 0 ..< 4 {
+        for i in 0 ..< 3 {
             let top = rowTop + (rowH - colH[i]) / 2
             let value = c.truncate(values[i], cols[i], valueFonts[i])
             let label = c.truncate(labels[i], cols[i], labelFont)
@@ -608,33 +633,29 @@ public enum DashLayout {
                 labelFont: labelFont, valueFont: valueFonts[i]))
             cx += cols[i] + gaps[i]
         }
-        let endRect = DashRect(x: cx + endGap, y: rowTop + (rowH - endH) / 2, width: endW, height: endH)
         let statusRect = hasStatus
             ? DashRect(x: frame.minX + padL, y: rowTop + rowH + c.dp(2), width: w - padL - padR, height: c.lineHeight(statusFont))
             : nil
-        return DashMetricsLayout(frame: frame, isBar: false, columns: columns, endRect: endRect, endFont: endFont,
-                                 statusRect: statusRect, statusFont: statusFont)
+        return DashMetricsLayout(frame: frame, isBar: false, columns: columns, statusRect: statusRect, statusFont: statusFont)
     }
 
-    private static func portraitMetrics(_ c: DashLayoutContext, labels: [String], values: [String], endLabel: String) -> DashMetricsLayout {
+    private static func portraitMetrics(_ c: DashLayoutContext, labels: [String], values: [String]) -> DashMetricsLayout {
         let padL = c.dp(12) + c.safe.minX, padR = c.dp(12) + (c.canvas.width - c.safe.maxX)
         let padT = c.dp(10), padB = c.dp(10)
         let labelFont = c.font(11)
-        let valueFonts = [c.font(22, .bold), c.font(22, .bold), c.font(24, .bold), c.font(22, .bold)]
-        let weights = [1.0, 1.0, 1.2, 1.0]
+        let valueFonts = [c.font(22, .bold), c.font(22, .bold), c.font(24, .bold)]
+        let weights = [1.0, 1.0, 1.2]
         let innerW = c.canvas.width - padL - padR
         let labelH = c.lineHeight(labelFont)
-        let row1H = (0 ..< 4).map { labelH + c.lineHeight(valueFonts[$0]) }.max() ?? 0
+        let row1H = (0 ..< 3).map { labelH + c.lineHeight(valueFonts[$0]) }.max() ?? 0
         let statusFont = c.font(13)
-        let endFont = c.font(15, .bold)
-        let endH = c.dp(40)
-        let row2H = max(c.lineHeight(statusFont), endH)
+        let row2H = c.lineHeight(statusFont)
         let h = padT + row1H + c.dp(6) + row2H + padB
         let bottom = c.safe.maxY
         let frame = DashRect(x: 0, y: bottom - h, width: c.canvas.width, height: h)
         var cx = padL
         var columns: [DashMetricColumnLayout] = []
-        for i in 0 ..< 4 {
+        for i in 0 ..< 3 {
             let w = innerW * weights[i] / weights.reduce(0, +)
             let colH = labelH + c.lineHeight(valueFonts[i])
             let top = frame.minY + padT + (row1H - colH) / 2
@@ -646,26 +667,28 @@ public enum DashLayout {
             cx += w
         }
         let row2Top = frame.minY + padT + row1H + c.dp(6)
-        let endW = 2 * c.dp(16) + c.width(endLabel, endFont)
-        let endRect = DashRect(x: c.canvas.width - padR - endW, y: row2Top + (row2H - endH) / 2, width: endW, height: endH)
-        let statusRect = DashRect(x: padL, y: row2Top, width: max(0, endRect.minX - c.dp(8) - padL), height: row2H)
-        return DashMetricsLayout(frame: frame, isBar: true, columns: columns, endRect: endRect, endFont: endFont,
-                                 statusRect: statusRect, statusFont: statusFont)
+        let statusRect = DashRect(x: padL, y: row2Top, width: innerW, height: row2H)
+        return DashMetricsLayout(frame: frame, isBar: true, columns: columns, statusRect: statusRect, statusFont: statusFont)
     }
 
     // MARK: Speed chip
 
-    /// Landscape: gauge 84 (+ 12 + limit 56 to its right), right edge W − 88, bottom H − 8.
+    /// Landscape: gauge 84 + 12 + limit room 56 to its right, right edge W − 88, bottom H − 8.
     /// Portrait: gauge 96; navigating → top-right under the banner (`belowY`), else bottom-left
     /// (x 12, bottom H − 12). `stackAboveY` (iOS): bottom-anchored chips sit 8 above that y
     /// instead (narrow landscape canvases: above the metrics card; above a preview/arrive card
     /// that would otherwise cover the gauge).
+    /// P0 (D03, D19): the limit sign's room is always reserved — the gauge no longer jumps 68 px sideways
+    /// and the metrics card no longer reflows when a limit appears or goes; `hasLimit` only decides whether
+    /// the sign is drawn (`limitRect`). Speed 44 sp (portrait 48), unit 13 (14): D11's type bump.
+    public static let speedSp = (landscape: 44.0, portrait: 48.0)
+
     public static func speedChip(_ c: DashLayoutContext, hasLimit: Bool, navigating: Bool,
                                  belowY: Double? = nil, stackAboveY: Double? = nil) -> DashSpeedChipLayout {
         let land = c.isLandscape
         let g = c.dp(land ? DashDimens.gaugeLandscape : DashDimens.gaugePortrait)
         let lim = c.dp(DashDimens.limitSign), gap = c.dp(DashDimens.limitGap)
-        let w = hasLimit ? g + gap + lim : g
+        let w = g + gap + lim
         let x: Double, y: Double
         if land {
             x = c.safe.maxX - c.dp(DashDimens.fabLane) - w
@@ -682,8 +705,8 @@ public enum DashLayout {
         let gauge = DashRect(x: x, y: y, width: g, height: g)
         let limitRect = hasLimit ? DashRect(x: gauge.maxX + gap, y: gauge.midY - lim / 2, width: lim, height: lim) : nil
         return DashSpeedChipLayout(frame: DashRect(x: x, y: y, width: w, height: g), gaugeRect: gauge,
-                                   speedFont: c.font(land ? 32 : 36, .bold, digits: true),
-                                   unitFont: c.font(land ? 11 : 12, .bold),
+                                   speedFont: c.font(land ? speedSp.landscape : speedSp.portrait, .bold, digits: true),
+                                   unitFont: c.font(land ? 13 : 14, .bold),
                                    limitRect: limitRect, limitFont: c.font(20, .bold, digits: true))
     }
 
@@ -805,9 +828,11 @@ public enum DashLayout {
     // MARK: Arrive card
 
     /// Landscape: bottom-left (x 10, bottom H − 10, max right W − 76), padding 16×12, title 17 sp
-    /// bold, meta 13 sp, buttons (top 10, h 44): Park here (min 120, blue), Find parking (min 120,
-    /// route-chip style), Done (transparent). Portrait: full width, title 18 sp, Park/Find equal
-    /// weights (min h 48, gap 8), full-width "Done · free ride" (h 44, top 8).
+    /// bold, meta 13 sp, buttons (top 10, h 44, 14 sp bold): Done (min 120, blue), Park here (min 120,
+    /// route-chip style), Find parking (min 120, route-chip style). Portrait: full width, title 18 sp,
+    /// Done full width (h 48) on top, Park here / Find parking below (equal weights, h 44, gap 8).
+    /// P0 (D22): Done leads — the default focus and the primary button (Android focused Park here, so ★
+    /// marked a parked spot) — and reads the same on every canvas (Android: "Done · free ride" in portrait).
     public static func arriveCard(_ c: DashLayoutContext, arrival: ArrivalCard, language: DashLanguage) -> DashArriveCardLayout {
         let land = c.isLandscape
         let pad = c.dp(16), padV = c.dp(land ? 12 : 14)
@@ -816,18 +841,18 @@ public enum DashLayout {
         let maxRight = land ? c.safe.maxX - c.dp(76) : c.safe.maxX - c.dp(10)
         let availInner = max(c.dp(120), maxRight - x - 2 * pad)
         let titleFont = c.font(land ? 17 : 18, .bold), metaFont = c.font(13)
-        let buttonFont = c.font(14, .bold), doneFont = c.font(14)
+        let buttonFont = c.font(14, .bold)
         let parkLabel = DashText.parkHere.localized(language), findLabel = DashText.findParking.localized(language)
-        let doneLabel = (land ? DashText.done : DashText.doneFreeRide).localized(language)
+        let doneLabel = DashText.done.localized(language)
         let btnPad = c.dp(16)
         let parkW = max(c.dp(120), 2 * btnPad + c.width(parkLabel, buttonFont))
         let findW = max(c.dp(120), 2 * btnPad + c.width(findLabel, buttonFont))
-        let doneW = 2 * btnPad + c.width(doneLabel, doneFont)
+        let doneW = max(c.dp(120), 2 * btnPad + c.width(doneLabel, buttonFont))
         let titleH = c.lineHeight(titleFont)
         let metaLines = DashTextLayout.lineCount(arrival.meta, maxWidth: availInner, font: metaFont, maxLines: 2, measurer: c.measurer)
         let metaH = Double(metaLines) * c.lineHeight(metaFont)
         if land {
-            let buttonsW = parkW + c.dp(8) + findW + c.dp(8) + doneW
+            let buttonsW = doneW + c.dp(8) + parkW + c.dp(8) + findW
             let innerW = min(availInner, max(c.width(arrival.title, titleFont), c.width(arrival.meta, metaFont), buttonsW))
             let h = padV + titleH + c.dp(2) + metaH + c.dp(10) + c.dp(44) + padV
             let frame = DashRect(x: x, y: bottom - h, width: innerW + 2 * pad, height: h)
@@ -835,28 +860,71 @@ public enum DashLayout {
             let titleRect = DashRect(x: left, y: frame.minY + padV, width: innerW, height: titleH)
             let metaRect = DashRect(x: left, y: titleRect.maxY + c.dp(2), width: innerW, height: metaH)
             let by = metaRect.maxY + c.dp(10)
-            let park = DashRect(x: left, y: by, width: parkW, height: c.dp(44))
+            let done = DashRect(x: left, y: by, width: doneW, height: c.dp(44))
+            let park = DashRect(x: done.maxX + c.dp(8), y: by, width: parkW, height: c.dp(44))
             let find = DashRect(x: park.maxX + c.dp(8), y: by, width: findW, height: c.dp(44))
-            let done = DashRect(x: find.maxX + c.dp(8), y: by, width: doneW, height: c.dp(44))
             return DashArriveCardLayout(frame: frame, titleRect: titleRect, titleFont: titleFont, metaRect: metaRect,
                                         metaFont: metaFont, parkRect: park, findRect: find, doneRect: done,
-                                        buttonFont: buttonFont, doneFont: doneFont)
+                                        buttonFont: buttonFont, doneFont: buttonFont)
         }
         let innerW = availInner
-        let rowH = c.dp(48)
-        let h = padV + titleH + c.dp(2) + metaH + c.dp(12) + rowH + c.dp(8) + c.dp(44) + padV
+        let doneH = c.dp(48), rowH = c.dp(44)
+        let h = padV + titleH + c.dp(2) + metaH + c.dp(12) + doneH + c.dp(8) + rowH + padV
         let frame = DashRect(x: x, y: bottom - h, width: innerW + 2 * pad, height: h)
         let left = frame.minX + pad
         let titleRect = DashRect(x: left, y: frame.minY + padV, width: innerW, height: titleH)
         let metaRect = DashRect(x: left, y: titleRect.maxY + c.dp(2), width: innerW, height: metaH)
-        let by = metaRect.maxY + c.dp(12)
+        let done = DashRect(x: left, y: metaRect.maxY + c.dp(12), width: innerW, height: doneH)
         let half = (innerW - c.dp(8)) / 2
-        let park = DashRect(x: left, y: by, width: half, height: rowH)
-        let find = DashRect(x: park.maxX + c.dp(8), y: by, width: half, height: rowH)
-        let done = DashRect(x: left, y: park.maxY + c.dp(8), width: innerW, height: c.dp(44))
+        let park = DashRect(x: left, y: done.maxY + c.dp(8), width: half, height: rowH)
+        let find = DashRect(x: park.maxX + c.dp(8), y: park.minY, width: half, height: rowH)
         return DashArriveCardLayout(frame: frame, titleRect: titleRect, titleFont: titleFont, metaRect: metaRect,
                                     metaFont: metaFont, parkRect: park, findRect: find, doneRect: done,
-                                    buttonFont: buttonFont, doneFont: doneFont)
+                                    buttonFont: buttonFont, doneFont: buttonFont)
+    }
+
+    // MARK: Confirm card (P0, D01)
+
+    /// The confirm card: bottom-left (x 10, bottom at `bottom`, default H − 8 like the metrics card it covers,
+    /// right edge at most `maxRight`, default W − 96 in landscape), padding 16×14, the question (24 sp bold,
+    /// ≤ 2 lines), the consequence (17 sp, ≤ 2 lines), then [keep][act] (h 48, 18 sp bold, min 150 each, gap
+    /// 12). Portrait: full width, the two buttons share the row. The safe option comes first: it is the
+    /// focused one.
+    public static func confirmCard(_ c: DashLayoutContext, question: String, consequence: String, keepLabel: String,
+                                   actLabel: String, maxRight: Double? = nil, bottom: Double? = nil) -> DashConfirmCardLayout {
+        let land = c.isLandscape
+        let pad = c.dp(16), padV = c.dp(14)
+        let x = c.safe.minX + c.dp(10)
+        let bottom = bottom ?? c.safe.maxY - c.dp(DashDimens.edge)
+        let right = maxRight ?? (land ? c.safe.maxX - c.dp(96) : c.safe.maxX - c.dp(10))
+        let availInner = max(c.dp(160), right - x - 2 * pad)
+        let questionFont = c.font(24, .bold), consequenceFont = c.font(17), buttonFont = c.font(18, .bold)
+        let btnH = c.dp(48), gap = c.dp(12), btnPad = c.dp(20)
+        let keepW = max(c.dp(150), 2 * btnPad + c.width(keepLabel, buttonFont))
+        let actW = max(c.dp(150), 2 * btnPad + c.width(actLabel, buttonFont))
+        let naturalInner = max(c.width(question, questionFont), c.width(consequence, consequenceFont), keepW + gap + actW)
+        let innerW = land ? min(availInner, max(c.dp(320), naturalInner)) : availInner
+        let qLines = DashTextLayout.lineCount(question, maxWidth: innerW, font: questionFont, maxLines: 2, measurer: c.measurer)
+        let cLines = DashTextLayout.lineCount(consequence, maxWidth: innerW, font: consequenceFont, maxLines: 2, measurer: c.measurer)
+        let qH = Double(qLines) * c.lineHeight(questionFont), cH = Double(cLines) * c.lineHeight(consequenceFont)
+        let h = padV + qH + c.dp(4) + cH + c.dp(12) + btnH + padV
+        let frame = DashRect(x: x, y: bottom - h, width: innerW + 2 * pad, height: h)
+        let left = frame.minX + pad
+        let qRect = DashRect(x: left, y: frame.minY + padV, width: innerW, height: qH)
+        let cRect = DashRect(x: left, y: qRect.maxY + c.dp(4), width: innerW, height: cH)
+        let by = cRect.maxY + c.dp(12)
+        let keep: DashRect, act: DashRect
+        if land && keepW + gap + actW <= innerW {
+            keep = DashRect(x: left, y: by, width: keepW, height: btnH)
+            act = DashRect(x: keep.maxX + gap, y: by, width: actW, height: btnH)
+        } else {
+            let half = (innerW - gap) / 2
+            keep = DashRect(x: left, y: by, width: half, height: btnH)
+            act = DashRect(x: keep.maxX + gap, y: by, width: half, height: btnH)
+        }
+        return DashConfirmCardLayout(frame: frame, questionRect: qRect, questionFont: questionFont, questionLines: qLines,
+                                     consequenceRect: cRect, consequenceFont: consequenceFont, consequenceLines: cLines,
+                                     keepRect: keep, actRect: act, buttonFont: buttonFont)
     }
 
     // MARK: Lap card
@@ -882,8 +950,12 @@ public enum DashLayout {
 
     /// Right-side panel (w 280, full safe height, padding 12): Ride / Map / Settings / Close
     /// (navigation-dash.md §11.8). The "3D" row (no-op on the bike) and the unused legacy scenic
-    /// length row are omitted.
-    public static func menu(_ c: DashLayoutContext, content m: DashMenuContent) -> DashMenuLayout {
+    /// length row are omitted. `endPadding` (iOS): extra room after Close, so the last items can scroll
+    /// clear of the speed chip drawn over the panel's bottom (P0, D03).
+    /// P0 (D01, D23): the Ride section opens on harmless items — Recenter / reroute (the first item, where
+    /// the menu opens), Music, Circuit, Go home — then Park here, Record, Set home here, and "End route…"
+    /// last (only while a route runs; it opens the confirm card). Toggles carry verb labels.
+    public static func menu(_ c: DashLayoutContext, content m: DashMenuContent, endPadding: Double = 0) -> DashMenuLayout {
         let L = m.language
         let w = c.dp(DashDimens.menuWidth)
         let panel = DashRect(x: c.safe.maxX - w, y: c.safe.minY, width: w, height: c.safe.height)
@@ -924,19 +996,19 @@ public enum DashLayout {
         let p = m.preferences
         title(.ride, first: true)
         firstInSection = true
-        button("menu.end", DashText.endNavigation.localized(L), destructive: true)
-        button("menu.park", DashText.parkHere.localized(L))
-        button("menu.goHome", DashText.goHome.localized(L))
-        button("menu.setHome", DashText.setHomeHere.localized(L))
         button("menu.recalc", DashText.recenterRecalc.localized(L))
-        button("menu.record", (m.recording ? DashText.stopRecording : DashText.recordRide).localized(L))
-        button("menu.circuit", DashText.circuit.localized(L))
         if m.showsMusic { button("menu.music", DashText.music.localized(L)) }
+        button("menu.circuit", DashText.circuit.localized(L))
+        button("menu.goHome", DashText.goHome.localized(L))
+        button("menu.park", DashText.parkHere.localized(L))
+        button("menu.record", (m.recording ? DashText.stopRecording : DashText.recordRide).localized(L))
+        button("menu.setHome", DashText.setHomeHere.localized(L))
+        if m.showsEnd { button("menu.end", DashText.endNavigation.localized(L), destructive: true) }
         title(.map, first: false)
         firstInSection = true
-        button("menu.follow", (m.follow ? DashText.followOn : DashText.freePan).localized(L))
-        button("menu.heading", (m.headingUp ? DashText.headingUp : DashText.northUp).localized(L))
-        button("menu.voice", (p.voiceOn ? DashText.voiceOn : DashText.voiceMuted).localized(L))
+        button("menu.follow", (m.follow ? DashText.panMap : DashText.followMe).localized(L))
+        button("menu.heading", (m.headingUp ? DashText.switchNorthUp : DashText.switchHeadingUp).localized(L))
+        button("menu.voice", (p.voiceOn ? DashText.muteVoice : DashText.unmuteVoice).localized(L))
         // － | ＋ row (weights 1:1, gap 6, 18 sp)
         y += c.dp(6)
         let half = (innerW - c.dp(6)) / 2
@@ -967,18 +1039,20 @@ public enum DashLayout {
         y += c.dp(16)
         items.append(DashMenuItem(kind: .button(id: "menu.close", label: DashText.close.localized(L), destructive: false, fontSp: 15),
                                   rect: DashRect(x: left, y: y, width: innerW, height: btnH)))
-        y += btnH + pad
+        y += btnH + pad + max(0, endPadding)
         return DashMenuLayout(panel: panel, items: items, contentHeight: y)
     }
 
     // MARK: Search sheet
 
-    /// Full-canvas white sheet: header h 64 (← 44×44, input pill h 48 with a 40×40 magnifier),
+    /// Full-canvas sheet (white by day, dark at night — P0, D06): header h 64 (← 44×44, input pill h 48 with a 40×40 magnifier),
     /// POI chips row (padding 10×8, horizontally scrollable), status line, then the list: a
     /// "Type on your phone" row followed by place rows (name 16 sp bold, subtitle 13 sp,
     /// ★ Save / ＋ Marker / Delete actions on the right).
+    /// `endPadding` (iOS): extra room at the end of the list, so its last rows can scroll clear of the speed
+    /// chip drawn over the sheet (P0, D03).
     public static func searchSheet(_ c: DashLayoutContext, search: DashSearchState, places: DashPlaces,
-                                   language L: DashLanguage, chipScroll: Double = 0) -> DashSearchLayout {
+                                   language L: DashLanguage, chipScroll: Double = 0, endPadding: Double = 0) -> DashSearchLayout {
         let s = c.safe
         let backFont = c.font(24), inputFont = c.font(17), chipFont = c.font(14)
         let nameFont = c.font(16, .bold), subFont = c.font(13), actionFont = c.font(14, .bold)
@@ -1042,10 +1116,10 @@ public enum DashLayout {
         for (i, entry) in rowsPlaces.enumerated() {
             let (place, resultIndex) = entry
             var specs: [(String, String, DashColor)] = [
-                ("save", DashText.save.localized(L), DashPalette.sheetAction),
-                ("marker", DashText.marker.localized(L), DashPalette.sheetAction),
+                ("save", DashText.save.localized(L), DashPalette.searchDay.sheetAction),
+                ("marker", DashText.marker.localized(L), DashPalette.searchDay.sheetAction),
             ]
-            if places.canDelete(place) { specs.append(("delete", DashText.delete.localized(L), DashPalette.sheetDelete)) }
+            if places.canDelete(place) { specs.append(("delete", DashText.delete.localized(L), DashPalette.searchDay.sheetDelete)) }
             let widths = specs.map { 2 * actionPadX + c.width($0.1, actionFont) }
             let actionsW = widths.reduce(0, +)
             let textW = max(c.dp(80), listVP.width - 2 * rowPadX - actionsW - c.dp(8))
@@ -1070,7 +1144,7 @@ public enum DashLayout {
                                             subtitleRect: subRect, subtitle: subtitle, actions: actions))
             y += rowH + 1 // 1 px divider
         }
-        y += c.dp(24)
+        y += c.dp(24) + max(0, endPadding)
         return DashSearchLayout(sheet: DashRect(x: 0, y: 0, width: c.canvas.width, height: c.canvas.height),
                                 backRect: back, inputRect: input, inputTextRect: inputText, goRect: go,
                                 chipsViewport: chipsVP, chipRects: chipRects, chipLabels: chipLabels,
@@ -1197,6 +1271,15 @@ public enum DashLayout {
             hidesClock: hidesClock)
     }
 
+    /// `rect` cut to stay `gap` clear of `obstacle`: its bottom ends above it, or its right side left of it
+    /// when that keeps at least `minWidth` and loses less area.
+    static func clearOf(_ rect: DashRect, _ obstacle: DashRect, gap: Double, minWidth: Double) -> DashRect {
+        let above = DashRect(x: rect.minX, y: rect.minY, width: rect.width, height: max(0, obstacle.minY - gap - rect.minY))
+        let left = DashRect(x: rect.minX, y: rect.minY, width: max(0, obstacle.minX - gap - rect.minX), height: rect.height)
+        let leftOK = left.width >= minWidth
+        return leftOK && left.width * left.height > above.width * above.height ? left : above
+    }
+
     /// Metadata as drawn on one line: line breaks / tabs become spaces, surrounding blanks trimmed.
     static func musicText(_ s: String) -> String {
         String(s.map { $0.isNewline || $0 == "\t" ? " " : $0 }).trimmingCharacters(in: .whitespaces)
@@ -1283,8 +1366,10 @@ public enum DashLayout {
     /// Block (centred text): title ≤ 2 lines · +4 artist · +2 album · +14 bar (6 dp) · +4 times ·
     /// +14 transport ⏮ 64 · 20 · ⏯ 80 · 20 · ⏭ 64 dp; empty artist / album and an unknown duration
     /// drop their lines and spacing. ✕ (48 dp) on the artwork's top-right corner, inset 8 dp.
+    /// `avoid` (P0, D03): the speed chip, drawn over the sheet — the artwork (with its ✕), the text column and
+    /// the stacked block keep 12 dp clear of it (a smaller artwork, or one moved below / above the chip).
     public static func musicSheet(_ c: DashLayoutContext, music: DashNowPlaying, language: DashLanguage,
-                                  reserved: DashRect?) -> DashMusicSheetLayout {
+                                  reserved: DashRect?, avoid: DashRect? = nil) -> DashMusicSheetLayout {
         let s = c.safe
         let m = c.dp(DashDimens.musicSheetMargin), gap = c.dp(DashDimens.musicSheetGap)
         let textMin = c.dp(DashDimens.musicSheetTextMin), artMin = c.dp(DashDimens.musicArtMin)
@@ -1311,11 +1396,27 @@ public enum DashLayout {
                 side = min(side, s.maxY - m - artTop)
                 artX = s.maxX - m - side
             }
+            var artY = max(artTop, min(s.midY - side / 2, s.maxY - m - side))
+            if let a = avoid, DashRect(x: artX, y: artY, width: side, height: side).intersects(a) {
+                // The speed chip (drawn over the sheet, P0 D03) never hides part of the artwork: the
+                // artwork ends above a low chip, or starts below a high one.
+                if a.midY > s.midY {
+                    let bottom = a.minY - gap
+                    side = min(side, bottom - artTop)
+                    artX = s.maxX - m - side
+                    artY = max(artTop, min(s.midY - side / 2, bottom - side))
+                } else {
+                    let top = max(artTop, a.maxY + gap)
+                    side = min(side, s.maxY - m - top)
+                    artX = s.maxX - m - side
+                    artY = max(top, min(s.midY - side / 2, s.maxY - m - side))
+                }
+            }
             if side >= artMin {
-                let artY = max(artTop, min(s.midY - side / 2, s.maxY - m - side))
                 let art = DashRect(x: artX, y: artY, width: side, height: side)
                 let colX = s.minX + m
-                let col = DashRect(x: colX, y: colTop, width: art.minX - m - colX, height: s.maxY - m - colTop)
+                var col = DashRect(x: colX, y: colTop, width: art.minX - m - colX, height: s.maxY - m - colTop)
+                if let a = avoid, col.intersects(a) { col = clearOf(col, a, gap: gap, minWidth: textMin) }
                 let lines = musicTitleLines(c, content, width: col.width, stacked: false)
                 if let b = musicBlock(c, content, width: col.width, maxHeight: col.height, stacked: false, titleLines: lines) {
                     candidates.append(Candidate(arrangement: .sideBySide, art: art, column: col, block: b))
@@ -1324,19 +1425,36 @@ public enum DashLayout {
         }
         // Stacked: artwork centred at the top, block below.
         do {
-            let top = reserved.map { $0.maxY + gap } ?? s.minY + m
+            let top0 = reserved.map { $0.maxY + gap } ?? s.minY + m
             let w = s.width - 2 * m
-            let avail = s.maxY - m - top
+            var bottom = s.maxY - m
+            // The speed chip (drawn over the sheet, P0 D03) in the lower half: everything stays above it.
+            if let a = avoid, a.minX < s.maxX - m, a.maxX > s.minX + m, a.midY > s.midY { bottom = min(bottom, a.minY - gap) }
             let lines = musicTitleLines(c, content, width: w, stacked: true)
-            for share in [0.60, 0.55, 0.50, 0.45, 0.40, 0.35, 0.30] {
-                guard let b = musicBlock(c, content, width: w, maxHeight: avail * share, stacked: true, titleLines: lines) else { continue }
-                let side = min(w, avail - gap - b.height)
-                guard side >= artMin else { continue }
-                let art = DashRect(x: s.midX - side / 2, y: top, width: side, height: side)
-                candidates.append(Candidate(arrangement: .stacked, art: art,
-                                            column: DashRect(x: s.minX + m, y: art.maxY + gap, width: w, height: b.height), block: b))
-                break
+            func stacked(top: Double, maxSide: Double) -> Candidate? {
+                let avail = bottom - top
+                for share in [0.60, 0.55, 0.50, 0.45, 0.40, 0.35, 0.30] {
+                    guard let b = musicBlock(c, content, width: w, maxHeight: avail * share, stacked: true, titleLines: lines) else { continue }
+                    let side = min(w, maxSide, avail - gap - b.height)
+                    guard side >= artMin else { continue }
+                    let art = DashRect(x: s.midX - side / 2, y: top, width: side, height: side)
+                    let column = DashRect(x: s.minX + m, y: art.maxY + gap, width: w, height: b.height)
+                    if let a = avoid, art.intersects(a) || column.intersects(a) { return nil }
+                    return Candidate(arrangement: .stacked, art: art, column: column, block: b)
+                }
+                return nil
             }
+            var options: [Candidate?] = []
+            if let a = avoid, a.minX < s.maxX - m, a.maxX > s.minX + m, a.midY <= s.midY, a.maxY > top0 {
+                // The chip beside the top of the artwork (portrait, under the nav card): a narrower artwork
+                // clear of it, or the artwork below it — whichever is larger.
+                let clear = a.midX > s.midX ? 2 * (a.minX - gap - s.midX) : 2 * (s.midX - a.maxX - gap)
+                if clear >= artMin { options.append(stacked(top: top0, maxSide: clear)) }
+                options.append(stacked(top: max(top0, a.maxY + gap), maxSide: w))
+            } else {
+                options.append(stacked(top: top0, maxSide: w))
+            }
+            if let best = options.compactMap({ $0 }).max(by: { $0.art.width < $1.art.width }) { candidates.append(best) }
         }
         var best: Candidate?
         for cand in candidates {

@@ -19,7 +19,7 @@ final class DashFocusTests: XCTestCase {
         XCTAssertNil(f.focusedId)
     }
 
-    func testPreferGoAndEnd() {
+    func testPreferGoRecenterAndConfirmKeep() {
         var f = DashFocusEngine(focusedId: "preview.save")
         f.ensure(["preview.go", "preview.circuit", "preview.cancel", "preview.save"], prefer: .go)
         XCTAssertEqual(f.focusedId, "preview.go")
@@ -27,10 +27,17 @@ final class DashFocusTests: XCTestCase {
         f = DashFocusEngine(focusedId: "preview.save")
         f.ensure(["preview.cancel", "preview.save", "preview.home", "preview.marker"], prefer: .go)
         XCTAssertEqual(f.focusedId, "preview.save")
-        f.ensure(["metrics.end", "fab.recenter"], prefer: .end)
-        XCTAssertEqual(f.focusedId, "metrics.end")
-        f.ensure(["fab.recenter", "fab.zoomIn"], prefer: .end) // End absent → first
+        // P0 (D01): navigating prefers Recenter (Android preferred End, the first item of its map list)
+        f.ensure(["pill", "fab.recenter", "fab.zoomIn"], prefer: .recenter)
         XCTAssertEqual(f.focusedId, "fab.recenter")
+        f.ensure(["fab.zoomIn", "fab.menu"], prefer: .recenter) // Recenter absent → first
+        XCTAssertEqual(f.focusedId, "fab.zoomIn")
+        // the confirm card opens on its safe option, whatever was focused
+        f.ensure(["confirm.keep", "confirm.act"], prefer: .confirmKeep)
+        XCTAssertEqual(f.focusedId, "confirm.keep")
+        f = DashFocusEngine(focusedId: "confirm.act")
+        f.ensure(["confirm.keep", "confirm.act"], prefer: .confirmKeep)
+        XCTAssertEqual(f.focusedId, "confirm.keep")
     }
 
     func testMoveWrapsBothWays() {
@@ -60,7 +67,7 @@ final class DashFocusTests: XCTestCase {
         f.focus("zzz", in: ["a", "b", "c"])
         XCTAssertEqual(f.focusedId, "c")
         XCTAssertEqual(DashFocusEngine.defaultPreference(inPreview: true, navigating: true), .go)
-        XCTAssertEqual(DashFocusEngine.defaultPreference(inPreview: false, navigating: true), .end)
+        XCTAssertEqual(DashFocusEngine.defaultPreference(inPreview: false, navigating: true), .recenter)
         XCTAssertEqual(DashFocusEngine.defaultPreference(inPreview: false, navigating: false), .default)
     }
 }

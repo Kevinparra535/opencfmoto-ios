@@ -216,7 +216,7 @@ Sigue la guía paso a paso [docs/PRUEBA-EN-LA-MOTO.md](docs/PRUEBA-EN-LA-MOTO.md
   Wi-Fi con la app en primer plano. Durante la ruta deja la app abierta en **Modo ruta** (pantalla
   negra, el teléfono no se bloquea) y con el iPhone cargando.
 - **Teléfono bloqueado**: en segundo plano iOS no deja usar el codificador de vídeo por hardware;
-  el tablero mantiene una imagen fija («Teléfono bloqueado: desbloquéalo para actualizar el mapa»).
+  el tablero mantiene una imagen fija («Mapa en pausa», sin números; el manillar no hace nada).
   La build actual es de **diagnóstico**: con el teléfono bloqueado prueba si iOS da un codificador
   por software (si lo da, el mapa sigue moviéndose) y mide en los registros si el proceso, el Wi-Fi,
   el enlace, el GPS y la brújula siguen vivos, y cuánta CPU gasta (guía en
@@ -521,7 +521,7 @@ no Wi-Fi or dash, and a demo GPS route so you can watch the dash UI on the phone
   app is in the foreground. During a ride keep the app open in **Ride Mode** (black screen, the
   phone does not auto-lock) with the iPhone charging.
 - **Locked phone**: iOS takes the hardware video encoder away in the background; the dash keeps a
-  still "hold" picture ("Phone locked — unlock to update the map"). The current build is a
+  still "hold" picture ("Map paused", no numbers; the handlebar does nothing). The current build is a
   **diagnostics** build: while the phone is locked it tries whether iOS gives it a software encoder
   (if so, the map keeps moving) and logs whether the process, the Wi-Fi, the link, GPS and heading
   stay alive and how much CPU it uses (guide in [docs/PRUEBA-EN-LA-MOTO.md](docs/PRUEBA-EN-LA-MOTO.md),

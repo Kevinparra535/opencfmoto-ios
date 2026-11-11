@@ -68,15 +68,21 @@ final class ControlsModelTests: XCTestCase {
     }
 
     @MainActor
-    func testDoubleForwardOpensTheMenu() async {
+    func testQuickDoubleForwardIsOnlyOneStep() async {
+        // P0 (D02): ▶▶ is unmapped on iOS (was Home → menu). The first ▶ moves the focus at once; the quick
+        // second press is swallowed: no menu, no second step — a mistimed double never means something else.
         let h = AppTestHarness()
         h.controls.setRemoteEnabled(true)
         h.ride.flushModel()
+        XCTAssertEqual(h.ride.ui.state.focusedId, "pill")
         signal(h, .forward)
-        signal(h, .forward, after: 0.1) // inside the 300 ms window → ▶▶ = Home (iOS default) → menu
-        XCTAssertEqual(h.ride.ui.state.sheet, .menu)
+        let afterOne = h.ride.ui.state.focusedId
+        XCTAssertNotEqual(afterOne, "pill")
+        signal(h, .forward, after: 0.1) // inside the 300 ms window → ▶▶ = Nothing
+        XCTAssertEqual(h.ride.ui.state.sheet, .none)
+        XCTAssertEqual(h.ride.ui.state.focusedId, afterOne)
         XCTAssertEqual(h.controls.lastCommand,
-                       "\(SessionText.gestureLabel(.navFwdDouble, h.language)) \u{2192} \(SessionText.actionLabel(.home, h.language))")
+                       "\(SessionText.gestureLabel(.navFwdDouble, h.language)) \u{2192} \(SessionText.actionLabel(.none, h.language))")
     }
 
     /// input-controls §7.9: capture off = the bars control media normally. The remote is not even

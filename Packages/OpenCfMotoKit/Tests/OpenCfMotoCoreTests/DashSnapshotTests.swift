@@ -97,11 +97,14 @@ final class DashSnapshotTests: XCTestCase {
 
     func testLandscapeNavigatingTurnLanesLimit() {
         let list = frame(DashFixtures.navigating())
-        assertHas(list, ["metrics.end", "nav.card", "metrics.card", "speed.chip"])
+        assertHas(list, ["nav.card", "metrics.card", "speed.chip", "fab.recenter"])
+        // P0: no End on the map (D01, it is in the menu behind a confirmation), no ALT (D12)
+        XCTAssertFalse(list.hitRegions.contains { $0.id == "metrics.end" })
         let svg = snapshot("land-navigating", list)
         XCTAssertTrue(svg.contains(">350 m<"))
         XCTAssertTrue(svg.contains(">TIME<"))
-        XCTAssertTrue(svg.contains(">End<"))
+        XCTAssertFalse(svg.contains(">End<"))
+        XCTAssertFalse(svg.contains(">ALT<"))
         XCTAssertTrue(svg.contains(">© OpenStreetMap<")) // above the metrics card
     }
 
@@ -137,7 +140,7 @@ final class DashSnapshotTests: XCTestCase {
         var m = DashFixtures.navigating()
         m.isNight = true
         let list = frame(m)
-        XCTAssertTrue(list.commands.contains { if case let .tile(_, _, _, _, inv) = $0 { return inv }; return false })
+        XCTAssertTrue(list.commands.contains { if case let .tile(_, _, _, _, t) = $0 { return t == .mutedNight }; return false })
         snapshot("land-night", list)
     }
 
@@ -167,11 +170,82 @@ final class DashSnapshotTests: XCTestCase {
     }
 
     func testHoldScreen() {
+        // P0 (D17): what the app serves (no message of its own): «Map paused», no map and no stale numbers.
         let ui = DashUIController()
         ui.update(DashFixtures.navigating())
-        let list = ui.displayList(forHoldScreen: "Paused — open OpenCfMoto on your phone to resume", now: 100)
+        let list = ui.displayList(forHoldScreen: nil, now: 100)
         XCTAssertTrue(list.hitRegions.isEmpty)
-        snapshot("land-hold", list)
+        let svg = snapshot("land-hold", list)
+        XCTAssertTrue(svg.contains(">Map paused<"))
+        XCTAssertTrue(svg.contains(">Voice keeps guiding<"))
+        XCTAssertFalse(list.commands.contains { if case .tile = $0 { return true }; return false }, "no map")
+        let texts = list.commands.compactMap { if case let .text(s, _, _) = $0 { return s }; return nil }
+        XCTAssertFalse(texts.contains { $0.contains(where: \.isNumber) }, "no numbers: \(texts)")
+    }
+
+    // MARK: P0 (D01, D06): the confirm card, End in the menu, the night search surfaces
+
+    /// From the map while navigating: HOME, the knob to «End route…» (scrolled clear of the speed gauge).
+    private func focusMenuEnd(_ ui: DashUIController) {
+        _ = ui.handle(.key(.home), now: 100)
+        let order = ui.state.focusOrder
+        let at = ui.state.focusedId.flatMap { order.firstIndex(of: $0) } ?? 0
+        _ = ui.handle(.knob((order.firstIndex(of: DashFocusEngine.menuEndId) ?? at) - at), now: 100)
+        XCTAssertEqual(ui.state.focusedId, DashFocusEngine.menuEndId)
+    }
+
+    func testLandscapeMenuEndFocused() {
+        snapshot("land-menu-end", frame(DashFixtures.navigating()) { ui in self.focusMenuEnd(ui) })
+    }
+
+    func testLandscapeConfirmEnd() {
+        let list = frame(DashFixtures.navigating()) { ui in
+            self.focusMenuEnd(ui)
+            XCTAssertEqual(ui.handle(.key(.enter), now: 100), [])
+            XCTAssertEqual(ui.state.focusedId, DashFocusEngine.confirmKeepId)
+        }
+        assertHas(list, [DashFocusEngine.confirmKeepId, DashFocusEngine.confirmActId, "speed.chip", "nav.card"])
+        let svg = snapshot("land-confirm-end", list)
+        XCTAssertTrue(svg.contains(">End the route?<"))
+        XCTAssertTrue(svg.contains(">Keep going<"))
+    }
+
+    func testPortraitConfirmEndSpanish() {
+        var m = DashFixtures.navigating(DashFixtures.port)
+        m.language = .es
+        let svg = snapshot("port-confirm-end-es", frame(m) { ui in
+            self.focusMenuEnd(ui)
+            _ = ui.handle(.key(.enter), now: 100)
+        })
+        XCTAssertTrue(svg.contains(">¿Terminar la ruta?<"))
+        XCTAssertTrue(svg.contains(">Seguir<"))
+        XCTAssertTrue(svg.contains(">Terminar<"))
+    }
+
+    func testLandscapeConfirmChange() {
+        var m = DashFixtures.navigating()
+        m.nav.preview = DashFixtures.preview().nav.preview
+        let list = frame(m) { ui in XCTAssertEqual(ui.handle(.key(.enter), now: 100), []) }
+        let svg = snapshot("land-confirm-change", list)
+        XCTAssertTrue(svg.contains(">Change route?<"))
+    }
+
+    func testLandscapeNightFreeRide() {
+        var m = DashFixtures.freeRide()
+        m.isNight = true
+        let list = frame(m)
+        // the dark search pill (D06): no white surface after dark
+        XCTAssertFalse(list.commands.contains { if case let .fill(_, c, _) = $0 { return c == DashPalette.searchDay.pillFill }; return false })
+        snapshot("land-night-free-ride", list)
+    }
+
+    func testLandscapeNightSearch() {
+        var m = DashFixtures.withSearchResults(DashFixtures.freeRide())
+        m.isNight = true
+        let list = frame(m) { ui in _ = ui.handle(.key(.assistant), now: 100) }
+        XCTAssertTrue(list.commands.contains { if case let .fill(_, c, _) = $0 { return c == DashPalette.searchNight.sheetBackground }; return false })
+        XCTAssertFalse(list.commands.contains { if case let .fill(_, c, _) = $0 { return c == DashPalette.searchDay.sheetBackground }; return false })
+        snapshot("land-night-search", list)
     }
 
     // MARK: Portrait 800×944
@@ -213,7 +287,8 @@ final class DashSnapshotTests: XCTestCase {
         let svg = snapshot("land-navigating-es", frame(m))
         XCTAssertTrue(svg.contains(">TIEMPO<"))
         XCTAssertTrue(svg.contains(">RESTANTE<"))
-        XCTAssertTrue(svg.contains(">Fin<"))
+        XCTAssertFalse(svg.contains(">Fin<"), "P0 (D01): no End on the map")
+        XCTAssertFalse(svg.contains(">ALT<"), "P0 (D12): no ALT")
     }
 
     // MARK: Apple Music (iOS addition) — artwork is the exporter's placeholder (gradient + id)
@@ -262,7 +337,15 @@ final class DashSnapshotTests: XCTestCase {
             _ = ui.handle(.knob(-1), now: self.musicNow)
             XCTAssertEqual(ui.state.focusedId, "music.tile")
         }
-        XCTAssertFalse(list.commands.contains { if case let .fill(_, c, _) = $0 { return c == DashPalette.focusFill }; return false })
+        let tile = try! XCTUnwrap(list.hitRegions.last { $0.id == "music.tile" }).rect
+        // a wash = a fill in the ring's colours over at least half the cover (its own white glyphs are smaller)
+        XCTAssertFalse(list.commands.contains {
+            if case let .fill(p, c, _) = $0, c == DashPalette.focusStroke || c == DashPalette.focusEdge, let b = p.controlPointBounds {
+                let w = min(b.maxX, tile.maxX) - max(b.minX, tile.minX), h = min(b.maxY, tile.maxY) - max(b.minY, tile.minY)
+                return w > 0 && h > 0 && w * h >= 0.5 * tile.width * tile.height
+            }
+            return false
+        }, "no wash over the cover")
         return list
     }
 
@@ -325,10 +408,11 @@ final class DashSnapshotTests: XCTestCase {
     }
 
     func testLandscapeMusicMenu() {
-        // "Music" closes the Ride section (focused: scrolled into view)
+        // "Music" right after the menu's default item, Recenter / reroute (P0, D01), focused
         let list = frame(music(DashFixtures.navigating()), now: musicNow) { ui in
             _ = ui.handle(.key(.home), now: self.musicNow)
-            _ = ui.handle(.knob(7), now: self.musicNow)
+            _ = ui.handle(.knob(1), now: self.musicNow)
+            XCTAssertEqual(ui.state.focusedId, "menu.music")
         }
         assertHas(list, ["menu.music"])
         let svg = snapshot("land-music-menu", list)

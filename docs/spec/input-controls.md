@@ -1300,18 +1300,33 @@ Engine inputs on iOS:
 | `navBack` | ◀ tap | `MEDIA_PREVIOUS` | `previousTrack` | yes | knobBack | **knobBack** |
 | `navFwd` | ▶ tap | `MEDIA_NEXT` | `nextTrack` | yes | knobFwd | **knobFwd** |
 | `selectPress` | ★ tap | `PLAY_PAUSE`/`PAUSE` | toggle / play / pause | yes | select | **select** |
-| `selectDouble` | ★★ | 2 × play/pause in 300 ms | 2 × command | yes | back | **back** |
-| `navBackDouble` | ◀◀ | 2 × previous | 2 × `previousTrack` | yes | left | **left** (previous focus group) |
-| `navFwdDouble` | ▶▶ | 2 × next | 2 × `nextTrack` | yes | right | **home** (menu): replaces the unobservable ★-hold |
+| `selectDouble` | ★★ | 2 × play/pause in 300 ms | 2 × command | yes | back | **none** (P0; was back) |
+| `navBackDouble` | ◀◀ | 2 × previous | 2 × `previousTrack` | yes | left | **none** (P0; was left) |
+| `navFwdDouble` | ▶▶ | 2 × next | 2 × `nextTrack` | yes | right | **none** (P0; was home, the menu) |
 | `selectLong` | ★ hold | DOWN…UP ≥ 600 ms / repeat | — | **no** | home | **none** (stored value kept; never fires) |
 | `navBackLong` | ◀ hold | DOWN…UP ≥ 600 ms | `seekBackward` begin/end (if the dash sends REWIND) | unverified | none | **none** |
 | `navFwdLong` | ▶ hold | DOWN…UP ≥ 600 ms | `seekForward` begin/end | unverified | none | **none** |
 
+**P0 (UI/UX proposal, D02): every double → none.** With snappy singles a double always fired its single
+first (★★ = activate, then Back; ▶▶ = move, then the menu; ◀◀ = −2) and a double pressed a bit slowly became
+two singles, so a mistimed double meant something else. Now a quick second press is swallowed (its action is
+`none`) and a slow one is a second single: a double never changes meaning. The window stays 300 ms. A map
+stored exactly as the pre-P0 iOS default (▶▶ home, ◀◀ left, ★★ back) reads as the new default
+(`HandlebarPresets.migratingLegacyDefault`); any map the rider changed, BACK/SET and the single-button option
+are kept. What only a double reached stays reachable with singles:
+- BACK (★★): every sheet and card has its own control — the menu's Close, the search sheet's ←, the Music
+  sheet's ✕, the confirm card's «Keep going», the arrival card's Done, the preview's Cancel; on the map BACK
+  did nothing;
+- HOME (▶▶): the map's Menu FAB (⋮), a few ◀ / ▶ from the default focus (over a preview or the arrival card,
+  once Cancel / Go / Done put the map back); with the menu open, its Close (◀ from the menu's first item);
+- D-pad left (◀◀): the same as ◀ (focus −1).
+
 Now Playing metadata, for the dash's own "now playing" widget. Printable ASCII only: the 450MT dash
 drew ◀ ▶ as empty boxes in its media pill (second field test; ★ and · were not caught on camera). The
-pill scrolls the title and artist, so the most-used keys come first:
+pill scrolls the title and artist; since P0 it names only the singles, in the dash's language (the
+proposal's «◀ ▶ mover · ★ elegir»):
 - title `"OpenCfMoto"`
-- artist `"< > move  * OK  ** Back  >> Menu  << Group"`
+- artist `"< > move  * select"` / `"< > mover  * elegir"`
 - album `"OpenCfMoto"`
 - duration 3600 s
 
@@ -1492,6 +1507,7 @@ In both options, rely on the on-phone pad, Lock Screen controls and a Live Activ
 16. **Built-in map pinch** was never possible from the dash on Android. Real dash pinch on the iOS UI is
     new and untested against digitizer ghosting. The 48 px merge and Q6 promotion logic should mitigate
     it.
-17. **Snappy singles**: a double-tap always fires the single action first. On iOS, where ▶▶ maps to Home,
-    that means "focus next, then open the menu". This is harmless but visible. Consider "deferred
-    singles" for channels whose ×2 is mapped (Android doc 06 idea 4, the inverse case).
+17. **Snappy singles**: a double-tap always fires the single action first. On iOS before P0, where ▶▶
+    mapped to Home, that meant "focus next, then open the menu". P0 maps every double to none on the iOS
+    default map, so a double is its single, once (quick) or twice (slow); "deferred singles" remain an option
+    for maps whose ×2 is mapped (the single-button option, BACK/SET).
