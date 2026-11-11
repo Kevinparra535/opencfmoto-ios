@@ -7,6 +7,7 @@
 # runs one subcommand per step; `all` runs them in order (for a manual run on a Mac).
 #
 #   create-signing    asc.py create-signing: a distribution certificate + two App Store profiles
+#                     named after the run and the build number («OpenCfMoto CI <suffix> b<build> …»)
 #   setup-keychain    a temporary keychain holding that identity and Apple's WWDR intermediate
 #   install-profiles  copy the profiles to where every Xcode version looks for them
 #   configure         Config/Local.xcconfig (Manual signing, the CI profiles) + xcodegen generate
@@ -16,11 +17,15 @@
 #   teardown          stop what a cancelled step left running; delete keychain, keys, profiles and
 #                     Local.xcconfig; revoke the certificate and profiles at once unless the build
 #                     reached Apple (uploaded, or committed or being committed: then the workflow's
-#                     finish job revokes them once Apple has processed it, and teardown revokes only
-#                     a duplicate certificate an unanswered request made). Writes the step outputs
-#                     uploaded=true|false and teardown=done. Safe to run more than once, also
-#                     without the API key.
-#   all               everything above in order, teardown on exit
+#                     finish job keeps them if Apple accepts the build, until it accepts a newer one,
+#                     and revokes them if not; teardown revokes only a duplicate certificate an
+#                     unanswered request made). Writes the step outputs uploaded=true|false and
+#                     teardown=done. Safe to run more than once, also without the API key.
+#   all               everything above in order, teardown on exit. On a Mac there is no finish
+#                     job: an uploaded build's set («OpenCfMoto CI local… b<build> …») stays, and
+#                     the workflow's janitor revokes it 12 hours after it was made, whatever the
+#                     build's state; submit a Mac-built build for beta review before then, or use
+#                     the workflow
 #
 # Environment:
 #   TF_WORK          work directory (default $RUNNER_TEMP/testflight): keychain, archive, IPA, state
@@ -36,9 +41,10 @@
 #                    finish (default 60 s) and to wait for stopped leftovers (default 15 s)
 #   TF_DUPLICATES_WAIT_SEC   teardown of an uploaded build: how long the look for a duplicate
 #                    certificate may take (default 120 s; GitHub stops Clean up soon after a cancel)
-#   GITHUB_REPOSITORY_ID GITHUB_RUN_ID GITHUB_RUN_ATTEMPT   name the CI profiles
-#                    ("OpenCfMoto CI r<repository>-<run>-<attempt> app"; "local<date>-1" on a Mac);
-#                    TF_SUFFIX replaces that suffix (asc.py janitor never removes such profiles)
+#   GITHUB_REPOSITORY_ID GITHUB_RUN_ID GITHUB_RUN_ATTEMPT BUILD_NUMBER   name the CI profiles
+#                    ("OpenCfMoto CI r<repository>-<run>-<attempt> b<build> app"; "local<date>-1" on
+#                    a Mac); TF_SUFFIX replaces that suffix (asc.py janitor never removes such
+#                    profiles unless the result matches its names)
 #
 # The workflow runs each subcommand by its absolute path: that is how teardown recognizes (and
 # stops) a subcommand a cancelled step left running.
@@ -77,6 +83,7 @@ URL_CERTS="https://developer.apple.com/account/resources/certificates/list"
 URL_PROFILES="https://developer.apple.com/account/resources/profiles/list"
 NEW_RUN_ES="lanza una ejecución nueva: Actions ▸ TestFlight ▸ Run workflow (Re-run repite el mismo commit, sin tus arreglos)"
 NEW_RUN_EN="start a new run: Actions ▸ TestFlight ▸ Run workflow (Re-run repeats the same commit, without your fixes)"
+FINISH_JOB="Processing, TestFlight group, keep or revoke the certificate" # the workflow's third job (asc.py FINISH_JOB)
 STEP=""
 
 # ------------------------------------------------------------------ output helpers
@@ -204,15 +211,22 @@ cmd_create_signing() {
   mkdir -p "$SIGNING_DIR"
   # Unique per run, so profiles left behind by a crashed run never clash by name. Recorded before
   # asc.py runs: the teardown names this run's profiles by it in its manual steps.
-  local suffix outputs="$WORK/create-signing.outputs" status=0
+  # The build number (the workflow's «Choose the build number» step runs first) goes into the
+  # names too: the janitor decides about each kept signing set by its build's state.
+  local suffix build="" outputs="$WORK/create-signing.outputs" status=0
   suffix=$(profile_suffix)
+  case "${BUILD_NUMBER:-}" in
+    '' | *[!0-9]*) ;;
+    *) build=$BUILD_NUMBER ;;
+  esac
   state_set S_SUFFIX "$suffix"
+  state_set S_BUILD "$build"
   : > "$outputs"
-  note "creating a distribution certificate and two App Store profiles (suffix $suffix)"
+  note "creating a distribution certificate and two App Store profiles (suffix $suffix, build ${build:-?})"
   GITHUB_OUTPUT="$outputs" python3 "$ASC" create-signing \
     --app-bundle-resource-id "$APP_BUNDLE_RESOURCE_ID" --mirror-bundle-resource-id "$MIRROR_BUNDLE_RESOURCE_ID" \
     --app-bundle-id "$APP_BUNDLE_ID" --mirror-bundle-id "$MIRROR_BUNDLE_ID" --app-group "$APP_GROUP" \
-    --out "$SIGNING_DIR" --suffix "$suffix" || status=$?
+    --out "$SIGNING_DIR" --suffix "$suffix" --build "$build" || status=$?
   # Pass every id on even after a failure: the job outputs and teardown need them.
   if [ -n "${GITHUB_OUTPUT:-}" ]; then cat "$outputs" >> "$GITHUB_OUTPUT"; fi
   gh_output profile_ids "$(state_json profile_ids)"
@@ -229,8 +243,8 @@ cmd_create_signing() {
   fi
   app_name=$(output_value "$outputs" profile_app_name)
   mirror_name=$(output_value "$outputs" profile_mirror_name)
-  if [ -z "$app_name" ]; then app_name="OpenCfMoto CI $suffix app"; fi
-  if [ -z "$mirror_name" ]; then mirror_name="OpenCfMoto CI $suffix mirror"; fi
+  if [ -z "$app_name" ]; then app_name="OpenCfMoto CI $suffix${build:+ b$build} app"; fi
+  if [ -z "$mirror_name" ]; then mirror_name="OpenCfMoto CI $suffix${build:+ b$build} mirror"; fi
   if ! [[ "$team" =~ ^[A-Z0-9]{10}$ ]]; then
     die "No se pudo leer el Team ID del certificado." "Could not read the team id from the certificate."
   fi
@@ -547,8 +561,8 @@ cmd_upload() {
       ;;
     3) # the API refused before the file was committed: Apple's own uploader may still work
       if [ -e "$WORK/committed" ]; then # Apple has the file already: never send it twice
-        die "asc.py pidió usar altool, pero Apple ya tiene el archivo: no se sube otra vez. El trabajo «Processing, TestFlight group, revoke the certificate» espera a la build." \
-          "asc.py asked for altool, but Apple already has the file: it is not uploaded again. The «Processing, TestFlight group, revoke the certificate» job waits for the build."
+        die "asc.py pidió usar altool, pero Apple ya tiene el archivo: no se sube otra vez. El trabajo «${FINISH_JOB}» espera a la build." \
+          "asc.py asked for altool, but Apple already has the file: it is not uploaded again. The «${FINISH_JOB}» job waits for the build."
       fi
       annotate warning "TestFlight upload" "La API de subida de builds rechazó la subida; se intenta con xcrun altool."$'\n'"The Build Upload API refused the upload; trying xcrun altool instead."
       altool_upload "$ipa"
@@ -696,21 +710,25 @@ cmd_teardown() {
 
   # Apple side: a certificate counts against the team's small limit, so never leave one behind.
   # Once Apple has (or may have) the file - uploaded, or committed or being committed - the
-  # certificate must outlive this job: the finish job revokes it after Apple's processing.
-  local have_key="" suffix="" status
+  # certificate must outlive this job: the finish job keeps it if Apple accepts the build (beta
+  # review checks the signature again) and revokes it if not.
+  local have_key="" suffix="" build="" status
   if [ -n "${ASC_KEY_ID:-}" ] && [ -n "${ASC_ISSUER_ID:-}" ] && [ -n "${ASC_PRIVATE_KEY:-}" ]; then have_key=1; fi
   state_load
-  suffix="${S_SUFFIX:-}" # this run's profile names: «OpenCfMoto CI <suffix> app|mirror»
+  suffix="${S_SUFFIX:-}" # this run's profile names: «OpenCfMoto CI <suffix> b<build> app|mirror»
+  build="${S_BUILD:-}"
   if [ -f "$WORK/uploaded" ] || [ -f "$WORK/committed" ]; then
     uploaded=true
     # Written before anything below talks to Apple: should GitHub stop this step half-way (its
     # time limit after a cancel), the finish job must still wait for the build before it revokes
     # the certificate, not take this job for one that lost its runner.
     gh_output uploaded true
-    if [ -f "$WORK/uploaded" ]; then
-      note "the build was uploaded: the «Processing, TestFlight group, revoke the certificate» job revokes the CI certificate and profiles after Apple's processing"
+    if [ "${GITHUB_ACTIONS:-}" != true ]; then
+      note "Apple has (or may have) this build, sent from a Mac, where there is no «${FINISH_JOB}» job: the CI certificate and profiles stay, and the TestFlight workflow's janitor revokes them 12 hours after they were made; submit this build for beta review before then, or use the workflow"
+    elif [ -f "$WORK/uploaded" ]; then
+      note "the build was uploaded: after Apple's processing the «${FINISH_JOB}» job keeps the CI certificate and profiles if Apple accepts the build, and revokes them if not"
     else
-      note "Apple has, or may have, the whole file although the upload step did not finish: the «Processing, TestFlight group, revoke the certificate» job waits for the build, then revokes the CI certificate and profiles"
+      note "Apple has, or may have, the whole file although the upload step did not finish: the «${FINISH_JOB}» job waits for the build, then keeps or revokes the CI certificate and profiles"
     fi
     # A second certificate that an unanswered certificate request of this run made is in no
     # profile, so only this run's key (csr.pem) finds it: revoke it now (asc.py keeps the
@@ -719,21 +737,21 @@ cmd_teardown() {
       status=0
       bounded "$DUPLICATES_WAIT_SEC" python3 "$ASC" cleanup --state "$SIGNING_DIR/state.json" --duplicates-only || status=$?
       if [ "$status" -eq 142 ]; then
-        annotate warning "Certificado sin confirmar / Certificate not confirmed" "Una petición de certificado de esta ejecución quedó sin respuesta clara, y App Store Connect no respondió a tiempo (${DUPLICATES_WAIT_SEC} s) para comprobar si creó un segundo certificado. Cuando termine el trabajo «Processing, TestFlight group, revoke the certificate» (revoca el certificado de esta build), mira en $URL_CERTS: si aún queda un certificado «Apple Distribution» creado hoy, púlsalo ▸ Revoke."$'\n'"A certificate request of this run got no clear answer, and App Store Connect did not answer in time (${DUPLICATES_WAIT_SEC} s) to check whether it made a second certificate. Once the «Processing, TestFlight group, revoke the certificate» job has finished (it revokes this build's certificate), look at $URL_CERTS: if an «Apple Distribution» certificate created today is still there, click it ▸ Revoke."
+        annotate warning "Certificado sin confirmar / Certificate not confirmed" "Una petición de certificado de esta ejecución quedó sin respuesta clara, y App Store Connect no respondió a tiempo (${DUPLICATES_WAIT_SEC} s) para comprobar si creó un segundo certificado. Cuando termine el trabajo «${FINISH_JOB}», el certificado de esta build sigue en la cuenta si Apple la aceptó (lo usan sus perfiles «OpenCfMoto CI ${suffix:-…}${build:+ b$build} app» y «… mirror»): no lo revoques mientras esa build esté en revisión o sea la que vas a enviar. Un segundo certificado «Apple Distribution» creado hoy que no usa ningún perfil es el duplicado: revócalo en $URL_CERTS solo si sabes cuál es. Ante la duda, déjalo: no firma nada; solo ocupa uno de los pocos certificados de distribución que permite Apple hasta que caduque."$'\n'"A certificate request of this run got no clear answer, and App Store Connect did not answer in time (${DUPLICATES_WAIT_SEC} s) to check whether it made a second certificate. Once the «${FINISH_JOB}» job has finished, this build's certificate stays in the account if Apple accepted the build (its profiles «OpenCfMoto CI ${suffix:-…}${build:+ b$build} app» and «… mirror» use it): do not revoke it while that build is in review or is the one you will submit. A second «Apple Distribution» certificate created today that no profile uses is the duplicate: revoke it at $URL_CERTS only if you know which one it is. When in doubt, leave it: it signs nothing; it only uses one of the few distribution certificates Apple allows until it expires."
       fi
     fi
   elif [ -f "$SIGNING_DIR/state.json" ] && [ ! -f "$WORK/apple-cleanup-done" ]; then
     if [ -n "$have_key" ]; then
       note "the build was not uploaded: revoking the CI certificate and profiles now"
-      if python3 "$ASC" cleanup --state "$SIGNING_DIR/state.json" --suffix "$suffix"; then touch "$WORK/apple-cleanup-done"; fi
+      if python3 "$ASC" cleanup --state "$SIGNING_DIR/state.json" --suffix "$suffix" --build "$build"; then touch "$WORK/apple-cleanup-done"; fi
     else
       # Only this run's profiles by name: another repository's or a Mac's run may be using its own.
       local cert_id profile_ids app mirror
       cert_id=$(state_json cert_id)
       profile_ids=$(state_json profile_ids)
-      app="OpenCfMoto CI ${suffix:-…} app"
-      mirror="OpenCfMoto CI ${suffix:-…} mirror"
-      annotate warning "Revoca a mano / Revoke by hand" "Sin la clave de la API no se pudo revocar lo que creó esta ejecución. En $URL_CERTS revoca el certificado «Apple Distribution» creado hoy${cert_id:+ (id $cert_id)} (púlsalo ▸ Revoke) y en $URL_PROFILES borra los perfiles «${app}» y «${mirror}»${profile_ids:+ (ids $profile_ids)} (cada uno ▸ Remove; ningún otro «OpenCfMoto CI …»)."$'\n'"Without the API key, what this run created could not be revoked. At $URL_CERTS revoke the «Apple Distribution» certificate created today${cert_id:+ (id $cert_id)} (click it ▸ Revoke) and at $URL_PROFILES delete the «${app}» and «${mirror}» profiles${profile_ids:+ (ids $profile_ids)} (each ▸ Remove; no other «OpenCfMoto CI …» one)."
+      app="OpenCfMoto CI ${suffix:-…}${build:+ b$build} app"
+      mirror="OpenCfMoto CI ${suffix:-…}${build:+ b$build} mirror"
+      annotate warning "Revoca a mano / Revoke by hand" "Sin la clave de la API no se pudo revocar lo que creó esta ejecución. En $URL_CERTS revoca el certificado «Apple Distribution» creado hoy${cert_id:+ (id $cert_id)} (púlsalo ▸ Revoke) y en $URL_PROFILES borra los perfiles «${app}» y «${mirror}»${profile_ids:+ (ids $profile_ids)} (cada uno ▸ Remove; ningún otro «OpenCfMoto CI …»). No revoques el certificado que el workflow conserva a propósito para la última build que Apple aceptó (lo usan sus perfiles «OpenCfMoto CI … bN app» y «… bN mirror», de otra ejecución, con N el número de esa build): mientras esa build esté en revisión o sea la que vas a enviar a las pruebas externas, revocarlo hace que Apple la marque «Invalid Binary» (ITMS-90035)."$'\n'"Without the API key, what this run created could not be revoked. At $URL_CERTS revoke the «Apple Distribution» certificate created today${cert_id:+ (id $cert_id)} (click it ▸ Revoke) and at $URL_PROFILES delete the «${app}» and «${mirror}» profiles${profile_ids:+ (ids $profile_ids)} (each ▸ Remove; no other «OpenCfMoto CI …» one). Do not revoke the certificate the workflow keeps on purpose for the latest build Apple accepted (its profiles «OpenCfMoto CI … bN app» and «… bN mirror», of another run, N being that build's number, use it): while that build is in review or is the one you will send to external testing, revoking it makes Apple mark it «Invalid Binary» (ITMS-90035)."
     fi
   fi
   gh_output uploaded "$uploaded"

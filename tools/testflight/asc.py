@@ -11,14 +11,26 @@ LibreSSL as macOS /usr/bin/openssl), using only flags both understand.
   asc.py check-auth
   asc.py prepare --prefix PREFIX [--setup-only]
   asc.py next-build --app-id ID
-  asc.py janitor [--run-id ID]
+  asc.py janitor [--run-id ID] [--app-id ID]
   asc.py create-signing --app-bundle-resource-id ID --mirror-bundle-resource-id ID \\
-                        --app-bundle-id X --mirror-bundle-id Y --app-group G --out DIR [--suffix S]
+                        --app-bundle-id X --mirror-bundle-id Y --app-group G --out DIR [--suffix S] \\
+                        [--build N]
   asc.py upload --ipa PATH --app-id ID --version 1.2.3 --build N [--timeout-min 30] \\
                 [--committed-marker PATH]
   asc.py wait-build --app-id ID --build N [--timeout-min 90] [--poll-sec 60]
-  asc.py cleanup [--state DIR/state.json] [--cert-id C] [--profile-ids P1,P2] [--suffix S]
+  asc.py settle-signing --app-id ID --build N --state STATE --run-id ID [--cert-id C] \\
+                        [--profile-ids P1,P2]                    (finish job, after wait-build)
+  asc.py cleanup [--state DIR/state.json] [--cert-id C] [--profile-ids P1,P2] [--suffix S] [--build N]
   asc.py cleanup --state DIR/state.json --duplicates-only     (teardown of an uploaded build)
+
+Signing sets: each run signs with a distribution certificate of its own, made from a private key
+that exists only on the build runner (the teardown deletes it; Apple only ever sees the CSR), plus
+two App Store profiles named after the run and the build. Apple checks a build's signature again
+when it is submitted to TestFlight beta review, and marks a build signed with a revoked
+certificate «Invalid Binary» (ITMS-90035). So the set of a build Apple accepted (processing VALID)
+stays: nobody can sign with it any more (the key is gone), it only keeps that signature valid.
+It is revoked once a newer build is accepted, unless its build is still waiting for or in beta
+review (settle-signing, janitor). Every other set is revoked as soon as nothing needs it.
 
 Environment: ASC_KEY_ID, ASC_ISSUER_ID and ASC_PRIVATE_KEY (the text of the .p8 file; CRLF, stray
 spaces, a one-line paste or literal "\\n" sequences are tolerated) or ASC_PRIVATE_KEY_PATH.
@@ -98,11 +110,18 @@ MIRROR_CAPABILITIES = ("APP_GROUPS",)
 BETA_GROUP_NAME = "OpenCfMoto (interno)"
 TESTER_ROLE = "ACCOUNT_HOLDER"            # only the owner becomes a tester
 CI_PROFILE_PREFIX = "OpenCfMoto CI "      # create-signing names its profiles like this
-# The whole names create-signing gives (default_suffix): "OpenCfMoto CI r<repository id>-<run id>-
-# <attempt> app|mirror" on GitHub, "OpenCfMoto CI local<date and time>-1 app|mirror" on a Mac.
+# The whole names create-signing gives (profile_name with default_suffix and the build number):
+# "OpenCfMoto CI r<repository id>-<run id>-<attempt> b<build> app|mirror" on GitHub, "OpenCfMoto CI
+# local<date and time>-1 b<build> app|mirror" on a Mac. Names from before the build number was in
+# them (no « b<build>») are leftovers: their certificates are revoked already, or sign nothing
+# Apple still checks. Apple documents no length limit for profile names; these stay under 64.
 CI_PROFILE_RE = re.compile(r"OpenCfMoto CI (?:r(?P<repo>[0-9]+)-)?(?P<run>[0-9]+|local[0-9]+)"
-                           r"-[0-9]+ (?:app|mirror)")
+                           r"-(?P<attempt>[0-9]+)(?: b(?P<build>[0-9]+))? (?:app|mirror)")
 CI_LEFTOVER_HOURS = 12      # longer than any run (build job 60 min, finish job 120 min)
+# buildBetaDetails.externalBuildState of a build submitted to TestFlight beta review and not
+# reviewed yet: Apple checks its signature again, so its certificate must stay.
+REVIEW_PENDING = frozenset({"WAITING_FOR_BETA_REVIEW", "IN_BETA_REVIEW"})
+FINISH_JOB = "Processing, TestFlight group, keep or revoke the certificate"   # testflight.yml
 ENT_APP_GROUPS = "com.apple.security.application-groups"
 ENT_HOTSPOT = "com.apple.developer.networking.HotspotConfiguration"
 ENT_WIFI_INFO = "com.apple.developer.networking.wifi-info"
@@ -773,11 +792,25 @@ def _ids(ids) -> str:
     return f" ({'id' if len(ids) == 1 else 'ids'} {', '.join(ids)})" if ids else ""
 
 
-def run_profile_names(suffix: str = ""):
+def build_tag(build) -> str:
+    """The build number as profile names carry it: digits only, "" for anything else."""
+    text = str(build or "").strip()
+    return text if re.fullmatch(r"[0-9]+", text) else ""
+
+
+def profile_name(suffix: str, build: str, role: str) -> str:
+    """A CI profile's name: «OpenCfMoto CI <suffix> b<build> app|mirror» (CI_PROFILE_RE), or
+    without « b<build>» when no build number is known."""
+    tag = build_tag(build)
+    return f"{CI_PROFILE_PREFIX}{suffix}{f' b{tag}' if tag else ''} {role}"
+
+
+def run_profile_names(suffix: str = "", build=None):
     """(app, mirror): this run's two profiles as the developer portal's Profiles list names them.
     `suffix`: the exact one create-signing used (the teardown knows it). Without it, the name is
     made from this run's ids as default_suffix() makes it, with «…» for the attempt (the finish
-    job's attempt can differ from the build job's); «…» alone outside GitHub Actions."""
+    job's attempt can differ from the build job's); «…» alone outside GitHub Actions. `build`: the
+    build number in the names (None: BUILD_NUMBER, which every job that signs or cleans up has)."""
     if not suffix:
         run = os.environ.get("GITHUB_RUN_ID") or ""
         repo = os.environ.get("GITHUB_REPOSITORY_ID") or ""
@@ -786,16 +819,33 @@ def run_profile_names(suffix: str = ""):
             suffix = f"{run}-…"
             if re.fullmatch(r"[0-9]+", repo):
                 suffix = f"r{repo}-{suffix}"
-    return f"{CI_PROFILE_PREFIX}{suffix} app", f"{CI_PROFILE_PREFIX}{suffix} mirror"
+    if build is None:
+        build = os.environ.get("BUILD_NUMBER") or ""
+    return profile_name(suffix, build, "app"), profile_name(suffix, build, "mirror")
+
+
+# A run's own manual steps must never send the owner after the certificate the workflow keeps on
+# purpose: it can be «created today» as well (an earlier run of the same day).
+KEPT_CAUTION_ES = ("No revoques el certificado que el workflow conserva a propósito para la "
+                   "última build que Apple aceptó (lo usan sus perfiles «OpenCfMoto CI … bN app» "
+                   "y «… bN mirror», de otra ejecución, con N el número de esa build): mientras "
+                   "esa build esté en revisión o sea la que vas a enviar a las pruebas externas, "
+                   "revocarlo hace que Apple la marque «Invalid Binary» (ITMS-90035).")
+KEPT_CAUTION_EN = ("Do not revoke the certificate the workflow keeps on purpose for the latest "
+                   "build Apple accepted (its profiles «OpenCfMoto CI … bN app» and «… bN "
+                   "mirror», of another run, N being that build's number, use it): while that "
+                   "build is in review or is the one you will send to external testing, revoking "
+                   "it makes Apple mark it «Invalid Binary» (ITMS-90035).")
 
 
 def manual_revoke(cert_ids=(), profile_ids=(), suffix: str = "", certs: bool = True,
-                  profiles: bool = True):
+                  profiles: bool = True, build=None):
     """(es, en): how to revoke by hand what this run created today, the way the developer portal
     lists it: the certificate by its type and date, the profiles by this run's names, never every
-    «OpenCfMoto CI …» one (another repository's or a Mac's run may still be using its own).
+    «OpenCfMoto CI …» one (another repository's or a Mac's run may still be using its own), and
+    never the certificate kept for the latest accepted build (KEPT_CAUTION).
     `certs=False` / `profiles=False`: nothing of that kind can be left (it went, none was made,
-    or another message names it)."""
+    or another message names it). `build`: as in run_profile_names."""
     cert_ids, profile_ids = list(cert_ids), list(profile_ids)
     certs = certs or not profiles
     es, en = [], []
@@ -810,12 +860,14 @@ def manual_revoke(cert_ids=(), profile_ids=(), suffix: str = "", certs: bool = T
             "Revoke." if many else
             f"the «Apple Distribution» certificate created today{_ids(cert_ids)}, click it ▸ Revoke."))
     if profiles:
-        app, mirror = run_profile_names(suffix)
+        app, mirror = run_profile_names(suffix, build)
         es.append(f"En {URL_PROFILES}: los perfiles «{app}» y «{mirror}» que queden"
                   f"{_ids(profile_ids)}, cada uno ▸ Remove (ningún otro «OpenCfMoto CI …»).")
         en.append(f"At {URL_PROFILES}: the «{app}» and «{mirror}» profiles that are left"
                   f"{_ids(profile_ids)}, each ▸ Remove (no other «OpenCfMoto CI …» one).")
     if certs:
+        es.append(KEPT_CAUTION_ES)
+        en.append(KEPT_CAUTION_EN)
         es.append("Un certificado olvidado ocupa uno de los pocos certificados de distribución que "
                   "permite Apple.")
         en.append("A forgotten certificate uses one of the few distribution certificates Apple allows.")
@@ -823,14 +875,25 @@ def manual_revoke(cert_ids=(), profile_ids=(), suffix: str = "", certs: bool = T
             " ".join(["Revoke what is left by hand." if certs else "Delete what is left by hand."] + en))
 
 
-# After a build reached Apple its certificate must outlive the build job: only once the finish job
-# has revoked it is an «Apple Distribution» certificate of today still there a leftover of the run.
-AFTER_FINISH_ES = ("Cuando termine el trabajo «Processing, TestFlight group, revoke the certificate» "
-                   f"(revoca el certificado de esta build), mira en {URL_CERTIFICATES}: si aún queda "
-                   "un certificado «Apple Distribution» creado hoy, púlsalo ▸ Revoke.")
-AFTER_FINISH_EN = ("Once the «Processing, TestFlight group, revoke the certificate» job has finished "
-                   f"(it revokes this build's certificate), look at {URL_CERTIFICATES}: if an «Apple "
-                   "Distribution» certificate created today is still there, click it ▸ Revoke.")
+# After a build reached Apple its certificate must outlive the build job, and it stays after the
+# finish job too when Apple accepts the build. A duplicate certificate (made by an unanswered
+# request, in no profile) signs nothing; told apart from the build's own it can go, but revoking
+# the build's own by mistake would break the build, so when in doubt it stays until it expires.
+AFTER_FINISH_ES = (f"Cuando termine el trabajo «{FINISH_JOB}», el certificado de esta "
+                   "build sigue en la cuenta si Apple la aceptó (lo usan sus perfiles «OpenCfMoto "
+                   "CI … bN app» y «… bN mirror», con N el número de esta build): no lo revoques "
+                   "mientras esa build esté en revisión o sea la que vas a enviar. En "
+                   f"{URL_CERTIFICATES} revoca solo el duplicado (el de este aviso, si da su id; "
+                   "púlsalo ▸ Revoke). Ante la duda, déjalo: no firma nada; solo ocupa uno de los "
+                   "pocos certificados de distribución que permite Apple hasta que caduque.")
+AFTER_FINISH_EN = (f"Once the «{FINISH_JOB}» job has finished, this build's certificate stays "
+                   "in the account if Apple accepted the build (its profiles «OpenCfMoto CI … bN "
+                   "app» and «… bN mirror», N being this build's number, use it): do not revoke it "
+                   "while that build is in review or is the one you will submit. At "
+                   f"{URL_CERTIFICATES} revoke only the duplicate (the one this warning names, if "
+                   "it gives its id; click it ▸ Revoke). When in doubt, leave it: it signs "
+                   "nothing; it only uses one of the few distribution certificates Apple allows "
+                   "until it expires.")
 
 
 # ---------------------------------------------------------------- check-auth
@@ -993,10 +1056,12 @@ def cmd_prepare(args) -> int:
     mirror_bundle, mirror_new = ensure_bundle_id(client, mirror_bid, MIRROR_BUNDLE_NAME)
     app_added = ensure_capabilities(client, app_bundle, APP_CAPABILITIES)
     mirror_added = ensure_capabilities(client, mirror_bundle, MIRROR_CAPABILITIES)
-    janitor(client)    # the key works: remove what an interrupted run left (warnings only)
     team_id = attrs(app_bundle).get("seedId") or ""   # App ID prefix = team ID on modern teams
     app = find_app(client, app_bid)
     app_id = app["id"] if app else ""
+    # The key works: remove what an interrupted run left and the signing sets no build needs any
+    # more (their builds' states come from the app record). Warnings only.
+    janitor(client, app_id=app_id)
     ready = bool(app) and not args.setup_only
 
     for key, value in (("ready", "true" if ready else "false"), ("team_id", team_id),
@@ -1089,23 +1154,123 @@ def profile_certificate_ids(client: Client, profile: dict) -> list:
     return _unique(ids)
 
 
-def is_leftover(profile: dict, repo_id: str, run_id: str = "", now: float = None) -> bool:
-    """A CI profile to remove: only the exact names create-signing gives, App Store type only.
-    This repository's (its id is in the name) at any age: GitHub's concurrency group runs one
-    TestFlight run at a time per repository, so none of them is still in use. Another
-    repository's or a manual run's only once older than CI_LEFTOVER_HOURS: that run may still be
-    building. With run_id (the finish job): only that run's profiles of this repository."""
+def classify_profile(profile: dict, repo_id: str, run_id: str = "", keep_run: str = "",
+                     now: float = None, attempt: str = "", run_build: str = ""):
+    """What the sweep does with a profile; only the exact names create-signing gives, App Store
+    type only. None: never touched now. "leftover": remove. ("set", build): this repository's
+    signing set of that build, whose build decides (set_fate).
+    A run id alone does not name one set: the set of an accepted build outlives its attempt, so a
+    re-run finds the earlier attempt's (its build may be in review). `attempt` and `run_build`
+    narrow the run's profiles to that attempt's and to that build's.
+    - run_id (the finish job, after a build job that ended without its clean-up; settle-signing,
+      after a refused build whose ids it lacks): only that run's profiles of this repository, as
+      leftovers, of `attempt` and of `run_build` when given.
+    - keep_run (settle-signing, once that run's build was accepted): that run's profiles of
+      `run_build` stay; its other sets are decided by their builds like any other.
+    - This repository's (its id is in the name): a set when the name has « b<build>»; any other
+      name is a leftover at any age (GitHub's concurrency group runs one TestFlight run at a time
+      per repository, so none of them is in use).
+    - Another repository's set: never (that repository's own runs decide about it).
+    - Anything else (another repository's names from before the build number, a manual run on a
+      Mac): a leftover only once older than CI_LEFTOVER_HOURS (that run may still be building)."""
     info = attrs(profile)
     match = CI_PROFILE_RE.fullmatch(str(info.get("name") or ""))
     if not match or (info.get("profileType") or "IOS_APP_STORE") != "IOS_APP_STORE":
-        return False
-    if repo_id and match.group("repo") == repo_id:
-        return not run_id or match.group("run") == run_id
+        return None
+    ours = bool(repo_id) and match.group("repo") == repo_id
+    build = match.group("build")
+    of_build = not run_build or build in (None, run_build)
     if run_id:
-        return False
+        mine = (ours and match.group("run") == run_id and of_build
+                and (not attempt or match.group("attempt") == attempt))
+        return "leftover" if mine else None
+    if keep_run and ours and match.group("run") == keep_run and of_build:
+        return None
+    if ours:
+        return ("set", int(build)) if build else "leftover"
+    if build and match.group("repo"):
+        return None
     created = _timestamp(info.get("createdDate"))   # unknown: kept (never removed by mistake)
     now = time.time() if now is None else now
-    return created > 0 and now - created > CI_LEFTOVER_HOURS * 3600
+    return "leftover" if created > 0 and now - created > CI_LEFTOVER_HOURS * 3600 else None
+
+
+class BuildFacts:
+    """What App Store Connect says about the builds of one build number."""
+
+    def __init__(self):
+        self.refused = False    # one of them is INVALID or FAILED (Apple refused it)
+        self.alive = False      # one of them is neither refused nor expired
+        self.valid = False      # an alive one is VALID: it can be tested and submitted
+        self.pending = False    # an alive one waits for or is in TestFlight beta review
+        self.unread = False     # an alive VALID one whose TestFlight state was not in the answer
+
+
+def app_builds(client: Client, app_id: str) -> dict:
+    """{build number: BuildFacts} of the app's builds (GET /v1/builds?include=buildBetaDetail).
+    Beta review is read from buildBetaDetails.externalBuildState, not from
+    betaAppReviewSubmissions.betaReviewState: every build has exactly one build beta detail, so one
+    missing from the answer is missing data (never taken for «not in review»), and it is the build's
+    own TestFlight state as App Store Connect shows it (Ready to Submit, Waiting for Review, In Beta
+    Review, Expired...). A beta app review submission exists only once a build was submitted, so a
+    missing one cannot be told from «never submitted», and its state stays APPROVED or REJECTED
+    after the build has expired. Raises ApiError when the listing fails."""
+    included = []
+    builds = client.get_all("/v1/builds", {"filter[app]": app_id, "include": "buildBetaDetail",
+                                           "limit": "200"}, included=included)
+    external = {str(d.get("id")): str(attrs(d).get("externalBuildState") or "") for d in included
+                if d.get("type") == "buildBetaDetails" and d.get("id")}
+    facts = {}
+    for build in builds:
+        info = attrs(build)
+        number = build_tag(info.get("version"))
+        if not number:          # not a plain build number: never one this workflow made
+            continue
+        fact = facts.setdefault(int(number), BuildFacts())
+        link = ((build.get("relationships") or {}).get("buildBetaDetail") or {}).get("data")
+        state = external.get(str(link.get("id"))) if isinstance(link, dict) else None
+        if str(info.get("processingState") or "") in ("INVALID", "FAILED"):
+            fact.refused = True
+        elif info.get("expired") is not True and state != "EXPIRED":
+            fact.alive = True
+            if info.get("processingState") == "VALID":
+                fact.valid = True
+                fact.unread = fact.unread or not state
+                fact.pending = fact.pending or state in REVIEW_PENDING
+    return facts
+
+
+def newest_accepted(facts: dict):
+    """The newest build Apple accepted that can still be tested or submitted (VALID, not
+    expired): the one the owner submits. None when there is none."""
+    return max((number for number, fact in facts.items() if fact.valid), default=None)
+
+
+def set_fate(number: int, facts: dict, newest):
+    """(keep?, why in Spanish, why in English, known?) for this repository's signing set of build
+    `number`, given the app's builds and the newest accepted one. known=False: kept only for want
+    of data. Nothing is revoked on missing data: a build the answer does not show, or whose
+    TestFlight state it lacks, keeps its set unless a newer build was accepted (a build that is
+    not listed cannot be in beta review)."""
+    fact = facts.get(number)
+    if fact is not None and not fact.alive:
+        if fact.refused:
+            return False, f"Apple rechazó la build {number}", f"Apple rejected build {number}", True
+        return False, f"la build {number} caducó", f"build {number} expired", True
+    if fact is not None and fact.pending:
+        return (True, f"la build {number} está en la revisión de TestFlight",
+                f"build {number} is in TestFlight beta review", True)
+    if newest is not None and number == newest:
+        return (True, f"la build {number} es la más reciente que Apple aceptó",
+                f"build {number} is the newest build Apple accepted", True)
+    if newest is not None and number < newest:
+        if fact is not None and fact.unread:
+            return (True, f"no se pudo leer el estado de TestFlight de la build {number}",
+                    f"the TestFlight state of build {number} could not be read", False)
+        return (False, f"Apple aceptó una build más reciente que la {number} (la {newest})",
+                f"Apple accepted a newer build than {number} ({newest})", True)
+    return (True, f"Apple aún no terminó con la build {number}",
+            f"Apple has not finished with build {number} yet", True)
 
 
 def _expiry(cert: dict) -> str:
@@ -1118,12 +1283,30 @@ def _joined(items, word: str) -> str:
     return items[0] if len(items) == 1 else f"{', '.join(items[:-1])} {word} {items[-1]}"
 
 
-def sweep_leftovers(client: Client, run_id: str = ""):
-    """Revoke the certificates of the CI profiles is_leftover() picks (those no other profile
-    uses), then delete those profiles. Certificates go first, and a profile whose certificate could
-    not be revoked stays: the sweep finds certificates only through these profiles, so the next run
-    can then try again. Returns (removed, problems): (Spanish, English) texts; each problem names
-    the profile or certificate that is left."""
+class Sweep:
+    """What sweep() did: (Spanish, English) texts."""
+
+    def __init__(self):
+        self.leftovers = []     # what went that a run had left behind
+        self.retired = []       # what went because its build no longer needs it
+        self.retired_why = []   # why, per build
+        self.kept = []          # why each signing set stays
+        self.problems = []      # what should have gone and is left, by name
+        self.unchecked = []     # sets kept for want of data (why)
+
+
+def sweep(client: Client, run_id: str = "", app_id: str = "", keep_run: str = "", attempt: str = "",
+          run_build: str = "") -> Sweep:
+    """Revoke the certificates of the CI profiles that are left over (classify_profile) or whose
+    build no longer needs them (set_fate) and that no profile kept uses, then delete those
+    profiles. Certificates go first, and a profile whose certificate could not be revoked stays:
+    the sweep finds certificates only through these profiles, so the next run can then try again.
+    The app's builds are read only when this repository has signing sets to decide about; without
+    them (no app id, a failed listing) every set stays. A set whose build Apple lists neither as a
+    build nor as a build upload (altool uploads are listed too) never reached Apple: a leftover of
+    a run that failed before its upload and could not clean up. No run of this repository is under
+    way meanwhile (the concurrency group), except the caller's own, whose set keep_run spares."""
+    result = Sweep()
     repo_id = os.environ.get("GITHUB_REPOSITORY_ID") or ""
     repo_id = repo_id if re.fullmatch(r"[0-9]+", repo_id) else ""
     included = []
@@ -1131,9 +1314,50 @@ def sweep_leftovers(client: Client, run_id: str = ""):
                                                            "limit": "200"}, included=included)
                 if RESOURCE_ID_RE.fullmatch(str(p.get("id") or ""))]
     now = time.time()
-    ci = [p for p in profiles if is_leftover(p, repo_id, run_id, now)]
+    kinds = {p["id"]: classify_profile(p, repo_id, run_id, keep_run, now, attempt, run_build)
+             for p in profiles}
+    sets = {}                               # build number -> the ids of its profiles
+    for profile_id, kind in kinds.items():
+        if isinstance(kind, tuple):
+            sets.setdefault(kind[1], []).append(profile_id)
+            kinds[profile_id] = None        # kept unless set_fate says otherwise
+    if sets:
+        facts, why = None, ("sin el id de la app en App Store Connect",
+                            "without the app's App Store Connect id")
+        uploaded = set()        # build numbers of the app's build uploads
+        if app_id:
+            try:
+                facts = app_builds(client, app_id)
+                if any(number not in facts for number in sets):
+                    uploaded = {int(n) for n in (build_tag(attrs(u).get("cfBundleVersion")) for u in
+                                read_uploads(client, f"/v1/apps/{app_id}/buildUploads",
+                                             {"limit": "200"}, every_page=True)) if n}
+            except ApiError as err:
+                facts, why = None, (err.describe(), err.describe())
+        newest = newest_accepted(facts) if facts is not None else None
+        for number in sorted(sets, reverse=True):
+            if facts is not None and number not in facts and number not in uploaded:
+                log(f"Apple never received build {number}: its signing set is a leftover")
+                for profile_id in sets[number]:
+                    kinds[profile_id] = "leftover"
+                continue
+            if facts is None:
+                keep, es, en, known = (True, f"no se pudo leer el estado de la build {number}",
+                                       f"the state of build {number} could not be read", False)
+            else:
+                keep, es, en, known = set_fate(number, facts, newest)
+            if keep:
+                result.kept.append((es, en))
+                if not known:
+                    result.unchecked.append(why if facts is None else (es, en))
+            else:
+                result.retired_why.append((es, en))
+                for profile_id in sets[number]:
+                    kinds[profile_id] = "retired"
+        result.unchecked = _unique(result.unchecked)
+    ci = [p for p in profiles if kinds[p["id"]]]
     if not ci:
-        return [], []
+        return result
     ci_ids = {p["id"] for p in ci}
     in_use = set()          # certificates that the profiles kept still need
     for profile in profiles:
@@ -1143,11 +1367,14 @@ def sweep_leftovers(client: Client, run_id: str = ""):
              for p in ci}
     names = {p["id"]: attrs(p).get("name") or p["id"] for p in ci}
     expiry = {str(c.get("id")): _expiry(c) for c in included if c.get("type") == "certificates"}
-    removed, problems, unrevoked = [], [], set()
+    unrevoked = set()
     for cert_id in _unique(c for p in ci for c in links[p["id"]]):
         if cert_id in in_use:
             log("A certificate is also in another profile: not revoked")
             continue
+        owners = [p for p in ci if cert_id in links[p["id"]]]
+        done = (result.retired if any(kinds[p["id"]] == "retired" for p in owners)
+                else result.leftovers)
         when = expiry.get(cert_id)
         # The id only in the problem texts, which say how to do it by hand (the portal's list shows
         # the type and the expiry date; the id tells two of a day apart).
@@ -1155,14 +1382,14 @@ def sweep_leftovers(client: Client, run_id: str = ""):
         en = f"«Apple Distribution» certificate{f' expiring {when}' if when else ''}"
         try:
             client.request("DELETE", f"/v1/certificates/{cert_id}")
-            removed.append((es, en))
+            done.append((es, en))
         except ApiError as err:
             if err.status != 404:      # 404: already gone
                 unrevoked.add(cert_id)
-                kept = [f"«{names[p['id']]}»" for p in ci if cert_id in links[p["id"]]]
+                kept = [f"«{names[p['id']]}»" for p in owners]
                 one = len(kept) == 1
                 es, en = es + _ids([cert_id]), en + _ids([cert_id])
-                problems.append((
+                result.problems.append((
                     f"{es}: {err.describe()}; se {'conserva su perfil' if one else 'conservan sus perfiles'} "
                     f"{_joined(kept, 'y')} para que la próxima ejecución lo encuentre",
                     f"{en}: {err.describe()}; its {'profile' if one else 'profiles'} "
@@ -1175,56 +1402,113 @@ def sweep_leftovers(client: Client, run_id: str = ""):
             continue
         try:
             client.request("DELETE", f"/v1/profiles/{profile['id']}")
-            removed.append((f"perfil «{name}»", f"profile «{name}»"))
+            (result.retired if kinds[profile["id"]] == "retired" else result.leftovers).append(
+                (f"perfil «{name}»", f"profile «{name}»"))
         except ApiError as err:
             if err.status != 404:
-                problems.append((f"perfil «{name}»{_ids([profile['id']])}: {err.describe()}",
-                                 f"profile «{name}»{_ids([profile['id']])}: {err.describe()}"))
-    return removed, problems
+                result.problems.append((f"perfil «{name}»{_ids([profile['id']])}: {err.describe()}",
+                                        f"profile «{name}»{_ids([profile['id']])}: {err.describe()}"))
+    return result
 
 
-def janitor(client: Client = None, run_id: str = "") -> None:
-    """The leftover sweep, best effort: a problem is a warning, never a failure."""
+KEPT_NOTE_ES = ("Se quedan a propósito: la revisión de TestFlight vuelve a comprobar la firma de una "
+                "build, y Apple marca «Invalid Binary» (ITMS-90035) la que firmó un certificado "
+                "revocado. Por eso en developer.apple.com puede haber uno o dos certificados «Apple "
+                "Distribution» del workflow (uno más por cada build anterior que esté en revisión): "
+                "no los revoques mientras sus builds estén en revisión o sean las que vas a enviar. "
+                "Se revocan solos cuando Apple acepta una build más reciente y la revisión de la suya "
+                "ha terminado.")
+KEPT_NOTE_EN = ("They stay on purpose: TestFlight beta review checks a build's signature again, and "
+                "Apple marks a build signed by a revoked certificate «Invalid Binary» (ITMS-90035). So "
+                "developer.apple.com may show one or two «Apple Distribution» certificates of the "
+                "workflow (one more for each older build in review): do not revoke them while their "
+                "builds are in review or are the ones you will submit. They are revoked by "
+                "themselves once Apple accepts a newer build and their own build's review is over.")
+
+
+def janitor(client: Client = None, run_id: str = "", app_id: str = "", keep_run: str = "",
+            attempt: str = "", run_build: str = "") -> Sweep:
+    """The sweep, best effort: a problem is a warning, never a failure."""
     try:
-        removed, problems = sweep_leftovers(client or Client(load_credentials()), run_id)
+        result = sweep(client or Client(load_credentials()), run_id, app_id, keep_run, attempt,
+                       run_build)
     except Exception as exc:  # never fail the caller
         reason = exc.en if isinstance(exc, Failure) else (
             exc.describe() if isinstance(exc, ApiError) else f"{type(exc).__name__}: {exc}")
-        removed, problems, unnamed = [], [], reason
+        result, unnamed = Sweep(), reason
     else:
         unnamed = ""
-    if removed:
+    if result.leftovers:
         report("notice", "Restos borrados / Leftovers removed",
                "Se borraron restos que una ejecución de TestFlight no había limpiado (perfiles "
                "«OpenCfMoto CI …» y su certificado temporal): "
-               f"{', '.join(r[0] for r in removed)}. No tienes que hacer nada.",
+               f"{', '.join(r[0] for r in result.leftovers)}. No tienes que hacer nada.",
                "Removed what a TestFlight run had not cleaned up (the «OpenCfMoto CI …» profiles "
-               f"and their temporary certificate): {', '.join(r[1] for r in removed)}. Nothing to "
-               "do.")
-    elif not problems and not unnamed:
+               f"and their temporary certificate): {', '.join(r[1] for r in result.leftovers)}. "
+               "Nothing to do.")
+    if result.retired:
+        report("notice", "Certificados anteriores revocados / Older certificates revoked",
+               "Se revocaron los certificados que el workflow conservaba para builds que ya no los "
+               f"necesitan ({'; '.join(w[0] for w in result.retired_why)}) y se borraron sus "
+               f"perfiles: {', '.join(r[0] for r in result.retired)}. No tienes que hacer nada "
+               "(esas builds ya no pueden enviarse a las pruebas externas: envía la más reciente).",
+               "Revoked the certificates the workflow kept for builds that no longer need them "
+               f"({'; '.join(w[1] for w in result.retired_why)}) and deleted their profiles: "
+               f"{', '.join(r[1] for r in result.retired)}. Nothing to do (those builds can no "
+               "longer be sent to external testing: submit the newest one).")
+    if result.kept:
+        es = "; ".join(k[0] for k in result.kept)
+        en = "; ".join(k[1] for k in result.kept)
+        log(f"Signing sets kept / se quedan: {en}")
+        append_summary(f"**Certificados que se quedan / Certificates kept:** {es}. / {en}.\n\n"
+                       f"{KEPT_NOTE_ES} / {KEPT_NOTE_EN}")
+    if not (result.leftovers or result.retired or result.kept or result.problems or unnamed):
         log("No leftovers from earlier runs / no quedan restos de ejecuciones anteriores")
-    if problems or unnamed:
+    if result.problems or unnamed:
         # Not the create-signing manual steps: nothing was created today, and when only the
         # listing failed there may be no leftovers at all. The next run does find whatever is left:
-        # a profile stays until its certificate is revoked (sweep_leftovers).
+        # a profile stays until its certificate is revoked (sweep).
         es = ("No se pudieron comprobar o borrar todos los restos de ejecuciones de TestFlight "
-              f"({'; '.join([p[0] for p in problems] + ([unnamed] if unnamed else []))}). No hace "
-              "falta hacer nada: la próxima ejecución lo intenta otra vez.")
+              f"({'; '.join([p[0] for p in result.problems] + ([unnamed] if unnamed else []))}). "
+              "No hace falta hacer nada: la próxima ejecución lo intenta otra vez.")
         en = ("Could not check or remove all leftovers of TestFlight runs "
-              f"({'; '.join([p[1] for p in problems] + ([unnamed] if unnamed else []))}). Nothing "
-              "to do: the next run tries again.")
-        if problems:
+              f"({'; '.join([p[1] for p in result.problems] + ([unnamed] if unnamed else []))}). "
+              "Nothing to do: the next run tries again.")
+        if result.problems:
             es += (f" Si prefieres hacerlo a mano: en {URL_PROFILES} borra solo los perfiles que "
                    f"nombra este aviso y en {URL_CERTIFICATES} revoca solo los certificados que "
-                   "nombra (ningún otro «Apple Distribution»).")
+                   "nombra (ningún otro «Apple Distribution»; si otro caduca el mismo día, no "
+                   f"revoques ninguno de los dos: la próxima ejecución lo hace). {KEPT_CAUTION_ES}")
             en += (f" To do it by hand instead: at {URL_PROFILES} delete only the profiles this "
                    f"warning names and at {URL_CERTIFICATES} revoke only the certificates it names "
-                   "(no other «Apple Distribution» one).")
+                   "(no other «Apple Distribution» one; if another one expires the same day, revoke "
+                   f"neither: the next run does it). {KEPT_CAUTION_EN}")
         report("warning", "Limpieza incompleta / Cleanup incomplete", es, en)
+    if result.unchecked:
+        report("warning", "Certificados sin comprobar / Certificates not checked",
+               "No se pudo leer en App Store Connect lo que hace falta para decidir sobre los "
+               "certificados que el workflow conserva para sus builds "
+               f"({'; '.join(u[0] for u in result.unchecked)}), así que no se revocó ninguno de "
+               "ellos: se quedan hasta que una ejecución pueda comprobarlo. No hace falta hacer "
+               "nada.",
+               "Could not read in App Store Connect what is needed to decide about the "
+               "certificates the workflow keeps for its builds "
+               f"({'; '.join(u[1] for u in result.unchecked)}), so none of them was revoked: they "
+               "stay until a run can check. Nothing to do.")
+    return result
+
+
+def run_attempt() -> str:
+    """This run's attempt (GITHUB_RUN_ATTEMPT), "" when unknown."""
+    attempt = os.environ.get("GITHUB_RUN_ATTEMPT") or ""
+    return attempt if re.fullmatch(r"[0-9]+", attempt) else ""
 
 
 def cmd_janitor(args) -> int:
-    janitor(run_id=args.run_id or "")
+    # --run-id (the finish job after a lost runner): this attempt's profiles only. The build job
+    # that left them ran in this attempt; an earlier attempt's set may be an accepted build's.
+    janitor(run_id=args.run_id or "", app_id=args.app_id or "",
+            attempt=run_attempt() if args.run_id else "")
     return EXIT_OK
 
 
@@ -1261,20 +1545,65 @@ def team_from_subject(subject: str) -> str:
     return match.group(1) if match else ""
 
 
-def cert_limit_failure(err: ApiError) -> Failure:
+def kept_certificates(client: Client) -> list:
+    """Best effort, for the certificate-limit message: [(build, certificate expiry date)] of this
+    repository's signing sets (the certificates the workflow keeps on purpose), newest build
+    first; [] when there is none or the listing fails."""
+    repo_id = os.environ.get("GITHUB_REPOSITORY_ID") or ""
+    repo_id = repo_id if re.fullmatch(r"[0-9]+", repo_id) else ""
+    included, found = [], {}
+    try:
+        profiles = client.get_all("/v1/profiles", {"include": "certificates", "limit": "200"},
+                                  included=included)
+    except (ApiError, Failure) as exc:
+        log(f"(could not list the profiles for the certificate-limit message: {exc})")
+        return []
+    expiry = {str(c.get("id")): _expiry(c) for c in included if c.get("type") == "certificates"}
+    for profile in profiles:
+        kind = classify_profile(profile, repo_id)
+        if isinstance(kind, tuple):
+            data = ((profile.get("relationships") or {}).get("certificates") or {}).get("data")
+            ids = [str(d.get("id")) for d in data or [] if isinstance(d, dict)]
+            if not found.get(kind[1]):
+                found[kind[1]] = next((expiry[c] for c in ids if expiry.get(c)), "")
+    return sorted(found.items(), reverse=True)
+
+
+def cert_limit_failure(err: ApiError, kept=()) -> Failure:
+    """`kept`: kept_certificates(), named so that the owner leaves them alone. Which of them a
+    build still needs is not said: when only the workflow's fill the limit, none is revoked by
+    hand (one may be a build's in review); the next run's janitor revokes those no longer needed."""
+    now_es = "; ".join(f"la build {b}" + (f", certificado que caduca el {d}" if d else "")
+                       for b, d in kept)
+    now_en = "; ".join(f"build {b}" + (f", certificate expiring {d}" if d else "") for b, d in kept)
     return Failure(
         "Límite de certificados / Certificate limit",
         "Apple no deja crear otro certificado de distribución: el equipo ya tiene el máximo de "
-        f"certificados «Apple Distribution». Entra en {URL_CERTIFICATES}, revoca los «Apple "
-        "Distribution» que no uses (por ejemplo los que dejó un workflow interrumpido: los crea "
-        f"la clave de la API) y después {NEW_RUN_ES}. Si otro workflow TestFlight está en marcha, "
-        f"espera a que termine: revoca su certificado al final. Detalle: {err.describe()}",
+        "certificados «Apple Distribution». Este workflow conserva a propósito el certificado de "
+        "la última build que Apple aceptó y el de cada build en la revisión de TestFlight; los "
+        "usan sus perfiles «OpenCfMoto CI … bN app» y «… bN mirror» (N: el número de esa build)"
+        f"{f' (ahora: {now_es})' if now_es else ''}. No los revoques mientras sus builds estén en "
+        "revisión o sean las que vas a enviar a las pruebas externas, porque Apple las marcaría "
+        f"«Invalid Binary» (ITMS-90035). Entra en {URL_CERTIFICATES} y revoca otros «Apple "
+        "Distribution» que no uses (por ejemplo los que dejó un workflow interrumpido: los crea la "
+        "clave de la API). Si todos son del workflow, no revoques ninguno: si una de sus builds "
+        "está en la revisión de TestFlight o Apple aún la procesa, espera a que termine; la "
+        "ejecución siguiente revoca al prepararse los que ya no hacen falta. Después "
+        f"{NEW_RUN_ES}. Si otro workflow TestFlight está en marcha, espera a que termine: al final "
+        f"revoca su certificado, salvo el de una build que Apple acepte. Detalle: {err.describe()}",
         "Apple will not create another distribution certificate: the team already has the "
-        f"maximum number of «Apple Distribution» certificates. Open {URL_CERTIFICATES}, revoke the "
+        "maximum number of «Apple Distribution» certificates. This workflow keeps on purpose the "
+        "certificate of the latest build Apple accepted and the one of each build in TestFlight "
+        "beta review, which its profiles «OpenCfMoto CI … bN app» and «… bN mirror» (N: that "
+        f"build's number) use{f' (now: {now_en})' if now_en else ''}. Do not revoke them while "
+        "their builds are in review or are the ones you will send to external testing, as Apple "
+        f"would mark them «Invalid Binary» (ITMS-90035). Open {URL_CERTIFICATES} and revoke other "
         "«Apple Distribution» certificates you do not use (e.g. ones left by an interrupted "
-        f"workflow: the API key creates them), then {NEW_RUN_EN}. If another TestFlight workflow "
-        "is running, wait for it to finish: it revokes its certificate at the end. "
-        f"Detail: {err.describe()}")
+        "workflow: the API key creates them). If all of them are the workflow's, revoke none: if "
+        "one of its builds is in TestFlight beta review or Apple is still processing it, wait for "
+        "that to end; the next run's preparation revokes those no longer needed. Then "
+        f"{NEW_RUN_EN}. If another TestFlight workflow is running, wait for it to finish: at the "
+        f"end it revokes its certificate, unless Apple accepts its build. Detail: {err.describe()}")
 
 
 def is_cert_limit(err: ApiError) -> bool:
@@ -1284,9 +1613,9 @@ def is_cert_limit(err: ApiError) -> bool:
         word in text for word in ("already have", "maximum", "pending certificate", "limit")))
 
 
-def certificate_refused(err: ApiError) -> Failure:
+def certificate_refused(err: ApiError, client: Client = None) -> Failure:
     if is_cert_limit(err):
-        return cert_limit_failure(err)
+        return cert_limit_failure(err, kept_certificates(client) if client is not None else ())
     return explain(err, "Crear el certificado de distribución", "Creating the distribution certificate")
 
 
@@ -1438,7 +1767,7 @@ def request_certificate(client: Client, csr: str, key_path: str, state: dict,
                 if mine:
                     return settled(adopt_certificate(client, mine))
             settled(None)
-            raise certificate_refused(err) from None
+            raise certificate_refused(err, client) from None
         if not unclear:
             return settled(cert)
         # Created on the second try: the unanswered first request may have made one too. This
@@ -1551,6 +1880,7 @@ def cmd_create_signing(args) -> int:
     state = {"cert_id": None, "profile_ids": []}
     save_state(state_path, state)
     suffix = clean_suffix(args.suffix or default_suffix())
+    build = build_tag(args.build)   # in the profile names: the janitor knows each set's build
     client = Client(load_credentials())
 
     # 1. Private key + CSR. The key stays here; Apple only sees the CSR. The key file is created
@@ -1596,7 +1926,7 @@ def cmd_create_signing(args) -> int:
     for role, resource_id, bundle_id in (
             ("app", args.app_bundle_resource_id, args.app_bundle_id),
             ("mirror", args.mirror_bundle_resource_id, args.mirror_bundle_id)):
-        name = f"{CI_PROFILE_PREFIX}{suffix} {role}"   # with default_suffix(): CI_PROFILE_RE
+        name = profile_name(suffix, build, role)   # with default_suffix(): CI_PROFILE_RE
         log(f"Creating the App Store provisioning profile «{name}» for {bundle_id}")
         body = {"data": {"type": "profiles",
                          "attributes": {"name": name, "profileType": "IOS_APP_STORE"},
@@ -1693,8 +2023,11 @@ def cmd_create_signing(args) -> int:
                  if missing_group else "Faltan capacidades / Capabilities missing")
         raise Failure(title, "\n\n".join(es_parts), "\n\n".join(en_parts),
                       code=EXIT_APP_GROUP if missing_group else EXIT_FAILED)
-    append_summary(summary + "\n\nCertificado y perfiles son temporales: se revocan y borran al "
-                   "final del workflow. / The certificate and profiles are temporary: they are "
+    append_summary(summary + "\n\nSi Apple acepta la build, el certificado y los perfiles se quedan "
+                   "hasta que acepte una build más reciente (la revisión de TestFlight vuelve a "
+                   "comprobar la firma); si no, se revocan y borran al final del workflow. / If Apple "
+                   "accepts the build, the certificate and profiles stay until it accepts a newer "
+                   "build (TestFlight beta review checks the signature again); otherwise they are "
                    "revoked and deleted at the end of the workflow.")
     return EXIT_OK
 
@@ -2040,11 +2373,11 @@ def wait_for_upload(client: Client, upload_id: str, args, marker: str = "") -> i
     # PROCESSING, or no readable answer at all after an accepted commit: never delete that.
     report("warning", "Apple sigue procesando la subida / Upload still processing",
            f"Tras {args.timeout_min:g} min Apple sigue procesando la subida (estado "
-           f"{state or '?'}). El archivo ya está en Apple: el trabajo «Processing, TestFlight "
-           "group, revoke the certificate» espera a la build.",
+           f"{state or '?'}). El archivo ya está en Apple: el trabajo «{FINISH_JOB}» espera a la "
+           "build.",
            f"After {args.timeout_min:g} min Apple is still processing the upload (state "
-           f"{state or '?'}). The file is with Apple already: the «Processing, TestFlight group, "
-           "revoke the certificate» job waits for the build.")
+           f"{state or '?'}). The file is with Apple already: the «{FINISH_JOB}» job waits for the "
+           "build.")
     set_output("uploaded", "true")
     set_output("upload_id", upload_id)
     return EXIT_OK
@@ -2277,7 +2610,7 @@ def cmd_cleanup(args) -> int:
         return _cleanup(args, known, suffix)
     except Exception as exc:  # cleanup never fails the job: say what to revoke by hand
         reason = exc.en if isinstance(exc, Failure) else f"{type(exc).__name__}: {exc}"
-        es, en = manual_revoke(known["certs"], known["profiles"], suffix)
+        es, en = manual_revoke(known["certs"], known["profiles"], suffix, build=args.build)
         report("warning", "Limpieza incompleta / Cleanup incomplete",
                f"La limpieza falló ({reason}). {es}", f"Cleanup failed ({reason}). {en}")
         return EXIT_OK
@@ -2315,7 +2648,7 @@ def _cleanup(args, known: dict, suffix: str = "") -> int:
             state = read_state(args.state)
         except (OSError, ValueError) as exc:
             state = {}
-            es, en = manual_revoke(suffix=suffix)
+            es, en = manual_revoke(suffix=suffix, build=args.build)
             report("warning", "state.json ilegible / unreadable",
                    f"No se pudo leer {args.state} ({exc}). {es}",
                    f"Could not read {args.state} ({exc}). {en}")
@@ -2394,7 +2727,7 @@ def _cleanup(args, known: dict, suffix: str = "") -> int:
             revoke_known()
     revoke_known()      # no CSR, or a listing that failed: the recorded ids go all the same
     if pending and not checked:
-        es, en = manual_revoke(suffix=suffix, profiles=False)   # profiles: reported below
+        es, en = manual_revoke(suffix=suffix, profiles=False, build=args.build)   # profiles: below
         report("warning", "Certificado sin confirmar / Certificate not confirmed",
                "Una petición de certificado de esta ejecución quedó sin respuesta clara y no se "
                f"pudo comprobar si Apple llegó a crear el certificado ({why_es}). {es}",
@@ -2409,7 +2742,7 @@ def _cleanup(args, known: dict, suffix: str = "") -> int:
         profiles_left = [f[1] for f in failed if f[0] == "profile"]
         unknown = any(f[0] == "invalid" for f in failed)    # a tampered id: say both
         es, en = manual_revoke(certs_left, profiles_left, suffix, certs=bool(certs_left) or unknown,
-                               profiles=bool(profiles_left) or unknown)
+                               profiles=bool(profiles_left) or unknown, build=args.build)
         report("warning", "Limpieza incompleta / Cleanup incomplete",
                f"No se pudo revocar o borrar: {listing}. {es}",
                f"Could not revoke or delete: {listing}. {en}")
@@ -2431,7 +2764,8 @@ def _cleanup(args, known: dict, suffix: str = "") -> int:
 
 def cleanup_duplicates(args) -> int:
     """Teardown of a build that reached Apple: the recorded certificate stays for the finish job,
-    which revokes it after Apple's processing. A second certificate that an unclear request of
+    which keeps it if Apple accepts the build and revokes it if not. A second certificate that an
+    unclear request of
     this run made as well is in no profile, so only this run's key finds it: revoke it now.
     Never touches profiles or the recorded certificate, and never gives the generic manual steps
     (they would point at the certificate the build still needs)."""
@@ -2481,12 +2815,67 @@ def cleanup_duplicates(args) -> int:
                f"{after_en}")
     if revoked:
         append_summary("**Limpieza / cleanup:** revocado un certificado duplicado de esta ejecución "
-                       f"/ revoked a duplicate certificate of this run: {', '.join(revoked)}. El de "
-                       "la build lo revoca el trabajo «Processing, TestFlight group, revoke the "
-                       "certificate» / the build's own certificate is revoked by the «Processing, "
-                       "TestFlight group, revoke the certificate» job.")
+                       f"/ revoked a duplicate certificate of this run: {', '.join(revoked)}. Con el "
+                       f"de la build decide el trabajo «{FINISH_JOB}» (lo conserva si Apple acepta la "
+                       "build) / the build's own certificate is up to the "
+                       f"«{FINISH_JOB}» job (it keeps it if Apple accepts the build).")
     elif not left:
         log("No duplicate certificate of this run / ningún certificado duplicado")
+    return EXIT_OK
+
+
+# ---------------------------------------------------------------- settle-signing
+
+def cmd_settle_signing(args) -> int:
+    """The finish job, once a build reached Apple and wait-build is over: what happens to this
+    run's signing set (its certificate and two profiles). Never fails the job: problems warn.
+    - Apple refused the build (processing INVALID or FAILED, or the upload itself FAILED): nothing
+      will check its signature, so the set is revoked now, by its ids, or by this run's profile
+      names of this build when the build job passed on none (an earlier attempt of this run may
+      have left the kept set of an accepted build).
+    - Apple accepted it (VALID): the set stays, since beta review checks the signature again; the
+      sets of older builds go, except a build's that waits for or is in beta review (janitor,
+      with this run's set of this build left alone; an earlier attempt's is decided by its build).
+    - Anything else (still processing at the time limit, no answer, the wait cancelled): the set
+      stays for now; the next run's janitor decides with fresh data."""
+    state = (args.state or "").strip().upper()
+    build = build_tag(args.build)
+    shown = build or "?"
+    if state in ("INVALID", "FAILED"):
+        if args.cert_id or args.profile_ids:
+            cmd_cleanup(argparse.Namespace(state=None, cert_id=args.cert_id,
+                                           profile_ids=args.profile_ids, suffix="", build=build,
+                                           duplicates_only=False))
+        else:
+            log("The build job passed on no certificate or profile ids: sweeping up this run's "
+                "profiles by name")
+            # Without a build number (never, in the workflow), this attempt's profiles instead.
+            janitor(run_id=args.run_id or "", run_build=build, attempt="" if build else run_attempt())
+        append_summary(f"**Certificado / certificate:** Apple rechazó la build {shown}: su "
+                       "certificado temporal y sus perfiles se revocan (nada vuelve a comprobar su "
+                       f"firma). / Apple rejected build {shown}: its temporary certificate and "
+                       "profiles are revoked (nothing checks its signature again).")
+        return EXIT_OK
+    if state != "VALID":
+        log(f"Build {shown} is not processed yet ({state or 'no state'}): its signing set stays for "
+            "now; the next run decides")
+        append_summary(f"**Certificado / certificate:** el de la build {shown} se queda por ahora: "
+                       "Apple aún no terminó de procesarla. La próxima ejecución lo decide (lo "
+                       "conserva si Apple la acepta y lo revoca si la rechaza). / The certificate "
+                       f"of build {shown} stays for now: Apple has not finished processing it. The "
+                       "next run decides (it keeps it if Apple accepts the build and revokes it if "
+                       "Apple rejects it).")
+        return EXIT_OK
+    log(f"Build {shown} was accepted: its signing set stays until Apple accepts a newer build")
+    append_summary(f"**Certificado / certificate:** el de la build {shown} se queda en la cuenta "
+                   "hasta que Apple acepte una build más reciente: la revisión de TestFlight vuelve "
+                   "a comprobar la firma cuando envías la build a las pruebas externas (el enlace "
+                   "público). No lo revoques mientras esa build esté en revisión. / The certificate "
+                   f"of build {shown} stays in the account until Apple accepts a newer build: "
+                   "TestFlight beta review checks the signature again when you send the build to "
+                   "external testing (the public link). Do not revoke it while that build is in "
+                   "review.")
+    janitor(app_id=args.app_id or "", keep_run=args.run_id or "", run_build=build)
     return EXIT_OK
 
 
@@ -2511,6 +2900,17 @@ def _run_id(value: str) -> str:
     return value
 
 
+def _build_number(value: str) -> str:
+    """A build number as the profile names carry it: digits, or "" when none is known."""
+    if value and not re.fullmatch(r"[0-9]+", value):
+        raise argparse.ArgumentTypeError(f"not a build number: {value!r}")
+    return value
+
+
+def _optional_resource_id(value: str) -> str:
+    return _resource_id(value) if value else ""
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = Parser(prog="asc.py", description="App Store Connect helper for the TestFlight workflow.")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -2529,9 +2929,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--app-id", required=True, type=_resource_id)
     p.set_defaults(func=cmd_next_build)
 
-    p = sub.add_parser("janitor", help="remove CI profiles and certificates a run left behind")
+    p = sub.add_parser("janitor", help="remove CI profiles and certificates a run left behind, and "
+                                       "the signing sets no build needs any more")
     p.add_argument("--run-id", type=_run_id, default="",
                    help="only that run's profiles of this repository (the finish job)")
+    p.add_argument("--app-id", type=_optional_resource_id, default="",
+                   help="the app whose builds decide about this repository's signing sets")
     p.set_defaults(func=cmd_janitor)
 
     p = sub.add_parser("create-signing", help="distribution certificate + App Store profiles")
@@ -2543,6 +2946,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", required=True)
     p.add_argument("--suffix", default="", help="profile name suffix (default: as "
                                                     "build_and_sign.sh makes it)")
+    p.add_argument("--build", type=_build_number, default="",
+                   help="the build number this set signs (in the profile names: « b<build>»)")
     p.set_defaults(func=cmd_create_signing)
 
     p = sub.add_parser("upload", help="upload an .ipa with the Build Upload API")
@@ -2562,12 +2967,24 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--poll-sec", type=float, default=60)
     p.set_defaults(func=cmd_wait_build)
 
+    p = sub.add_parser("settle-signing", help="after wait-build: keep this run's signing set if "
+                                              "Apple accepted the build, else revoke it")
+    p.add_argument("--app-id", type=_optional_resource_id, default="")
+    p.add_argument("--build", type=_build_number, default="")
+    p.add_argument("--state", default="", help="wait-build's processing_state output")
+    p.add_argument("--run-id", type=_run_id, default="")
+    p.add_argument("--cert-id")
+    p.add_argument("--profile-ids")
+    p.set_defaults(func=cmd_settle_signing)
+
     p = sub.add_parser("cleanup", help="delete the profiles and revoke the certificate")
     p.add_argument("--state")
     p.add_argument("--cert-id")
     p.add_argument("--profile-ids")
     p.add_argument("--suffix", default="", help="the profile name suffix create-signing used "
                                                 "(names this run's profiles in the manual steps)")
+    p.add_argument("--build", type=_build_number, default=None,
+                   help="the build number in those names (default: BUILD_NUMBER)")
     p.add_argument("--duplicates-only", action="store_true", help=argparse.SUPPRESS)
     p.set_defaults(func=cmd_cleanup)
     return parser
