@@ -91,27 +91,50 @@ canción justo tras una pausa).
 5. **Música en primer plano y OpenCfMoto en segundo plano**: al pasar de canción en Música, el
    tablero cambia en unos 2 s; el ⏯ del tablero funciona.
 6. **Tablero sin táctil** (Ajustes ▸ «Desactivar pantalla táctil») **con el mando multimedia del
-   teléfono activado** (Controles): ◀ lleva al recuadro (antes de pulsar ★, mira que el aro naranja
-   esté en el recuadro: sin recuadro, ◀ ★ ★ abre el menú y termina la navegación), ★ abre la hoja,
+   teléfono activado** (Controles): ◀ lleva al recuadro (el aro blanco lo rodea; sin recuadro, ◀ es el
+   botón ⋮ y ◀ ★ ★ abre el menú y elige «Recentrar / recalcular»: nada termina la ruta), ★ abre la hoja,
    ★ pone la música → aviso «Los botones del manillar controlan ahora Apple Music» y la hoja se
    cierra; los botones pasan de canción. ★ en el manillar pausa la música → aviso «Los botones del
-   manillar vuelven a controlar el tablero» (registro `handlebar buttons back on the dash`). Con la
-   hoja abierta y la música en pausa, dos ▶ rápidos abren el menú en «Música», no en «Finalizar
-   navegación» (★ vuelve a la hoja). Si la hoja ya se cerró sola (10 s sin tocarla en marcha, cerca
-   de un giro, o la canción se fue), dos ▶ rápidos pueden abrir el menú en «Finalizar navegación»:
-   mira antes de pulsar ★. Un aviso de voz con música baja la música sin pararla.
+   manillar vuelven a controlar el tablero» (registro `handlebar buttons back on the dash`). Dos ▶
+   rápidos cuentan como uno solo: el segundo se ignora (antes abrían el menú). Un aviso de voz con
+   música baja la música sin pararla.
 7. **Spotify con Música en pausa**: si Spotify ya sonaba al abrir el tablero, no aparece el recuadro;
    si empieza después, el recuadro se va a los 3 s (registro `other audio for 3 s: song hidden`). Un
    sonido corto de otra app no lo quita.
 8. **Navegando**: la hoja Música se cierra sola unos 200 m antes de un giro y tras 10 s sin tocarla
    en marcha; con la moto parada sigue abierta.
 9. **Bloquear y desbloquear el iPhone**: lo que muestre el tablero bloqueado (casi siempre la imagen
-   fija de «Teléfono bloqueado», ver la sección siguiente) y, al desbloquear, el recuadro correcto.
+   fija «Mapa en pausa», ver la sección siguiente) y, al desbloquear, el recuadro correcto.
+
+## Tablero: botones, terminar la ruta y modo noche
+
+Con la moto parada y navegando hacia un destino, con el mando multimedia del teléfono activado:
+
+1. **El foco por defecto** es el botón de recentrar (⌖), con un aro blanco alrededor: ★ solo recentra.
+   Ya no hay botón «Fin» en la tarjeta de abajo ni la columna ALT.
+2. **Dobles pulsaciones**: dos ★, dos ▶ o dos ◀ rápidos hacen lo mismo que una sola pulsación; más
+   lentos, dos pulsaciones. El texto del tablero (donde sale la canción) dice «< > mover  * elegir».
+3. **Terminar la ruta**: ▶ hasta el botón ⋮, ★ abre el menú en «Recentrar / recalcular»; baja hasta
+   «Terminar la ruta…» (lo último de la sección Viaje) y pulsa ★: sale «¿Terminar la ruta?» con
+   **Seguir** marcado. ★ deja la ruta; ▶ ★ (Terminar) la termina. Sin tocar nada, la tarjeta se va
+   sola a los 8 s y la ruta sigue.
+4. **Cambiar de ruta**: con una ruta en marcha, busca otro destino y pulsa **Ir**: pregunta
+   «¿Cambiar de ruta?» con **Seguir** marcado.
+5. **Al llegar**: la tarjeta abre en **Listo** (★ la cierra). «Estacionar aquí» solo guarda el
+   lugar; pulsarlo dos veces no lo borra.
+6. **Velocidad y límite** siempre a la vista, también con el menú, la búsqueda o la hoja Música
+   abiertos, y en el mismo sitio con o sin señal de límite.
+7. **Modo noche en AUTO**: el mapa pasa a oscuro al ponerse el sol donde estás (ya no a las 19:00 ni
+   con el modo oscuro del iPhone), y la barra de búsqueda y la hoja de búsqueda se vuelven oscuras.
+   Apunta la hora a la que cambió.
+8. **El mapa**: gris claro de día y gris oscuro de noche, con la ruta azul bordeada y la flecha blanca.
+   Dinos si se lee bien a pleno sol.
 
 ## Teléfono bloqueado: prueba de diagnóstico (fase 0)
 
 Esta build **mide** qué pasa con el iPhone bloqueado; no promete el mapa en vivo. En el tablero verás
-casi siempre lo mismo que antes (la imagen fija «Teléfono bloqueado»): la app intenta un codificador
+casi siempre la imagen fija «Mapa en pausa» (sin números; los botones del manillar no hacen nada
+mientras se ve): la app intenta un codificador
 de vídeo por software de iOS y apunta en los registros qué responde iOS, si el Wi-Fi y el enlace
 siguen vivos, cuánto gasta y si llegan el GPS y la brújula.
 
@@ -136,7 +159,7 @@ En la moto, parada y segura, con el contacto puesto:
    se mueve: lo que cambia es la **hora del tablero** (abajo a la derecha), una vez por minuto.
    ¿Qué ves?
    - el mapa sin aviso y la hora del tablero avanza (en vivo);
-   - «Teléfono bloqueado»;
+   - «Mapa en pausa»;
    - el mapa sin aviso y la hora no avanza (imagen congelada);
    - sin imagen o desconectado.
 7. Desbloquea. ¿Vuelve el mapa en menos de 5 s? Enseguida, antes de volver a bloquear y en este orden:
@@ -159,7 +182,7 @@ Qué significa cada resultado (con el iPhone bloqueado):
 - **El mapa en vivo** (sin aviso y la hora del tablero avanza; con la moto parada el mapa no se
   mueve): iOS dejó a la app comprimir el vídeo por software con el teléfono bloqueado. Es justo lo
   que esta prueba busca: compártelo aunque solo dure un rato.
-- **«Teléfono bloqueado»**: lo esperado en esta build. iOS no dio un codificador de vídeo, pero la
+- **«Mapa en pausa»**: lo esperado en esta build. iOS no dio un codificador de vídeo, pero la
   app siguió viva y respondió al tablero; el registro dice por qué (líneas `[bg] try vt-sw …`).
 - **La imagen congelada** (el último mapa, sin el aviso, y la hora del tablero no avanza): la app
   dejó de recibir peticiones del tablero, no tenía imagen de pausa para esa pantalla, o el tablero
@@ -201,7 +224,7 @@ Qué significa cada resultado (con el iPhone bloqueado):
   red de la moto, abre en el tablero su pantalla de conexión / QR.
 - **Pulsaste Conectar justo cuando la app ya conectaba sola**: ese toque no la detiene (cuenta como
   Conectar). Para detenerla, vuelve a pulsar.
-- **El tablero muestra «Teléfono bloqueado»**: lo esperado si bloqueas el iPhone, salvo que iOS le
+- **El tablero muestra «Mapa en pausa»**: lo esperado si bloqueas el iPhone, salvo que iOS le
   dé a la app un codificador por software (ver «Qué significa cada resultado» en la prueba de
   diagnóstico de arriba). Para rodar, usa **Modo ruta** en lugar de bloquear.
 
