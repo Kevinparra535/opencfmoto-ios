@@ -121,15 +121,23 @@ final class HandlebarEngineTests: XCTestCase {
     // MARK: iOS discrete commands and seek holds
 
     func testIOSDefaultMapOnDiscreteCommands() {
+        // P0 (D02): every double is unmapped. The single still fires at once; a quick second press is the
+        // double, whose action is none: swallowed (no input) — never Back, Home or D-pad left.
         let e = engine(map: HandlebarPresets.iosDefaultMapping)
         XCTAssertEqual(e.handle(.select, atMs: 0).first?.input, .key(.enter))
-        XCTAssertEqual(e.handle(.select, atMs: 200).first?.input, .key(.back))         // ★★ → Back
-        XCTAssertEqual(e.handle(.forward, atMs: 1000).first?.input, .knob(1))
-        XCTAssertEqual(e.handle(.forward, atMs: 1100).first?.input, .key(.home))      // ▶▶ → Home (menu)
-        XCTAssertEqual(e.handle(.backward, atMs: 2000).first?.input, .knob(-1))
-        XCTAssertEqual(e.handle(.backward, atMs: 2299).first?.input, .key(.left))     // ◀◀ → previous group
+        XCTAssertEqual(trace(e.handle(.select, atMs: 200)), ["200 selectDouble → none"])          // ★★ = ★
+        XCTAssertEqual(e.handle(.select, atMs: 1000).first?.input, .key(.enter))                      // slow: a second ★
+        XCTAssertEqual(e.handle(.forward, atMs: 2000).first?.input, .knob(1))
+        let fwdDouble = e.handle(.forward, atMs: 2100)
+        XCTAssertEqual(fwdDouble.map(\.action), [ButtonAction.none])                                  // ▶▶ = ▶
+        XCTAssertEqual(fwdDouble.compactMap(\.input), [])
         XCTAssertEqual(e.handle(.backward, atMs: 3000).first?.input, .knob(-1))
-        XCTAssertEqual(e.handle(.backward, atMs: 3300).first?.input, .knob(-1))       // gap == window: single
+        XCTAssertEqual(e.handle(.backward, atMs: 3299).compactMap(\.input), [])                       // ◀◀ = ◀
+        // a third quick press is a single again (the double disarmed the window): a mistimed double is
+        // only ever harmless singles
+        XCTAssertEqual(e.handle(.backward, atMs: 3400).first?.input, .knob(-1))
+        XCTAssertEqual(e.handle(.backward, atMs: 4000).first?.input, .knob(-1))
+        XCTAssertEqual(e.handle(.backward, atMs: 4300).first?.input, .knob(-1))                        // gap == window: single
     }
 
     func testSeekBeginEndHolds() {
@@ -221,7 +229,7 @@ final class HandlebarEngineTests: XCTestCase {
         let e = HandlebarGestureEngine(configuration: .init(settings: s), clock: FakeClock(t: t))
         XCTAssertEqual(trace(e.handle(.forward)), ["12000 navFwd → knobFwd"])
         t.set(12.2)
-        XCTAssertEqual(trace(e.handle(.forward)), ["12200 navFwdDouble → home"])
+        XCTAssertEqual(trace(e.handle(.forward)), ["12200 navFwdDouble → none"]) // P0 (D02): swallowed
         XCTAssertEqual(trace(e.handle(.select, at: 13.0)), ["13000 selectPress → select"])
         s.handlebarControl = false
         XCTAssertFalse(HandlebarGestureEngine.Configuration(settings: s).captureEnabled)

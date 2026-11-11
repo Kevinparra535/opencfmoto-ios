@@ -4321,12 +4321,12 @@
         }
       }
     },
-    "Same as 5-way: ◀/▶ move · ◀◀ / ▶▶ = group / menu · ★★ = Back. Singles are snappy; a second tap in the window still fires ×2.": {
+    "Same as 5-way: ◀/▶ move · ★ (ENT) selects. A quick second press is ignored: a double never does something else.": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Igual que la de 5 vías: ◀/▶ mueven · ◀◀ / ▶▶ = grupo / menú · ★★ = Atrás. Las pulsaciones simples son inmediatas; un segundo toque dentro del margen sigue disparando ×2."
+            "value": "Igual que la de 5 vías: ◀/▶ mueven · ★ (ENT) elige. Un segundo toque rápido se ignora: un doble nunca hace otra cosa."
           }
         }
       }
@@ -6151,12 +6151,12 @@
         }
       }
     },
-    "◀/▶ = move the focus · ◀◀ = previous group · ▶▶ = menu · ★ = Select · ★★ = Back. Singles fire immediately (no lag waiting for ×2).": {
+    "◀/▶ = move the focus · ★ = Select. Singles fire at once; a quick second press is ignored, so a double never does something else. The menu is the ⋮ button on the map.": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "◀/▶ = mover el foco · ◀◀ = grupo anterior · ▶▶ = menú · ★ = Seleccionar · ★★ = Atrás. Las pulsaciones simples se disparan al instante (sin esperar al ×2)."
+            "value": "◀/▶ = mover el foco · ★ = Elegir. Las pulsaciones simples actúan al instante; un segundo toque rápido se ignora, así que un doble nunca hace otra cosa. El menú es el botón ⋮ del mapa."
           }
         }
       }
