@@ -117,11 +117,20 @@ public struct LapTimer: Sendable, Equatable {
     }
 }
 
-/// Day / night map policy (`NightPrefs.isNightNow`): DAY → day, NIGHT → night, AUTO → phone dark
-/// mode OR local hour < 7 OR hour ≥ 19. No sunrise/sunset maths (parity, spec R8).
+/// Day / night map policy. DAY → day, NIGHT → night. AUTO:
+/// - Android (`NightPrefs.isNightNow`, kept for parity and its tests): phone dark mode OR local hour < 7 OR
+///   hour ≥ 19 (`isNight(theme:phoneDarkMode:…)`);
+/// - iOS (P0, D06): the sun at the rider's position — night from sunset to sunrise (the sun's upper edge
+///   below the horizon, so civil twilight is already night on the dash), computed on the phone from the GPS
+///   fix and the clock (`SunPosition`); without any position yet, the clock rule 19:00–06:59. The phone's
+///   dark mode never decides: a phone in dark mode no longer gets a dark map at noon, and a winter dusk
+///   before 19:00 no longer stays on the day map (`isNight(theme:position:…)`).
 public enum NightModePolicy {
     /// iOS re-evaluates AUTO at least this often (Android's built-in map never flips by itself).
     public static let reevaluationInterval: TimeInterval = 60
+    /// Sun elevation (degrees) below which AUTO is night: sunset / sunrise (the upper edge of the disc
+    /// on the horizon with standard refraction).
+    public static let sunsetElevationDeg = -0.833
 
     public static func isNight(theme: MapTheme, phoneDarkMode: Bool, hour: Int) -> Bool {
         switch theme {
@@ -135,6 +144,20 @@ public enum NightModePolicy {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = timeZone
         return isNight(theme: theme, phoneDarkMode: phoneDarkMode, hour: cal.component(.hour, from: date))
+    }
+
+    /// iOS AUTO (P0, D06): the sun at `position` (the rider's last GPS fix) at `date`; with no usable
+    /// position, the clock rule (local hour < 7 or ≥ 19 in `timeZone`). The phone's dark mode plays no part.
+    public static func isNight(theme: MapTheme, position: GeoPoint?, date: Date, timeZone: TimeZone = .current) -> Bool {
+        switch theme {
+        case .day: return false
+        case .night: return true
+        case .auto:
+            if let p = position, let e = SunPosition.elevationDeg(latitude: p.lat, longitude: p.lon, date: date) {
+                return e < sunsetElevationDeg
+            }
+            return isNight(theme: .auto, phoneDarkMode: false, date: date, timeZone: timeZone)
+        }
     }
 
     /// One-tap cycle AUTO → DAY → NIGHT → AUTO.
@@ -154,16 +177,19 @@ public struct NightModeMonitor: Sendable, Equatable {
     private var lastEvaluatedAt: TimeInterval?
     private var lastTheme: MapTheme?
     private var lastDark: Bool?
+    /// Whether the last evaluation had a position (the sun) or not (the clock rule).
+    private var lastHadPosition: Bool?
 
     public init() {}
 
-    /// Returns the current night flag, recomputing it when the theme / dark mode changed or
-    /// `interval` seconds elapsed since the last evaluation (monotonic `now`).
+    /// Android rule (parity): returns the current night flag, recomputing it when the theme / dark mode
+    /// changed or `interval` seconds elapsed since the last evaluation (monotonic `now`).
     @discardableResult
     public mutating func evaluate(theme: MapTheme, phoneDarkMode: Bool, date: Date, now: TimeInterval,
                                   timeZone: TimeZone = .current,
                                   interval: TimeInterval = NightModePolicy.reevaluationInterval) -> Bool {
-        if let cur = isNight, let at = lastEvaluatedAt, lastTheme == theme, lastDark == phoneDarkMode, now - at < interval {
+        if let cur = isNight, let at = lastEvaluatedAt, lastTheme == theme, lastDark == phoneDarkMode, lastHadPosition == nil,
+           now - at < interval {
             return cur
         }
         let v = NightModePolicy.isNight(theme: theme, phoneDarkMode: phoneDarkMode, date: date, timeZone: timeZone)
@@ -171,6 +197,28 @@ public struct NightModeMonitor: Sendable, Equatable {
         lastEvaluatedAt = now
         lastTheme = theme
         lastDark = phoneDarkMode
+        lastHadPosition = nil
+        return v
+    }
+
+    /// iOS rule (P0, D06): the sun at `position` (`NightModePolicy.isNight(theme:position:…)`), recomputed
+    /// when the theme changed, a position appeared or went away, or `interval` seconds elapsed (the sun moves
+    /// ¼° a minute: a 60-s step is a 1-minute late switch at most).
+    @discardableResult
+    public mutating func evaluate(theme: MapTheme, position: GeoPoint?, date: Date, now: TimeInterval,
+                                  timeZone: TimeZone = .current,
+                                  interval: TimeInterval = NightModePolicy.reevaluationInterval) -> Bool {
+        let hasPosition = position != nil
+        if let cur = isNight, let at = lastEvaluatedAt, lastTheme == theme, lastDark == nil, lastHadPosition == hasPosition,
+           now - at < interval {
+            return cur
+        }
+        let v = NightModePolicy.isNight(theme: theme, position: position, date: date, timeZone: timeZone)
+        isNight = v
+        lastEvaluatedAt = now
+        lastTheme = theme
+        lastDark = nil
+        lastHadPosition = hasPosition
         return v
     }
 }
