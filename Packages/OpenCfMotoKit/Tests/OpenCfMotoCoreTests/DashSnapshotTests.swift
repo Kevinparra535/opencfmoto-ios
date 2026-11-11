@@ -114,7 +114,7 @@ final class DashSnapshotTests: XCTestCase {
 
     func testLandscapeMenuOpen() {
         let list = frame(DashFixtures.navigating()) { ui in _ = ui.handle(.key(.home), now: 100) }
-        assertHas(list, ["dimmer", "menu.end", "menu.park"])
+        assertHas(list, ["dimmer", "menu.recenter", "menu.park"]) // opens on Recenter; End is further down (P0)
         snapshot("land-menu", list)
     }
 
@@ -408,7 +408,7 @@ final class DashSnapshotTests: XCTestCase {
     }
 
     func testLandscapeMusicMenu() {
-        // "Music" right after the menu's default item, Recenter / reroute (P0, D01), focused
+        // "Music" right after the menu's default item, Recenter (P0, D01), focused
         let list = frame(music(DashFixtures.navigating()), now: musicNow) { ui in
             _ = ui.handle(.key(.home), now: self.musicNow)
             _ = ui.handle(.knob(1), now: self.musicNow)

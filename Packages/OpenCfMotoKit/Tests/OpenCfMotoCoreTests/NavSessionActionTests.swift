@@ -375,9 +375,22 @@ final class NavSessionActionTests: XCTestCase {
         await s.navigateToSavedPlace(1)
         XCTAssertEqual(s.snapshot.mode, .navTo(Place(name: "Work", lat: 44.44, lon: 26.115, category: "saved", subtitle: "44.44, 26.115")))
         s.savedSlots!.set(1, name: "", query: "Câmpina")
+        // a route runs: the saved place opens as a preview (its Go asks on the dash), nothing is replaced
+        // (P0, D01; review DASH-SAFE-5)
+        let work = s.snapshot.mode
+        await s.navigateToSavedPlace(2)
+        await s.waitUntilIdle()
+        XCTAssertEqual(s.snapshot.mode, work)
+        XCTAssertEqual(s.snapshot.preview?.place.name, "Câmpina")
+        XCTAssertEqual(s.snapshot.preview?.place.category, "administrative") // Nominatim (no position yet)
+        s.go()
+        XCTAssertEqual(s.snapshot.destination?.name, "Câmpina")
+        // free ride: guidance at once, as before (nothing running to replace)
+        s.endNavigation()
+        XCTAssertEqual(s.snapshot.mode, .freeRide)
         await s.navigateToSavedPlace(2)
         XCTAssertEqual(s.snapshot.destination?.name, "Câmpina")
-        XCTAssertEqual(s.snapshot.destination?.category, "administrative") // Nominatim (no position yet)
+        XCTAssertNil(s.snapshot.preview)
     }
 
     func testSearchHelpers() async throws {

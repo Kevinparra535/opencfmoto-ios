@@ -133,6 +133,25 @@ final class LinkLossAlarmTests: XCTestCase {
         h.connection.stop()
     }
 
+    /// A link the phone blocks (Local Network privacy, a VPN, a content filter) at a stop is not an ignition
+    /// cycle: no «se reconecta sola» while the dialog says to change a setting and tap Connect (review PH-3).
+    @MainActor
+    func testALinkThePhoneBlocksAtAStopIsNotCalledAnIgnitionCycle() async {
+        let h = AppTestHarness()
+        _ = await streamingSession(h)
+        h.location.emit(fix(speed: 0))
+        h.connection.handleLinkEvent(.state(.failed(.localNetworkBlocked)), gen: h.connection.generation,
+                                     serial: h.connection.linkSerial)
+        let blocked = await eventually { h.connection.blockCause != nil }
+        XCTAssertTrue(blocked)
+        XCTAssertEqual(h.connection.phase, .error)
+        XCTAssertNotNil(h.connection.issue, "the dialog says what to change")
+        XCTAssertNil(h.connection.linkLossNotice, "no calm «reconnects by itself» over it")
+        h.connection.dismissIssue()
+        XCTAssertNil(h.connection.linkLossNotice, "nor once the dialog is dismissed")
+        h.connection.stop()
+    }
+
     @MainActor
     func testWithAutoRecoveryOffALostLinkEndsQuietlyAtAStopButExplainsItselfWhileMoving() async {
         for moving in [false, true] {

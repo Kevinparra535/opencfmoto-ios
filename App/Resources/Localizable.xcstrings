@@ -976,7 +976,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "CFMOTO monta varias piñas izquierdas distintas. Elige la que coincida con tu manillar: las pulsaciones dobles y largas no funcionan igual en todas."
+            "value": "CFMOTO usa varios mandos izquierdos distintos. Elige los que coincidan con tu manillar: las pulsaciones dobles y largas no funcionan igual en todos."
           }
         }
       }
@@ -2826,7 +2826,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Piña MODE / ENT"
+            "value": "Mandos MODE / ENT"
           }
         }
       }
@@ -4391,12 +4391,12 @@
         }
       }
     },
-    "Same as 5-way: ◀/▶ move · ★ (ENT) selects. A quick second press is ignored: a double never does something else.": {
+    "Same as 5-way: ◀/▶ move · ★ (ENT) selects. Every ◀ or ▶ press moves once; a quick second ★ is ignored: a double never does something else.": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Igual que la de 5 vías: ◀/▶ mueven · ★ (ENT) elige. Un segundo toque rápido se ignora: un doble nunca hace otra cosa."
+            "value": "Igual que los de 5 vías: ◀/▶ mueven · ★ (ENT) elige. Cada ◀ o ▶ mueve una vez; un segundo ★ rápido se ignora: un doble nunca hace otra cosa."
           }
         }
       }
@@ -5561,6 +5561,16 @@
         }
       }
     },
+    "Track opened — press and hold to leave pocket mode and see it": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Track abierto: mantén presionado para salir del Modo bolsillo y verlo"
+          }
+        }
+      }
+    },
     "Track preview": {
       "localizations": {
         "es": {
@@ -6066,7 +6076,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu piña de mandos izquierda"
+            "value": "Tus mandos izquierdos"
           }
         }
       }
@@ -6271,12 +6281,12 @@
         }
       }
     },
-    "◀/▶ = move the focus · ★ = Select. Singles fire at once; a quick second press is ignored, so a double never does something else. The menu is the ⋮ button on the map.": {
+    "◀/▶ = move the focus · ★ = Select. Singles fire at once; every ◀ or ▶ press moves once and a quick second ★ is ignored, so a double never does something else. The menu is the ⋮ button on the map.": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "◀/▶ = mover el foco · ★ = Elegir. Las pulsaciones simples actúan al instante; un segundo toque rápido se ignora, así que un doble nunca hace otra cosa. El menú es el botón ⋮ del mapa."
+            "value": "◀/▶ = mover el foco · ★ = Elegir. Las pulsaciones simples actúan al instante; cada ◀ o ▶ mueve una vez y un segundo ★ rápido se ignora, así que un doble nunca hace otra cosa. El menú es el botón ⋮ del mapa."
           }
         }
       }
@@ -6301,12 +6311,12 @@
         }
       }
     },
-    "★ moves the focus and ★★ selects. For dashes where only ★ reaches the phone; works best with a long double-tap delay.": {
+    "★ moves the focus once the double-tap delay is over and ★★ selects what is focused. For dashes where only ★ reaches the phone; works best with a long double-tap delay.": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "★ mueve el foco y ★★ selecciona. Para tableros en los que solo ★ llega al teléfono; funciona mejor con un retardo de doble pulsación largo."
+            "value": "★ mueve el foco al terminar el retardo de doble pulsación y ★★ elige lo que tiene el foco. Para tableros en los que solo ★ llega al teléfono; funciona mejor con un retardo de doble pulsación largo."
           }
         }
       }

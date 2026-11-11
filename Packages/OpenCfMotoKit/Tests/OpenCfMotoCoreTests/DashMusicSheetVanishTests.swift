@@ -101,7 +101,7 @@ final class DashMusicSheetVanishTests: XCTestCase {
 
     /// R4-FOCUS-2: HOME (▶▶ on back_set and custom maps; unmapped on the iOS default since P0) from the held sheet
     /// opens the menu with the held song, on "Music" as without the vanish: ◀ ★ is the menu's default item,
-    /// Recenter / reroute (P0 order; Circuit's hint before), and ★ re-opens the held sheet. Without the hold
+    /// Recenter (P0 order; Circuit's hint before), and ★ re-opens the held sheet. Without the hold
     /// reaching the menu it had no "Music": the knob parked on Circuit, whose ◀ ★ was Record (the trip log
     /// stops), and BACK / HOME closed it onto the parked Recenter, whose ◀ ★ ended navigation before P0.
     func testHomeDuringTheHoldOpensTheMenuOnTheHeldMusic() {
@@ -114,7 +114,7 @@ final class DashMusicSheetVanishTests: XCTestCase {
             _ = ui.displayList(now: t0 + 1.65)
             XCTAssertEqual(ui.state.focusedId, "menu.music", name)
             XCTAssertEqual(ui.handle(.knob(-1), now: t0 + 1.8), [], name)
-            XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 2.0), [.recalc], "\(name): Recenter / reroute, never Record")
+            XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 2.0), [.recenter], "\(name): Recenter, never Record")
             (ui, b, _) = sheetOpen(base)
             ui.update(b)
             _ = ui.displayList(now: t0 + 1.5)
@@ -221,8 +221,8 @@ final class DashMusicSheetVanishTests: XCTestCase {
 
     /// R4-FOCUS-1 through the real gesture engine: the hold ends between the two ▶ of a quick ▶▶. The first ▶ is
     /// a knob step on the sheet (⏯ → ⏭), the hold's end closes the sheet onto Recenter. On back_set the second ▶
-    /// is HOME from that stand-in: the menu parks on Circuit and ★ is its hint. On the iOS default maps ▶▶ is
-    /// unmapped since P0 (D02): the second ▶ is swallowed and ★ only recenters.
+    /// is HOME from that stand-in: the menu parks on Circuit and ★ is its hint. On the iOS default maps ▶▶ is its
+    /// own knob step since P0 (D02, review DASH-REG-3): the second ▶ moves Recenter → Zoom in and ★ zooms in.
     func testQuickRightRightAcrossTheHoldsEndNeverEndsNavigation() {
         for preset in ButtonClusterPreset.allCases {
             let (ui, base, _) = sheetOpen()
@@ -242,7 +242,7 @@ final class DashMusicSheetVanishTests: XCTestCase {
             press(.select, t0 + 3.5)
             XCTAssertFalse(out.contains(.endNavigation), "\(preset.rawValue): \(out)")
             let home = HandlebarPresets.iosMapping(for: preset)[.navFwdDouble] == .home
-            XCTAssertEqual(out, home ? [.openMenu, .startCircuit] : [.recenter], preset.rawValue)
+            XCTAssertEqual(out, home ? [.openMenu, .startCircuit] : [.zoomIn], preset.rawValue)
         }
     }
 

@@ -72,6 +72,10 @@ public final class NavigationModel {
     /// ADDITION (UI/UX P0, UX-17): an opened / picked GPX track waiting for «Seguir este track» or
     /// «Cancelar» (the Map hub shows it as a preview). Nothing changed yet.
     public private(set) var pendingGpx: GpxPreview?
+    /// ADDITION (review PH-1): the Map hub shows `pendingGpx`'s card right now (the screen sets it). An opened
+    /// track holds back the «Modo bolsillo» offer only while its question is on screen: one left behind (Back
+    /// out of the hub, or under the Dash view or pocket mode) must not block the offer for the rest of the ride.
+    public var isGpxPreviewOnScreen = false
 
     // Tunables (tests shorten them).
     /// Live-suggestion debounce (Android 350 ms).

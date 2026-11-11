@@ -1301,16 +1301,21 @@ Engine inputs on iOS:
 | `navFwd` | ▶ tap | `MEDIA_NEXT` | `nextTrack` | yes | knobFwd | **knobFwd** |
 | `selectPress` | ★ tap | `PLAY_PAUSE`/`PAUSE` | toggle / play / pause | yes | select | **select** |
 | `selectDouble` | ★★ | 2 × play/pause in 300 ms | 2 × command | yes | back | **none** (P0; was back) |
-| `navBackDouble` | ◀◀ | 2 × previous | 2 × `previousTrack` | yes | left | **none** (P0; was left) |
-| `navFwdDouble` | ▶▶ | 2 × next | 2 × `nextTrack` | yes | right | **none** (P0; was home, the menu) |
+| `navBackDouble` | ◀◀ | 2 × previous | 2 × `previousTrack` | yes | left | **knobBack** (P0: its own single; was left) |
+| `navFwdDouble` | ▶▶ | 2 × next | 2 × `nextTrack` | yes | right | **knobFwd** (P0: its own single; was home, the menu) |
 | `selectLong` | ★ hold | DOWN…UP ≥ 600 ms / repeat | — | **no** | home | **none** (stored value kept; never fires) |
 | `navBackLong` | ◀ hold | DOWN…UP ≥ 600 ms | `seekBackward` begin/end (if the dash sends REWIND) | unverified | none | **none** |
 | `navFwdLong` | ▶ hold | DOWN…UP ≥ 600 ms | `seekForward` begin/end | unverified | none | **none** |
 
-**P0 (UI/UX proposal, D02): every double → none.** With snappy singles a double always fired its single
-first (★★ = activate, then Back; ▶▶ = move, then the menu; ◀◀ = −2) and a double pressed a bit slowly became
-two singles, so a mistimed double meant something else. Now a quick second press is swallowed (its action is
-`none`) and a slow one is a second single: a double never changes meaning. The window stays 300 ms. A map
+**P0 (UI/UX proposal, D02): no double means anything of its own.** With snappy singles a double always fired
+its single first (★★ = activate, then Back; ▶▶ = move, then the menu; ◀◀ = −2) and a double pressed a bit slowly
+became two singles, so a mistimed double meant something else. Now ★★ → none: a quick second ★ is swallowed (a
+stuttered ★ is one ★) and a slow one is a second ★. ◀◀ / ▶▶ → the knob step of their own single: two presses are
+two steps at any tempo, so a rider who counts presses lands where they counted (with `none` a quick pair moved
+one step and a slow pair two; review DASH-REG-3). A double never changes meaning. The window stays 300 ms.
+Where a double is mapped to Select and its single is not (the single-button option: ★ = next, ★★ = choose), the
+single waits out the window, so ★★ chooses the item the rider sees focused and never the next one
+(`HandlebarGestureEngine.defersSingleLocked`; review DASH-SAFE-1). A map
 stored exactly as the pre-P0 iOS default (▶▶ home, ◀◀ left, ★★ back) reads as the new default
 (`HandlebarPresets.migratingLegacyDefault`); any map the rider changed, BACK/SET and the single-button option
 are kept. What only a double reached stays reachable with singles:
@@ -1319,7 +1324,7 @@ are kept. What only a double reached stays reachable with singles:
   did nothing;
 - HOME (▶▶): the map's Menu FAB (⋮), a few ◀ / ▶ from the default focus (over a preview or the arrival card,
   once Cancel / Go / Done put the map back); with the menu open, its Close (◀ from the menu's first item);
-- D-pad left (◀◀): the same as ◀ (focus −1).
+- D-pad left (◀◀): two ◀ (focus −2), like before P0, without the D-pad step.
 
 Now Playing metadata, for the dash's own "now playing" widget. Printable ASCII only: the 450MT dash
 drew ◀ ▶ as empty boxes in its media pill (second field test; ★ and · were not caught on camera). The

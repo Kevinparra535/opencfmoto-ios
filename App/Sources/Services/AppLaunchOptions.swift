@@ -14,7 +14,7 @@
 // | `-e2eMusic`                      | e2e: a fake Apple Music (3 songs with covers) + the dash music script |
 // | `-e2eBackgroundCycle <s>:<d>`    | e2e: simulated lock `s` s after the first STREAMING, for `d` s (scene inactive → background → inactive → active) |
 // | `-e2eBackgroundEncoder <policy>` | the locked-phone policy: `auto`, `vtsw`, `cpu`, `hold`, `cpu-always` (overrides the build default and any stored value) |
-// | `-uiScreen <name>`               | open that screen after launch (RootLaunchScreen names; `gpx` = a demo GPX preview) |
+// | `-uiScreen <name>`               | open that screen after launch (RootLaunchScreen names; `gpx` = a demo GPX preview; `pocketOffer` = Home with the «Modo bolsillo» countdown card held at 5 s) |
 // | `-uiOrientation landscape`       | rotate the interface to landscape after launch                      |
 // | `-uiDashSheet music`             | with `-uiScreen dash`: open the dash's Music sheet once it shows music |
 // | `-uiSettingsAnchor music`        | with `-uiScreen settings`: scroll to "Apple Music on the dash"      |

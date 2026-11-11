@@ -33,6 +33,8 @@ struct PocketCountdownCard: View {
     @Environment(AppModel.self) private var model
     let countdown: PocketCountdown
     @ScaledMetric(relativeTo: .title3) private var ringSize: CGFloat = 52
+    /// VoiceOver / Switch Control land on «Quedarme aquí» when the card shows (review PH-5).
+    @AccessibilityFocusState private var stayFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -75,6 +77,7 @@ struct PocketCountdownCard: View {
             }
             .buttonStyle(TonalButtonStyle())
             .accessibilityHint(Text("Keeps this screen; the dash stays live"))
+            .accessibilityFocused($stayFocused)
         }
         .padding(Theme.padding)
         .frame(maxWidth: 520)
@@ -82,9 +85,13 @@ struct PocketCountdownCard: View {
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.outline, lineWidth: 1))
         .shadow(color: .black.opacity(0.45), radius: 14, y: 6)
         .onAppear {
+            // With VoiceOver or Switch Control the countdown is 3 × longer (RideModel) and the focus moves to
+            // «Quedarme aquí», so one activation stays; the announcement is queued after the focus is read.
+            if UIAccessibility.isVoiceOverRunning || UIAccessibility.isSwitchControlRunning { stayFocused = true }
             let seconds = Int(countdown.duration.rounded())
+            let text = String(localized: "Pocket mode in \(seconds) seconds. Put the phone away: the dash stays live.")
             UIAccessibility.post(notification: .announcement,
-                                 argument: String(localized: "Pocket mode in \(seconds) seconds. Put the phone away: the dash stays live."))
+                                 argument: NSAttributedString(string: text, attributes: [.accessibilitySpeechQueueAnnouncement: true]))
         }
     }
 }

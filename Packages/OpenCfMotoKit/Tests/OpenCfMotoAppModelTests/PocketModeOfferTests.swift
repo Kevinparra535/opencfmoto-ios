@@ -206,17 +206,91 @@ final class PocketModeOfferTests: XCTestCase {
         h.model.cancelPendingImport()
         h.ride.projectionChanged(active: false)
 
-        // A countdown running when an opened GPX track arrives ends without pocket mode.
+        // A countdown running when an opened GPX track arrives (and the Map hub shows its card) ends
+        // without pocket mode.
         h.ride.projectionChanged(active: true)
         XCTAssertNotNil(h.ride.pocketCountdown)
         h.model.navigation.previewGpx(data: Data(GpxPreviewTests.loop.utf8), fileName: "Loop.gpx")
         XCTAssertNotNil(h.model.navigation.pendingGpx)
+        h.model.navigation.isGpxPreviewOnScreen = true // what the Map hub reports while it shows the card
         let ended = await eventually { h.ride.pocketCountdown == nil }
         XCTAssertTrue(ended)
         XCTAssertFalse(h.ride.isRideModeActive, "pocket mode never covers a question")
         XCTAssertEqual(h.model.pocketOfferBusyReason(), "an opened GPX track waits for an answer")
         h.model.navigation.cancelPendingGpx()
         XCTAssertNil(h.model.pocketOfferBusyReason())
+    }
+
+    /// Review PH-1: a track left unanswered off screen (Back out of the Map hub, or opened under the Dash view
+    /// or pocket mode) does not hold the offer back for the rest of the ride; its card holds it back again
+    /// once on screen.
+    @MainActor
+    func testAnOpenedTrackOffScreenDoesNotBlockTheOffer() async {
+        let h = harness(countdown: 30)
+        h.model.navigation.previewGpx(data: Data(GpxPreviewTests.loop.utf8), fileName: "Loop.gpx")
+        XCTAssertNotNil(h.model.navigation.pendingGpx)
+        h.model.navigation.isGpxPreviewOnScreen = true
+        XCTAssertEqual(h.model.pocketOfferBusyReason(), "an opened GPX track waits for an answer")
+        h.model.navigation.isGpxPreviewOnScreen = false // the rider left the hub without answering
+        XCTAssertNil(h.model.pocketOfferBusyReason())
+        h.ride.projectionChanged(active: true) // Connect
+        XCTAssertNotNil(h.ride.pocketCountdown, "the offer is not blocked by a question nobody sees")
+        h.model.navigation.isGpxPreviewOnScreen = true // back in the hub: the card is the question again
+        h.ride.cancelPocketCountdown()
+        h.ride.projectionChanged(active: false)
+        h.ride.projectionChanged(active: true)
+        XCTAssertNil(h.ride.pocketCountdown)
+    }
+
+    /// Review PH-2: any touch on the phone during the countdown is the rider using it — the countdown ends and
+    /// pocket mode never drops onto a pan, a tap or a scroll; a touch with no countdown changes nothing.
+    @MainActor
+    func testATouchOnThePhoneEndsTheCountdown() async {
+        let h = harness()
+        h.ride.phoneTouched()
+        XCTAssertNil(h.ride.pocketCountdown)
+        h.ride.projectionChanged(active: true)
+        XCTAssertNotNil(h.ride.pocketCountdown)
+        h.ride.phoneTouched()
+        XCTAssertNil(h.ride.pocketCountdown)
+        await settle(0.4)
+        XCTAssertFalse(h.ride.isRideModeActive)
+        XCTAssertTrue(h.ride.isProjecting, "the dash keeps the map")
+    }
+
+    /// The screenshot hook: the card held at its full count, no pocket mode at its end.
+    @MainActor
+    func testTheScreenshotHookHoldsTheCardAtItsFullCount() async {
+        let h = harness(countdown: 5)
+        h.ride.offersPocketMode = false // the launch modes
+        h.ride.showPocketOfferForScreenshot()
+        let now = h.core.services.clock.now()
+        let c = try! XCTUnwrap(h.ride.pocketCountdown)
+        XCTAssertEqual(c.secondsLeft(at: now + 30), 5)
+        XCTAssertEqual(c.progress(at: now + 30), 0)
+        await settle(0.3)
+        XCTAssertFalse(h.ride.isRideModeActive)
+        XCTAssertNotNil(h.ride.pocketCountdown)
+    }
+
+    /// Review PH-5: with VoiceOver or Switch Control the countdown is 3 × longer (5 s → 15 s).
+    @MainActor
+    func testAssistiveTechnologyLengthensTheCountdown() async {
+        XCTAssertEqual(PocketModePolicy.countdownSeconds * PocketModePolicy.assistiveCountdownFactor, 15)
+        let h = harness(countdown: 0.15)
+        h.ride.isAssistiveTechnologyRunning = { true }
+        h.ride.projectionChanged(active: true)
+        XCTAssertEqual(h.ride.pocketCountdown?.duration ?? 0, 0.45, accuracy: 1e-9)
+        await settle(0.3)
+        XCTAssertFalse(h.ride.isRideModeActive, "not yet at 5 s' worth")
+        let pocket = await eventually { h.ride.isRideModeActive }
+        XCTAssertTrue(pocket)
+        h.ride.exitRideMode()
+        let plain = harness(countdown: 0.15)
+        plain.ride.isAssistiveTechnologyRunning = { false }
+        plain.ride.projectionChanged(active: true)
+        XCTAssertEqual(plain.ride.pocketCountdown?.duration, 0.15)
+        plain.ride.cancelPocketCountdown()
     }
 
     @MainActor

@@ -1103,6 +1103,10 @@ public final class DashUIController: @unchecked Sendable {
         if confirming, intent != .closeSheets { confirmKind = nil } // the action, or another sheet, replaces it
         switch intent {
         case .recenter:
+            if sheet == .menu { // the menu's «Recenter» (its default item): back to the map, like Reroute
+                sheet = .none
+                pendingPreference = navPref
+            }
             camera.follow = true
             camera.cancelAutoRecenter()
             if let fix = model.fix, model.riderPosition != nil {

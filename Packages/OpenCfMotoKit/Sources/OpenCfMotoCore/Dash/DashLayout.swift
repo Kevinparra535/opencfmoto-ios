@@ -244,7 +244,8 @@ public struct DashMenuContent: Sendable, Equatable {
     public var preferences: MapPreferences
     /// The Ride section lists "Music" after its first item (Apple Music now playing; iOS addition).
     public var showsMusic: Bool
-    /// The Ride section ends with "End route…" (a route runs, no preview over it; it opens the confirm card).
+    /// The Ride section ends with "Reroute" and "End route…" (a route runs, no preview over it; End opens the
+    /// confirm card).
     public var showsEnd: Bool
     public init(language: DashLanguage, follow: Bool, headingUp: Bool, recording: Bool, preferences: MapPreferences,
                 showsMusic: Bool = false, showsEnd: Bool = true) {
@@ -331,6 +332,8 @@ public struct DashConfirmCardLayout: Sendable, Equatable {
     public var consequenceRect: DashRect
     public var consequenceFont: DashFont
     public var consequenceLines: Int
+    /// The consequence as drawn (`fitConsequence`'s text when given: whole, never cut by the 2-line cap).
+    public var consequence: String
     /// The safe option ("Keep going") and the action ("End route" / "Change"), in focus order.
     public var keepRect: DashRect
     public var actRect: DashRect
@@ -642,8 +645,10 @@ public enum DashLayout {
     private static func portraitMetrics(_ c: DashLayoutContext, labels: [String], values: [String]) -> DashMetricsLayout {
         let padL = c.dp(12) + c.safe.minX, padR = c.dp(12) + (c.canvas.width - c.safe.maxX)
         let padT = c.dp(10), padB = c.dp(10)
-        let labelFont = c.font(11)
-        let valueFonts = [c.font(22, .bold), c.font(22, .bold), c.font(24, .bold)]
+        // never smaller than the 800x384 card (FINAL: type is never smaller than the 800x384 sizes; review
+        // DASH-TYPE-10): labels 13, values 26 / 26 / 30
+        let labelFont = c.font(13)
+        let valueFonts = landscapeValueSp.map { c.font($0, .bold) }
         let weights = [1.0, 1.0, 1.2]
         let innerW = c.canvas.width - padL - padR
         let labelH = c.lineHeight(labelFont)
@@ -889,9 +894,11 @@ public enum DashLayout {
     /// right edge at most `maxRight`, default W − 96 in landscape), padding 16×14, the question (24 sp bold,
     /// ≤ 2 lines), the consequence (17 sp, ≤ 2 lines), then [keep][act] (h 48, 18 sp bold, min 150 each, gap
     /// 12). Portrait: full width, the two buttons share the row. The safe option comes first: it is the
-    /// focused one.
+    /// focused one. `fitConsequence` (width, font) → the consequence shortened to fit 2 lines at the card's
+    /// text width (its place names, not its fixed part — review DASH-COPY-9).
     public static func confirmCard(_ c: DashLayoutContext, question: String, consequence: String, keepLabel: String,
-                                   actLabel: String, maxRight: Double? = nil, bottom: Double? = nil) -> DashConfirmCardLayout {
+                                   actLabel: String, maxRight: Double? = nil, bottom: Double? = nil,
+                                   fitConsequence: ((Double, DashFont) -> String)? = nil) -> DashConfirmCardLayout {
         let land = c.isLandscape
         let pad = c.dp(16), padV = c.dp(14)
         let x = c.safe.minX + c.dp(10)
@@ -904,6 +911,7 @@ public enum DashLayout {
         let actW = max(c.dp(150), 2 * btnPad + c.width(actLabel, buttonFont))
         let naturalInner = max(c.width(question, questionFont), c.width(consequence, consequenceFont), keepW + gap + actW)
         let innerW = land ? min(availInner, max(c.dp(320), naturalInner)) : availInner
+        let consequence = fitConsequence?(innerW, consequenceFont) ?? consequence
         let qLines = DashTextLayout.lineCount(question, maxWidth: innerW, font: questionFont, maxLines: 2, measurer: c.measurer)
         let cLines = DashTextLayout.lineCount(consequence, maxWidth: innerW, font: consequenceFont, maxLines: 2, measurer: c.measurer)
         let qH = Double(qLines) * c.lineHeight(questionFont), cH = Double(cLines) * c.lineHeight(consequenceFont)
@@ -924,7 +932,7 @@ public enum DashLayout {
         }
         return DashConfirmCardLayout(frame: frame, questionRect: qRect, questionFont: questionFont, questionLines: qLines,
                                      consequenceRect: cRect, consequenceFont: consequenceFont, consequenceLines: cLines,
-                                     keepRect: keep, actRect: act, buttonFont: buttonFont)
+                                     consequence: consequence, keepRect: keep, actRect: act, buttonFont: buttonFont)
     }
 
     // MARK: Lap card
@@ -952,9 +960,11 @@ public enum DashLayout {
     /// (navigation-dash.md §11.8). The "3D" row (no-op on the bike) and the unused legacy scenic
     /// length row are omitted. `endPadding` (iOS): extra room after Close, so the last items can scroll
     /// clear of the speed chip drawn over the panel's bottom (P0, D03).
-    /// P0 (D01, D23): the Ride section opens on harmless items — Recenter / reroute (the first item, where
-    /// the menu opens), Music, Circuit, Go home — then Park here, Record, Set home here, and "End route…"
-    /// last (only while a route runs; it opens the confirm card). Toggles carry verb labels.
+    /// P0 (D01, D23): the Ride section opens on harmless items — Recenter (the first item, where the menu
+    /// opens: the camera only), Music, Circuit, Go home — then Park here, Record, Set home here, and, only
+    /// while a route runs, Reroute (it replaces the running route: a circuit becomes the leg to its far
+    /// point, a picked alternative the preferred route — never the default nor next to it, review
+    /// DASH-SAFE-2) and "End route…" last (it opens the confirm card). Toggles carry verb labels.
     public static func menu(_ c: DashLayoutContext, content m: DashMenuContent, endPadding: Double = 0) -> DashMenuLayout {
         let L = m.language
         let w = c.dp(DashDimens.menuWidth)
@@ -996,14 +1006,17 @@ public enum DashLayout {
         let p = m.preferences
         title(.ride, first: true)
         firstInSection = true
-        button("menu.recalc", DashText.recenterRecalc.localized(L))
+        button("menu.recenter", DashText.recenter.localized(L))
         if m.showsMusic { button("menu.music", DashText.music.localized(L)) }
         button("menu.circuit", DashText.circuit.localized(L))
         button("menu.goHome", DashText.goHome.localized(L))
         button("menu.park", DashText.parkHere.localized(L))
         button("menu.record", (m.recording ? DashText.stopRecording : DashText.recordRide).localized(L))
         button("menu.setHome", DashText.setHomeHere.localized(L))
-        if m.showsEnd { button("menu.end", DashText.endNavigation.localized(L), destructive: true) }
+        if m.showsEnd {
+            button("menu.recalc", DashText.reroute.localized(L))
+            button("menu.end", DashText.endNavigation.localized(L), destructive: true)
+        }
         title(.map, first: false)
         firstInSection = true
         button("menu.follow", (m.follow ? DashText.panMap : DashText.followMe).localized(L))

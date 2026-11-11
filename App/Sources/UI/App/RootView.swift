@@ -11,8 +11,8 @@
 // - the dash's "type on phone" request when the top screen has no search field (back to Home),
 // - UI/UX P0: the «Modo bolsillo» countdown card after Connect / Go (PocketCountdownCard.swift) and
 //   what only the UI knows about it — the keyboard or a root sheet is up, or the rider moved to
-//   another screen: the phone is in use, so no countdown runs then (UX-01); an opened GPX track
-//   opens the Map hub, which shows it as a preview (UX-17).
+//   another screen, or touched it anywhere (WindowTouchObserver.swift): the phone is in use, so no
+//   countdown runs then (UX-01); an opened GPX track opens the Map hub, which shows it as a preview (UX-17).
 // Alerts are attached to exactly one level at a time (the root when nothing is presented, else
 // inside the presented sheet / cover) because a view that is already presenting cannot present an
 // alert on iOS.
@@ -63,6 +63,12 @@ struct RootView: View {
         }
         .overlay(alignment: .bottom) {
             PocketCountdownOverlay()
+        }
+        .background {
+            // Any touch on the phone ends a running «Modo bolsillo» countdown (review PH-2).
+            WindowTouchObserver { model.ride.phoneTouched() }
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
         }
         .connectionIssueAlert(isActive: !isRootPresenting)
         .pendingImportAlert(isActive: !isRootPresenting)
@@ -145,14 +151,21 @@ struct RootView: View {
             MainRideMode.enter(model.ride)
         case .gpxPreview:
             Log.i("UI", "-uiScreen gpx")
-            openDemoGpxPreview()
+            await openDemoGpxPreview()
+        case .pocketOffer:
+            Log.i("UI", "-uiScreen pocketOffer")
+            model.ride.showPocketOfferForScreenshot()
         }
     }
 
     /// `-uiScreen gpx`: the demo loop opened as a GPX file while a route to Home runs, as when a track
-    /// arrives from Files or AirDrop mid-ride — the Map hub shows it as a preview, nothing replaced.
-    private func openDemoGpxPreview() {
+    /// arrives from Files or AirDrop mid-ride — the Map hub shows it as a preview, nothing replaced. The
+    /// track opens once the route runs (≤ 5 s), so the hub frames the track, not the route (review PH-4).
+    private func openDemoGpxPreview() async {
         if let home = model.navigation.home { model.navigation.navigate(to: home) }
+        for _ in 0 ..< 50 where !model.navigation.snapshot.mode.isNavigating {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
         let points = DemoRoutePlayer.defaultRoute.map { TrackPoint(lat: $0.lat, lon: $0.lon) }
         var waypoints: [TrackPoint] = []
         if let first = points.first { waypoints.append(TrackPoint(lat: first.lat, lon: first.lon, name: "Start")) }
@@ -214,10 +227,16 @@ struct RootView: View {
         router.scanRequest != nil || model.connection.manualJoin != nil || model.ride.isRideModeActive
     }
 
-    /// Brings the Map hub up for a GPX track waiting as a preview (after the onboarding).
+    /// Brings the Map hub up for a GPX track waiting as a preview (after the onboarding): back to the newest
+    /// hub in the stack — popping what was pushed over it, such as its Dash view — or a new one on top
+    /// (review PH-1: a hub under the Dash view used to keep the card hidden).
     private func showPendingGpx() {
         guard model.navigation.pendingGpx != nil, model.permissions.hasCompletedOnboarding else { return }
-        if router.path.last != .navigate { router.path.append(.navigate) }
+        if let hub = router.path.lastIndex(of: .navigate) {
+            if hub < router.path.count - 1 { router.path = Array(router.path.prefix(through: hub)) }
+        } else {
+            router.path.append(.navigate)
+        }
     }
 
     /// The manual join prompt: shown while the model has one; a swipe-down means Cancel.
@@ -292,6 +311,10 @@ private struct RootP0Hooks: ViewModifier {
                 // Asked when an offer would start and when it runs out: a sheet, cover or alert opened
                 // by any screen (file picker, share sheet…) — the pocket cover never goes over one.
                 model.ride.isPhoneBusyNow = { RootPresentationProbe.isAnythingPresented() }
+                // VoiceOver / Switch Control: a 3 × longer countdown (review PH-5).
+                model.ride.isAssistiveTechnologyRunning = {
+                    UIAccessibility.isVoiceOverRunning || UIAccessibility.isSwitchControlRunning
+                }
             }
     }
 

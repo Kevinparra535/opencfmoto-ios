@@ -181,7 +181,7 @@ final class DashMusicBlindInputTests: XCTestCase {
     // MARK: Paths to End, documented
 
     /// Navigating, P0 (D01). The map's list is Recenter, Zoom in, Zoom out, Compass, Menu, the tile (◀ ▶ wrap);
-    /// the sheet's ⏮ ⏯ ⏭ ✕; the menu's Recenter / reroute, Music, Circuit, Go home, Park here, Record, Set home,
+    /// the sheet's ⏮ ⏯ ⏭ ✕; the menu's Recenter, Music, Circuit, Go home, Park here, Record, Set home,
     /// End route…, Follow … Zoom in. End is the menu's eighth item and only opens «End the route?» on «Keep
     /// going» (▶ ★ there ends it): no path of up to three presses from any start. Before P0 End was the map
     /// list's first stop and the menu's first item: ▶★ from the tile, ◀★★ via the Menu FAB, B▶★ after BACK, and
@@ -339,7 +339,7 @@ final class DashMusicBlindInputTests: XCTestCase {
         return box.all
     }
 
-    /// Navigating: from the menu's Music (P0: right after the default Recenter / reroute), ▶▶★ is Go home (a
+    /// Navigating: from the menu's Music (P0: right after the default Recenter), ▶▶★ is Go home (a
     /// preview of Home; its Go asks before it replaces the running route); where a vanish parked the menu's
     /// focus (Circuit, the item below Music), ▶★ Go home and ▶▶★ Park here (it only sets the spot, P0 D22).
     /// Nothing else within three presses. (Before P0: ◀◀★ / ◀★ were Record.)
@@ -381,7 +381,7 @@ final class DashMusicBlindInputTests: XCTestCase {
     /// since P0 (Android's End left the map) — the field guide: ◀ to the tile, ★ the sheet, ★ play / pause. From
     /// a control that is not a Music control nothing parks or returns: while the tile is not listed — gone, or
     /// gone at the very knob step and back before the ★ (a gap that outlasted MusicModel's 2-s hold) — ◀ is
-    /// the Menu FAB, and ◀★★ opens the menu and picks its harmless first item, Recenter / reroute (it picked
+    /// the Menu FAB, and ◀★★ opens the menu and picks its harmless first item, Recenter (it picked
     /// "End navigation" before P0); ▶★ from the Menu FAB wraps to Recenter.
     func testFromRecenterTheTileMustBeListed() {
         let base = DashFixtures.navigating()
@@ -396,7 +396,7 @@ final class DashMusicBlindInputTests: XCTestCase {
             if gap == "blink at the knob step" { ui.update(with); _ = ui.displayList(now: Self.t0 + 1.2) }
             let a = ui.handle(.key(.enter), now: Self.t0 + 1.5)
             let b = ui.handle(.key(.enter), now: Self.t0 + 2)
-            XCTAssertEqual(a + b, gap == "tile shown" ? [.openMusic, .musicPlayPause] : [.openMenu, .recalc], gap)
+            XCTAssertEqual(a + b, gap == "tile shown" ? [.openMusic, .musicPlayPause] : [.openMenu, .recenter], gap)
         }
         for gone in [false, true] {
             let ui = DashUIController()
@@ -419,8 +419,8 @@ final class DashMusicBlindInputTests: XCTestCase {
     /// default item ▶▶★ is Go home (a preview) instead of Circuit. Before P0 End was a stop of the map's list
     /// and the menu's first item, and five starts reached it this way (◀★★ from End, ▶★ from the Menu FAB…).
     private static let notMusicOther: [Mode: [String: [String: String]]] = [
-        .navigating: ["menu.recalc": ["▶▶★": "Go home"]],
-        .freeRide: ["menu.recalc": ["▶▶★": "Go home"]],
+        .navigating: ["menu.recenter": ["▶▶★": "Go home"]],
+        .freeRide: ["menu.recenter": ["▶▶★": "Go home"]],
     ]
 
     /// From every map and menu control that is not a Music control (navigating and in free ride), the song
@@ -488,7 +488,7 @@ final class DashMusicBlindInputTests: XCTestCase {
             }
             box.lock.lock(); box.added[n] = added; box.notAndroid += notAndroid; box.lock.unlock()
         }
-        XCTAssertEqual(starts.count, 80) // P0: no End on the map, nor in the free-ride menu
+        XCTAssertEqual(starts.count, 81) // P0: no End on the map, nor Reroute or End in the free-ride menu
         XCTAssertEqual(box.notAndroid, [], "the song gone is a dash without music")
         for (n, s) in starts.enumerated() {
             let added = box.added[n] ?? [:]

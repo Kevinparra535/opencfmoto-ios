@@ -68,21 +68,22 @@ final class ControlsModelTests: XCTestCase {
     }
 
     @MainActor
-    func testQuickDoubleForwardIsOnlyOneStep() async {
-        // P0 (D02): ▶▶ is unmapped on iOS (was Home → menu). The first ▶ moves the focus at once; the quick
-        // second press is swallowed: no menu, no second step — a mistimed double never means something else.
+    func testQuickDoubleForwardIsTwoSteps() async {
+        // P0 (D02): ▶▶ is its own knob step on iOS (was Home → menu). The first ▶ moves the focus at once; the
+        // quick second press moves it once more: no menu — two presses are two steps at any tempo, so a
+        // mistimed double never means something else (review DASH-REG-3).
         let h = AppTestHarness()
         h.controls.setRemoteEnabled(true)
         h.ride.flushModel()
         XCTAssertEqual(h.ride.ui.state.focusedId, "pill")
+        let order = h.ride.ui.state.focusOrder
         signal(h, .forward)
-        let afterOne = h.ride.ui.state.focusedId
-        XCTAssertNotEqual(afterOne, "pill")
-        signal(h, .forward, after: 0.1) // inside the 300 ms window → ▶▶ = Nothing
+        XCTAssertEqual(h.ride.ui.state.focusedId, order[1])
+        signal(h, .forward, after: 0.1) // inside the 300 ms window → ▶▶ = Knob forward
         XCTAssertEqual(h.ride.ui.state.sheet, .none)
-        XCTAssertEqual(h.ride.ui.state.focusedId, afterOne)
+        XCTAssertEqual(h.ride.ui.state.focusedId, order[2])
         XCTAssertEqual(h.controls.lastCommand,
-                       "\(SessionText.gestureLabel(.navFwdDouble, h.language)) \u{2192} \(SessionText.actionLabel(.none, h.language))")
+                       "\(SessionText.gestureLabel(.navFwdDouble, h.language)) \u{2192} \(SessionText.actionLabel(.knobFwd, h.language))")
     }
 
     /// input-controls §7.9: capture off = the bars control media normally. The remote is not even

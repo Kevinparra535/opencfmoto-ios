@@ -97,6 +97,10 @@ public final class RideModel {
     /// it runs out: true while a sheet, a cover or an alert is up anywhere (pocket mode is never
     /// presented over another presentation). nil: nothing to ask.
     @ObservationIgnored public var isPhoneBusyNow: (() -> Bool)?
+    /// ADDITION (review PH-5): VoiceOver or Switch Control is running (the UI asks UIAccessibility). The offer
+    /// then counts `PocketModePolicy.assistiveCountdownFactor` × longer: announcing the card and moving to
+    /// «Quedarme aquí» takes longer than 5 s. nil: no assistive technology.
+    @ObservationIgnored public var isAssistiveTechnologyRunning: (() -> Bool)?
     /// ADDITION (UI/UX P0): false turns the automatic pocket-mode offer off (the E2E and screenshot
     /// launch modes, whose screens must stay as launched). The pocket-mode buttons still work.
     @ObservationIgnored public var offersPocketMode = true {
@@ -284,6 +288,22 @@ public final class RideModel {
         endPocketCountdown(reason: "the rider stays on the phone")
     }
 
+    /// The screenshot launch mode `-uiScreen pocketOffer` (review PH-5: the card had no screenshot): the card as
+    /// it first shows, held at its full count — it "starts" an hour from now, so the ring stays full — and no
+    /// pocket mode at its end. Only the launch modes call it (their `offersPocketMode` is off).
+    public func showPocketOfferForScreenshot() {
+        pocketTask?.cancel()
+        pocketTask = nil
+        pocketCountdown = PocketCountdown(trigger: .connected, startedAt: clock.now() + 3600, duration: tuning.pocketCountdown)
+    }
+
+    /// A touch anywhere on the phone (the UI reports every touch-down): the rider is using the phone, so a
+    /// running countdown ends — pocket mode never drops onto a pan, a tap or a scroll in progress (review PH-2).
+    public func phoneTouched() {
+        guard pocketCountdown != nil else { return }
+        endPocketCountdown(reason: "the rider touched the phone")
+    }
+
     /// Offers pocket mode with a countdown, if the rules allow it now (PocketModePolicy). A running
     /// countdown is kept as it is.
     func offerPocketMode(_ trigger: PocketCountdown.Trigger) {
@@ -292,7 +312,9 @@ public final class RideModel {
             Log.d("RIDE", "pocket mode not offered (\(trigger.rawValue)): \(reason)")
             return
         }
-        let countdown = PocketCountdown(trigger: trigger, startedAt: clock.now(), duration: tuning.pocketCountdown)
+        let assistive = isAssistiveTechnologyRunning?() == true
+        let duration = tuning.pocketCountdown * (assistive ? PocketModePolicy.assistiveCountdownFactor : 1)
+        let countdown = PocketCountdown(trigger: trigger, startedAt: clock.now(), duration: duration)
         pocketCountdown = countdown
         Log.i("RIDE", "pocket mode in \(Self.seconds(countdown.duration)) s (\(trigger.rawValue)) \u{2014} unless the rider stays")
         pocketTask?.cancel()

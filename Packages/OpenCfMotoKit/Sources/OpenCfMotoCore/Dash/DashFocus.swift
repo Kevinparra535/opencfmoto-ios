@@ -50,7 +50,7 @@ public struct DashFocusEngine: Sendable, Equatable {
     /// Where the focus goes when a Music control vanishes (F2, R2-DASH-1): the map's Recenter FAB (★ only
     /// recenters and the focus stays on the map, so repeated ★ meant for the tile or ⏯ are harmless), in the
     /// menu its "Circuit" (★ without a previewed place only shows a hint; P0 puts it right after "Music",
-    /// between Recenter / reroute and Go home). Neither ends or replaces anything.
+    /// between Recenter and Go home). Neither ends or replaces anything.
     public static let musicGoneIds = ["fab.recenter", "menu.circuit"]
 
     public private(set) var focusedId: String?

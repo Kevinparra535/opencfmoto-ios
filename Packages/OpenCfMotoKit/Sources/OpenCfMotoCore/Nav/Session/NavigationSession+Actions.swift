@@ -567,7 +567,9 @@ extension NavigationSession {
     public func idleSuggestions() -> [Place] { places.idleSuggestions() }
 
     /// Handlebar nav1…nav3 (`number` 1…3): geocodes the saved query (or parses "lat,lon") and
-    /// starts navigation in-app.
+    /// starts navigation in-app. While a route runs the place opens as a preview instead: its Go asks
+    /// before replacing the running route, as every other way to a new route does (P0, D01; review
+    /// DASH-SAFE-5 — a mapped gesture used to replace it at once).
     public func navigateToSavedPlace(_ number: Int) async {
         guard let slots = savedSlots, (1 ... SavedPlaceSlots.count).contains(number), slots.isSet(number - 1) else {
             mutate { statusLocked(.savedPlaceNotSet(number)) }
@@ -577,7 +579,7 @@ extension NavigationSession {
         let query = slots.query(slot)
         let name = slots.name(slot)
         if let p = SavedPlaceSlots.parseCoordinate(query) {
-            navigate(to: Place(name: name.isNavBlank ? query : name, lat: p.lat, lon: p.lon, category: "saved", subtitle: query))
+            startSavedPlace(Place(name: name.isNavBlank ? query : name, lat: p.lat, lon: p.lon, category: "saved", subtitle: query))
             return
         }
         do {
@@ -587,10 +589,17 @@ extension NavigationSession {
                 return
             }
             if !name.isNavBlank { first.name = name }
-            navigate(to: first)
+            startSavedPlace(first)
         } catch {
             let msg = NavServiceError.message(for: error, fallback: "Search failed")
             mutate { statusLocked(msg) }
+        }
+    }
+
+    /// A saved place: guidance at once in free ride, a preview over a running route.
+    private func startSavedPlace(_ place: Place) {
+        mutate {
+            if s.mode.isNavigating { previewPlaceLocked(place) } else { startNavigationLocked(to: place, cached: nil) }
         }
     }
 

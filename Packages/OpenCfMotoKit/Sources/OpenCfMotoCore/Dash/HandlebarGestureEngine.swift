@@ -9,7 +9,9 @@
 // iOS adaptation of Android's MediaSession key path:
 // - ★ / ▶ / ◀ arrive as DISCRETE remote commands (no press/release): they go straight into the
 //   double-tap detector (Android's onPlay/onPause path) with snappy singles: the single fires at once,
-//   a second tap on the same channel inside the window (1 ≤ gap < window) fires the double.
+//   a second tap on the same channel inside the window (1 ≤ gap < window) fires the double. Except
+//   where the double is mapped to Select and the single is not (★ = next, ★★ = choose): that single
+//   waits out the window, so a double fires the double alone (`defersSingleLocked`).
 // - Holds exist only for ▶/◀ when the dash sends AVRCP FAST_FORWARD / REWIND, observed as seek
 //   begin/end: begin = key down, end = key up (hold if held ≥ the hold threshold and holds are on,
 //   else a tap). A hold whose action is `none` is swallowed. If the app calls `tick` while a button is
@@ -395,6 +397,20 @@ public final class HandlebarGestureEngine: @unchecked Sendable {
         return out
     }
 
+    /// Whether a single waits out the double-tap window before it fires (the deferred path) instead of
+    /// firing at once (snappy). Snappy fires the single and then, on a quick second press, the double on
+    /// top of it: fine while the double only adds to what the single did, wrong when the double CHOOSES.
+    /// With ★ = next and ★★ = choose (the single-button option) the first ★ would move the focus and the
+    /// second activate the item after the one the rider saw focused («Terminar» instead of «Seguir» on
+    /// the End card). So a double mapped to Select defers its single (FINAL: "★ = next, ★★ = choose, with
+    /// the single deferred"), and a double that repeats its own single is two singles at any tempo.
+    private func defersSingleLocked(_ single: ButtonGesture, _ double: ButtonGesture) -> Bool {
+        let singleAction = actionLocked(single), doubleAction = actionLocked(double)
+        if doubleAction == singleAction { return false }
+        if doubleAction == .select { return true }
+        return !config.snappySingles
+    }
+
     private func detectDoubleTapLocked(_ single: ButtonGesture, _ double: ButtonGesture, forceDouble: Bool, now: Int64) -> [HandlebarCommand] {
         var ch = taps[single] ?? Tap()
         let gap = now - ch.lastAt
@@ -405,7 +421,7 @@ public final class HandlebarGestureEngine: @unchecked Sendable {
             taps[single] = ch
             return runGestureLocked(double, now: now)
         }
-        if config.snappySingles {
+        if !defersSingleLocked(single, double) {
             if ch.pendingDeadline != nil && gap >= 1 && gap < window {
                 ch.pendingDeadline = nil
                 taps[single] = ch

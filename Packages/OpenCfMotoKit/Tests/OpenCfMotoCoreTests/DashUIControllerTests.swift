@@ -285,7 +285,7 @@ final class DashUIControllerTests: XCTestCase {
         XCTAssertEqual(ui.state.focusedId, "fab.recenter") // navigating → Recenter first (P0, D01; Android: End)
         XCTAssertEqual(ui.handle(.key(.home), now: 1), [.openMenu])
         XCTAssertEqual(ui.state.sheet, .menu)
-        XCTAssertEqual(ui.state.focusedId, "menu.recalc") // the menu opens on a harmless item (Android: End)
+        XCTAssertEqual(ui.state.focusedId, "menu.recenter") // the menu opens on a harmless item (Android: End)
         XCTAssertEqual(ui.handle(.knob(1), now: 2), [])
         XCTAssertEqual(ui.state.focusedId, "menu.circuit")
         let park = try! XCTUnwrap(ui.state.focusOrder.firstIndex(of: "menu.park"))
@@ -314,9 +314,9 @@ final class DashUIControllerTests: XCTestCase {
         let ui = controller(DashFixtures.freeRide())
         _ = ui.handle(.key(.home), now: 1)
         let order = ui.state.focusOrder
-        // "menu.music" (Apple Music, iOS addition) is only listed while music shows on the dash, "menu.end" only
-        // while navigating (P0, D01)
-        let base = DashSceneBuilder.menuFocusBase.filter { $0 != "menu.music" && $0 != "menu.end" }
+        // "menu.music" (Apple Music, iOS addition) is only listed while music shows on the dash, "menu.recalc" and
+        // "menu.end" only while navigating (P0, D01)
+        let base = DashSceneBuilder.menuFocusBase.filter { $0 != "menu.music" && $0 != "menu.end" && $0 != "menu.recalc" }
         XCTAssertEqual(Array(order.prefix(base.count)), base)
         XCTAssertTrue(order.contains("menu.units.imperial"))
         XCTAssertEqual(order.last, "menu.close")
@@ -349,6 +349,7 @@ final class DashUIControllerTests: XCTestCase {
     func testMenuItemsEmitTheirIntents() {
         let expected: [(String, DashIntent)] = [
             ("menu.end", .endNavigation), ("menu.goHome", .goHome), ("menu.setHome", .setHomeHere), ("menu.recalc", .recalc),
+            ("menu.recenter", .recenter),
             ("menu.record", .toggleRecording), ("menu.circuit", .startCircuit), ("menu.follow", .toggleFollow),
             ("menu.heading", .toggleHeadingUp), ("menu.voice", .toggleVoice), ("menu.zoomOut", .zoomOut), ("menu.zoomIn", .zoomIn),
             ("menu.theme.night", .setTheme(.night)), ("menu.voiceSeg.off", .setVoice(false)), ("menu.nextStop.off", .setNextStop(false)),
@@ -757,11 +758,14 @@ final class DashUIControllerTests: XCTestCase {
         nav.language = .es
         let ui = controller(nav)
         _ = ui.perform(.openMenu, now: 0)
-        let menu = texts(ui.displayList(now: 0))
+        let top = texts(ui.displayList(now: 0))
+        _ = ui.handle(.knob(ui.state.focusOrder.firstIndex(of: "menu.end")!), now: 0.1) // scrolled into view
+        let menu = texts(ui.displayList(now: 0.2))
         // P0 (D23): neutral Latin-American Spanish (was «Finalizar navegación», «Conducir»)
         XCTAssertTrue(menu.contains("Terminar la ruta…"), "\(menu)")
-        XCTAssertTrue(menu.contains("Viaje"), "\(menu)")
-        XCTAssertFalse(menu.contains("Conducir"))
+        XCTAssertTrue(top.contains("Viaje"), "\(top)")
+        XCTAssertTrue(top.contains("Recentrar"), "\(top)")
+        XCTAssertFalse((top + menu).contains("Conducir"))
     }
 
     func testFirstFixPositionsCameraEvenWhenNotFollowing() {

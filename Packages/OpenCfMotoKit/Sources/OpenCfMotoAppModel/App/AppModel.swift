@@ -307,7 +307,7 @@ public final class AppModel {
         if let issue = connection.issue, issue != .noBikePaired { return "a connection dialog is open" }
         if connection.manualJoin != nil { return "the manual Wi-Fi join is open" }
         if pendingImport != nil { return "an opened settings file waits for an answer" }
-        if navigation.pendingGpx != nil { return "an opened GPX track waits for an answer" }
+        if navigation.pendingGpx != nil, navigation.isGpxPreviewOnScreen { return "an opened GPX track waits for an answer" }
         if navigation.typeOnPhoneRequested { return "the dash asks to type on the phone" }
         return nil
     }

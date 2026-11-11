@@ -176,8 +176,9 @@ final class DashMusicControllerTests: XCTestCase {
 
     /// R3-FOCUS-3: two quick ▶ are the rider's way from ⏯ to ✕. On back_set ▶▶ is HOME: from the Music sheet it
     /// opens the menu on "Music", so the ★ meant for ✕ re-opens the sheet instead of ending navigation. On the
-    /// iOS default maps ▶▶ is unmapped since P0 (D02): the quick second ▶ is swallowed and ★ is ⏭. Through the
-    /// real gesture engine, inside the double-tap window and past it, with and without a frame between the presses.
+    /// iOS default maps ▶▶ is its own knob step since P0 (D02, review DASH-REG-3): two ▶ reach ✕ at any tempo and
+    /// ★ closes the sheet. Through the real gesture engine, inside the double-tap window and past it, with and
+    /// without a frame between the presses.
     func testQuickRightRightFromPlayPauseThenStarNeverEndsNavigation() {
         for preset in ButtonClusterPreset.allCases {
             for frames in [true, false] {
@@ -197,10 +198,10 @@ final class DashMusicControllerTests: XCTestCase {
                     }
                     let label = "\(preset.rawValue), \(gap) s apart, frames \(frames)"
                     XCTAssertFalse(out.contains(.endNavigation), label)
-                    // ▶▶ = HOME (back_set): the menu on "Music", whose ★ re-opens the sheet; unmapped (iOS default):
-                    // one step, ★ = ⏭; slower, ▶ ▶ reach ✕
+                    // ▶▶ = HOME (back_set): the menu on "Music", whose ★ re-opens the sheet; a knob step (iOS
+                    // default): ▶ ▶ reach ✕ at any tempo, like two slow ▶
                     let home = HandlebarPresets.iosMapping(for: preset)[.navFwdDouble] == .home
-                    XCTAssertEqual(out, gap < 0.3 ? (home ? [.openMenu, .openMusic] : [.musicNext]) : [.closeSheets], label)
+                    XCTAssertEqual(out, gap < 0.3 && home ? [.openMenu, .openMusic] : [.closeSheets], label)
                 }
             }
         }
@@ -228,16 +229,16 @@ final class DashMusicControllerTests: XCTestCase {
                 XCTAssertEqual(ui.state.focusedId, "music.tile", "\(key), frame \(frame)")
             }
         }
-        // HOME from the map: the menu opens on its harmless first item, Recenter / reroute (P0, D01; Android: End)
+        // HOME from the map: the menu opens on its harmless first item, Recenter (P0, D01; Android: End)
         let map = controller(music(DashFixtures.navigating()))
         XCTAssertEqual(map.handle(.key(.home), now: t0), [.openMenu])
-        XCTAssertEqual(map.state.focusedId, "menu.recalc")
+        XCTAssertEqual(map.state.focusedId, "menu.recenter")
     }
 
     /// R4-FOCUS-1: HOME from where a closed Music sheet left the knob — the tile (BACK, ✕, an idle close) —
     /// opens the menu on "Music" too, as BACK already treats the tile (R2-DASH-2). Before, HOME there was the
     /// map's HOME: the menu opened on End and the next ★ ended navigation without a confirmation (since P0 the
-    /// map's HOME opens it on Recenter / reroute, and End asks first).
+    /// map's HOME opens it on Recenter, and End asks first).
     func testHomeFromTheTileAClosedSheetLeftOpensTheMenuOnMusic() {
         for navigating in [true, false] {
             let base = navigating ? DashFixtures.navigating() : DashFixtures.freeRide()
@@ -272,14 +273,14 @@ final class DashMusicControllerTests: XCTestCase {
         _ = recenter.displayList(now: t0)
         XCTAssertEqual(recenter.state.focusedId, "fab.recenter")
         XCTAssertEqual(recenter.handle(.key(.home), now: t0 + 0.5), [.openMenu])
-        XCTAssertEqual(recenter.state.focusedId, "menu.recalc", "HOME from Recenter")
+        XCTAssertEqual(recenter.state.focusedId, "menu.recenter", "HOME from Recenter")
         let fab = controller(music(DashFixtures.navigating()))
         _ = fab.displayList(now: t0)
         _ = fab.handle(.knob(1), now: t0 + 0.1) // Recenter → Zoom in, moved there by the rider
         _ = fab.displayList(now: t0 + 0.2)
         XCTAssertEqual(fab.state.focusedId, "fab.zoomIn")
         XCTAssertEqual(fab.handle(.key(.home), now: t0 + 0.5), [.openMenu])
-        XCTAssertEqual(fab.state.focusedId, "menu.recalc", "HOME from a FAB the rider chose")
+        XCTAssertEqual(fab.state.focusedId, "menu.recenter", "HOME from a FAB the rider chose")
     }
 
     func testHomeFromTheSheetWhileTheSongGoesAwayInTheSameFrameParksOnCircuit() {
@@ -532,10 +533,10 @@ final class DashMusicControllerTests: XCTestCase {
         XCTAssertEqual(fab.state.focusedId, "fab.zoomIn")
         _ = fab.handle(.key(.back), now: t0 + 1)
         XCTAssertEqual(fab.state.focusedId, "fab.recenter")
-        // the menu (opened on Recenter / reroute) closed with BACK while navigating
+        // the menu (opened on Recenter) closed with BACK while navigating
         let menu = controller(music(DashFixtures.navigating()))
         XCTAssertEqual(menu.handle(.key(.home), now: t0), [.openMenu])
-        XCTAssertEqual(menu.state.focusedId, "menu.recalc")
+        XCTAssertEqual(menu.state.focusedId, "menu.recenter")
         XCTAssertEqual(menu.handle(.key(.back), now: t0 + 1), [.closeSheets])
         XCTAssertEqual(menu.state.focusedId, "fab.recenter")
         // preview: BACK cancels it; arrival: BACK dismisses it (the tile is drawn, not focusable, there)
@@ -816,7 +817,7 @@ final class DashMusicControllerTests: XCTestCase {
 
     func testNothingButMusicCanVanishFromTheNavigatingLists() {
         // F2 audit: a control that vanished under the focus sends it to the list's default item (End while
-        // navigating before P0; Recenter and the menu's Recenter / reroute since P0, D01). In the map list and
+        // navigating before P0; Recenter and the menu's Recenter since P0, D01). In the map list and
         // the menu every id but the Music controls is fixed whatever the dash shows next to them (lap card,
         // banner + toast, night, no clock, off route, canvas, options), so nothing else can go away under the
         // focus.
@@ -844,8 +845,8 @@ final class DashMusicControllerTests: XCTestCase {
                         _ = ui.handle(.key(.home), now: t0)
                         XCTAssertEqual(ui.state.sheet, .menu)
                         let menu = ui.state.focusOrder.filter { !DashFocusEngine.isMusicControl($0) }
-                        XCTAssertEqual(menu.first, "menu.recalc")
-                        XCTAssertEqual(ui.state.focusedId, "menu.recalc")
+                        XCTAssertEqual(menu.first, "menu.recenter")
+                        XCTAssertEqual(ui.state.focusedId, "menu.recenter")
                         XCTAssertTrue(menu.contains("menu.end"), "End is in the menu while navigating")
                         if let same = menus[opts.handlebarReachesSettings] { XCTAssertEqual(menu, same) } else { menus[opts.handlebarReachesSettings] = menu }
                     }
@@ -1050,8 +1051,8 @@ final class DashMusicControllerTests: XCTestCase {
             _ = ui.handle(.key(.home), now: t0)
             let order = ui.state.focusOrder
             let i = try! XCTUnwrap(order.firstIndex(of: "menu.music"), "reach \(reach)")
-            // P0 (D01): right after the default Recenter / reroute, before Circuit (harmless neighbours)
-            XCTAssertEqual(order[i - 1], "menu.recalc")
+            // P0 (D01): right after the default Recenter, before Circuit (harmless neighbours)
+            XCTAssertEqual(order[i - 1], "menu.recenter")
             XCTAssertEqual(order[i + 1], "menu.circuit")
             // one ◀▶ step from the menu's default item, in view
             _ = ui.handle(.knob(i), now: t0 + 1)

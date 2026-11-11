@@ -390,8 +390,8 @@ final class DashMusicLayoutTests: XCTestCase {
         }
         XCTAssertFalse(ids(false).contains("menu.music"))
         let with = ids(true)
-        // P0 (D01): the menu opens on Recenter / reroute; Music is its harmless next neighbour (was after Circuit)
-        XCTAssertEqual(with.firstIndex(of: "menu.music"), with.firstIndex(of: "menu.recalc").map { $0 + 1 })
+        // P0 (D01): the menu opens on Recenter; Music is its harmless next neighbour (was after Circuit)
+        XCTAssertEqual(with.firstIndex(of: "menu.music"), with.firstIndex(of: "menu.recenter").map { $0 + 1 })
         XCTAssertEqual(with.firstIndex(of: "menu.circuit"), with.firstIndex(of: "menu.music").map { $0 + 1 })
         XCTAssertEqual(with.filter { $0 != "menu.music" }, ids(false))
         let es = DashLayout.menu(c, content: DashMenuContent(language: .es, follow: true, headingUp: true, recording: false,

@@ -187,9 +187,9 @@ final class DashMusicFocusRingTests: XCTestCase {
         XCTAssertTrue(same(try! XCTUnwrap(rings(fab).first).inner, fabRect))
         // a rectangular control: the menu's first item
         _ = ui.handle(.key(.enter), now: t0 + 1)
-        XCTAssertEqual(ui.state.focusedId, "menu.recalc")
+        XCTAssertEqual(ui.state.focusedId, "menu.recenter")
         let menu = ui.displayList(now: t0 + 1)
-        let item = try! XCTUnwrap(menu.hitRegions.last { $0.id == "menu.recalc" }?.rect)
+        let item = try! XCTUnwrap(menu.hitRegions.last { $0.id == "menu.recenter" }?.rect)
         XCTAssertEqual(focusFills(menu, over: item), [])
         XCTAssertTrue(same(try! XCTUnwrap(rings(menu).first).inner, item))
     }

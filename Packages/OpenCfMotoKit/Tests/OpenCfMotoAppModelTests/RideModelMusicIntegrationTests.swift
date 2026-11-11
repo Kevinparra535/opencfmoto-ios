@@ -433,8 +433,8 @@ final class RideModelMusicIntegrationTests: XCTestCase {
         tap(h, clock, "fab.menu")
         XCTAssertEqual(h.ride.dashUIState.sheet, .menu)
         let order = h.ride.dashUIState.focusOrder
-        XCTAssertEqual(order.firstIndex(of: "menu.music"), order.firstIndex(of: "menu.recalc").map { $0 + 1 },
-                       "Music comes right after Recenter / reroute, the menu's default item (P0, D01)")
+        XCTAssertEqual(order.firstIndex(of: "menu.music"), order.firstIndex(of: "menu.recenter").map { $0 + 1 },
+                       "Music comes right after Recenter, the menu's default item (P0, D01)")
         // 800×384: the menu's second item, in view without a drag (it was below the fold, after Circuit)
         XCTAssertTrue(has(h, "menu.music"))
         tap(h, clock, "menu.music")
@@ -945,9 +945,9 @@ extension RideModelMusicIntegrationTests {
 
     /// R3-FOCUS-3, the physical presses (PreviewHandlebar → ControlsModel's gesture engine → RideModel →
     /// NavigationModel): capture on, a paused song, navigating, the sheet open on ⏯ (◀ ★). Two quick ▶ are
-    /// the rider's way to ✕. On the iOS default map ▶▶ inside the 300-ms window is unmapped since P0 (D02): the
-    /// first ▶ moved the knob to ⏭ and the second is swallowed, so the ★ meant for ✕ is ⏭ (it was HOME, the
-    /// menu on "Music", and on bfa6c93 the menu opened on End and that ★ ended navigation); slower, ▶ ▶ reach
+    /// the rider's way to ✕. On the iOS default map ▶▶ inside the 300-ms window is its own knob step since P0
+    /// (D02, review DASH-REG-3): ▶ ▶ reach ✕ at any tempo (it was HOME, the menu on "Music", and on bfa6c93 the
+    /// menu opened on End and that ★ ended navigation; with ▶▶ unmapped the second ▶ was swallowed); quick or slow, ▶ ▶ reach
     /// ✕ and ★ closes the sheet onto the tile. Navigation goes on either way.
     @MainActor
     func testCaptureOnQuickRightRightFromTheSheetThenStarNeverEndsNavigation() async {
@@ -967,19 +967,15 @@ extension RideModelMusicIntegrationTests {
             press(.forward)
             clock.advance(gap)
             press(.forward)
-            if gap < 0.3 {
-                XCTAssertEqual(h.ride.dashUIState.sheet, .music, "\(name): no HOME")
-                XCTAssertEqual(h.ride.dashUIState.focusedId, "music.next", "\(name): one step, the second ▶ swallowed")
-            } else {
-                XCTAssertEqual(h.ride.dashUIState.focusedId, "music.close", "\(name): ✕")
-            }
+            XCTAssertEqual(h.ride.dashUIState.sheet, .music, "\(name): no HOME")
+            XCTAssertEqual(h.ride.dashUIState.focusedId, "music.close", "\(name): ✕, two steps at any tempo")
             clock.advance(1)
             press(.select) // the ★ meant for ✕
-            XCTAssertEqual(h.ride.dashUIState.sheet, gap < 0.3 ? .music : .none, name)
-            if gap >= 0.3 { XCTAssertEqual(h.ride.dashUIState.focusedId, DashFocusEngine.musicTileId, name) }
+            XCTAssertEqual(h.ride.dashUIState.sheet, .none, name)
+            XCTAssertEqual(h.ride.dashUIState.focusedId, DashFocusEngine.musicTileId, name)
             await settle(0.2)
             XCTAssertTrue(h.core.navigation.snapshot.mode.isNavigating, "\(name): navigation goes on")
-            XCTAssertEqual(fake.commands, gap < 0.3 ? ["next"] : [], "\(name): what the Music app got")
+            XCTAssertEqual(fake.commands, [], "\(name): what the Music app got")
         }
     }
 }

@@ -159,8 +159,11 @@ public final class ConnectionModel {
     /// in a session that already reached the dash — calm words and colour while the bike is stopped
     /// (an ignition cycle at a stop), today's presentation while moving; nil while the link is fine or
     /// the session is still connecting. Read-only.
+    /// A link the phone itself blocks (Local Network privacy, a VPN or content filter: `blockCause`) is not an
+    /// ignition cycle and does not come back by itself: it keeps its normal error presentation, whose dialog
+    /// tells the rider what to change (review PH-3).
     public var linkLossNotice: LinkLossNotice? {
-        guard isSessionActive, LinkLossAlarmPolicy.isLinkDown(phase) else { return nil }
+        guard isSessionActive, LinkLossAlarmPolicy.isLinkDown(phase), blockCause == nil else { return nil }
         return LinkLossAlarmPolicy.notice(phase: phase, hasReachedDash: sessionEverStreamed,
                                           bikeWifiLost: wifiLostAt != nil || isParked, stopped: isBikeStopped)
     }

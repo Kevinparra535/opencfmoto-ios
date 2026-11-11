@@ -53,18 +53,20 @@ public enum HandlebarPresets {
 
     /// iOS default mapping (input-controls.md §9.1 cluster C): singles as Android (◀ / ▶ = knob ∓1,
     /// ★ = select), `selectLong` → `none` (★ hold is never observable on iOS: play/pause commands carry no
-    /// press duration) and — P0 (D02) — every double → `none`. With snappy singles a double always fired its
-    /// single first (★★ = activate, then Back; ▶▶ = move, then the menu; ◀◀ = −2), and a double pressed a bit
-    /// slowly became two singles: a mistimed double meant something else. Now a quick second press is
-    /// swallowed (the double's action is `none`) and a slow one is a second single — never a different action.
-    /// The double-tap window stays 300 ms. What only a double reached stays reachable with singles: BACK
-    /// (close a sheet, dismiss the arrival card, cancel a preview) through each one's own close / Done /
-    /// Cancel control; HOME (the menu) through the map's Menu FAB; ◀◀'s D-pad left is ◀ again.
+    /// press duration) and — P0 (D02) — no double means anything of its own. With snappy singles a double
+    /// always fired its single first (★★ = activate, then Back; ▶▶ = move, then the menu; ◀◀ = −2), and a
+    /// double pressed a bit slowly became two singles: a mistimed double meant something else. Now ★★ →
+    /// `none`: a quick second ★ is swallowed (a stuttered ★ is one ★) and a slow one is a second ★. ◀◀ / ▶▶
+    /// → the knob step of their own single: two presses of ◀ or ▶ are two steps at any tempo, so a rider
+    /// who counts presses lands where they counted (review DASH-REG-3: with `none` a quick pair moved one
+    /// step and a slow pair two). The double-tap window stays 300 ms. What only a double reached stays
+    /// reachable with singles: BACK (close a sheet, dismiss the arrival card, cancel a preview) through each
+    /// one's own close / Done / Cancel control; HOME (the menu) through the map's Menu FAB.
     public static let iosDefaultMapping: [ButtonGesture: ButtonAction] = {
         var m = androidDefaults
         m[.selectDouble] = ButtonAction.none
-        m[.navFwdDouble] = ButtonAction.none
-        m[.navBackDouble] = ButtonAction.none
+        m[.navFwdDouble] = .knobFwd
+        m[.navBackDouble] = .knobBack
         m[.selectLong] = ButtonAction.none
         return m
     }()

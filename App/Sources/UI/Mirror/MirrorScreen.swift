@@ -89,13 +89,16 @@ struct MirrorScreen: View {
     }
 
     private func status(phase: ConnectionPhase, inMirrorFlow: Bool) -> some View {
-        let tint = Theme.tint(for: phase)
+        // The same words as Home and the pocket screen: calm «Bike off · reconnects by itself» for a mirror
+        // session at a stop, never an amber «Reconnecting…» for the same link (review PH-7).
+        let connection = model.connection
+        let tint = MainStrings.statusTint(connection)
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
-                Image(systemName: MainStrings.phaseSymbol(phase))
+                Image(systemName: MainStrings.statusSymbol(connection))
                     .foregroundStyle(tint)
                     .accessibilityHidden(true)
-                Text(MainStrings.phaseLabel(phase))
+                Text(MainStrings.statusLabel(connection))
                     .font(.headline)
                     .foregroundStyle(Theme.text)
                 Spacer(minLength: 0)

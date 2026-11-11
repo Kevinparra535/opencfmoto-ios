@@ -54,9 +54,7 @@ struct DashPreviewScreen: View {
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 // Android "Hub": the phone map (search, routes, GPX) drives the same session.
-                NavigationLink {
-                    NavigateScreen()
-                } label: {
+                NavigationLink(value: MainRoute.navigate) {
                     Label("Map", systemImage: "map")
                 }
                 // «Modo bolsillo» by name (UI/UX P0: the unlabelled moon icon read as "night mode").

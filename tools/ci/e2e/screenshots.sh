@@ -55,6 +55,8 @@ done
 # An opened GPX track shown as a preview over a running route (UI/UX P0, UX-17).
 shoot gpx_preview 9 "${DEMO[@]}" -uiScreen gpx
 shoot es_gpx_preview 9 "${DEMO[@]}" -uiScreen gpx -AppleLanguages "(es)" -AppleLocale es_ES
+shoot pocket_offer 5 "${DEMO[@]}" -uiScreen pocketOffer
+shoot es_pocket_offer 5 "${DEMO[@]}" -uiScreen pocketOffer -AppleLanguages "(es)" -AppleLocale es_ES
 # Settings scrolled to "Apple Music on the dash" (the -demoSeed fake Music app: on, access allowed).
 shoot settings_music 5 "${DEMO[@]}" -uiScreen settings -uiSettingsAnchor music
 shoot dash_landscape_raw 9 "${DEMO[@]}" -uiScreen dash -uiOrientation landscape

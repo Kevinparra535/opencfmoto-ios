@@ -11,8 +11,9 @@
 //   screen), the app is in the foreground and nothing else needs the rider: no dialog, sheet,
 //   keyboard, opened file waiting for an answer or dash "type on the phone" request;
 // - the same rule is checked again when the countdown runs out (it may end without pocket mode);
-// - leaving the foreground, the dash link ending, the rider using the phone or entering pocket mode by
-//   hand ends a running countdown; one countdown at a time;
+// - leaving the foreground, the dash link ending, the rider using the phone (any touch, the keyboard, a
+//   sheet, another screen) or entering pocket mode by hand ends a running countdown; one at a time;
+// - with VoiceOver or Switch Control the countdown is 3 × longer;
 // - pocket mode itself changes nothing on the dash and is left with a 1.5-s hold.
 // RideModel owns the countdown (`pocketCountdown`); these are its pure rules.
 
@@ -66,6 +67,9 @@ public struct PocketCountdown: Sendable, Equatable {
 enum PocketModePolicy {
     /// Seconds from the offer to pocket mode (P0: 5 s).
     static let countdownSeconds: TimeInterval = 5
+    /// With VoiceOver or Switch Control the countdown is 3 × longer (15 s): the card is announced, and the
+    /// rider moves to «Quedarme aquí» before the cover comes (WCAG 2.2.1, timing adjustable; review PH-5).
+    static let assistiveCountdownFactor: TimeInterval = 3
 
     /// Everything the offer depends on, at one moment.
     struct Context: Equatable {

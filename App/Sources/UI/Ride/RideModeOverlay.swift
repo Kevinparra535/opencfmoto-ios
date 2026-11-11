@@ -155,6 +155,13 @@ struct RideModeOverlay: View {
                         .foregroundStyle(Theme.brand)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
+                } else if model.navigation.pendingGpx != nil {
+                    // A GPX track opened under this cover waits as a preview in the Map hub (review PH-1).
+                    Label("Track opened — press and hold to leave pocket mode and see it", systemImage: "map")
+                        .font(.headline)
+                        .foregroundStyle(Theme.brand)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 // What the rider may wonder about with the phone in a pocket: the dash, and a stop.

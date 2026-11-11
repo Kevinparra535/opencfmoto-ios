@@ -121,18 +121,20 @@ final class HandlebarEngineTests: XCTestCase {
     // MARK: iOS discrete commands and seek holds
 
     func testIOSDefaultMapOnDiscreteCommands() {
-        // P0 (D02): every double is unmapped. The single still fires at once; a quick second press is the
-        // double, whose action is none: swallowed (no input) — never Back, Home or D-pad left.
+        // P0 (D02): no double means anything of its own. The single still fires at once; a quick second ★ is
+        // the double, whose action is none: swallowed (no input) — never Back. A quick second ◀ / ▶ is the
+        // double, whose action is its own knob step: two presses, two steps (review DASH-REG-3) — never Home
+        // or D-pad left.
         let e = engine(map: HandlebarPresets.iosDefaultMapping)
         XCTAssertEqual(e.handle(.select, atMs: 0).first?.input, .key(.enter))
         XCTAssertEqual(trace(e.handle(.select, atMs: 200)), ["200 selectDouble → none"])          // ★★ = ★
         XCTAssertEqual(e.handle(.select, atMs: 1000).first?.input, .key(.enter))                      // slow: a second ★
         XCTAssertEqual(e.handle(.forward, atMs: 2000).first?.input, .knob(1))
         let fwdDouble = e.handle(.forward, atMs: 2100)
-        XCTAssertEqual(fwdDouble.map(\.action), [ButtonAction.none])                                  // ▶▶ = ▶
-        XCTAssertEqual(fwdDouble.compactMap(\.input), [])
+        XCTAssertEqual(fwdDouble.map(\.action), [ButtonAction.knobFwd])                               // ▶▶ = ▶ ▶
+        XCTAssertEqual(fwdDouble.compactMap(\.input), [.knob(1)])
         XCTAssertEqual(e.handle(.backward, atMs: 3000).first?.input, .knob(-1))
-        XCTAssertEqual(e.handle(.backward, atMs: 3299).compactMap(\.input), [])                       // ◀◀ = ◀
+        XCTAssertEqual(e.handle(.backward, atMs: 3299).compactMap(\.input), [.knob(-1)])              // ◀◀ = ◀ ◀
         // a third quick press is a single again (the double disarmed the window): a mistimed double is
         // only ever harmless singles
         XCTAssertEqual(e.handle(.backward, atMs: 3400).first?.input, .knob(-1))
@@ -221,6 +223,25 @@ final class HandlebarEngineTests: XCTestCase {
         XCTAssertEqual(f.release(.forward, atMs: 100), [])
     }
 
+    func testADoubleThatSelectsDefersItsSingle() {
+        // The single-button option (★ = next, ★★ = choose): the snappy ★ would move the focus before the ★★
+        // chose, so ★★ chose the next item (review DASH-SAFE-1). The single waits out the window instead.
+        let e = engine(map: HandlebarPresets.iosSingleButtonMapping)
+        XCTAssertEqual(e.handle(.select, atMs: 0), [])                                   // ★: waits
+        XCTAssertEqual(e.nextDeadlineMs(), 300)
+        XCTAssertEqual(e.tick(atMs: 299), [])
+        XCTAssertEqual(e.tick(atMs: 300).compactMap(\.input), [.knob(1)])               // then moves
+        XCTAssertEqual(e.handle(.select, atMs: 1000), [])
+        XCTAssertEqual(trace(e.handle(.select, atMs: 1150)), ["1150 selectDouble → select"]) // ★★: only chooses
+        XCTAssertEqual(e.tick(atMs: 2000), [])
+        // ◀ / ▶ keep firing at once (their doubles repeat them), and maps whose ★★ does not select stay snappy
+        XCTAssertEqual(e.handle(.forward, atMs: 3000).compactMap(\.input), [.knob(1)])
+        let backSet = engine(map: HandlebarPresets.iosMapping(for: .backSet))
+        XCTAssertEqual(backSet.handle(.select, atMs: 0).compactMap(\.input), [.key(.enter)])
+        let ios = engine(map: HandlebarPresets.iosDefaultMapping)
+        XCTAssertEqual(ios.handle(.select, atMs: 0).compactMap(\.input), [.key(.enter)])
+    }
+
     func testSettingsInitAndClock() {
         var s = BikeSettings()
         s.buttonMap = HandlebarPresets.iosDefaultMapping
@@ -229,7 +250,7 @@ final class HandlebarEngineTests: XCTestCase {
         let e = HandlebarGestureEngine(configuration: .init(settings: s), clock: FakeClock(t: t))
         XCTAssertEqual(trace(e.handle(.forward)), ["12000 navFwd → knobFwd"])
         t.set(12.2)
-        XCTAssertEqual(trace(e.handle(.forward)), ["12200 navFwdDouble → none"]) // P0 (D02): swallowed
+        XCTAssertEqual(trace(e.handle(.forward)), ["12200 navFwdDouble → knobFwd"]) // P0 (D02): its own knob step
         XCTAssertEqual(trace(e.handle(.select, at: 13.0)), ["13000 selectPress → select"])
         s.handlebarControl = false
         XCTAssertFalse(HandlebarGestureEngine.Configuration(settings: s).captureEnabled)

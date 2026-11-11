@@ -47,9 +47,10 @@ final class HandlebarPresetTests: XCTestCase {
     func testIOSDefaultMapping() {
         let m = HandlebarPresets.iosDefaultMapping
         XCTAssertEqual(m.count, 9)
-        // P0 (D02): doubles unmapped (were ▶▶ Home, ◀◀ D-pad left, ★★ Back): a mistimed double is only singles
-        XCTAssertEqual(m[.navFwdDouble], ButtonAction.none)
-        XCTAssertEqual(m[.navBackDouble], ButtonAction.none)
+        // P0 (D02): no double of its own (were ▶▶ Home, ◀◀ D-pad left, ★★ Back): ◀◀ / ▶▶ are their own knob
+        // step (two presses = two steps at any tempo, review DASH-REG-3), ★★ is unmapped (a stuttered ★ is one)
+        XCTAssertEqual(m[.navFwdDouble], .knobFwd)
+        XCTAssertEqual(m[.navBackDouble], .knobBack)
         XCTAssertEqual(m[.selectDouble], ButtonAction.none)
         XCTAssertEqual(m[.selectLong], ButtonAction.none)
         XCTAssertEqual(m[.navBack], .knobBack)

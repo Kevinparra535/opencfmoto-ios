@@ -1551,18 +1551,26 @@ Changes to today's layouts, no new slot layout (that is P1). Pinned by `DashSafe
 dash state the tests build, on eight canvases.
 
 - **No destructive default (D01).** While navigating the default focus is the Recenter FAB, not End.
-  End left the metrics card; the menu lists «End route…» last in its Ride section (only while a route
-  runs) and opens on «Recenter / reroute». «End route…» opens a confirm card «End the route?» with the
+  End left the metrics card; the menu opens on «Recenter» (the camera only: it closes the menu and
+  recentres) and lists «Reroute» and «End route…» last in its Ride section (only while a route runs:
+  Reroute asks the router again from the fix, which turns a circuit into its outbound leg and a picked
+  alternative into the preferred route). «End route…» opens a confirm card «End the route?» with the
   consequence line and [Keep going*][End route]; Go over a preview while a route runs asks «Change
-  route?» the same way (the card stands in for the preview card). The safe option is the default, the
-  card closes after 8 s without input committing nothing, and closes when its question no longer applies.
-  No destructive or route-replacing item is the default or one knob step from it, except the confirm
-  card's own action.
-- **Doubles (D02).** The iOS default map leaves ★★, ▶▶ and ◀◀ unmapped (input-controls.md §9.1).
+  route?» the same way (the card stands in for the preview card), and so does a handlebar saved place
+  (nav1–3), which opens as a preview while a route runs. The safe option is the default, the card closes
+  after 8 s without input committing nothing, and closes when its question no longer applies. Its
+  consequence line shortens the place names (whole words, «…») so its fixed part always shows; in
+  landscape the metrics card it covers is not drawn while it is up (no cut numbers beside it). No
+  destructive or route-replacing item is the default or one knob step from it, except the confirm card's
+  own action.
+- **Doubles (D02).** On the iOS default map ★★ is unmapped (a quick second ★ is swallowed) and ◀◀ / ▶▶ are
+  their own knob step (two presses, two steps, at any tempo); with the single-button option the single waits
+  out the double window, so ★★ chooses what is focused (input-controls.md §9.1).
 - **Speed and limit never covered (D03, D19).** The gauge and the limit sign are the scene's last drawing,
   over the menu, the search and Music sheets and every card; the limit sign's room is always reserved
   (the gauge does not jump and the metrics card does not reflow when a limit appears). Scroll containers
-  under it scroll the focused control clear of it and get end padding.
+  under it scroll the focused control clear of it and get end padding (`testTheKnobNeverFocusesAnItemUnderTheGauge`
+  steps the knob through every menu, search and Music item on every canvas).
 - **Focus ring (D09).** Outline only: white 3 dp on a black 5-dp band, 0–5 dp outside the control (the
   music tile's ring of fix F3, for every control). Never a fill over the control.
 - **Map (D05).** `tile(…, treatment:)` replaced `tile(…, invert:)`: `normal`, `inverted` (classic night),
@@ -1573,7 +1581,9 @@ dash state the tests build, on eight canvases.
   (`SunPosition`, `NightModePolicy.isNight(theme:position:date:)`); without a fix yet 19:00–06:59; the
   phone's dark mode plays no part. At night the search pill and the search sheet are dark.
 - **Type and cards (D11, D12).** Turn distance 48 sp (portrait 52), road 26 (28), speed 44 (48, shrunk to
-  fit three digits); cards, gauge, clock and FABs are opaque with a 1.5-dp edge; ALT left the metrics card.
+  fit three digits); the portrait metrics bar uses the landscape card's sizes (labels 13, values 26 / 26 / 30:
+  never smaller than 800x384); cards, gauge, clock and FABs are opaque with a 1.5-dp edge; ALT left the
+  metrics card.
 - **Hold picture (D17).** A card on the plain chrome colour — «Map paused», «Voice keeps guiding» while a
   route runs with the voice on, «Resumes when you open the app, stopped» — no map and no numbers; dash
   keys and touches are ignored while it shows (the controller with `holdMessage`, RideModel while the

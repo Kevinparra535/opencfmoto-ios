@@ -62,9 +62,9 @@ permiso de red local, el codificador de video del teléfono y el comportamiento 
 5. Navega a un destino desde el iPhone (**Mapa** → busca → **Ir**) y comprueba en el tablero el cartel
    de giro, las distancias, la hora de llegada y la voz en el iPhone o el casco.
 6. Para rodar: guarda el teléfono en **Modo bolsillo**. La app lo ofrece sola: 5 s después de
-   **Conectar** o de **Ir** aparece la cuenta atrás «Modo bolsillo en 5 s · Guarda el teléfono: el
-   tablero sigue en vivo» y entra, salvo que toques **Quedarme aquí** (también está el botón **Modo
-   bolsillo** en la pantalla de inicio). La pantalla queda negra, el teléfono no se bloquea y el
+   **Conectar** o de **Ir** aparece la cuenta regresiva «Modo bolsillo en 5 s · Guarda el teléfono: el
+   tablero sigue en vivo» y entra, salvo que toques **Quedarme aquí** o cualquier parte de la pantalla
+   (también está el botón **Modo bolsillo** en la pantalla de inicio). La pantalla queda negra, el teléfono no se bloquea y el
    tablero sigue recibiendo el mapa. Para salir, mantén presionado 1,5 s.
 7. En una parada, apaga la moto un minuto y vuelve a encenderla: el iPhone no debe mostrar ninguna
    alarma. El estado dice «Moto apagada · se reconecta sola» y el mapa vuelve al tablero solo.
@@ -97,11 +97,11 @@ canción justo tras una pausa).
    tablero cambia en unos 2 s; el ⏯ del tablero funciona.
 6. **Tablero sin táctil** (Ajustes ▸ «Desactivar pantalla táctil») **con el mando multimedia del
    teléfono activado** (Controles): ◀ lleva al recuadro (el aro blanco lo rodea; sin recuadro, ◀ es el
-   botón ⋮ y ◀ ★ ★ abre el menú y elige «Recentrar / recalcular»: nada termina la ruta), ★ abre la hoja,
+   botón ⋮ y ◀ ★ ★ abre el menú y elige «Recentrar»: nada termina ni cambia la ruta), ★ abre la hoja,
    ★ pone la música → aviso «Los botones del manillar controlan ahora Apple Music» y la hoja se
    cierra; los botones pasan de canción. ★ en el manillar pausa la música → aviso «Los botones del
    manillar vuelven a controlar el tablero» (registro `handlebar buttons back on the dash`). Dos ▶
-   rápidos cuentan como uno solo: el segundo se ignora (antes abrían el menú). Un aviso de voz con
+   rápidos son dos pasos, igual que dos lentos (antes abrían el menú). Un aviso de voz con
    música baja la música sin pararla.
 7. **Spotify con Música en pausa**: si Spotify ya sonaba al abrir el tablero, no aparece el recuadro;
    si empieza después, el recuadro se va a los 3 s (registro `other audio for 3 s: song hidden`). Un
@@ -117,10 +117,11 @@ Con la moto parada y navegando hacia un destino, con el mando multimedia del tel
 
 1. **El foco por defecto** es el botón de recentrar (⌖), con un aro blanco alrededor: ★ solo recentra.
    Ya no hay botón «Fin» en la tarjeta de abajo ni la columna ALT.
-2. **Dobles pulsaciones**: dos ★, dos ▶ o dos ◀ rápidos hacen lo mismo que una sola pulsación; más
-   lentos, dos pulsaciones. El texto del tablero (donde sale la canción) dice «< > mover  * elegir».
-3. **Terminar la ruta**: ▶ hasta el botón ⋮, ★ abre el menú en «Recentrar / recalcular»; baja hasta
-   «Terminar la ruta…» (lo último de la sección Viaje) y pulsa ★: sale «¿Terminar la ruta?» con
+2. **Dobles pulsaciones**: dos ★ rápidos cuentan como uno; más lentos, dos. Dos ▶ o dos ◀ mueven
+   siempre dos pasos, rápidos o lentos: cada pulsación cuenta. Un doble nunca hace otra cosa. El texto del tablero (donde sale la canción) dice «< > mover  * elegir».
+3. **Terminar la ruta**: ▶ hasta el botón ⋮, ★ abre el menú en «Recentrar» (★ ahí solo recentra el
+   mapa); baja hasta «Terminar la ruta…» (lo último de la sección Viaje, después de «Recalcular ruta»)
+   y pulsa ★: sale «¿Terminar la ruta?» con
    **Seguir** marcado. ★ deja la ruta; ▶ ★ (Terminar) la termina. Sin tocar nada, la tarjeta se va
    sola a los 8 s y la ruta sigue.
 4. **Cambiar de ruta**: con una ruta en marcha, busca otro destino y pulsa **Ir**: pregunta

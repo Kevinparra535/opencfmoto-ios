@@ -206,10 +206,7 @@ struct DashSceneBuilder {
             lapFrame = l.frame
         }
         var navFrame: DashRect?
-        if navigating {
-            navFrame = drawNavCard()
-            if let metrics { drawMetrics(metrics) }
-        }
+        if navigating { navFrame = drawNavCard() }
         // The speed chip's place (drawn last): beside / above the metrics card, never under a card.
         var speed = Self.speedChipLayout(model, c, metrics: metrics, bannerBottom: navFrame?.maxY,
                                          covering: [preview?.frame, arrive?.frame].compactMap { $0 })
@@ -222,6 +219,11 @@ struct DashSceneBuilder {
             }
             confirm = l
         }
+        // Landscape: the confirm card sits over the metrics card. Where it does not cover all of it (544x512,
+        // whose gauge stacks above the card) the trip numbers would show as cut fragments («NTE», a bare
+        // «km») beside it: the metrics card waits for the card to close (review DASH-LOOK-6). Portrait keeps
+        // it: the card sits above the bar there.
+        if navigating, let metrics, confirm == nil || !c.isLandscape { drawMetrics(metrics) }
         // The confirm card stands in for the preview card it asks about («Change route?»): one card at a time.
         if let preview, let p = model.nav.preview, confirm == nil { drawPreview(preview, p) }
         if let arrive { drawArrive(arrive) }
@@ -725,8 +727,44 @@ struct DashSceneBuilder {
         let t = Self.confirmTexts(kind, model)
         let maxRight: Double? = c.isLandscape ? min(c.safe.maxX - c.dp(DashDimens.fabLane), speed.frame.minX - c.dp(DashDimens.edge)) : nil
         let bottom: Double? = c.isLandscape ? nil : metrics.map { $0.frame.minY - c.dp(DashDimens.edge) }
+        let (model, measurer) = (model, c.measurer)
         return DashLayout.confirmCard(c, question: t.question, consequence: t.consequence, keepLabel: t.keep, actLabel: t.act,
-                                      maxRight: maxRight, bottom: bottom)
+                                      maxRight: maxRight, bottom: bottom) { width, font in
+            Self.fittedConsequence(kind, model, width: width, font: font, measurer: measurer)
+        }
+    }
+
+    /// The consequence line at `width`: the place names lose words from their end («…») until the whole line
+    /// fits the card's 2 lines, so its fixed part («Sigues en ruta libre.») always shows (review DASH-COPY-9).
+    /// Whole words go first, the longest name first; a name that is one long word is cut last.
+    static func fittedConsequence(_ kind: DashConfirmKind, _ model: DashModel, width: Double, font: DashFont,
+                                  measurer: any DashTextMeasurer) -> String {
+        let L = model.language
+        let names = kind == .endRoute ? [routeName(model)] : [routeName(model), model.nav.preview?.place.name ?? ""]
+        func text(_ n: [String]) -> String {
+            kind == .endRoute ? DashStrings.endConsequence(n[0], L) : DashStrings.changeConsequence(from: n[0], to: n[1], L)
+        }
+        func fits(_ n: [String]) -> Bool {
+            DashTextLayout.wrap(text(n), maxWidth: width, font: font, maxLines: 3, measurer: measurer).count <= 2
+        }
+        if fits(names) { return text(names) }
+        let original = names.map { $0.split(separator: " ").map(String.init) }
+        var words = original
+        func shortened() -> [String] {
+            names.indices.map { words[$0].count < original[$0].count ? words[$0].joined(separator: " ") + "\u{2026}" : names[$0] }
+        }
+        while !fits(shortened()) {
+            let current = shortened()
+            guard let i = names.indices.filter({ words[$0].count > 1 }).max(by: { current[$0].count < current[$1].count }) else { break }
+            words[i].removeLast()
+        }
+        var fitted = shortened()
+        var w = width
+        while !fits(fitted), w > 1 { // one-word names still too long: cut them by width
+            w *= 0.8
+            fitted = fitted.map { DashTextLayout.truncate($0, maxWidth: w, font: font, measurer: measurer) }
+        }
+        return text(fitted)
     }
 
     /// The safe option is a plain secondary button; the action is red text on dark red (it acts only here).
@@ -735,7 +773,7 @@ struct DashSceneBuilder {
         card(l.frame, radius: c.dp(DashPalette.cardRadius))
         widget("confirm.card", l.frame, .blocker)
         text(t.question, l.questionRect, l.questionFont, DashPalette.primaryText, maxLines: l.questionLines)
-        text(t.consequence, l.consequenceRect, l.consequenceFont, DashPalette.secondaryText, maxLines: l.consequenceLines)
+        text(l.consequence, l.consequenceRect, l.consequenceFont, DashPalette.secondaryText, maxLines: l.consequenceLines)
         roundRect(l.keepRect, radius: c.dp(DashPalette.menuButtonRadius), fill: DashPalette.menuButtonFill,
                   stroke: DashPalette.menuButtonStroke, strokeWidth: c.dp(1))
         text(t.keep, l.keepRect, l.buttonFont, DashPalette.menuButtonText, align: .center)
@@ -886,6 +924,7 @@ struct DashSceneBuilder {
         case "menu.park": return .parkHere
         case "menu.goHome": return .goHome
         case "menu.setHome": return .setHomeHere
+        case "menu.recenter": return .recenter
         case "menu.recalc": return .recalc
         case "menu.record": return .toggleRecording
         case "menu.circuit": return .startCircuit
@@ -922,13 +961,13 @@ struct DashSceneBuilder {
     }
 
     /// Menu focus order (input-controls.md §6.6) — settings segments optionally appended (iOS).
-    /// "menu.music" (iOS addition) only exists while Apple Music shows on the dash, "menu.end" only while a
-    /// route runs: the order is filtered by the buttons actually drawn. P0 (D01): harmless items first — the
-    /// menu opens on Recenter / reroute — and "End route…" (which opens the confirm card) last of the Ride
-    /// section.
-    static let menuFocusBase = ["menu.recalc", "menu.music", "menu.circuit", "menu.goHome", "menu.park", "menu.record",
-                                "menu.setHome", "menu.end", "menu.follow", "menu.heading", "menu.voice", "menu.zoomOut",
-                                "menu.zoomIn"]
+    /// "menu.music" (iOS addition) only exists while Apple Music shows on the dash, "menu.recalc" and
+    /// "menu.end" only while a route runs: the order is filtered by the buttons actually drawn. P0 (D01):
+    /// harmless items first — the menu opens on Recenter (the camera only) — and Reroute (it replaces the
+    /// running route) and "End route…" (which opens the confirm card) last of the Ride section.
+    static let menuFocusBase = ["menu.recenter", "menu.music", "menu.circuit", "menu.goHome", "menu.park", "menu.record",
+                                "menu.setHome", "menu.recalc", "menu.end", "menu.follow", "menu.heading", "menu.voice",
+                                "menu.zoomOut", "menu.zoomIn"]
 
     private func menuContent() -> DashMenuContent {
         DashMenuContent(language: L, follow: input.camera.follow, headingUp: input.camera.headingUp,

@@ -90,7 +90,7 @@ public struct NavStrings: Sendable, Equatable {
         case .sharpRight: return es ? "Derecha cerrada" : "Sharp right"
         case .slightLeft: return es ? "Ligeramente a la izquierda" : "Slight left"
         case .slightRight: return es ? "Ligeramente a la derecha" : "Slight right"
-        case .uturn: return es ? "Cambio de sentido" : "U-turn"
+        case .uturn: return es ? "Da la vuelta" : "U-turn" // neutral Latin-American, as DashStrings (P0, D23)
         case .roundabout: return es ? "Rotonda" : "Roundabout"
         case .mergeLeft, .mergeRight: return es ? "Incorpórate" : "Merge"
         case .forkLeft: return es ? "Mantente a la izquierda" : "Keep left"

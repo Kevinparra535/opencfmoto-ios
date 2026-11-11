@@ -66,6 +66,9 @@ struct NavigateScreen: View {
             .animation(.easeInOut(duration: 0.2), value: navigation.toast)
             .onAppear {
                 isVisible = true
+                // The opened track's card is the question on screen (review PH-1: only then does it hold
+                // the «Modo bolsillo» offer back).
+                navigation.isGpxPreviewOnScreen = navigation.pendingGpx != nil
                 lease.acquire(model)
                 if navigation.pendingGpx != nil {
                     fitGpxPreview()
@@ -77,6 +80,7 @@ struct NavigateScreen: View {
             }
             .onDisappear {
                 isVisible = false
+                model.navigation.isGpxPreviewOnScreen = false
                 lease.release(model)
             }
             .mainTypeOnPhone(isVisible: isVisible) {
@@ -86,6 +90,7 @@ struct NavigateScreen: View {
                 if framing != nil { fitPreview() }
             }
             .onChange(of: navigation.pendingGpx?.id) { _, id in
+                model.navigation.isGpxPreviewOnScreen = id != nil && isVisible
                 if id != nil {
                     // An opened track is the question on screen: its card replaces the search list.
                     searchFocused = false
@@ -96,7 +101,9 @@ struct NavigateScreen: View {
                 }
             }
             .onChange(of: snapshot.mode.isNavigating) { _, navigating in
-                if navigating && snapshot.preview == nil { followRider() }
+                guard navigating && snapshot.preview == nil else { return }
+                // An opened track's preview keeps its framing over a route that starts meanwhile (review PH-4).
+                if model.navigation.pendingGpx != nil { fitGpxPreview() } else { followRider() }
             }
             .onChange(of: navigation.query) { _, _ in
                 panelDismissed = false
@@ -268,10 +275,9 @@ struct NavigateScreen: View {
             }
         }
         ToolbarItem(placement: .topBarTrailing) {
-            NavigationLink {
-                DashPreviewScreen()
-                    .onAppear { lease.handOff() }
-            } label: {
+            // A root route (not a nested destination): the stack knows the Dash view is on top, so an opened
+            // GPX track pops back to this hub's card instead of staying hidden under it (review PH-1).
+            NavigationLink(value: MainRoute.dashPreview) {
                 Label("Show dash", systemImage: "rectangle.inset.filled")
             }
         }

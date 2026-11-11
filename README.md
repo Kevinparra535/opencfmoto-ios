@@ -89,15 +89,15 @@ usando el protocolo **PXC** obtenido por ingeniería inversa. Es un port a Swift
 
 - **Mapa propio en el tablero**: el iPhone dibuja la pantalla del tablero (CoreGraphics), la
   codifica en H.264 (VideoToolbox) y la envía por el Wi-Fi de la moto. Teselas de OpenStreetMap,
-  modo día/noche, ruta, cartel de giro con distancia, carriles, métricas (tiempo, llegada,
-  distancia restante, altitud) y límite de velocidad.
+  modo día/noche, ruta, cartel de giro con distancia, carriles, métricas (tiempo, llegada y
+  distancia restante) y límite de velocidad.
 - **Navegación**: búsqueda de lugares y direcciones, categorías cercanas (gasolina, café, comida,
-  aparcamiento, hotel, cajero, hospital, mirador), rutas alternativas (Rápida / Divertida),
-  circuito de ida y vuelta, evitar peajes o autovías, seguimiento de pistas **GPX**, recálculo,
-  avisos de voz en español o inglés, favoritos, marcadores, casa y «dónde aparqué».
+  estacionamiento, hotel, cajero automático, hospital, mirador), rutas alternativas (Rápida /
+  Divertida), circuito de ida y vuelta, evitar peajes o autopistas, seguimiento de pistas **GPX**,
+  recálculo, avisos de voz en español o inglés, favoritos, marcadores, casa y «dónde estacioné».
 - **Táctil del tablero** (en los tableros táctiles) y **botones del manillar** (opcional y
   experimental, a través de los controles multimedia del iPhone), con asignación de gestos,
-  preajustes por piña de mandos y lugares guardados para navegar con un botón.
+  preajustes por tipo de mandos y lugares guardados para navegar con un botón.
 - **Apple Music en el tablero** (opcional, Ajustes): la portada de la canción que suena en la app
   **Música** sobre el mapa y, al tocarla, una hoja con título, artista, progreso y ⏮ ⏯ ⏭, sin tapar
   nunca la indicación de giro. También con los botones del manillar. Solo Apple Music: iOS no deja
@@ -403,8 +403,8 @@ the reverse-engineered **PXC** protocol. It is a Swift port of the Android app
 
 - **Own map on the dash**: the iPhone draws the dash picture (CoreGraphics), encodes it as H.264
   (VideoToolbox) and sends it over the bike's Wi-Fi. OpenStreetMap tiles, day/night themes, the
-  route, the maneuver card with distance and lanes, metrics (time, arrival, distance left,
-  altitude) and the speed limit.
+  route, the maneuver card with distance and lanes, metrics (time, arrival and distance left) and
+  the speed limit.
 - **Navigation**: place and address search, nearby categories (fuel, cafe, food, parking, hotel,
   ATM, hospital, viewpoint), alternative routes (Fast / Fun), there-and-back circuits, avoid tolls
   or highways, **GPX** track following, rerouting, voice prompts in English or Spanish, favorites,

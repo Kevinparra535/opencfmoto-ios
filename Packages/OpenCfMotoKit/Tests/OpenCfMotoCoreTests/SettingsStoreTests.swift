@@ -74,11 +74,11 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(s.settings(forBike: bike).buttonMap, HandlebarPresets.iosDefaultMapping)
         XCTAssertTrue(s.isButtonMapDefault(forBike: bike))
         XCTAssertEqual(s.settings(forBike: bike).clusterPreset, .fiveWay)
-        // one gesture changed later: the other doubles stay unmapped (the migrated map is pinned first)
+        // one gesture changed later: the other doubles stay as today's default (the migrated map is pinned first)
         s.setButtonAction(.home, for: .navFwdLong, forBike: bike)
         var m = s.settings(forBike: bike).buttonMap
         XCTAssertEqual(m[.navFwdLong], .home)
-        for g in [ButtonGesture.selectDouble, .navFwdDouble, .navBackDouble] { XCTAssertEqual(m[g], ButtonAction.none, "\(g)") }
+        for g in [ButtonGesture.selectDouble, .navFwdDouble, .navBackDouble] { XCTAssertEqual(m[g], HandlebarPresets.iosDefaultMapping[g], "\(g)") }
         XCTAssertEqual(kv.string(forKey: "button_map.selectDouble#b58cde373"), "none")
         // the same through update(forBike:)
         let (s2, kv2) = make()
@@ -86,7 +86,7 @@ final class SettingsStoreTests: XCTestCase {
         s2.update(forBike: bike) { $0.buttonMap[.navBackLong] = .assistant }
         m = s2.settings(forBike: bike).buttonMap
         XCTAssertEqual(m[.navBackLong], .assistant)
-        for g in [ButtonGesture.selectDouble, .navFwdDouble, .navBackDouble] { XCTAssertEqual(m[g], ButtonAction.none, "\(g)") }
+        for g in [ButtonGesture.selectDouble, .navFwdDouble, .navBackDouble] { XCTAssertEqual(m[g], HandlebarPresets.iosDefaultMapping[g], "\(g)") }
         // a map the rider changed (or any other map) is never rewritten
         let (s3, kv3) = make()
         var custom = HandlebarPresets.iosDefaultMappingBeforeP0

@@ -199,9 +199,15 @@ final class DashLayoutTests: XCTestCase {
         XCTAssertEqual(widths[0], 776 / 3.2, accuracy: 1e-9)
         XCTAssertEqual(widths[2], 776 * 1.2 / 3.2, accuracy: 1e-9)
         XCTAssertEqual(widths.reduce(0, +), 776, accuracy: 1e-9)
-        XCTAssertEqual(l.columns[0].labelFont.size, 11)
-        XCTAssertEqual(l.columns[0].valueFont.size, 22)
-        XCTAssertEqual(l.columns[2].valueFont.size, 24)
+        // never smaller than the 800x384 card (FINAL; review DASH-TYPE-10; were 11 / 22 / 24)
+        let land = DashLayout.metricsCard(ctx(800, 384), labels: labels3, values: ["18m", "14:23", "12.3 km"])
+        XCTAssertEqual(l.columns[0].labelFont.size, 13)
+        XCTAssertEqual(l.columns[0].valueFont.size, 26)
+        XCTAssertEqual(l.columns[2].valueFont.size, 30)
+        for i in 0 ..< 3 {
+            XCTAssertGreaterThanOrEqual(l.columns[i].labelFont.size, land.columns[i].labelFont.size)
+            XCTAssertGreaterThanOrEqual(l.columns[i].valueFont.size, land.columns[i].valueFont.size)
+        }
         let status = try! XCTUnwrap(l.statusRect)
         XCTAssertEqual(status.width, 776, accuracy: 1e-9) // the whole row: End left the bar
         XCTAssertEqual(l.statusFont.size, 13)
@@ -376,12 +382,15 @@ final class DashLayoutTests: XCTestCase {
         let l = DashLayout.menu(ctx(800, 384), content: content)
         assertRect(l.panel, 520, 0, 280, 384)
         let ids = l.items.compactMap(\.id)
-        // P0 (D01): harmless items first (the menu opens on Recenter / reroute), "End route…" last of the Ride section
-        XCTAssertEqual(Array(ids.prefix(12)), ["menu.recalc", "menu.circuit", "menu.goHome", "menu.park", "menu.record", "menu.setHome",
-                                               "menu.end", "menu.follow", "menu.heading", "menu.voice", "menu.zoomOut", "menu.zoomIn"])
+        // P0 (D01): harmless items first (the menu opens on Recenter), Reroute (it replaces the running route)
+        // and "End route…" last of the Ride section
+        XCTAssertEqual(Array(ids.prefix(13)), ["menu.recenter", "menu.circuit", "menu.goHome", "menu.park", "menu.record",
+                                               "menu.setHome", "menu.recalc", "menu.end", "menu.follow", "menu.heading",
+                                               "menu.voice", "menu.zoomOut", "menu.zoomIn"])
         let noEnd = DashLayout.menu(ctx(800, 384), content: DashMenuContent(language: .en, follow: true, headingUp: true, recording: false,
                                                                             preferences: MapPreferences(), showsEnd: false))
         XCTAssertFalse(noEnd.items.compactMap(\.id).contains("menu.end"), "no End without a running route")
+        XCTAssertFalse(noEnd.items.compactMap(\.id).contains("menu.recalc"), "no Reroute without a running route")
         XCTAssertEqual(ids.last, "menu.close")
         XCTAssertGreaterThan(l.contentHeight, 384)
         XCTAssertGreaterThan(l.maxScroll, 0)
@@ -422,7 +431,7 @@ final class DashLayoutTests: XCTestCase {
             if case let .button(_, label, _, _) = item.kind { return label }
             return nil
         }
-        for label in ["Recentrar / recalcular", "Estacionar aquí", "Guardar casa aquí", "Terminar la ruta…", "Mover el mapa",
+        for label in ["Recentrar", "Recalcular ruta", "Estacionar aquí", "Guardar casa aquí", "Terminar la ruta…", "Mover el mapa",
                       "Poner norte arriba", "Silenciar voz", "Grabar viaje"] {
             XCTAssertTrue(es.contains(label), label)
         }

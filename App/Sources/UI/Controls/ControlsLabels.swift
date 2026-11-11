@@ -124,13 +124,13 @@ enum ControlsLabels {
     static func summary(_ choice: PresetChoice) -> String {
         switch choice {
         case .preset(.fiveWay):
-            return String(localized: "◀/▶ = move the focus · ★ = Select. Singles fire at once; a quick second press is ignored, so a double never does something else. The menu is the ⋮ button on the map.")
+            return String(localized: "◀/▶ = move the focus · ★ = Select. Singles fire at once; every ◀ or ▶ press moves once and a quick second ★ is ignored, so a double never does something else. The menu is the ⋮ button on the map.")
         case .preset(.modeEnt):
-            return String(localized: "Same as 5-way: ◀/▶ move · ★ (ENT) selects. A quick second press is ignored: a double never does something else.")
+            return String(localized: "Same as 5-way: ◀/▶ move · ★ (ENT) selects. Every ◀ or ▶ press moves once; a quick second ★ is ignored: a double never does something else.")
         case .preset(.backSet):
             return String(localized: "Snappy singles. Discrete hold / Select ×2 usually don't exist; ▲/▼ only work with Volume buttons on (a hard ▲▲ / ▼▼ flick = Back / menu). Dash touch and the phone cover the rest.")
         case .singleButton:
-            return String(localized: "★ moves the focus and ★★ selects. For dashes where only ★ reaches the phone; works best with a long double-tap delay.")
+            return String(localized: "★ moves the focus once the double-tap delay is over and ★★ selects what is focused. For dashes where only ★ reaches the phone; works best with a long double-tap delay.")
         }
     }
 

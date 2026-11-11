@@ -41,7 +41,7 @@ public enum DashText: String, Sendable, CaseIterable {
     // Arrive card
     case parkHere, findParking
     // Menu ("End route…" opens the confirm card, P0 D01)
-    case ride, map, settings, endNavigation, goHome, setHomeHere, recenterRecalc, recordRide, stopRecording
+    case ride, map, settings, endNavigation, goHome, setHomeHere, recenter, reroute, recordRide, stopRecording
     // State words (toasts) and the menu's verb labels (P0, D23: a toggle says what it does)
     case headingUp, northUp, voiceOn, voiceMuted
     case followMe, panMap, switchNorthUp, switchHeadingUp, muteVoice, unmuteVoice
@@ -90,7 +90,8 @@ public enum DashText: String, Sendable, CaseIterable {
         case .endNavigation: return "End route…"
         case .goHome: return "Go home"
         case .setHomeHere: return "Set home here"
-        case .recenterRecalc: return "Recenter / reroute"
+        case .recenter: return "Recenter"
+        case .reroute: return "Reroute"
         case .recordRide: return "Record ride"
         case .stopRecording: return "Stop recording"
         case .headingUp: return "Heading up"
@@ -175,7 +176,8 @@ public enum DashText: String, Sendable, CaseIterable {
         case .endNavigation: return "Terminar la ruta…"
         case .goHome: return "Ir a casa"
         case .setHomeHere: return "Guardar casa aquí"
-        case .recenterRecalc: return "Recentrar / recalcular"
+        case .recenter: return "Recentrar"
+        case .reroute: return "Recalcular ruta"
         case .recordRide: return "Grabar viaje"
         case .stopRecording: return "Detener grabación"
         case .headingUp: return "Rumbo arriba"
@@ -252,16 +254,20 @@ public enum DashStrings {
         let d = destination.trimmingCharacters(in: .whitespacesAndNewlines)
         switch lang {
         case .en: return d.isEmpty ? "Guidance stops. You keep riding in free ride." : "Guidance to \(d) stops. You keep riding in free ride."
-        case .es: return d.isEmpty ? "Se detiene la guía. Sigues en ruta libre." : "Se detiene la guía a \(d). Sigues en ruta libre."
+        case .es:
+            // a name shortened to fit («Estación de servicio…») takes no second full stop
+            return d.isEmpty ? "Se detiene la guía. Sigues en ruta libre."
+                : "Se detiene la guía a \(d)\(d.hasSuffix("\u{2026}") ? "" : ".") Sigues en ruta libre."
         }
     }
 
     /// The confirm card's consequence line for Go over a running route (P0, D01).
     public static func changeConsequence(from current: String, to next: String, _ lang: DashLanguage) -> String {
         let a = current.trimmingCharacters(in: .whitespacesAndNewlines), b = next.trimmingCharacters(in: .whitespacesAndNewlines)
+        let stop = b.hasSuffix("\u{2026}") ? "" : "." // a name shortened to fit takes no second full stop
         switch lang {
-        case .en: return a.isEmpty ? "The running route stops; guidance goes to \(b)." : "The route to \(a) stops; guidance goes to \(b)."
-        case .es: return a.isEmpty ? "Se deja la ruta actual y la guía va a \(b)." : "Se deja la ruta a \(a) y la guía va a \(b)."
+        case .en: return a.isEmpty ? "The running route stops; guidance goes to \(b)\(stop)" : "The route to \(a) stops; guidance goes to \(b)\(stop)"
+        case .es: return a.isEmpty ? "Se deja la ruta actual y la guía va a \(b)\(stop)" : "Se deja la ruta a \(a) y la guía va a \(b)\(stop)"
         }
     }
 

@@ -21,10 +21,12 @@ enum RootLaunchScreen: Equatable {
     case ride
     /// The Map hub with a demo GPX track opened as a preview over a route to Home (UI/UX P0, UX-17).
     case gpxPreview
+    /// Home with the «Modo bolsillo» countdown card, held at its full count (UX-01; review PH-5).
+    case pocketOffer
 
     /// The names accepted by `-uiScreen` (lower-case).
     static let names = ["home", "dash", "navigate", "trips", "settings", "controls", "logs", "garage", "about",
-                        "mirror", "onboarding", "scan", "ride", "gpx"]
+                        "mirror", "onboarding", "scan", "ride", "gpx", "pocketoffer"]
 
     init?(name: String?) {
         guard let name else { return nil }
@@ -43,6 +45,7 @@ enum RootLaunchScreen: Equatable {
         case "scan": self = .scan
         case "ride": self = .ride
         case "gpx": self = .gpxPreview
+        case "pocketoffer", "pocket_offer": self = .pocketOffer
         default: return nil
         }
     }
