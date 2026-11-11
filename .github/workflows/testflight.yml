@@ -35,7 +35,8 @@ permissions:
 # The leftover sweep (asc.py janitor) relies on it for this repository's «OpenCfMoto CI r<repository
 # id>-…» profiles only; those of other repositories or of a Mac run go only once older than 12 hours.
 # This repository's kept signing sets («… b<build> app|mirror») go when their build no longer needs
-# them (a newer build accepted and no beta review pending); another repository's are never touched.
+# them (a newer build accepted and no beta review pending, the build refused or expired, or never
+# received by Apple); another repository's are never touched.
 concurrency:
   group: testflight
   cancel-in-progress: false
@@ -354,7 +355,8 @@ jobs:
       # if Apple refused the build; without a clear state it keeps them and the next run decides.
       # Without an upload, the build job's Clean up step revoked already, unless that job ended
       # without it (lost runner, force cancel): then this sweeps up the profiles this run left
-      # behind and their certificate (janitor --run-id: this repository's run only).
+      # behind and their certificate (janitor --run-id: this repository's run, and only this
+      # attempt's profiles, since an earlier attempt may have kept an accepted build's set).
       - name: Keep or revoke the signing certificate and profiles
         if: always()
         env:
@@ -373,7 +375,7 @@ jobs:
             run="OpenCfMoto CI ${GITHUB_REPOSITORY_ID:+r$GITHUB_REPOSITORY_ID-}$GITHUB_RUN_ID-…${BUILD_NUMBER:+ b$BUILD_NUMBER}"
             if [ "$UPLOADED" = true ]; then
               # Apple may have accepted the build by now: its certificate must not go blindly.
-              echo "::warning title=Certificado sin decidir / Certificate not settled::No se pudo decidir qué hacer con el certificado de esta build porque falló la descarga del código (checkout). Lanza una ejecución nueva con «Solo preparar» marcado (Actions ▸ TestFlight ▸ Run workflow): su preparación conserva el certificado y los perfiles «$run app» y «$run mirror» si Apple aceptó la build ${BUILD_NUMBER:-?} y es la más reciente, y si no los revoca. No revoques ese certificado a mano mientras esa build esté en revisión o sea la que vas a enviar: Apple la marcaría «Invalid Binary» (ITMS-90035).%0ACould not decide what to do with this build's certificate because the code checkout failed. Start a new run with «Solo preparar» ticked (Actions ▸ TestFlight ▸ Run workflow): its prepare job keeps the certificate and the «$run app» and «$run mirror» profiles if Apple accepted build ${BUILD_NUMBER:-?} and it is the newest, and revokes them if not. Do not revoke that certificate by hand while that build is in review or is the one you will submit: Apple would mark it «Invalid Binary» (ITMS-90035)."
+              echo "::warning title=Certificado sin decidir / Certificate not settled::No se pudo decidir qué hacer con el certificado de esta build porque falló la descarga del código (checkout). Lanza una ejecución nueva con «Solo preparar» marcado (Actions ▸ TestFlight ▸ Run workflow): su preparación conserva el certificado y los perfiles «$run app» y «$run mirror» si Apple aceptó la build ${BUILD_NUMBER:-?} y es la más reciente o está en revisión, o si Apple aún no terminó con ella, y los revoca si Apple la rechazó, si ya aceptó una más reciente o si nunca la recibió. No revoques ese certificado a mano mientras esa build esté en revisión o sea la que vas a enviar: Apple la marcaría «Invalid Binary» (ITMS-90035).%0ACould not decide what to do with this build's certificate because the code checkout failed. Start a new run with «Solo preparar» ticked (Actions ▸ TestFlight ▸ Run workflow): its prepare job keeps the certificate and the «$run app» and «$run mirror» profiles if Apple accepted build ${BUILD_NUMBER:-?} and it is the newest or in review, or if Apple has not finished with it, and revokes them if Apple rejected it, already accepted a newer one or never received it. Do not revoke that certificate by hand while that build is in review or is the one you will submit: Apple would mark it «Invalid Binary» (ITMS-90035)."
             else
               echo "::warning title=Revoca a mano / Revoke by hand::No se pudo revocar porque falló la descarga del código (checkout). En $certs revoca el certificado «Apple Distribution» creado hoy${CERT_ID:+ (id $CERT_ID)} (púlsalo ▸ Revoke) y en $profiles borra los perfiles «$run app» y «$run mirror»${PROFILE_IDS:+ (ids $PROFILE_IDS)} (cada uno ▸ Remove; ningún otro «OpenCfMoto CI …»). No revoques el que el workflow conserva para la última build que Apple aceptó (sus perfiles son de otra ejecución): Apple marcaría esa build «Invalid Binary» (ITMS-90035). O lanza una ejecución nueva con «Solo preparar» marcado (Actions ▸ TestFlight ▸ Run workflow): su preparación borra estos restos.%0ACould not revoke because the code checkout failed. At $certs revoke the «Apple Distribution» certificate created today${CERT_ID:+ (id $CERT_ID)} (click it ▸ Revoke) and at $profiles delete the «$run app» and «$run mirror» profiles${PROFILE_IDS:+ (ids $PROFILE_IDS)} (each ▸ Remove; no other «OpenCfMoto CI …» one). Do not revoke the one the workflow keeps for the latest build Apple accepted (its profiles are another run's): Apple would mark that build «Invalid Binary» (ITMS-90035). Or start a new run with «Solo preparar» ticked (Actions ▸ TestFlight ▸ Run workflow): its prepare job removes these leftovers."
             fi
@@ -432,11 +434,11 @@ jobs:
             elif [ "$STATE" = VALID ]; then
               echo "La versión **$version** está lista en TestFlight (grupo interno: ${GROUP:-?}). Abre la app **TestFlight** en tu iPhone, con el Apple ID de tu cuenta de App Store Connect, e instala OpenCfMoto. Si no aparece, mira el correo de Apple y la guía docs/TESTFLIGHT.md."
               echo
-              echo "Para las pruebas externas (el enlace público), envía esta build a revisión: App Store Connect ▸ Apps ▸ OpenCfMoto ▸ TestFlight ▸ tu grupo externo ▸ Builds «+» ▸ esta build ▸ What to Test ▸ Submit Review. Su certificado se queda en la cuenta hasta que Apple acepte una build más reciente: no lo revoques mientras esta esté en revisión."
+              echo "Para las pruebas externas (el enlace público; en tu propia copia, solo con el permiso del que habla docs/TESTFLIGHT.md ▸ Seguridad y licencia), envía esta build a revisión: App Store Connect ▸ Apps ▸ OpenCfMoto ▸ TestFlight ▸ tu grupo externo ▸ **Add Builds** (o **+** junto a *Builds* si el grupo ya tiene alguna) ▸ esta build ▸ What to Test, con **Automatically notify testers** marcada ▸ Submit Review. Si no la marcaste, cuando Apple la apruebe: TestFlight ▸ Builds ▸ iOS ▸ esta build ▸ **Notify Testers**. Su certificado se queda en la cuenta hasta que Apple acepte una build más reciente: no lo revoques mientras esta esté en revisión."
               echo
               echo "Version **$version** is ready in TestFlight (internal group: ${GROUP:-?}). Open the **TestFlight** app on your iPhone, signed in with your App Store Connect Apple ID, and install OpenCfMoto. If it is not there, check Apple's e-mail and docs/TESTFLIGHT.md."
               echo
-              echo "For external testing (the public link), submit this build for review: App Store Connect ▸ Apps ▸ OpenCfMoto ▸ TestFlight ▸ your external group ▸ Builds «+» ▸ this build ▸ What to Test ▸ Submit Review. Its certificate stays in the account until Apple accepts a newer build: do not revoke it while this one is in review."
+              echo "For external testing (the public link; in your own copy, only with the permission described in docs/TESTFLIGHT.md), submit this build for review: App Store Connect ▸ Apps ▸ OpenCfMoto ▸ TestFlight ▸ your external group ▸ **Add Builds** (or **+** next to *Builds* if the group has one already) ▸ this build ▸ What to Test, with **Automatically notify testers** ticked ▸ Submit Review. If you did not tick it, once Apple approves the build: TestFlight ▸ Builds ▸ iOS ▸ this build ▸ **Notify Testers**. Its certificate stays in the account until Apple accepts a newer build: do not revoke it while this one is in review."
             elif [ "$STATE" = INVALID ] || [ "$STATE" = FAILED ]; then
               echo "Apple rechazó la versión **$version** (estado: $STATE): no aparecerá en TestFlight. Lee el error de arriba y el correo de App Store Connect (códigos ITMS), corrígelo y lanza una ejecución nueva: **Actions ▸ TestFlight ▸ Run workflow** (*Re-run* repite el mismo commit, sin tus arreglos)."
               echo

@@ -1188,8 +1188,8 @@ class JwtTest(unittest.TestCase):
             self.assertEqual(name, f"OpenCfMoto CI r123456789-18700000001-12 b12345 {role}")
             self.assertLess(len(name), 64)                 # no documented limit; these stay short
             match = asc.CI_PROFILE_RE.fullmatch(name)
-            self.assertEqual((match.group("repo"), match.group("run"), match.group("build")),
-                             ("123456789", "18700000001", "12345"))
+            self.assertEqual((match.group("repo"), match.group("run"), match.group("attempt"), match.group("build")),
+                             ("123456789", "18700000001", "12", "12345"))
             # Names from before the build number: still this CI's, with no build (leftovers).
             match = asc.CI_PROFILE_RE.fullmatch(asc.profile_name(suffix, "", role))
             self.assertEqual((match.group("repo"), match.group("build")), ("123456789", None))
@@ -1984,11 +1984,15 @@ class SigningSetTest(AscTest):
         f.add_build(APP_ID, "12", state="FAILED")                         # refused: goes
         f.add_build(APP_ID, "1.0")                                        # not a plain number: not ours
         f.add_build("999", "20")                                          # another app's: not counted
-        # 2: older and not listed (never processed): goes; 11: newer and not listed yet: stays.
-        sets = {b: self.add_set(b) for b in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)}
+        # Uploaded but not listed as builds: 2 (older, never processed) goes; 11 (newer, not
+        # listed yet) stays. 13 never reached Apple at all: a leftover.
+        f.add_upload(APP_ID, "2", state="FAILED")
+        f.add_upload(APP_ID, "11", state="PROCESSING")
+        sets = {b: self.add_set(b) for b in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)}
         proc = self.run_asc("janitor", "--app-id", APP_ID)
         self.assertEqual(self.alive(sets), {2: False, 3: False, 4: True, 5: True, 6: False, 7: True, 8: True,
-                                            9: False, 10: False, 11: True, 12: False})
+                                            9: False, 10: False, 11: True, 12: False, 13: False})
+        self.assertIn(f"perfil «OpenCfMoto CI r{REPO_ID}-113-1 b13 app»", self.annotations(proc, "notice")[0][1])
         paths = self.deletes()
         last_cert = max(i for i, p in enumerate(paths) if p.startswith("/v1/certificates/"))
         first_profile = min(i for i, p in enumerate(paths) if p.startswith("/v1/profiles/"))
@@ -2080,6 +2084,10 @@ class SigningSetTest(AscTest):
         self.assertEqual(title, "Limpieza incompleta / Cleanup incomplete")
         self.assertIn(f"se conservan sus perfiles «OpenCfMoto CI r{REPO_ID}-106-1 b6 app» y «OpenCfMoto CI "
                       f"r{REPO_ID}-106-1 b6 mirror» para que la próxima ejecución lo encuentre", message)
+        # By hand: never the kept certificate, which can expire the same day as this one.
+        for needle in ("si otro caduca el mismo día, no revoques ninguno de los dos", asc.KEPT_CAUTION_ES,
+                       "if another one expires the same day, revoke neither", asc.KEPT_CAUTION_EN):
+            self.assertIn(needle, message)
         f.faults.clear()
         self.run_asc("janitor", "--app-id", APP_ID)                        # the next run
         self.assertEqual(self.alive(sets), {6: False, 7: True})
@@ -2093,6 +2101,92 @@ class SigningSetTest(AscTest):
         self.run_asc("janitor", "--run-id", "112")
         self.assertEqual(self.alive(sets), {6: True, 7: False})
         self.assertEqual(self.calls("GET", "/v1/builds"), [])
+
+    def test_a_re_run_never_takes_an_earlier_attempts_kept_set(self):
+        # Run 100, attempt 1: build 5, accepted and kept. «Re-run all jobs» (attempt 2): build 6.
+        # The run id alone names both sets; only attempt 2's (build 6's) is this attempt's.
+        def two_attempts(five, six):
+            self.reset()
+            f = self.fake
+            f.add_build(APP_ID, "5", external=five)
+            if six:
+                f.add_build(APP_ID, "6", state=six)
+            sets = {}
+            for build, attempt in ((5, 1), (6, 2)):
+                cert = f.add_cert(KEYS.cert_der)
+                sets[build] = cert, [f.add_profile(f"OpenCfMoto CI r{REPO_ID}-100-{attempt} b{build} {role}", [cert])
+                                     for role in ("app", "mirror")]
+            return sets
+        with self.subTest("attempt 2's build job lost its runner: the finish job's janitor --run-id"):
+            sets = two_attempts("WAITING_FOR_BETA_REVIEW", None)
+            self.run_asc("janitor", "--run-id", "100", env={"GITHUB_RUN_ATTEMPT": "2"})
+            self.assertEqual(self.alive(sets), {5: True, 6: False})
+        with self.subTest("attempt 2's build refused, and the build job passed on no ids"):
+            sets = two_attempts("IN_BETA_REVIEW", "INVALID")
+            self.settle("INVALID", None, build="6", run="100")
+            self.assertEqual(self.alive(sets), {5: True, 6: False})
+        with self.subTest("attempt 2's build accepted: attempt 1's set is superseded"):
+            sets = two_attempts("IN_BETA_TESTING", "VALID")
+            proc = self.settle("VALID", sets[6], build="6", run="100")
+            self.assertEqual(self.alive(sets), {5: False, 6: True})
+            self.assertIn("Apple aceptó una build más reciente que la 5 (la 6)", self.annotation(proc, "notice")[1])
+        with self.subTest("... unless attempt 1's build is in review"):
+            sets = two_attempts("WAITING_FOR_BETA_REVIEW", "VALID")
+            self.settle("VALID", sets[6], build="6", run="100")
+            self.assertEqual(self.alive(sets), {5: True, 6: True})
+
+    def test_a_set_whose_build_never_reached_apple_goes_at_the_next_prepare(self):
+        # A run made its set, failed before the upload and could not clean up (an API error in
+        # Clean up): Apple lists neither a build nor an upload of that number. Kept, it would also
+        # be merged into the fate of the next run's build, which reuses the number.
+        f = self.fake
+        for version in ("3", "4"):
+            f.add_build(APP_ID, version)
+        sets = {4: self.add_set(4), 5: self.add_set(5)}
+        proc = self.run_asc("janitor", "--app-id", APP_ID)
+        self.assertEqual(self.alive(sets), {4: True, 5: False})
+        title, message = self.annotation(proc, "notice")
+        self.assertEqual(title, "Restos borrados / Leftovers removed")
+        self.assertIn(f"perfil «OpenCfMoto CI r{REPO_ID}-105-1 b5 app»", message)
+        self.assertNotIn("build 5", self.summary())
+        self.assertEqual(self.annotations(proc, "warning"), [])
+        uploads = rf"/v1/apps/{APP_ID}/buildUploads"
+        self.assertEqual(len([c for c in self.calls("GET", uploads) if "cursor" not in c.query]), 1)
+        # Every set's build listed: the uploads are not read.
+        self.fake.requests.clear()
+        self.run_asc("janitor", "--app-id", APP_ID)
+        self.assertEqual(self.calls("GET", uploads), [])
+        # Uploaded and not listed as a build yet: Apple is still on it, so the set stays.
+        f.add_upload(APP_ID, "6", state="PROCESSING")
+        sets[6] = self.add_set(6)
+        self.run_asc("janitor", "--app-id", APP_ID)
+        self.assertEqual(self.alive(sets), {4: True, 5: False, 6: True})
+        self.assertIn("Apple aún no terminó con la build 6", self.summary())
+
+    def test_a_failed_uploads_listing_keeps_every_set_and_warns(self):
+        f = self.fake
+        for version in ("6", "7"):
+            f.add_build(APP_ID, version)
+        sets = {b: self.add_set(b) for b in (6, 7, 8)}                     # 8: not listed
+        f.fail("GET", rf"/v1/apps/{APP_ID}/buildUploads", 500, SERVER_ERROR, times=99)
+        proc = self.run_asc("janitor", "--app-id", APP_ID)
+        self.assertEqual(self.alive(sets), {6: True, 7: True, 8: True})  # never revoked on missing data
+        title, message = self.annotation(proc, "warning")
+        self.assertEqual(title, "Certificados sin comprobar / Certificates not checked")
+        self.assertIn("GET /v1/apps/…/buildUploads?limit=… → HTTP 500", message)
+
+    def test_builds_sharing_a_number_are_decided_conservatively(self):
+        # A refused build of a number never takes the set of an accepted build of that number.
+        for order in (("VALID", "INVALID"), ("INVALID", "VALID")):
+            with self.subTest(order=order):
+                self.reset()
+                f = self.fake
+                f.add_build(APP_ID, "4")
+                for state in order:
+                    f.add_build(APP_ID, "5", state=state)
+                sets = {4: self.add_set(4), 5: self.add_set(5)}
+                self.run_asc("janitor", "--app-id", APP_ID)
+                self.assertEqual(self.alive(sets), {4: False, 5: True})
 
 
 # ---------------------------------------------------------------- create-signing
@@ -2409,12 +2503,14 @@ class CreateSigningTest(AscTest):
         self.assertEqual(title, "Límite de certificados / Certificate limit")
         for needle in ("Este workflow conserva a propósito el certificado de la última build que Apple aceptó",
                        "(ahora: la build 7, certificado que caduca el 2027-11-01)", "«Invalid Binary» (ITMS-90035)",
-                       "si todos son del workflow, el de la build más antigua",
+                       "Si todos son del workflow, no revoques ninguno", "If all of them are the workflow's, revoke none",
                        "This workflow keeps on purpose the certificate of the latest build Apple accepted",
                        "(now: build 7, certificate expiring 2027-11-01)", "unless Apple accepts its build"):
             self.assertIn(needle, message)
         self.assertNotIn("build 9", message)
         self.assertNotIn(kept, message)
+        for wrong in ("más antigua", "oldest"):         # it could be a build in review
+            self.assertNotIn(wrong, message)
         self.assert_new_run_advice(message)
         # Without the listing the rule still stands, without the «now».
         f.fail("GET", "/v1/profiles", 500, SERVER_ERROR, times=99)
@@ -3633,6 +3729,19 @@ class BuildScriptTest(ScriptTest):
         self.assertEqual(self.outputs()["uploaded"], "true")
         self.assertEqual(len(self.alive()), 1)
 
+    def test_the_teardown_of_a_build_uploaded_from_a_mac_says_how_long_its_set_stays(self):
+        # No finish job on a Mac: the workflow's janitor revokes a Mac's set after 12 hours.
+        mac = {"GITHUB_RUN_ID": None, "GITHUB_RUN_ATTEMPT": None, "GITHUB_REPOSITORY_ID": None,
+               "GITHUB_ACTIONS": None, "GITHUB_OUTPUT": None, "GITHUB_STEP_SUMMARY": None}
+        self.step("create-signing", env=mac)
+        open(os.path.join(self.work, "uploaded"), "w").close()
+        proc = self.step("teardown", env=mac)
+        self.assertEqual(len(self.alive()), 1)
+        self.assertIn("revokes them 12 hours after they were made; submit this build for beta review before then",
+                      proc.stdout)
+        with open(SCRIPT_PATH, encoding="utf-8") as fh:
+            self.assertIn("the workflow's janitor revokes it 12 hours after it was made", fh.read())
+
     def test_a_second_manual_run_installs_only_its_own_profiles(self):
         # `build_and_sign.sh all` on a Mac, twice, with the same work directory (no GitHub run).
         mac = {"GITHUB_RUN_ID": None, "GITHUB_RUN_ATTEMPT": None, "GITHUB_REPOSITORY_ID": None,
@@ -3932,7 +4041,10 @@ class WorkflowTextTest(ScriptTest):
         title, message = self.annotation(proc, "warning")
         self.assertEqual(title, "Certificado sin decidir / Certificate not settled")
         for needle in ("Lanza una ejecución nueva con «Solo preparar» marcado", f"«{run} app» y «{run} mirror»",
-                       "si Apple aceptó la build 7 y es la más reciente", "No revoques ese certificado a mano",
+                       "si Apple aceptó la build 7 y es la más reciente o está en revisión, o si Apple aún no terminó con "
+                       "ella, y los revoca si Apple la rechazó, si ya aceptó una más reciente o si nunca la recibió",
+                       "and revokes them if Apple rejected it, already accepted a newer one or never received it",
+                       "No revoques ese certificado a mano",
                        "«Invalid Binary» (ITMS-90035)", "Start a new run with «Solo preparar» ticked",
                        "if Apple accepted build 7 and it is the newest", "Do not revoke that certificate by hand"):
             self.assertIn(needle, message)
@@ -3979,6 +4091,18 @@ class WorkflowTextTest(ScriptTest):
         self.assertEqual(len(builds), 1)                                  # only after the accepted build
         self.assertIn("STATE: ${{ steps.wait.outputs.processing_state }}", self.workflow_text())
 
+    def test_the_finish_step_passes_this_runs_id_to_settle_signing(self):
+        f = self.fake
+        for version in ("7", "8"):                                        # 8: accepted meanwhile, from elsewhere
+            f.add_build(APP_ID, version)
+        cert = f.add_cert(KEYS.cert_der)
+        mine = [f.add_profile(f"OpenCfMoto CI r{REPO_ID}-112-1 b7 {role}", [cert]) for role in ("app", "mirror")]
+        self.revoke_step(UPLOADED="true", STATE="VALID", CERT_ID=cert, PROFILE_IDS=",".join(mine))
+        self.assertIn(cert, f.certificates)                               # this run's accepted build keeps it
+        self.revoke_step(UPLOADED="true", STATE="INVALID")                # refused, no ids: by this run's names
+        self.assertNotIn(cert, f.certificates)
+        self.assertEqual(f.profiles, {})
+
     def test_the_finish_job_is_named_as_the_messages_name_it(self):
         text = self.workflow_text()
         self.assertIn(f"    name: {asc.FINISH_JOB}\n", text)
@@ -3999,10 +4123,15 @@ class WorkflowTextTest(ScriptTest):
 
     def test_the_finish_summary_of_an_accepted_build_says_how_to_reach_external_testers(self):
         text = self.finish_summary(STATE="VALID", OUTCOME="success", GROUP="OpenCfMoto (interno)")
-        for needle in ("Para las pruebas externas (el enlace público), envía esta build a revisión",
-                       "TestFlight ▸ tu grupo externo ▸ Builds «+» ▸ esta build ▸ What to Test ▸ Submit Review",
+        for needle in ("Para las pruebas externas (el enlace público; en tu propia copia, solo con el permiso del que "
+                       "habla docs/TESTFLIGHT.md ▸ Seguridad y licencia), envía esta build a revisión",
+                       "TestFlight ▸ tu grupo externo ▸ **Add Builds** (o **+** junto a *Builds* si el grupo ya tiene "
+                       "alguna) ▸ esta build ▸ What to Test, con **Automatically notify testers** marcada ▸ Submit Review",
+                       "esta build ▸ **Notify Testers**",
                        "Su certificado se queda en la cuenta hasta que Apple acepte una build más reciente",
-                       "For external testing (the public link), submit this build for review",
+                       "For external testing (the public link; in your own copy, only with the permission described in "
+                       "docs/TESTFLIGHT.md), submit this build for review",
+                       "with **Automatically notify testers** ticked ▸ Submit Review", "this build ▸ **Notify Testers**",
                        "Its certificate stays in the account until Apple accepts a newer build"):
             self.assertIn(needle, text)
         self.assertNotIn("Para las pruebas externas", self.finish_summary(STATE="INVALID", OUTCOME="failure"))

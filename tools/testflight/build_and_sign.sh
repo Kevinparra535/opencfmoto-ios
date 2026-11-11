@@ -21,7 +21,11 @@
 #                     and revokes them if not; teardown revokes only a duplicate certificate an
 #                     unanswered request made). Writes the step outputs uploaded=true|false and
 #                     teardown=done. Safe to run more than once, also without the API key.
-#   all               everything above in order, teardown on exit
+#   all               everything above in order, teardown on exit. On a Mac there is no finish
+#                     job: an uploaded build's set («OpenCfMoto CI local… b<build> …») stays, and
+#                     the workflow's janitor revokes it 12 hours after it was made, whatever the
+#                     build's state; submit a Mac-built build for beta review before then, or use
+#                     the workflow
 #
 # Environment:
 #   TF_WORK          work directory (default $RUNNER_TEMP/testflight): keychain, archive, IPA, state
@@ -719,7 +723,9 @@ cmd_teardown() {
     # time limit after a cancel), the finish job must still wait for the build before it revokes
     # the certificate, not take this job for one that lost its runner.
     gh_output uploaded true
-    if [ -f "$WORK/uploaded" ]; then
+    if [ "${GITHUB_ACTIONS:-}" != true ]; then
+      note "Apple has (or may have) this build, sent from a Mac, where there is no «${FINISH_JOB}» job: the CI certificate and profiles stay, and the TestFlight workflow's janitor revokes them 12 hours after they were made; submit this build for beta review before then, or use the workflow"
+    elif [ -f "$WORK/uploaded" ]; then
       note "the build was uploaded: after Apple's processing the «${FINISH_JOB}» job keeps the CI certificate and profiles if Apple accepts the build, and revokes them if not"
     else
       note "Apple has, or may have, the whole file although the upload step did not finish: the «${FINISH_JOB}» job waits for the build, then keeps or revokes the CI certificate and profiles"

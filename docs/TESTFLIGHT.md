@@ -171,11 +171,18 @@ Cada build caduca a los 90 días; para seguir usando la app, lanza otra ejecuci�
 
 Así llega una build a la beta pública de este repositorio (en tu propia copia, solo con el permiso
 del que habla [Seguridad y licencia](#seguridad-y-licencia)): App Store Connect ▸ **Apps** ▸
-OpenCfMoto ▸ **TestFlight** ▸ el grupo externo (aquí, «Comunidad») ▸ **Builds** **+** ▸ elige la
-build ▸ escribe **What to Test** (qué probar) ▸ **Submit Review**. Apple la revisa (la primera build
-de cada versión, más a fondo) y después la reciben quienes usan el enlace público.
+OpenCfMoto ▸ **TestFlight** ▸ el grupo externo (aquí, «Comunidad») ▸ **Add Builds** (o **+** junto
+a *Builds* si el grupo ya tiene alguna) ▸ elige la build ▸ escribe **What to Test** (qué probar) y
+deja marcada **Automatically notify testers** ▸ **Submit Review**. Apple la revisa (la primera build
+de cada versión, más a fondo) y después la reciben quienes usan el enlace público. Si no marcaste
+esa casilla, cuando Apple la apruebe: **TestFlight** ▸ **Builds** ▸ **iOS** ▸ esa build ▸ **Notify
+Testers**.
 
-- Envía siempre **la build más reciente** que Apple aceptó: es la que conserva su certificado.
+- Envía siempre **la build más reciente** que Apple aceptó: es la que conserva su certificado. Las
+  anteriores (salvo una que ya esté en revisión) y todas las que se subieron antes de que el
+  workflow conservara el certificado ya no lo tienen: siguen sirviendo para tus pruebas internas,
+  pero Apple las marcaría **Invalid Binary** en las externas. Si aún no hay una build nueva, lanza
+  una ejecución y envía esa.
 - Si una build aparece como **Invalid Binary** con el código **ITMS-90035** (firma no válida), esa
   build ya no tiene arreglo: lanza una ejecución nueva (**Actions** ▸ **TestFlight** ▸ **Run
   workflow**) y envía la build nueva.
@@ -194,9 +201,10 @@ de una build que Apple rechazó, que no llegó a subirse o que ya caducó. Norma
 mientras corre una ejecución.
 
 En developer.apple.com ▸ **Certificates** verás, entonces, uno o dos certificados *Apple
-Distribution* del workflow. **No los revoques** mientras su build esté en revisión o sea la que vas a
-enviar a las pruebas externas. Cuando ya no hacen falta se revocan solos, con la nota «Certificados
-anteriores revocados / Older certificates revoked».
+Distribution* del workflow (uno más por cada build anterior que esté en revisión). **No los
+revoques** mientras su build esté en revisión o sea la que vas a enviar a las pruebas externas.
+Cuando ya no hacen falta se revocan solos, con la nota «Certificados anteriores revocados / Older
+certificates revoked».
 
 ## Si algo falla
 
@@ -212,7 +220,7 @@ hace falta para pedir ayuda (por ejemplo, en un *issue* del repositorio). Los t�
 | Bundle ID no disponible / Bundle ID not available<br>Prefijo no válido / Invalid prefix | Crea o corrige la variable `BUNDLE_ID_PREFIX` (paso 2) con un prefijo tuyo, como `com.tunombre`. Si «Bundle ID no disponible» sale en la primera ejecución, prueba antes con una ejecución nueva: puede ser pasajero |
 | Falta la app en App Store Connect / App record missing | Pasos 4 y 5 |
 | Falta el App Group en los perfiles / App Group missing from the profiles<br>TestFlight: App Group | Paso 4, en los **dos** identificadores |
-| Límite de certificados / Certificate limit | developer.apple.com ▸ **Certificates**: revoca los *Apple Distribution* que no uses, pero no el que el workflow conserva para su última build aceptada (el aviso dice de qué build es y cuándo caduca) mientras esa build esté en revisión o sea la que vas a enviar |
+| Límite de certificados / Certificate limit | developer.apple.com ▸ **Certificates**: revoca los *Apple Distribution* que no uses, pero ninguno de los que conserva el workflow (el aviso dice de qué builds son y cuándo caducan). Si todos son del workflow, espera a que termine la revisión de TestFlight (o a que Apple termine con la build) y lanza una ejecución nueva |
 | Apple rechazó la subida / Apple rejected the upload<br>Apple rechazó la build / Apple rejected the build | El motivo (códigos `ITMS-…`) viene en el correo de Apple o en los avisos titulados «App Store Connect». Suele hacer falta un cambio en el código: pide ayuda con ese texto |
 | La build ya existe / Build already exists<br>Fallo temporal de Apple / Temporary Apple error (404)<br>Error de red / Network error<br>App Store Connect no responde / not responding (5xx)<br>Límite de peticiones / Rate limited (429) | Nada que corregir: espera unos minutos (una hora si es el 429) y lanza una ejecución nueva |
 | La build sigue en proceso / Build still processing (aviso, en una ejecución en verde) | Nada: Apple tarda más de lo normal; la build aparecerá en TestFlight cuando termine |
@@ -238,13 +246,16 @@ Lo que el workflow resuelve solo:
   «OpenCfMoto CI …» y su certificado temporal), los borra el último trabajo de esa ejecución o, si
   no, la siguiente al prepararse, con la nota «Restos borrados / Leftovers removed». No tienes que
   hacer nada. Solo se borran perfiles con el nombre exacto que les da el workflow: los de este
-  repositorio siempre; los de otro repositorio (un *fork*) o de un Mac con la misma cuenta, solo
-  si tienen más de 12 horas, porque esa otra ejecución podría seguir en marcha. Tus propios
-  perfiles no se tocan, ni ningún certificado que use alguno de ellos.
-- El certificado que se conserva para una build aceptada se revoca solo cuando Apple acepta una
-  build más reciente y la revisión de la suya ha terminado. Si App Store Connect no deja leer el
-  estado de las builds, no se revoca ninguno («Certificados sin comprobar / Certificates not
-  checked»): la siguiente ejecución lo comprueba. El que conserve otro repositorio no se toca nunca.
+  repositorio siempre (salvo los que conserva para una build); los de otro repositorio (un *fork*)
+  con nombres sin « bN», o de un Mac con la misma cuenta, solo si tienen más de 12 horas, porque
+  esa otra ejecución podría seguir en marcha; los que otro repositorio conserva para sus builds
+  («… bN app» y «… bN mirror»), nunca. Tus propios perfiles no se tocan, ni ningún certificado que
+  use alguno de ellos.
+- El certificado que se conserva para una build aceptada lo revoca el workflow, sin que hagas nada,
+  cuando Apple acepta una build más reciente y la revisión de la suya ha terminado, o cuando esa
+  build caduca. Si App Store Connect no deja leer el estado de las builds, no se revoca ninguno
+  («Certificados sin comprobar / Certificates not checked»): la siguiente ejecución lo comprueba.
+  El que conserve otro repositorio no se toca nunca.
 - Apple puede enviarte un correo por cada certificado temporal revocado (uno por ejecución, alguno
   más si se borraron restos). Es normal.
 
@@ -326,6 +337,39 @@ GitHub builds the app on a cloud Mac, signs it with your Apple Developer account
 7. On the iPhone: install TestFlight, open it with your developer account's Apple ID (or the
    invitation e-mail, which Apple usually sends) and install OpenCfMoto.
 
+**External testing (the public link).** This repository's public beta gets a build like this (in
+your own copy, only with the permission described below): App Store Connect ▸ Apps ▸ OpenCfMoto ▸
+TestFlight ▸ the external group (here "Comunidad") ▸ **Add Builds** (or **+** next to *Builds* if
+the group has one already) ▸ the build ▸ **What to Test**, leaving **Automatically notify testers**
+ticked ▸ **Submit Review**. Apple reviews it (the first build of each version more thoroughly), then
+those who use the public link get it. If you did not tick that box, once Apple approves the build:
+**TestFlight** ▸ **Builds** ▸ **iOS** ▸ that build ▸ **Notify Testers**. Always submit **the newest
+build** Apple accepted: it is the one whose certificate is kept. Older builds (except one already in
+review), and every build uploaded before the workflow kept certificates, no longer have theirs: they
+still work for your internal testing, but Apple would mark them **Invalid Binary** in external
+testing; if there is no new build yet, start a run and submit that one. If a build shows **Invalid
+Binary** with **ITMS-90035** (invalid signature), that build cannot be fixed: start a new run and
+submit the new build.
+
+**The certificate of the latest accepted build stays.** Each run signs with an *Apple Distribution*
+certificate of its own, whose private key exists only on GitHub's Mac and is deleted when the job
+ends: nobody can sign with it again. It must stay valid all the same: TestFlight beta review checks
+the build's signature again when you submit it, and Apple marks a build signed by a revoked
+certificate **Invalid Binary** (ITMS-90035). So the workflow keeps the certificate (and its two
+profiles "OpenCfMoto CI … bN app" and "… bN mirror", N being the build number) of the latest build
+Apple accepted until Apple accepts a newer one, and the one of a build waiting for or in beta review;
+everything else goes as soon as the workflow knows (a refused, never uploaded or expired build's).
+developer.apple.com may therefore show one or two *Apple Distribution* certificates of the workflow
+(one more for each older build in review): **do not revoke them** while their build is in review or
+is the one you will send to external testing. The workflow revokes them, with nothing for you to do,
+once Apple accepts a newer build and their own build's review is over, or once their build expires
+("Certificados anteriores revocados / Older certificates revoked"); if App Store Connect does not let
+the builds' states be read, none is revoked ("Certificados sin comprobar / Certificates not
+checked") and the next run checks. Another repository's are never touched. If Apple's certificate
+limit is reached, revoke another one you do not use, none of the workflow's: the "Límite de
+certificados / Certificate limit" error names them; if all of them are the workflow's, wait for the
+TestFlight review to end (or for Apple to finish with the build) and start a new run.
+
 **If a run fails**, its Annotations box and summary say why and what to do, in Spanish and English; the
 table under [Si algo falla](#si-algo-falla) lists the usual titles.
 
@@ -338,30 +382,10 @@ table under [Si algo falla](#si-algo-falla) lists the usual titles.
 - Leftovers of an interrupted run ("OpenCfMoto CI …" profiles and their temporary certificate) are
   removed by that run's last job or by the next run's preparation, with the notice "Restos borrados /
   Leftovers removed": nothing to do. Only profiles with the exact names the workflow gives are
-  removed: this repository's always; another repository's (a fork) or a Mac's with the same account
-  only when older than 12 hours, as that run may still be going. Your own profiles are never touched,
-  nor any certificate one of them uses.
-- **The certificate of the latest accepted build stays.** Each run signs with an *Apple Distribution*
-  certificate of its own, whose private key exists only on GitHub's Mac and is deleted when the job
-  ends: nobody can sign with it again. It must stay valid all the same: TestFlight beta review checks
-  the build's signature again when you submit it, and Apple marks a build signed by a revoked
-  certificate **Invalid Binary** (ITMS-90035). So the workflow keeps the certificate (and its two
-  profiles "OpenCfMoto CI … bN app" and "… bN mirror", N being the build number) of the latest build Apple accepted until
-  Apple accepts a newer one, and the one of a build waiting for or in beta review; everything else
-  goes as soon as the workflow knows (a refused, never uploaded or expired build's). developer.apple.com may therefore show
-  one or two *Apple Distribution* certificates of the workflow: **do not revoke them** while their
-  build is in review or is the one you will send to external testing. They go by themselves once no
-  longer needed ("Certificados anteriores revocados / Older certificates revoked"); if App Store
-  Connect does not let the builds' states be read, none is revoked ("Certificados sin comprobar /
-  Certificates not checked") and the next run checks. Another repository's are never touched. If
-  Apple's certificate limit is reached, revoke another one you do not use: the "Límite de
-  certificados / Certificate limit" error names the kept one.
-- **External testing (the public link).** This repository's public beta gets a build like this (in
-  your own copy, only with the permission described below): App Store Connect ▸ Apps ▸ OpenCfMoto ▸
-  TestFlight ▸ the external group (here "Comunidad") ▸ Builds **+** ▸ the build ▸ **What to Test** ▸
-  **Submit Review**. Always submit **the newest build** Apple accepted: it is the one whose
-  certificate is kept. If a build shows **Invalid Binary** with **ITMS-90035** (invalid signature),
-  that build cannot be fixed: start a new run and submit the new build.
+  removed: this repository's always (except those it keeps for a build); another repository's (a
+  fork) with names without " bN", or a Mac's with the same account, only when older than 12 hours,
+  as that run may still be going; those another repository keeps for its builds ("… bN app" and
+  "… bN mirror"), never. Your own profiles are never touched, nor any certificate one of them uses.
 - Apple may e-mail you about each revoked temporary certificate; that is expected.
 
 Builds expire after 90 days: start a new run to keep using the app.
