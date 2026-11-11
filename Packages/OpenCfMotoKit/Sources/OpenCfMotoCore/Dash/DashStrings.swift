@@ -5,7 +5,9 @@
 //
 // Spanish fixes recommended by the spec are applied: dash_left "IZQUIERDA" → "RESTANTE",
 // dash_arrive "LLEGAR" → "LLEGADA". Strings Android leaves untranslated (Lap/Stop, Follow on…)
-// get proposed Spanish here.
+// get proposed Spanish here. iOS P0 (D23): neutral Latin-American Spanish (estacionar, autopista, viaje,
+// gasolinera; no Spain vocabulary where a neutral word exists), no shouting capitals, and verb labels on
+// the menu's toggles (the action, not the state); the confirm card and the hold card copy (D01, D17).
 
 import Foundation
 
@@ -31,24 +33,29 @@ public enum DashLanguage: String, Sendable, Codable, CaseIterable {
 public enum DashText: String, Sendable, CaseIterable {
     // Search pill
     case searchHere, circuit, lap, lapStop
-    // Nav card / metrics
-    case time, arrive, left, alt, end
+    // Nav card / metrics (TIME, ARRIVE, LEFT: ALT left the strip in P0, D12)
+    case time, arrive, left
     case limit
     // Preview card
     case go, save, home, marker, cancel, done
     // Arrive card
-    case youveArrived, parkHere, findParking, doneFreeRide
-    // Menu
+    case parkHere, findParking
+    // Menu ("End route…" opens the confirm card, P0 D01)
     case ride, map, settings, endNavigation, goHome, setHomeHere, recenterRecalc, recordRide, stopRecording
-    case followOn, freePan, headingUp, northUp, voiceOn, voiceMuted, zoomOutGlyph, zoomInGlyph, close
+    // State words (toasts) and the menu's verb labels (P0, D23: a toggle says what it does)
+    case headingUp, northUp, voiceOn, voiceMuted
+    case followMe, panMap, switchNorthUp, switchHeadingUp, muteVoice, unmuteVoice
+    case zoomOutGlyph, zoomInGlyph, close
     case units, metric, imperial, theme, auto, day, night, voice, on, off, nextStop, autoFinish
     case chrome, dark, black, slate, forest, routeMode, fast, fun, avoidTolls, avoidHighways
+    // Confirm card (P0, D01): the safe option first and focused
+    case confirmKeep, confirmEndQuestion, confirmEndAction, confirmChangeQuestion, confirmChangeAction
     // Search sheet
-    case typeOnPhoneHint, typeOnPhoneStatus, typeOnPhoneRow, recentAndFavorites, typeOrTapCategory, noResults, delete
+    case typeOnPhoneHint, typeOnPhoneStatus, typeOnPhoneRow, noResults, delete
     // Toasts produced by the dash itself (camera / UI-only actions)
     case centeredOnGps, noGpsYet, routeOverview, overview
-    // Hold screen default
-    case holdDefault
+    // Hold card (P0, D17): no map, no numbers, honest copy
+    case holdTitle, holdVoiceGuides, holdResume
     // Apple Music (iOS addition): menu entry, empty title, `.openMusic` with nothing loaded
     case music, unknownSong, nothingPlaying
 
@@ -68,8 +75,6 @@ public enum DashText: String, Sendable, CaseIterable {
         case .time: return "TIME"
         case .arrive: return "ARRIVE"
         case .left: return "LEFT"
-        case .alt: return "ALT"
-        case .end: return "End"
         case .limit: return "LIMIT"
         case .go: return "Go"
         case .save: return "★ Save"
@@ -77,25 +82,27 @@ public enum DashText: String, Sendable, CaseIterable {
         case .marker: return "＋ Marker"
         case .cancel: return "Cancel"
         case .done: return "Done"
-        case .youveArrived: return "You've arrived"
         case .parkHere: return "Park here"
         case .findParking: return "Find parking"
-        case .doneFreeRide: return "Done · free ride"
         case .ride: return "Ride"
         case .map: return "Map"
         case .settings: return "Settings"
-        case .endNavigation: return "End navigation"
-        case .goHome: return "Go Home"
-        case .setHomeHere: return "Set Home here"
-        case .recenterRecalc: return "Recenter / Recalc"
+        case .endNavigation: return "End route…"
+        case .goHome: return "Go home"
+        case .setHomeHere: return "Set home here"
+        case .recenterRecalc: return "Recenter / reroute"
         case .recordRide: return "Record ride"
         case .stopRecording: return "Stop recording"
-        case .followOn: return "Follow on"
-        case .freePan: return "Free pan"
         case .headingUp: return "Heading up"
         case .northUp: return "North up"
         case .voiceOn: return "Voice on"
         case .voiceMuted: return "Voice muted"
+        case .followMe: return "Follow me"
+        case .panMap: return "Pan the map"
+        case .switchNorthUp: return "Put north up"
+        case .switchHeadingUp: return "Put heading up"
+        case .muteVoice: return "Mute voice"
+        case .unmuteVoice: return "Turn voice on"
         case .zoomOutGlyph: return "－"
         case .zoomInGlyph: return "＋"
         case .close: return "Close"
@@ -121,18 +128,23 @@ public enum DashText: String, Sendable, CaseIterable {
         case .fun: return "Fun"
         case .avoidTolls: return "Avoid tolls"
         case .avoidHighways: return "Avoid highways"
-        case .typeOnPhoneHint: return "Type on your PHONE keyboard…"
-        case .typeOnPhoneStatus: return "⌨ Type on PHONE — results show here"
+        case .confirmKeep: return "Keep going"
+        case .confirmEndQuestion: return "End the route?"
+        case .confirmEndAction: return "End route"
+        case .confirmChangeQuestion: return "Change route?"
+        case .confirmChangeAction: return "Change"
+        case .typeOnPhoneHint: return "Type on your phone's keyboard…"
+        case .typeOnPhoneStatus: return "⌨ Type on the phone — results show here"
         case .typeOnPhoneRow: return "⌨ Type on your phone"
-        case .recentAndFavorites: return "Recent & favorites"
-        case .typeOrTapCategory: return "Type on PHONE, or tap a category"
         case .noResults: return "No results"
         case .delete: return "Delete"
         case .centeredOnGps: return "Centered on GPS"
         case .noGpsYet: return "No GPS yet — wait for a fix"
         case .routeOverview: return "Route overview · north up"
         case .overview: return "Overview · north up"
-        case .holdDefault: return "Open OpenCfMoto on your phone to resume the map"
+        case .holdTitle: return "Map paused"
+        case .holdVoiceGuides: return "Voice keeps guiding"
+        case .holdResume: return "Resumes when you open the app, stopped"
         case .music: return "Music"
         case .unknownSong: return "Unknown song"
         case .nothingPlaying: return "Nothing playing in Apple Music"
@@ -141,41 +153,41 @@ public enum DashText: String, Sendable, CaseIterable {
 
     public var es: String {
         switch self {
-        case .searchHere: return "Busca aquí"
+        case .searchHere: return "Buscar aquí"
         case .circuit: return "Circuito"
         case .lap: return "Vuelta"
         case .lapStop: return "Parar"
         case .time: return "TIEMPO"
         case .arrive: return "LLEGADA"
         case .left: return "RESTANTE"
-        case .alt: return "ALT"
-        case .end: return "Fin"
         case .limit: return "LÍMITE"
         case .go: return "Ir"
         case .save: return "★ Guardar"
         case .home: return "Casa"
         case .marker: return "＋ Marcador"
         case .cancel: return "Cancelar"
-        case .done: return "Hecho"
-        case .youveArrived: return "Has llegado"
-        case .parkHere: return "Aparca aquí"
-        case .findParking: return "Buscar aparcamiento"
-        case .doneFreeRide: return "Listo · ruta libre"
-        case .ride: return "Conducir"
+        case .done: return "Listo"
+        case .parkHere: return "Estacionar aquí"
+        case .findParking: return "Buscar estacionamiento"
+        case .ride: return "Viaje"
         case .map: return "Mapa"
         case .settings: return "Ajustes"
-        case .endNavigation: return "Finalizar navegación"
+        case .endNavigation: return "Terminar la ruta…"
         case .goHome: return "Ir a casa"
-        case .setHomeHere: return "Fijar aquí mi casa"
-        case .recenterRecalc: return "Recentrar/Recalcular"
-        case .recordRide: return "Grabar la ruta"
+        case .setHomeHere: return "Guardar casa aquí"
+        case .recenterRecalc: return "Recentrar / recalcular"
+        case .recordRide: return "Grabar viaje"
         case .stopRecording: return "Detener grabación"
-        case .followOn: return "Seguimiento activado"
-        case .freePan: return "Desplazamiento libre"
         case .headingUp: return "Rumbo arriba"
         case .northUp: return "Norte arriba"
         case .voiceOn: return "Voz activada"
         case .voiceMuted: return "Voz silenciada"
+        case .followMe: return "Seguir mi posición"
+        case .panMap: return "Mover el mapa"
+        case .switchNorthUp: return "Poner norte arriba"
+        case .switchHeadingUp: return "Poner rumbo arriba"
+        case .muteVoice: return "Silenciar voz"
+        case .unmuteVoice: return "Activar voz"
         case .zoomOutGlyph: return "－"
         case .zoomInGlyph: return "＋"
         case .close: return "Cerrar"
@@ -200,19 +212,24 @@ public enum DashText: String, Sendable, CaseIterable {
         case .fast: return "Rápido"
         case .fun: return "Divertido"
         case .avoidTolls: return "Evitar peajes"
-        case .avoidHighways: return "Evitar autovías"
-        case .typeOnPhoneHint: return "Escribe en el teclado del TELÉFONO…"
-        case .typeOnPhoneStatus: return "⌨ Escribe en el TELÉFONO: los resultados aparecen aquí"
+        case .avoidHighways: return "Evitar autopistas"
+        case .confirmKeep: return "Seguir"
+        case .confirmEndQuestion: return "¿Terminar la ruta?"
+        case .confirmEndAction: return "Terminar"
+        case .confirmChangeQuestion: return "¿Cambiar de ruta?"
+        case .confirmChangeAction: return "Cambiar"
+        case .typeOnPhoneHint: return "Escribe en el teclado del teléfono…"
+        case .typeOnPhoneStatus: return "⌨ Escribe en el teléfono: los resultados aparecen aquí"
         case .typeOnPhoneRow: return "⌨ Escribe en tu teléfono"
-        case .recentAndFavorites: return "Recientes y favoritos"
-        case .typeOrTapCategory: return "Escribe en el TELÉFONO o toca una categoría"
         case .noResults: return "Sin resultados"
         case .delete: return "Eliminar"
         case .centeredOnGps: return "Centrado en el GPS"
         case .noGpsYet: return "Aún no hay GPS: espera la señal"
         case .routeOverview: return "Vista de la ruta · norte arriba"
         case .overview: return "Vista general · norte arriba"
-        case .holdDefault: return "Abre OpenCfMoto en el teléfono para reanudar el mapa"
+        case .holdTitle: return "Mapa en pausa"
+        case .holdVoiceGuides: return "La voz sigue guiando"
+        case .holdResume: return "Se reanuda al abrir la app, detenido"
         case .music: return "Música"
         case .unknownSong: return "Canción desconocida"
         case .nothingPlaying: return "Apple Music no está reproduciendo nada"
@@ -230,23 +247,36 @@ public enum DashStrings {
         }
     }
 
-    /// The metrics ALT label: "ALT m" / "ALT ft".
-    public static func altLabel(unit: String, _ lang: DashLanguage) -> String {
-        let u = unit.trimmingCharacters(in: .whitespaces)
-        return u.isEmpty ? DashText.alt.localized(lang) : "\(DashText.alt.localized(lang)) \(u)"
+    /// The confirm card's consequence line for End (P0, D01): what stops, and what stays.
+    public static func endConsequence(_ destination: String, _ lang: DashLanguage) -> String {
+        let d = destination.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch lang {
+        case .en: return d.isEmpty ? "Guidance stops. You keep riding in free ride." : "Guidance to \(d) stops. You keep riding in free ride."
+        case .es: return d.isEmpty ? "Se detiene la guía. Sigues en ruta libre." : "Se detiene la guía a \(d). Sigues en ruta libre."
+        }
+    }
+
+    /// The confirm card's consequence line for Go over a running route (P0, D01).
+    public static func changeConsequence(from current: String, to next: String, _ lang: DashLanguage) -> String {
+        let a = current.trimmingCharacters(in: .whitespacesAndNewlines), b = next.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch lang {
+        case .en: return a.isEmpty ? "The running route stops; guidance goes to \(b)." : "The route to \(a) stops; guidance goes to \(b)."
+        case .es: return a.isEmpty ? "Se deja la ruta actual y la guía va a \(b)." : "Se deja la ruta a \(a) y la guía va a \(b)."
+        }
     }
 
     /// Display label for a POI chip id (Android chip labels are the ids: Fuel, Cafe, Food,
-    /// Parking, Hotel, ATM, Hospital, Viewpoint). Unknown ids are shown as-is.
+    /// Parking, Hotel, ATM, Hospital, Viewpoint). Unknown ids are shown as-is. Spanish: neutral
+    /// Latin-American words (P0, D23).
     public static func poiChipLabel(_ id: String, _ lang: DashLanguage) -> String {
         guard lang == .es else { return id }
         switch id.lowercased() {
-        case "fuel": return "Gasolina"
+        case "fuel": return "Gasolinera"
         case "cafe": return "Cafetería"
         case "food": return "Comida"
-        case "parking": return "Aparcamiento"
+        case "parking": return "Estacionamiento"
         case "hotel": return "Hotel"
-        case "atm": return "Cajero"
+        case "atm": return "Cajero automático"
         case "hospital": return "Hospital"
         case "viewpoint": return "Mirador"
         default: return id
@@ -280,7 +310,7 @@ public enum DashStrings {
             case .sharpRight: return "Cerrada a la derecha"
             case .slightLeft: return "Ligeramente a la izquierda"
             case .slightRight: return "Ligeramente a la derecha"
-            case .uturn: return "Cambio de sentido"
+            case .uturn: return "Da la vuelta"
             case .roundabout: return "Rotonda"
             case .mergeLeft, .mergeRight: return "Incorpórate"
             case .forkLeft: return "Mantente a la izquierda"
@@ -333,7 +363,8 @@ public enum DashFormat {
     }
 
     /// `NightPrefs.isNightNow` (navigation-dash.md §10.3): DAY → false, NIGHT → true,
-    /// AUTO → phone dark mode or local hour < 7 or ≥ 19. No sunrise/sunset algorithm (parity).
+    /// AUTO → phone dark mode or local hour < 7 or ≥ 19 (Android parity). The iOS dash uses the sun at the
+    /// rider's fix instead (`NightModePolicy.isNight(theme:position:date:timeZone:)`, P0 D06).
     public static func isNight(theme: MapTheme, phoneDarkMode: Bool, date: Date, timeZone: TimeZone) -> Bool {
         switch theme {
         case .day: return false

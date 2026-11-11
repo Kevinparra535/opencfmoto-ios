@@ -64,9 +64,10 @@ final class IOSSystem: SystemControlling {
         ThermalLevel.fromProcessInfoThermalState(rawValue: ProcessInfo.processInfo.thermalState.rawValue)
     }
 
-    /// The PHONE's appearance (Settings ▸ Display & Brightness: Dark, or Automatic after sunset) for
-    /// the dash map's AUTO theme: night = phone dark mode OR 19:00–06:59 (navigation-dash §10.3,
-    /// app-features §2.2; review finding CL-10). Read from the screen's traits: the app forces its own
+    /// The PHONE's appearance (Settings ▸ Display & Brightness: Dark, or Automatic after sunset). The dash
+    /// map's AUTO theme used it on Android and before P0 (night = phone dark mode OR 19:00–06:59,
+    /// navigation-dash §10.3, review finding CL-10); since P0 (D06) AUTO follows the sun at the rider's fix and
+    /// ignores it. Read from the screen's traits: the app forces its own
     /// UI dark (`preferredColorScheme(.dark)` overrides the window, not the screen), so window or view
     /// traits would always say dark. In the background UIKit renders light AND dark app snapshots,
     /// briefly flipping traits, so the last foreground answer is kept until the scene is back.

@@ -85,12 +85,15 @@ final class NavSessionActionTests: XCTestCase {
         s.parkHere()
         XCTAssertEqual(env.places.parked()?.subtitle, "Marked on dash")
         XCTAssertEqual(env.rec.spoken, ["Parking marked"])
-        s.updateLocation(env.fix(44.4302, 26.10, speed: 0)) // 22 m away → clears
+        // P0 (D22): Park only sets. A second press 22 m away moves the spot (it used to clear it within 40 m,
+        // so a ★ meant to mark the bike could delete the mark); clearing is the phone's delete.
+        s.updateLocation(env.fix(44.4302, 26.10, speed: 0))
         s.parkHere()
-        XCTAssertNil(env.places.parked())
-        XCTAssertEqual(env.rec.toasts.last, "Parked spot cleared")
-        XCTAssertEqual(env.rec.spoken.last, "Parking cleared")
-        s.parkHere()
+        XCTAssertEqual(env.places.parked()?.lat, 44.4302)
+        XCTAssertEqual(env.rec.toasts.last, "Parking updated")
+        XCTAssertEqual(env.rec.spoken.last, "Parking updated")
+        s.parkHere() // the same spot again: still set
+        XCTAssertNotNil(env.places.parked())
         s.updateLocation(env.fix(44.432, 26.10, speed: 0)) // 200 m away → replaces
         s.parkHere()
         XCTAssertEqual(env.rec.spoken.last, "Parking updated")

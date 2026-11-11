@@ -15,6 +15,19 @@ enum DashFixtures {
     /// 2026-10-26 14:05 UTC
     static let afternoon = Date(timeIntervalSince1970: 1_792_972_800 + 14 * 3600 + 5 * 60)
 
+    /// The drawn rider puck (P0, D05): its halo disc (centre) and the white chevron filled right after it.
+    /// The halo is not rotated, so its bounds are centred on the puck; the chevron's first point is its tip.
+    static func drawnPuck(_ list: DashDisplayList) -> (center: DashPoint, halo: DashRect, chevron: DashPath)? {
+        let halos = [DashPalette.puckHalo(night: false), DashPalette.puckHalo(night: true)]
+        let cmds = list.commands
+        for i in cmds.indices.reversed() where i + 1 < cmds.count {
+            guard case let .fill(disc, c, _) = cmds[i], halos.contains(c), let b = disc.controlPointBounds,
+                  case let .fill(chevron, w, _) = cmds[i + 1], w == DashPalette.puckFill else { continue }
+            return (b.center, b, chevron)
+        }
+        return nil
+    }
+
     static func fix(_ p: GeoPoint = rider, kmh: Double = 42, course: Double? = 20) -> LocationFix {
         LocationFix(lat: p.lat, lon: p.lon, speedMps: kmh / 3.6, courseDeg: course, accuracyM: 5, altitudeM: 412, timeMs: 1_792_972_800_000)
     }

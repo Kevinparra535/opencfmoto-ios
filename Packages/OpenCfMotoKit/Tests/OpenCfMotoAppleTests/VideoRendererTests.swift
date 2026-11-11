@@ -177,11 +177,18 @@ final class VideoRendererTests: XCTestCase {
     func testMissingTilesUsePlaceholders() throws {
         let pb = try buffer(64, 32)
         DashRenderer().render(list(64, 32, [
-            .tile(z: 16, x: 1, y: 1, rect: DashRect(x: 0, y: 0, width: 32, height: 32), invert: false),
-            .tile(z: 16, x: 2, y: 1, rect: DashRect(x: 32, y: 0, width: 32, height: 32), invert: true),
+            .tile(z: 16, x: 1, y: 1, rect: DashRect(x: 0, y: 0, width: 32, height: 32), treatment: .normal),
+            .tile(z: 16, x: 2, y: 1, rect: DashRect(x: 32, y: 0, width: 32, height: 32), treatment: .inverted),
         ]), into: pb)
         XCTAssertEqual(rgba(pb, 10, 10), [0xE9, 0xE5, 0xDC, 255])
         XCTAssertEqual(rgba(pb, 50, 10), [0x26, 0x2A, 0x2E, 255])
+        // P0 (D05): the muted treatments' placeholders are their ground colours
+        DashRenderer().render(list(64, 32, [
+            .tile(z: 16, x: 1, y: 1, rect: DashRect(x: 0, y: 0, width: 32, height: 32), treatment: .mutedDay),
+            .tile(z: 16, x: 2, y: 1, rect: DashRect(x: 32, y: 0, width: 32, height: 32), treatment: .mutedNight),
+        ]), into: pb)
+        XCTAssertEqual(rgba(pb, 10, 10), [0xE5, 0xE4, 0xE0, 255])
+        XCTAssertEqual(rgba(pb, 50, 10), [0x16, 0x19, 0x1D, 255])
     }
 
     func testMakeImageAndBufferCopyAreIndependent() throws {

@@ -433,21 +433,10 @@ final class RideModelMusicIntegrationTests: XCTestCase {
         tap(h, clock, "fab.menu")
         XCTAssertEqual(h.ride.dashUIState.sheet, .menu)
         let order = h.ride.dashUIState.focusOrder
-        XCTAssertEqual(order.firstIndex(of: "menu.music"), order.firstIndex(of: "menu.circuit").map { $0 + 1 },
-                       "Music comes right after Circuit")
-        // 800×384: the entry is below the fold — the rider drags the menu up first.
-        XCTAssertFalse(has(h, "menu.music"))
-        let x = 660
-        h.ride.handleDashTouch(DashTouch(action: .down, x: x, y: 330, time: clock.now()))
-        for y in stride(from: 310, through: 90, by: -20) {
-            clock.advance(0.02)
-            h.ride.handleDashTouch(DashTouch(action: .move, x: x, y: y, time: clock.now()))
-        }
-        clock.advance(0.02)
-        h.ride.handleDashTouch(DashTouch(action: .up, x: x, y: 90, time: clock.now()))
-        clock.advance(0.5)
-        XCTAssertGreaterThan(h.ride.dashUIState.menuScroll, 0)
-        XCTAssertEqual(h.ride.dashUIState.sheet, .menu, "a drag scrolls, it activates nothing")
+        XCTAssertEqual(order.firstIndex(of: "menu.music"), order.firstIndex(of: "menu.recalc").map { $0 + 1 },
+                       "Music comes right after Recenter / reroute, the menu's default item (P0, D01)")
+        // 800×384: the menu's second item, in view without a drag (it was below the fold, after Circuit)
+        XCTAssertTrue(has(h, "menu.music"))
         tap(h, clock, "menu.music")
         XCTAssertEqual(h.ride.dashUIState.sheet, .music)
         XCTAssertEqual(h.ride.dashUIState.focusedId, "music.playPause")
@@ -548,8 +537,10 @@ extension RideModelMusicIntegrationTests {
         XCTAssertTrue(shown, "the song (with its artwork) is on the dash")
         XCTAssertEqual(h.model.music.snapshot.otherAudioPlaying, playing, "iOS: the playing Music app is other audio for us")
         _ = list(h)
-        XCTAssertEqual(h.ride.dashUIState.focusedId, DashFocusEngine.endId,
-                       "navigating: End is the default focus — what is at stake below")
+        // P0 (D01): Recenter is the default focus while navigating and End left the map (it is in the menu,
+        // behind a confirm card); what was at stake below — a ★ ending navigation — stays pinned anyway.
+        XCTAssertEqual(h.ride.dashUIState.focusedId, DashFocusEngine.recenterId,
+                       "navigating: Recenter is the default focus")
         return (h, fake, clock, grace)
     }
 
@@ -565,7 +556,7 @@ extension RideModelMusicIntegrationTests {
     @MainActor
     func testNavigatingAPauseWhileIOSStillCountsTheMusicAppKeepsTheKnobOnTheTile() async {
         let (h, fake, clock, grace) = await navigatingHarness()
-        h.ride.handleDashInput(.knob(-1)) // ◀ from End wraps to the tile (the last of the map list)
+        h.ride.handleDashInput(.knob(-1)) // ◀ from Recenter wraps to the tile (the last of the map list)
         XCTAssertEqual(h.ride.dashUIState.focusedId, DashFocusEngine.musicTileId)
         clock.advance(1)
         fake.simulate(playing: false)
@@ -611,7 +602,7 @@ extension RideModelMusicIntegrationTests {
             let (h, fake, clock, grace) = await navigatingHarness()
             switch start {
             case "tile":
-                h.ride.handleDashInput(.knob(-1)) // ◀ from End wraps to the tile
+                h.ride.handleDashInput(.knob(-1)) // ◀ from Recenter wraps to the tile
             case "sheet ⏯":
                 h.ride.handleDashInput(.knob(-1))
                 clock.advance(0.5)
@@ -953,11 +944,11 @@ extension RideModelMusicIntegrationTests {
     }
 
     /// R3-FOCUS-3, the physical presses (PreviewHandlebar → ControlsModel's gesture engine → RideModel →
-    /// NavigationModel): capture on, a paused song, navigating, the sheet open on ⏯ (◀ ★). On every shipped
-    /// map ▶▶ inside the 300-ms window is HOME (the first ▶ already moved the knob to ⏭), and two quick ▶
-    /// are also the rider's way to ✕. The menu now opens on "Music", so the ★ meant for ✕ re-opens the sheet;
-    /// slower, ▶ ▶ reach ✕ and ★ closes the sheet onto the tile. On bfa6c93 the menu opened on End and that
-    /// ★ ended navigation, with nothing sent to the Music app.
+    /// NavigationModel): capture on, a paused song, navigating, the sheet open on ⏯ (◀ ★). Two quick ▶ are
+    /// the rider's way to ✕. On the iOS default map ▶▶ inside the 300-ms window is unmapped since P0 (D02): the
+    /// first ▶ moved the knob to ⏭ and the second is swallowed, so the ★ meant for ✕ is ⏭ (it was HOME, the
+    /// menu on "Music", and on bfa6c93 the menu opened on End and that ★ ended navigation); slower, ▶ ▶ reach
+    /// ✕ and ★ closes the sheet onto the tile. Navigation goes on either way.
     @MainActor
     func testCaptureOnQuickRightRightFromTheSheetThenStarNeverEndsNavigation() async {
         for gap in [0.25, 0.6] {
@@ -977,8 +968,8 @@ extension RideModelMusicIntegrationTests {
             clock.advance(gap)
             press(.forward)
             if gap < 0.3 {
-                XCTAssertEqual(h.ride.dashUIState.sheet, .menu, "\(name): HOME")
-                XCTAssertEqual(h.ride.dashUIState.focusedId, "menu.music", "\(name): on \"Music\", not End")
+                XCTAssertEqual(h.ride.dashUIState.sheet, .music, "\(name): no HOME")
+                XCTAssertEqual(h.ride.dashUIState.focusedId, "music.next", "\(name): one step, the second ▶ swallowed")
             } else {
                 XCTAssertEqual(h.ride.dashUIState.focusedId, "music.close", "\(name): ✕")
             }
@@ -988,7 +979,7 @@ extension RideModelMusicIntegrationTests {
             if gap >= 0.3 { XCTAssertEqual(h.ride.dashUIState.focusedId, DashFocusEngine.musicTileId, name) }
             await settle(0.2)
             XCTAssertTrue(h.core.navigation.snapshot.mode.isNavigating, "\(name): navigation goes on")
-            XCTAssertEqual(fake.commands, [], "\(name): nothing sent to the Music app")
+            XCTAssertEqual(fake.commands, gap < 0.3 ? ["next"] : [], "\(name): what the Music app got")
         }
     }
 }

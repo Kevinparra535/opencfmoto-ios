@@ -30,11 +30,12 @@ final class RideModelTilePolicyTests: XCTestCase {
         XCTAssertEqual(h.model.settings.current.tileURLTemplate, BikeSettings().tileURLTemplate)
         XCTAssertTrue(MapTileSource.isOpenStreetMapFoundation(template: h.model.settings.current.tileURLTemplate))
         /// RideModel has handled the newest navigation snapshot (the prefetch decision is taken in the same
-        /// step): its dash shows guidance (End) or free ride (the search pill).
+        /// step): its dash shows guidance (the map list starts on Recenter, P0) or free ride (the search pill).
         func dashShows(navigating: Bool) async -> Bool {
             await eventually {
                 h.ride.flushModel()
-                return h.ride.dashUIState.focusOrder.contains(navigating ? DashFocusEngine.endId : "pill")
+                let order = h.ride.dashUIState.focusOrder
+                return navigating ? order.first == DashFocusEngine.recenterId : order.contains("pill")
             }
         }
 

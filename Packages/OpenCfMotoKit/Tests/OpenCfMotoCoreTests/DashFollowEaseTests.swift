@@ -25,26 +25,16 @@ final class DashFollowEaseTests: XCTestCase {
         return o
     }
 
-    /// Centre of the drawn puck (its shadow disc, r 15 dp) in a display list. The disc's control
-    /// points are point-symmetric, so their bounds stay centred on the puck when it is rotated
-    /// (they only grow, up to 30·√2).
+    /// Centre of the drawn puck (its halo disc, 56 dp, is never rotated: its bounds stay centred on the puck).
     static func drawnPuck(_ list: DashDisplayList) -> DashPoint? {
-        for cmd in list.commands.reversed() {
-            if case let .fill(p, c, _) = cmd, c == DashPalette.puckShadow, let b = p.controlPointBounds,
-               b.width > 29.5, b.width < 46 {
-                return b.center
-            }
-        }
-        return nil
+        guard let p = DashFixtures.drawnPuck(list), p.halo.width > 55, p.halo.width < 57 else { return nil }
+        return p.center
     }
 
-    /// The blue chevron of the puck points straight up on screen.
+    /// The white chevron of the puck points straight up on screen.
     static func puckIsUpright(_ list: DashDisplayList, file: StaticString = #filePath, line: UInt = #line) {
-        let chevron = list.commands.compactMap { cmd -> DashPath? in
-            if case let .fill(p, c, _) = cmd, c == DashPalette.puckBlue { return p }
-            return nil
-        }.last
-        guard let chevron, case let .move(tip)? = chevron.elements.first, let b = chevron.controlPointBounds else {
+        guard let chevron = DashFixtures.drawnPuck(list)?.chevron, case let .move(tip)? = chevron.elements.first,
+              let b = chevron.controlPointBounds else {
             return XCTFail("no puck chevron", file: file, line: line)
         }
         XCTAssertEqual(tip.x, b.midX, accuracy: 1e-6, file: file, line: line)

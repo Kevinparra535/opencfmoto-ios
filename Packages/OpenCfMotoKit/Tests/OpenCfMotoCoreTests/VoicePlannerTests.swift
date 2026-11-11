@@ -121,7 +121,7 @@ final class VoicePlannerTests: XCTestCase {
         XCTAssertEqual(en.phrase(.noHomeSet), "No Home set — long-press map or use Set Home")
         XCTAssertEqual(en.phrase(.buildingCircuitTo("X")), "Building there & back to X…")
         XCTAssertEqual(es.phrase(.navigatingTo("Câmpina")), "Navegando a Câmpina")
-        XCTAssertEqual(es.phrase(.destinationReached), "Has llegado a tu destino")
+        XCTAssertEqual(es.phrase(.destinationReached), "Llegaste a tu destino") // P0 (D23): Latin-American Spanish
         XCTAssertEqual(en.arrivalTitle("Câmpina"), "Arrived · Câmpina")
         XCTAssertEqual(en.arrivalTitle(" "), "You've arrived")
         XCTAssertEqual(en.arrivalMeta, "Mark parking, find a spot, or continue free ride")
@@ -129,7 +129,7 @@ final class VoicePlannerTests: XCTestCase {
         XCTAssertEqual(en.routeLabel("Fast"), "Fast")
         XCTAssertEqual(es.routingWarning(RouteOrchestrator.warningAvoidFallback),
                        "No se pudieron evitar autopistas/peajes en línea: ruta normal (puede usar autopista)")
-        XCTAssertEqual(es.poiChipLabel("Fuel"), "Gasolina")
+        XCTAssertEqual(es.poiChipLabel("Fuel"), "Gasolinera")
     }
 
     func testSpanishInstructions() {

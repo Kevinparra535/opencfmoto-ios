@@ -142,9 +142,11 @@ public final class DashRenderer: @unchecked Sendable {
     private var textLayouts: [TextLayoutKey: TextLayout] = [:]
     private var _stats = DashRendererStats()
 
-    /// Placeholder for a missing tile (day / night).
+    /// Placeholder for a missing tile (classic day / night; muted day / night, P0 D05).
     public var tilePlaceholderDay = DashColor(rgb: 0xE9E5DC)
     public var tilePlaceholderNight = DashColor(rgb: 0x262A2E)
+    public var tilePlaceholderMutedDay = DashColor(rgb: 0xE5E4E0)
+    public var tilePlaceholderMutedNight = DashColor(rgb: 0x16191D)
     /// Draw a cached ancestor tile (scaled up) while a tile is loading.
     public var usesParentTileFallback = true
     /// Resampling quality for tiles (map tiles are over-zoomed / rotated).
@@ -278,8 +280,8 @@ public final class DashRenderer: @unchecked Sendable {
                 guard !text.isEmpty, style.color.alpha > 0 else { continue }
                 stats.textBlocks += 1
                 drawText(text, rect: rect, style: style, in: ctx)
-            case let .tile(z, x, y, rect, invert):
-                drawTile(z: z, x: x, y: y, rect: rect, night: invert, cache: tiles, in: ctx, stats: &stats)
+            case let .tile(z, x, y, rect, treatment):
+                drawTile(z: z, x: x, y: y, rect: rect, treatment: treatment, cache: tiles, in: ctx, stats: &stats)
             case let .image(id, rect, cornerRadius):
                 drawImage(id: id, rect: rect, cornerRadius: cornerRadius, store: images, in: ctx, stats: &stats)
             case .save:
@@ -380,7 +382,7 @@ public final class DashRenderer: @unchecked Sendable {
 
     // MARK: tiles
 
-    private func drawTile(z: Int, x: Int, y: Int, rect: DashRect, night: Bool, cache: TileImageCache?,
+    private func drawTile(z: Int, x: Int, y: Int, rect: DashRect, treatment: DashTileTreatment, cache: TileImageCache?,
                           in ctx: CGContext, stats: inout DashRendererStats) {
         let r = CGRect(x: rect.x, y: rect.y, width: rect.width, height: rect.height)
         guard !r.isEmpty, r.minX.isFinite, r.minY.isFinite else { return }
@@ -389,14 +391,14 @@ public final class DashRenderer: @unchecked Sendable {
         ctx.setShouldAntialias(false)
         defer { ctx.restoreGState() }
         if let cache {
-            if let image = cache.image(z: z, x: x, y: y, night: night) {
+            if let image = cache.image(z: z, x: x, y: y, treatment: treatment) {
                 Self.drawImage(image, in: r, ctx: ctx)
                 stats.tilesDrawn += 1
                 return
             }
             cache.request(z: z, x: x, y: y)
             stats.tilesMissing += 1
-            if usesParentTileFallback, let parent = cache.fallbackImage(z: z, x: x, y: y, night: night) {
+            if usesParentTileFallback, let parent = cache.fallbackImage(z: z, x: x, y: y, treatment: treatment) {
                 Self.drawImage(parent, in: r, ctx: ctx)
                 stats.tilesFromParent += 1
                 return
@@ -404,7 +406,14 @@ public final class DashRenderer: @unchecked Sendable {
         } else {
             stats.tilesMissing += 1
         }
-        ctx.setFillColor(cgColor(night ? tilePlaceholderNight : tilePlaceholderDay))
+        let placeholder: DashColor
+        switch treatment {
+        case .normal: placeholder = tilePlaceholderDay
+        case .inverted: placeholder = tilePlaceholderNight
+        case .mutedDay: placeholder = tilePlaceholderMutedDay
+        case .mutedNight: placeholder = tilePlaceholderMutedNight
+        }
+        ctx.setFillColor(cgColor(placeholder))
         ctx.fill(r)
     }
 

@@ -99,10 +99,11 @@ final class DashMusicSheetVanishTests: XCTestCase {
         XCTAssertEqual(ui.state.focusedId, "fab.recenter", "the song stayed gone: parked as F2 says, never End")
     }
 
-    /// R4-FOCUS-2: HOME (▶▶ on the iOS default maps) from the held sheet opens the menu with the held song, on
-    /// "Music" as without the vanish: ◀ ★ is Circuit's hint and ★ re-opens the held sheet. Without the hold
-    /// reaching the menu it had no "Music": the knob parked on Circuit, whose ◀ ★ is Record (the trip log
-    /// stops), and BACK / HOME closed it onto the parked Recenter, whose ◀ ★ ends navigation.
+    /// R4-FOCUS-2: HOME (▶▶ on back_set and custom maps; unmapped on the iOS default since P0) from the held sheet
+    /// opens the menu with the held song, on "Music" as without the vanish: ◀ ★ is the menu's default item,
+    /// Recenter / reroute (P0 order; Circuit's hint before), and ★ re-opens the held sheet. Without the hold
+    /// reaching the menu it had no "Music": the knob parked on Circuit, whose ◀ ★ was Record (the trip log
+    /// stops), and BACK / HOME closed it onto the parked Recenter, whose ◀ ★ ended navigation before P0.
     func testHomeDuringTheHoldOpensTheMenuOnTheHeldMusic() {
         for base in [DashFixtures.navigating(), DashFixtures.freeRide()] {
             let name = base.navigating ? "navigating" : "free ride"
@@ -113,7 +114,7 @@ final class DashMusicSheetVanishTests: XCTestCase {
             _ = ui.displayList(now: t0 + 1.65)
             XCTAssertEqual(ui.state.focusedId, "menu.music", name)
             XCTAssertEqual(ui.handle(.knob(-1), now: t0 + 1.8), [], name)
-            XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 2.0), [.startCircuit], "\(name): Circuit's hint, never Record")
+            XCTAssertEqual(ui.handle(.key(.enter), now: t0 + 2.0), [.recalc], "\(name): Recenter / reroute, never Record")
             (ui, b, _) = sheetOpen(base)
             ui.update(b)
             _ = ui.displayList(now: t0 + 1.5)
@@ -218,9 +219,10 @@ final class DashMusicSheetVanishTests: XCTestCase {
         }
     }
 
-    /// R4-FOCUS-1 through the real gesture engine: the hold ends between the two ▶ of a quick ▶▶ (HOME on every
-    /// shipped map). The first ▶ is a knob step on the sheet (⏯ → ⏭), the hold's end closes the sheet onto
-    /// Recenter, the second ▶ is HOME from that stand-in: the menu parks on Circuit and ★ is its hint.
+    /// R4-FOCUS-1 through the real gesture engine: the hold ends between the two ▶ of a quick ▶▶. The first ▶ is
+    /// a knob step on the sheet (⏯ → ⏭), the hold's end closes the sheet onto Recenter. On back_set the second ▶
+    /// is HOME from that stand-in: the menu parks on Circuit and ★ is its hint. On the iOS default maps ▶▶ is
+    /// unmapped since P0 (D02): the second ▶ is swallowed and ★ only recenters.
     func testQuickRightRightAcrossTheHoldsEndNeverEndsNavigation() {
         for preset in ButtonClusterPreset.allCases {
             let (ui, base, _) = sheetOpen()
@@ -239,7 +241,8 @@ final class DashMusicSheetVanishTests: XCTestCase {
             press(.forward, t0 + 2.55) // 0.25 s after the first: HOME
             press(.select, t0 + 3.5)
             XCTAssertFalse(out.contains(.endNavigation), "\(preset.rawValue): \(out)")
-            XCTAssertEqual(out, [.openMenu, .startCircuit], preset.rawValue)
+            let home = HandlebarPresets.iosMapping(for: preset)[.navFwdDouble] == .home
+            XCTAssertEqual(out, home ? [.openMenu, .startCircuit] : [.recenter], preset.rawValue)
         }
     }
 
@@ -273,7 +276,7 @@ final class DashMusicSheetVanishTests: XCTestCase {
         (ui, base, _) = sheetOpen(DashFixtures.freeRide())
         ui.update(DashFixtures.navigating()) // no music, navigation starts
         XCTAssertEqual(ui.state.sheet, .none)
-        XCTAssertEqual(ui.state.focusedId, DashFocusEngine.endId)
+        XCTAssertEqual(ui.state.focusedId, DashFocusEngine.recenterId) // P0 (D01): never End
     }
 
     func testIdleAndNearTurnRulesStillCountFromTheRidersLastInput() {

@@ -12,8 +12,11 @@ import Foundation
 public enum DashFocusPreference: String, Sendable, Equatable {
     /// Focus the preview "Go" button when listed.
     case go
-    /// Focus the metrics "End" button when listed.
-    case end
+    /// Focus the map's Recenter FAB when listed: the default while navigating (P0, D01; Android focused End,
+    /// so one ★ — the key that also pauses music — ended the route without a confirmation).
+    case recenter
+    /// Focus the confirm card's safe option ("Keep going") when listed (P0, D01).
+    case confirmKeep
     /// Keep the current focus when still listed, else the first item.
     case `default`
     /// Focus the Music sheet's ⏯ when listed (the sheet just opened; iOS addition).
@@ -23,27 +26,31 @@ public enum DashFocusPreference: String, Sendable, Equatable {
     case musicTile
     /// A Music control vanished under the focus (iOS addition, music fix F2): the song went away for
     /// a moment (a paused song while another app plays, a stale reading right after a pause, no item
-    /// between songs). Never the default item: while navigating that is End, where the rider's next ★,
-    /// meant for the tile, ⏯ or the menu's "Music", would end navigation without confirmation. →
+    /// between songs). Not the default item (End while navigating before P0) but a harmless stand-in: →
     /// the first listed of `musicGoneIds` (harmless neighbours), else like `.default`.
     case musicGone
     /// Focus the menu's "Music" when listed (iOS addition, R3-FOCUS-3): the menu opened by HOME from the Music
-    /// sheet, the tile, or the stand-in a vanished Music control parked the knob on (R4-FOCUS-1). Never its
-    /// first item: while navigating that is End, and on the iOS default map HOME is ▶▶ —
-    /// two quick ▶ are also the rider's way from ⏯ to ✕, so the ★ meant for ✕ would end navigation without
-    /// confirmation. When "Music" is not listed (the song went away in the same frame) → like `.musicGone`.
+    /// sheet, the tile, or the stand-in a vanished Music control parked the knob on (R4-FOCUS-1) — the rider's
+    /// next ★ there means "Music" again. When "Music" is not listed (the song went away in the same frame) →
+    /// like `.musicGone`.
     case menuMusic
 }
 
 public struct DashFocusEngine: Sendable, Equatable {
     public static let goId = "preview.go"
-    public static let endId = "metrics.end"
+    public static let recenterId = "fab.recenter"
+    /// The menu's "End route…" (it opens the confirm card; Android's metrics-card End left the strip in P0).
+    public static let menuEndId = "menu.end"
+    /// The confirm card's safe option (focused) and its action (End route / Change).
+    public static let confirmKeepId = "confirm.keep"
+    public static let confirmActId = "confirm.act"
     public static let musicPlayPauseId = "music.playPause"
     public static let musicTileId = "music.tile"
     public static let menuMusicId = "menu.music"
     /// Where the focus goes when a Music control vanishes (F2, R2-DASH-1): the map's Recenter FAB (★ only
     /// recenters and the focus stays on the map, so repeated ★ meant for the tile or ⏯ are harmless), in the
-    /// menu its "Circuit" (★ without a previewed place only shows a hint). Neither ends anything.
+    /// menu its "Circuit" (★ without a previewed place only shows a hint; P0 puts it right after "Music",
+    /// between Recenter / reroute and Go home). Neither ends or replaces anything.
     public static let musicGoneIds = ["fab.recenter", "menu.circuit"]
 
     public private(set) var focusedId: String?
@@ -55,8 +62,8 @@ public struct DashFocusEngine: Sendable, Equatable {
 
     private static func musicGoneTarget(in list: [String]) -> String? { musicGoneIds.first { list.contains($0) } }
 
-    /// `ensureFocus(prefer)`: empty list → clear; `.go` / `.end` / `.musicPlayPause` → that control
-    /// when listed (otherwise behaves like `.default`); `.musicTile` / `.menuMusic` → the tile / the
+    /// `ensureFocus(prefer)`: empty list → clear; `.go` / `.recenter` / `.confirmKeep` / `.musicPlayPause` →
+    /// that control when listed (otherwise behaves like `.default`); `.musicTile` / `.menuMusic` → the tile / the
     /// menu's "Music" when listed, else like `.musicGone`; `.musicGone` → the first listed of
     /// `musicGoneIds`, else like `.default`; `.default` → keep the focused control when still listed,
     /// else the first item.
@@ -65,7 +72,8 @@ public struct DashFocusEngine: Sendable, Equatable {
         let preferred: String?
         switch prefer {
         case .go: preferred = Self.goId
-        case .end: preferred = Self.endId
+        case .recenter: preferred = Self.recenterId
+        case .confirmKeep: preferred = Self.confirmKeepId
         case .musicPlayPause: preferred = Self.musicPlayPauseId
         // F2: the sheet closed but the tile is not listed (no room for it, or the song went away in
         // the same frame): a harmless neighbour, never the first item (End while navigating).
@@ -98,10 +106,11 @@ public struct DashFocusEngine: Sendable, Equatable {
 
     public mutating func clear() { focusedId = nil }
 
-    /// `defaultPrefer()`: "go" with a preview, "end" while navigating, else "default".
+    /// `defaultPrefer()`: "go" with a preview, Recenter while navigating (P0, D01: Android's "end" put the
+    /// route one ★ from its end), else "default".
     public static func defaultPreference(inPreview: Bool, navigating: Bool) -> DashFocusPreference {
         if inPreview { return .go }
-        if navigating { return .end }
+        if navigating { return .recenter }
         return .default
     }
 }

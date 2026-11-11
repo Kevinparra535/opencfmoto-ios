@@ -334,12 +334,12 @@ public struct NavStrings: Sendable, Equatable {
     // MARK: Cards, chips, places
 
     public func arrivalTitle(_ name: String?) -> String {
-        guard let name, !name.isNavBlank else { return es ? "Has llegado" : "You've arrived" }
-        return es ? "Has llegado · \(name)" : "Arrived · \(name)"
+        guard let name, !name.isNavBlank else { return es ? "Llegaste" : "You've arrived" }
+        return es ? "Llegaste · \(name)" : "Arrived · \(name)"
     }
 
     public var arrivalMeta: String {
-        es ? "Marca el aparcamiento, busca sitio o sigue en ruta libre" : "Mark parking, find a spot, or continue free ride"
+        es ? "Marca dónde estacionaste, busca estacionamiento o sigue en ruta libre" : "Mark parking, find a spot, or continue free ride"
     }
 
     /// Display text of a route label (data labels stay English in `Route.label`).
@@ -380,10 +380,10 @@ public struct NavStrings: Sendable, Equatable {
     /// Name given to a long-press pin.
     public var droppedPinName: String { es ? "Punto marcado" : "Dropped pin" }
     /// Name of the parking pin.
-    public var parkedName: String { es ? "Aparcado" : "Parked" }
+    public var parkedName: String { es ? "Estacionado" : "Parked" }
     /// Name of the home place.
     public var homeName: String { es ? "Casa" : "Home" }
-    public var parkedHereSubtitle: String { es ? "Aparcado aquí" : "Parked here" }
+    public var parkedHereSubtitle: String { es ? "Estacionado aquí" : "Parked here" }
     public var markedOnArrivalSubtitle: String { es ? "Marcado al llegar" : "Marked on arrival" }
     public var markedOnDashSubtitle: String { es ? "Marcado en el tablero" : "Marked on dash" }
     public var setOnDashSubtitle: String { es ? "Fijada en el tablero" : "Set on dash" }
@@ -393,12 +393,12 @@ public struct NavStrings: Sendable, Equatable {
     public func poiChipLabel(_ label: String) -> String {
         guard es else { return label }
         switch label {
-        case "Fuel": return "Gasolina"
+        case "Fuel": return "Gasolinera"
         case "Cafe": return "Café"
         case "Food": return "Comida"
-        case "Parking": return "Aparcamiento"
+        case "Parking": return "Estacionamiento"
         case "Hotel": return "Hotel"
-        case "ATM": return "Cajero"
+        case "ATM": return "Cajero automático"
         case "Hospital": return "Hospital"
         case "Viewpoint": return "Mirador"
         default: return label
@@ -419,22 +419,22 @@ public struct NavStrings: Sendable, Equatable {
         switch p {
         case .routeUpdated: return es ? "Ruta actualizada" : "Route updated"
         case .routeReady: return es ? "Ruta lista" : "Route ready"
-        case .arrived: return es ? "Has llegado" : "Arrived"
+        case .arrived: return es ? "Llegaste" : "Arrived"
         case .navigationFinished: return es ? "Navegación finalizada" : "Navigation finished"
         case .typeSearchOnPhone: return es ? "Escribe tu búsqueda en el teléfono" : "Type your search on the phone"
         case let .navigatingTo(n): return es ? "Navegando a \(n)" : "Navigating to \(n)"
         case .saved: return es ? "Guardado" : "Saved"
         case .homeSet: return es ? "Casa guardada" : "Home set"
         case .markerAdded: return es ? "Marcador añadido" : "Marker added"
-        case .parkingMarked: return es ? "Aparcamiento marcado" : "Parking marked"
-        case .parkingUpdated: return es ? "Aparcamiento actualizado" : "Parking updated"
-        case .parkingCleared: return es ? "Aparcamiento borrado" : "Parking cleared"
+        case .parkingMarked: return es ? "Estacionamiento marcado" : "Parking marked"
+        case .parkingUpdated: return es ? "Estacionamiento actualizado" : "Parking updated"
+        case .parkingCleared: return es ? "Estacionamiento borrado" : "Parking cleared"
         case .backOnTrack: return es ? "De vuelta en la ruta" : "Back on track"
         case .centered: return es ? "Centrado" : "Centered"
         case .buildingCircuit: return es ? "Creando circuito de ida y vuelta" : "Building there and back circuit"
         case .lapTimerArmed: return es ? "Cronómetro de vueltas activado" : "Lap timer armed"
         case .pinDropped: return es ? "Punto marcado" : "Pin dropped"
-        case .destinationReached: return es ? "Has llegado a tu destino" : "Destination reached"
+        case .destinationReached: return es ? "Llegaste a tu destino" : "Destination reached"
         case let .arrivingAt(n): return es ? "Llegando a \(n)" : "Arriving at \(n)"
         case let .lap(n): return es ? "Vuelta \(n)" : "Lap \(n)"
         case .followingTrackReversed: return es ? "Siguiendo el track en sentido contrario" : "Following the track the other way"
@@ -453,13 +453,13 @@ public struct NavStrings: Sendable, Equatable {
         case .savePinHint: return es ? "Guarda este punto: ábrelo luego para navegar" : "Save this pin — open it later to navigate"
         case .alreadyFreeRide: return es ? "Ya estás en ruta libre" : "Already free ride"
         case .alreadyNearby: return es ? "Ya estás cerca" : "Already nearby"
-        case .noGpsForParking: return es ? "Sin GPS para marcar el aparcamiento" : "No GPS for parking"
-        case .parkedSpotCleared: return es ? "Aparcamiento borrado" : "Parked spot cleared"
+        case .noGpsForParking: return es ? "Sin GPS para marcar el estacionamiento" : "No GPS for parking"
+        case .parkedSpotCleared: return es ? "Estacionamiento borrado" : "Parked spot cleared"
         case .noHomeSet:
-            return es ? "No hay casa guardada: mantén pulsado el mapa o usa Fijar casa aquí"
+            return es ? "No hay casa guardada: mantén presionado el mapa o usa Guardar casa aquí"
                 : "No Home set — long-press map or use Set Home"
         case .noGpsToSetHome: return es ? "Sin GPS para fijar la casa" : "No GPS to set Home"
-        case .homeSetHere: return es ? "Casa fijada aquí" : "Home set here"
+        case .homeSetHere: return es ? "Casa guardada aquí" : "Home set here"
         case .snapBackOnTrack: return es ? "Ajustado · de vuelta en la ruta" : "Snap · back on track"
         case .recentered: return es ? "Recentrado" : "Recentered"
         case .noGps: return es ? "Sin GPS" : "No GPS"

@@ -393,4 +393,113 @@ final class VideoTileCacheTests: XCTestCase {
         b.withUnsafeMutableBytes { TileNightFilter(style: .lightnessInvert).apply(to: $0, width: 1, height: 1, bytesPerRow: 4) }
         XCTAssertEqual(b, [9, 55, 5, 255], "iOS: dark green park")
     }
+
+    // MARK: muted dash map (P0, D05): desaturated, flattened greys by day and by night
+
+    /// WCAG contrast ratio of two opaque 0xRRGGBB colours.
+    private func contrast(_ a: UInt32, _ b: UInt32) -> Double {
+        func lin(_ c: UInt32) -> Double {
+            let v = Double(c) / 255
+            return v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4)
+        }
+        func lum(_ c: UInt32) -> Double { 0.2126 * lin((c >> 16) & 0xFF) + 0.7152 * lin((c >> 8) & 0xFF) + 0.0722 * lin(c & 0xFF) }
+        let x = lum(a), y = lum(b)
+        return (max(x, y) + 0.05) / (min(x, y) + 0.05)
+    }
+
+    private func chroma(_ c: UInt32) -> Int {
+        let r = Int((c >> 16) & 0xFF), g = Int((c >> 8) & 0xFF), b = Int(c & 0xFF)
+        return max(r, g, b) - min(r, g, b)
+    }
+
+    func testMutedFilterOfOSMColoursMatchesTheMapTokens() {
+        // (name, OSM Carto colour, muted day, muted night)
+        let vectors: [(String, UInt32, UInt32, UInt32)] = [
+            ("land", 0xF2EFE9, 0xE4E4E2, 0x161615), // tokens: ground #E5E4E0 / #16191D
+            ("road (minor)", 0xFFFFFF, 0xFFFFFF, 0x383838), // white roads / #252A31…#3C434C
+            ("road casing", 0xBBBBBB, 0xA0A0A0, 0x2E2E2E), // casing #9EA3AA
+            ("park", 0xC8FACC, 0xD7E1D8, 0x111912), // park #D0DCC6 / #18211B
+            ("water", 0xAAD3DF, 0xABB3B5, 0x222829), // water #B6CCDF / #152029
+            ("label", 0x222222, 0x5C5C5C, 0x757575), // labels #5E646C / #737B85
+            ("black", 0x000000, 0x5C5C5C, 0x858585),
+            ("road (secondary)", 0xF7FABF, 0xEEEEE3, 0x222219),
+            ("road (motorway)", 0xE892A2, 0x99888B, 0x413537),
+        ]
+        for (name, osm, day, night) in vectors {
+            let d = TileMutedFilter.apply(rgb: osm, night: false), n = TileMutedFilter.apply(rgb: osm, night: true)
+            XCTAssertEqual(d, day, "\(name) day: got \(String(format: "%06X", d))")
+            XCTAssertEqual(n, night, "\(name) night: got \(String(format: "%06X", n))")
+            // a fifth (day) or less (night) of the colour is kept: only the route, the puck and the pins are saturated
+            XCTAssertLessThanOrEqual(chroma(d), chroma(osm) / 5 + 1, name)
+            XCTAssertLessThanOrEqual(chroma(n), chroma(osm) / 6 + 1, name)
+        }
+        let landDay: UInt32 = 0xE4E4E2, landNight: UInt32 = 0x161615
+        // day: road casings ≈ 2:1 against the land, labels recessive but readable, the route ≥ 4:1
+        XCTAssertEqual(contrast(0xA0A0A0, landDay), 2.0, accuracy: 0.15)
+        XCTAssertGreaterThan(contrast(0x5C5C5C, landDay), 4.5)
+        XCTAssertLessThan(contrast(0x5C5C5C, landDay), 7)
+        XCTAssertGreaterThanOrEqual(contrast(DashPalette.routeRemain(night: false).argb & 0xFF_FFFF, landDay), 4)
+        XCTAssertGreaterThanOrEqual(contrast(DashPalette.routeRemain(night: true).argb & 0xFF_FFFF, landNight), 5)
+        // night: roads a step lighter than the land, labels lighter than roads and water, nothing white
+        XCTAssertGreaterThan(contrast(0x383838, landNight), 1.3)
+        XCTAssertGreaterThan(contrast(0x757575, landNight), 3.5)
+        for (_, osm, _, _) in vectors {
+            let n = TileMutedFilter.apply(rgb: osm, night: true)
+            XCTAssertLessThanOrEqual(max((n >> 16) & 0xFF, (n >> 8) & 0xFF, n & 0xFF), 0x90, "no bright surface at night")
+        }
+    }
+
+    func testMutedTablesAreMonotonicWhereTheyShouldBe() {
+        // day: brighter in, brighter out (labels never cross the land)
+        for y in 1 ... 255 { XCTAssertGreaterThanOrEqual(TileMutedFilter.dayTable[y], TileMutedFilter.dayTable[y - 1]) }
+        XCTAssertEqual(TileMutedFilter.dayTable[255], 255)
+        XCTAssertEqual(TileMutedFilter.dayTable[0], 92)
+        // night: a V whose bottom is the land's luma
+        let knee = Int((TileMutedFilter.nightKnee * 255).rounded(.up))
+        for y in 1 ..< knee { XCTAssertLessThanOrEqual(TileMutedFilter.nightTable[y], TileMutedFilter.nightTable[y - 1]) }
+        for y in knee ... 255 where y > knee { XCTAssertGreaterThanOrEqual(TileMutedFilter.nightTable[y], TileMutedFilter.nightTable[y - 1]) }
+        XCTAssertEqual(TileMutedFilter.nightTable[255], 56)
+        XCTAssertEqual(TileMutedFilter.nightTable[0], 133)
+    }
+
+    func testMutedFilterOverPremultipliedPixels() {
+        // 2×2 BGRA with 4 bytes of row padding: opaque land, opaque white, half-transparent land, transparent.
+        var px: [UInt8] = [
+            0xE9, 0xEF, 0xF2, 255, 255, 255, 255, 255, 0xAA, 0xAA, 0xAA, 0xAA,
+            117, 120, 121, 128, 0, 0, 0, 0, 0xBB, 0xBB, 0xBB, 0xBB,
+        ]
+        var night = px
+        px.withUnsafeMutableBytes { TileMutedFilter.applyPremultiplied($0, width: 2, height: 2, bytesPerRow: 12, night: false) }
+        XCTAssertEqual(Array(px[0 ..< 8]), [0xE2, 0xE4, 0xE4, 255, 255, 255, 255, 255])
+        XCTAssertEqual(Array(px[8 ..< 12]), [0xAA, 0xAA, 0xAA, 0xAA], "padding untouched")
+        XCTAssertEqual(Array(px[12 ..< 16]), [113, 114, 114, 128], "filtered un-premultiplied, alpha kept")
+        XCTAssertEqual(Array(px[16 ..< 24]), [0, 0, 0, 0, 0xBB, 0xBB, 0xBB, 0xBB], "transparent stays transparent")
+        night.withUnsafeMutableBytes {
+            TileVariantFilter.mutedNight.apply(to: $0, width: 2, height: 2, bytesPerRow: 12)
+        }
+        XCTAssertEqual(Array(night[0 ..< 8]), [0x15, 0x16, 0x16, 255, 0x38, 0x38, 0x38, 255])
+        for i in stride(from: 12, to: 16, by: 1) where i != 15 { XCTAssertLessThanOrEqual(night[i], 128, "premultiplied: c ≤ a") }
+        // the variant recipe runs the same filter
+        var a: [UInt8] = [0xCC, 0xFA, 0xC8, 255], b = a
+        a.withUnsafeMutableBytes { TileVariantFilter.mutedDay.apply(to: $0, width: 1, height: 1, bytesPerRow: 4) }
+        b.withUnsafeMutableBytes { TileMutedFilter.applyPremultiplied($0, width: 1, height: 1, bytesPerRow: 4, night: false) }
+        XCTAssertEqual(a, b)
+        XCTAssertEqual(a, [0xD8, 0xE1, 0xD7, 255])
+        XCTAssertNotEqual(TileVariantFilter.mutedDay, TileVariantFilter.mutedNight)
+        XCTAssertNotEqual(TileVariantFilter.mutedNight, TileVariantFilter.night(TileNightFilter(style: .lightnessInvert)))
+    }
+
+    func testMutedFilterRejectsBadBuffers() {
+        var px: [UInt8] = [1, 2, 3, 255]
+        px.withUnsafeMutableBytes { TileMutedFilter.applyPremultiplied($0, width: 2, height: 1, bytesPerRow: 8, night: false) }
+        XCTAssertEqual(px, [1, 2, 3, 255], "short buffer")
+        px.withUnsafeMutableBytes { TileMutedFilter.applyPremultiplied($0, width: 1, height: 1, bytesPerRow: 4, night: true, alphaIndex: 4) }
+        XCTAssertEqual(px, [1, 2, 3, 255], "invalid alpha index")
+        px.withUnsafeMutableBytes {
+            TileMutedFilter.applyPremultiplied($0, width: 1, height: 1, bytesPerRow: 4, night: true, alphaIndex: 3, redIndex: 3)
+        }
+        XCTAssertEqual(px, [1, 2, 3, 255], "two channels on one byte")
+        px.withUnsafeMutableBytes { TileMutedFilter.applyPremultiplied($0, width: 0, height: 1, bytesPerRow: 4, night: true) }
+        XCTAssertEqual(px, [1, 2, 3, 255], "empty")
+    }
 }

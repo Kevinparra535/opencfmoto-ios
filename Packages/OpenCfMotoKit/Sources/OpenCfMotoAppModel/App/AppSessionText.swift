@@ -172,11 +172,6 @@ enum SessionText {
 
     // MARK: - Dash overlays
 
-    /// The "hold" picture served while the phone is locked / the app is in the background.
-    static func holdMessage(_ l: NavLanguage) -> String {
-        pick(l, "Phone locked \u{2014} unlock to update the map", "Teléfono bloqueado: desbloquéalo para actualizar el mapa")
-    }
-
     static func reconnectingBanner(_ l: NavLanguage) -> String {
         pick(l, "Reconnecting\u{2026}", "Reconectando\u{2026}")
     }

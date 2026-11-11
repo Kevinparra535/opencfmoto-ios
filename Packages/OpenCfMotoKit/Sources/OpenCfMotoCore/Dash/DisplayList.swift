@@ -240,6 +240,38 @@ public struct DashStroke: Hashable, Sendable, Codable {
     }
 }
 
+/// How a raster map tile is drawn from the downloaded one (P0, D05). The renderer's tile cache builds each
+/// variant once per tile from the decoded image and keeps it in memory (TileImageCache).
+public enum DashTileTreatment: String, Hashable, Sendable, Codable, CaseIterable {
+    /// The tile as downloaded (the classic day map).
+    case normal
+    /// The classic night map: the tile's lightness inverted (TileImageCache's night style; parks stay green,
+    /// water blue).
+    case inverted
+    /// The dash's day map: desaturated and flattened to light greys (white roads, darker casings, dark
+    /// labels), so only the route, the puck and the pins carry colour.
+    case mutedDay
+    /// The dash's night map: desaturated dark greys, roads a step lighter than the ground, light labels.
+    case mutedNight
+
+    /// A night variant (dark placeholder, dark export).
+    public var isNight: Bool { self == .inverted || self == .mutedNight }
+
+    /// The treatment of a map style at day / night: muted by default; `classic` = the tiles as downloaded by
+    /// day and lightness-inverted at night (today's look before P0).
+    public static func of(night: Bool, style: DashMapStyle = .muted) -> DashTileTreatment {
+        switch style {
+        case .muted: return night ? .mutedNight : .mutedDay
+        case .classic: return night ? .inverted : .normal
+        }
+    }
+}
+
+/// The dash map's look (P0, D05): `muted` (default) or the `classic` OpenStreetMap colours.
+public enum DashMapStyle: String, Hashable, Sendable, Codable, CaseIterable {
+    case muted, classic
+}
+
 /// One drawing operation. Renderers execute them in order.
 public enum DashDrawCommand: Hashable, Sendable {
     case fill(DashPath, DashColor, DashFillRule)
@@ -250,10 +282,10 @@ public enum DashDrawCommand: Hashable, Sendable {
     /// line horizontally aligned per `style.alignment`. Baseline of line i =
     /// rect.minY + (rect.height − blockHeight)/2 + i·lineHeight + ascent.
     case text(String, DashRect, DashTextStyle)
-    /// 256-px raster map tile (slippy z/x/y) drawn into `rect` in the current transform.
-    /// `invert` = night mode (RGB → 255 − c). Missing tiles: renderer draws a neutral placeholder
-    /// fill and requests the tile in the background.
-    case tile(z: Int, x: Int, y: Int, rect: DashRect, invert: Bool)
+    /// 256-px raster map tile (slippy z/x/y) drawn into `rect` in the current transform, with `treatment`
+    /// (P0: the muted day / night variants; it replaced the night `invert` flag). Missing tiles: the renderer
+    /// draws the treatment's placeholder fill (or a cached ancestor) and requests the tile in the background.
+    case tile(z: Int, x: Int, y: Int, rect: DashRect, treatment: DashTileTreatment)
     /// Save / restore graphics state (transform + clip).
     case save
     case restore

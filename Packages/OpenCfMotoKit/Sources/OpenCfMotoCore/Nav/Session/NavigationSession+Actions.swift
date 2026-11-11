@@ -447,20 +447,14 @@ extension NavigationSession {
         }
     }
 
-    /// Park here (menu): toggles — a parked pin < 40 m away is cleared, otherwise set / replaced
-    /// at the fix ("Marked on dash").
+    /// Park here (menu): sets / replaces the parked spot at the fix ("Marked on dash"). P0 (D22): it only
+    /// sets — Android's toggle cleared a parked pin less than 40 m away, so a second ★ meant to confirm erased
+    /// the spot. Clearing it is a deliberate action elsewhere (the search list's Delete, the phone).
     public func parkHere() {
         mutate {
             guard let fix = s.lastFix else { statusLocked(.noGpsForParking); return }
             let str = strings
             let existing = places.parked()
-            if let e = existing, GeoMath.haversineM(fix.lat, fix.lon, e.lat, e.lon) < 40 {
-                places.clearParked()
-                placesChangedLocked()
-                statusLocked(.parkedSpotCleared)
-                speakLocked(.parkingCleared)
-                return
-            }
             places.setParked(Place(name: str.parkedName, lat: fix.lat, lon: fix.lon, category: "parking",
                                    subtitle: str.markedOnDashSubtitle),
                              defaultName: str.parkedName, historySubtitle: str.parkedHereSubtitle)

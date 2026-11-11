@@ -92,6 +92,9 @@ public final class DashUIController: @unchecked Sendable {
         /// "Music"), the tile BACK / ✕ close onto, ★ there re-opens the held sheet — so every press means what it
         /// would mean with the song; when the hold ends they go as F2 says.
         public var musicSheetVanishGrace: TimeInterval? = 2
+        /// P0 (D01): the confirm card ("End the route?", "Change route?") closes by itself — committing nothing,
+        /// like its safe option — after this long without dash input; nil = never.
+        public var confirmIdleTimeout: TimeInterval? = 8
         public init() {}
     }
 
@@ -145,6 +148,10 @@ public final class DashUIController: @unchecked Sendable {
     /// grace (`shownMusic`): HOME's menu without "Music" parked the knob on Circuit, whose ◀ ★ is Record, and a
     /// sheet closed onto the parked Recenter turned ◀ ★ into End.
     private var musicHeld: (music: DashNowPlaying, since: TimeInterval)?
+    /// P0 (D01): what the open confirm card asks (meaningful while `sheet == .confirm`) and the last dash input
+    /// since it opened (`Options.confirmIdleTimeout`).
+    private var confirmKind: DashConfirmKind?
+    private var confirmActivityAt: TimeInterval = 0
 
     public init(measurer: any DashTextMeasurer = ApproximateTextMeasurer(), options: Options = Options()) {
         self.measurer = measurer
@@ -181,11 +188,13 @@ public final class DashUIController: @unchecked Sendable {
     public func handle(_ input: DashInput, now: TimeInterval) -> [DashIntent] {
         lock.lock(); defer { lock.unlock() }
         advance(now)
+        // P0 (D17): the hold picture shows no controls — keys, the knob and touches act on nothing.
+        if model.holdMessage != nil { return [] }
         musicFocusReturn = nil // the rider acted on what the dash showed: no jump afterwards
         if sheet == .music { musicActivityAt = max(musicActivityAt, now) } // any dash input keeps it open
+        if sheet == .confirm { confirmActivityAt = max(confirmActivityAt, now) }
         switch input {
         case let .touch(t):
-            if model.holdMessage != nil { return [] }
             lastTouchAt = now
             let sc = ensureScene()
             let p = DashPoint(min(max(0, Double(t.x)), max(0, model.canvas.width - 1)),
@@ -228,7 +237,21 @@ public final class DashUIController: @unchecked Sendable {
             scene = nil
             out.append(.closeSheets)
         }
+        // P0 (D01): an unanswered confirm card closes by itself and commits nothing.
+        if sheet == .confirm, let timeout = options.confirmIdleTimeout, now - confirmActivityAt >= timeout {
+            out += closeConfirm()
+        }
         return out
+    }
+
+    /// Closes the confirm card as its safe option does: nothing is ended or replaced.
+    private func closeConfirm() -> [DashIntent] {
+        guard sheet == .confirm else { return [] }
+        sheet = .none
+        confirmKind = nil
+        pendingPreference = DashFocusEngine.defaultPreference(inPreview: model.inPreview, navigating: model.navigating)
+        scene = nil
+        return [.closeSheets]
     }
 
     /// The Music sheet's safety rules (navigation stays primary): 10 s without dash input while the
@@ -271,7 +294,7 @@ public final class DashUIController: @unchecked Sendable {
     public func displayList(now: TimeInterval) -> DashDisplayList {
         lock.lock(); defer { lock.unlock() }
         advance(now)
-        if let msg = model.holdMessage { return holdList(message: msg) }
+        if let msg = model.holdMessage { return holdList(title: msg) }
         let sc = ensureScene()
         var cmds = sc.commands
         cmds += overlays(sc, now: now)
@@ -281,13 +304,15 @@ public final class DashUIController: @unchecked Sendable {
         return DashDisplayList(size: model.canvas, background: model.chromeColor, commands: cmds, hitRegions: regions)
     }
 
-    /// The "hold" picture: the current scene dimmed with a centred message card (no hit regions).
-    /// Encode it as an IDR before the app is backgrounded so the media plane can keep answering
-    /// pulls with it. `message` nil → the model's `holdMessage` or a default text.
+    /// The "hold" picture (no hit regions): a clean card on the plain chrome colour — no map, no numbers that
+    /// would go stale (P0, D17) — "Map paused", "Voice keeps guiding" while a route runs with the voice on, and
+    /// "Resumes when you open the app, stopped". Encode it as an IDR before the app is backgrounded so the
+    /// media plane can keep answering pulls with it. `message` replaces the title; nil → the model's
+    /// `holdMessage` or "Map paused".
     public func displayList(forHoldScreen message: String?, now: TimeInterval) -> DashDisplayList {
         lock.lock(); defer { lock.unlock() }
         advance(now)
-        return holdList(message: message ?? model.holdMessage ?? DashText.holdDefault.localized(model.language))
+        return holdList(title: message ?? model.holdMessage ?? DashText.holdTitle.localized(model.language))
     }
 
     /// Current UI state snapshot.
@@ -633,9 +658,28 @@ public final class DashUIController: @unchecked Sendable {
                     camera.setCenter(d.point, zoom: 16)
                 }
             }
-            pendingPreference = .end
+            pendingPreference = .recenter // P0 (D01): never End
+            // The start owns the focus: Recenter is where it puts the knob, not a stand-in parked for a vanished
+            // Music control, so the song coming back does not move it to the tile.
+            musicFocusReturn = nil
+            musicFocusParkedOn = nil
         } else if prev.navigating && !new.nav.mode.isNavigating && new.nav.preview == nil {
             pendingPreference = .default
+        }
+        // P0 (D01): a confirm card whose question no longer applies closes, committing nothing (the route ended
+        // or arrived by itself, the preview went away).
+        if sheet == .confirm {
+            let stillAsks: Bool
+            switch confirmKind {
+            case .endRoute: stillAsks = new.navigating
+            case .changeRoute: stillAsks = new.inPreview && new.routeRunning && prev.nav.preview?.place == new.nav.preview?.place
+            case nil: stillAsks = false
+            }
+            if !stillAsks {
+                sheet = .none
+                confirmKind = nil
+                pendingPreference = DashFocusEngine.defaultPreference(inPreview: new.inPreview, navigating: new.navigating)
+            }
         }
         // Apple Music: the sheet closes when the song is gone (feature off, another app plays…) and
         // when arrival starts (a preview / navigation start already closed every sheet above). A song
@@ -748,7 +792,8 @@ public final class DashUIController: @unchecked Sendable {
                                    searchChipScroll: searchChipScroll, previewChipScroll: previewChipScroll,
                                    lapReachableByHandlebar: options.lapReachableByHandlebar,
                                    handlebarReachesSettings: options.handlebarReachesSettings,
-                                   musicNow: lastNow ?? shown.music?.positionAt ?? 0)
+                                   musicNow: lastNow ?? shown.music?.positionAt ?? 0,
+                                   confirm: sheet == .confirm ? confirmKind : nil)
         var b = DashSceneBuilder(input: input, measurer: measurer)
         return b.build()
     }
@@ -769,8 +814,8 @@ public final class DashUIController: @unchecked Sendable {
             }
         } else if focus.focusedId.map({ !s.focusOrder.contains($0) }) ?? true {
             // F2: a Music control that vanished under the focus (the tile or the menu's "Music" while
-            // the song is gone for a moment) never hands it to the default item: while navigating that
-            // is End, and the rider's next ★ would end navigation without confirmation.
+            // the song is gone for a moment) parks it on a harmless stand-in, not the default item (End
+            // while navigating before P0, where the rider's next ★ ended navigation without confirmation).
             let gone = focus.focusedId
             let musicGone = gone.map(DashFocusEngine.isMusicControl) ?? false
             focus.ensure(s.focusOrder, prefer: musicGone ? .musicGone : defaultPref)
@@ -859,6 +904,21 @@ public final class DashUIController: @unchecked Sendable {
                 off -= cont.viewport.minY - w.fullRect.minY + margin
             } else if w.fullRect.maxY > cont.viewport.maxY {
                 off += w.fullRect.maxY - cont.viewport.maxY + margin
+            }
+            // P0 (D03): the speed chip is drawn over the container — scroll the focused control clear of it,
+            // above or below, whichever moves less and keeps it inside the viewport.
+            if let ob = cont.obstacle {
+                let shifted = w.fullRect.offsetBy(dx: 0, dy: old - off)
+                if shifted.intersects(ob) {
+                    let up = off + (shifted.maxY - (ob.minY - margin))
+                    let down = off - ((ob.maxY + margin) - shifted.minY)
+                    let fits = [up, down].filter { cand in
+                        guard cand >= 0, cand <= cont.maxOffset else { return false }
+                        let r = w.fullRect.offsetBy(dx: 0, dy: old - cand)
+                        return r.minY >= cont.viewport.minY - 0.5 && r.maxY <= cont.viewport.maxY + 0.5
+                    }
+                    if let best = fits.min(by: { abs($0 - off) < abs($1 - off) }) { off = best }
+                }
             }
         case .horizontal:
             if w.fullRect.minX < cont.viewport.minX {
@@ -1015,12 +1075,32 @@ public final class DashUIController: @unchecked Sendable {
         toast = (t.localized(model.language), now + options.toastDuration)
     }
 
+    /// Opens the confirm card (P0, D01): nothing reaches the app until its action is chosen.
+    private func openConfirm(_ kind: DashConfirmKind, now: TimeInterval) -> [DashIntent] {
+        sheet = .confirm
+        confirmKind = kind
+        confirmActivityAt = now
+        pendingPreference = .confirmKeep
+        scene = nil
+        return []
+    }
+
     /// Applies the UI-side effect of an intent and returns it for the app.
     private func activate(_ intent: DashIntent, now: TimeInterval) -> [DashIntent] {
         // Where a sheet closing leaves the focus: a sheet closed from the menu's "Music" or from a vanished
-        // Music control's stand-in (★ on the parked "Circuit", HOME) hands it to the tile, never to End.
+        // Music control's stand-in (★ on the parked "Circuit", HOME) hands it to the tile.
         let navPref: DashFocusPreference = sheet != .none && focusStandsForMusic ? .musicTile
             : DashFocusEngine.defaultPreference(inPreview: model.inPreview, navigating: model.navigating)
+        // P0 (D01): ending a running route, or replacing it with a previewed one, asks first. The confirm card's
+        // action carries the same intent and is the only way it reaches the app.
+        let confirming = sheet == .confirm
+        if intent == .endNavigation, model.navigating, !(confirming && confirmKind == .endRoute) {
+            return openConfirm(.endRoute, now: now)
+        }
+        if intent == .go, model.inPreview, model.routeRunning, !(confirming && confirmKind == .changeRoute) {
+            return openConfirm(.changeRoute, now: now)
+        }
+        if confirming, intent != .closeSheets { confirmKind = nil } // the action, or another sheet, replaces it
         switch intent {
         case .recenter:
             camera.follow = true
@@ -1104,6 +1184,7 @@ public final class DashUIController: @unchecked Sendable {
         case .closeSheets:
             pendingPreference = sheet == .music ? .musicTile : navPref
             sheet = .none
+            confirmKind = nil
         case .openMusic:
             guard shownMusic != nil else { // a held song re-opens its sheet (R4-FOCUS-2)
                 feedback(.nothingPlaying, now: now)
@@ -1152,6 +1233,24 @@ public final class DashUIController: @unchecked Sendable {
 
     // MARK: - Overlays (focus ring, toast, link banner, hold)
 
+    /// The focus ring around `r` (P0, D09): the ring's centre line `focusOutset` dp outside the control,
+    /// following its corners (`radius` dp) or its circle; black 5 dp under white 3 dp (0…5 dp outside).
+    static func focusRingCommands(_ r: DashRect, circular: Bool, radius: Double, c: DashLayoutContext) -> [DashDrawCommand] {
+        let out = c.dp(DashPalette.focusOutset)
+        let ring = r.insetBy(dx: -out, dy: -out)
+        let path: DashPath
+        if circular {
+            path = DashPath.ellipse(in: ring)
+        } else {
+            let rad = min(c.dp(radius), min(r.width, r.height) / 2) + out
+            path = DashPath.roundedRect(ring, radius: rad)
+        }
+        return [
+            .stroke(path, DashStroke(width: c.dp(DashPalette.focusEdgeWidth), color: DashPalette.focusEdge, cap: .butt, join: .round)),
+            .stroke(path, DashStroke(width: c.dp(DashPalette.focusStrokeWidth), color: DashPalette.focusStroke, cap: .butt, join: .round)),
+        ]
+    }
+
     private func ringVisible(now: TimeInterval) -> Bool {
         guard model.handlebarFocus, focus.focusedId != nil else { return false }
         if let hide = options.hideFocusRingAfterTouch, let t = lastTouchAt, now - t < hide {
@@ -1164,31 +1263,16 @@ public final class DashUIController: @unchecked Sendable {
     private func overlays(_ sc: DashScene, now: TimeInterval) -> [DashDrawCommand] {
         let c = layoutContext
         var cmds: [DashDrawCommand] = []
-        // Focus ring (fill #66FF9800, 5 dp stroke #FF9800, radius 12 dp; circular for FABs).
+        // Focus ring (P0, D09): outline only, never a fill over the control; circular for round controls. The
+        // music tile's outset ring (fix F3) became the rule for every control: 0…5 dp outside it, black with a
+        // white core. In a scroll container the ring is clipped to the viewport grown by its 5 dp.
         if ringVisible(now: now), let id = focus.focusedId, let w = sc.widget(id), !w.rect.isEmpty {
-            let clip = w.container.flatMap { sc.containers[$0]?.viewport }
+            let band = c.dp(DashPalette.focusEdgeWidth)
+            let clip = w.container.flatMap { sc.containers[$0]?.viewport }.map { $0.insetBy(dx: -band, dy: -band) }
             if let clip { cmds += [.save, .clip(DashPath.rect(clip))] }
-            let sw = c.dp(DashPalette.focusStrokeWidth)
-            let r = w.fullRect
-            if w.circular {
-                cmds.append(.fill(DashPath.ellipse(in: r), DashPalette.focusFill, .nonZero))
-                cmds.append(.stroke(DashPath.ellipse(in: r.insetBy(dx: sw / 2, dy: sw / 2)),
-                                    DashStroke(width: sw, color: DashPalette.focusStroke, cap: .butt, join: .round)))
-            } else if id == DashFocusEngine.musicTileId {
-                // Fix F3: the ring parks on the tile after every close of the Music sheet, so a fill or
-                // an inset stroke would wash out the album cover (the point of the tile) for the rest of
-                // the ride. No fill, and the stroke OUTSIDE the cover: path r grown by sw/2, so the band
-                // covers r … r + sw and follows the cover's corners. Room for it on every canvas: the tile
-                // is 8 dp under the last FAB and 8 dp above the clock (DashMusicLayoutTests).
-                let rad = min(c.dp(DashDimens.musicTileRadius), min(r.width, r.height) / 2)
-                cmds.append(.stroke(DashPath.roundedRect(r.insetBy(dx: -sw / 2, dy: -sw / 2), radius: rad + sw / 2),
-                                    DashStroke(width: sw, color: DashPalette.focusStroke, cap: .butt, join: .round)))
-            } else {
-                let rad = min(c.dp(DashPalette.focusRadius), min(r.width, r.height) / 2)
-                cmds.append(.fill(DashPath.roundedRect(r, radius: rad), DashPalette.focusFill, .nonZero))
-                cmds.append(.stroke(DashPath.roundedRect(r.insetBy(dx: sw / 2, dy: sw / 2), radius: max(0, rad - sw / 2)),
-                                    DashStroke(width: sw, color: DashPalette.focusStroke, cap: .butt, join: .round)))
-            }
+            cmds += Self.focusRingCommands(w.fullRect, circular: w.circular,
+                                           radius: id == DashFocusEngine.musicTileId ? DashDimens.musicTileRadius : DashPalette.focusRadius,
+                                           c: c)
             if clip != nil { cmds.append(.restore) }
         }
         var top = sc.topChromeBottom
@@ -1213,24 +1297,46 @@ public final class DashUIController: @unchecked Sendable {
         return cmds
     }
 
-    private func holdList(message: String) -> DashDisplayList {
-        let sc = ensureScene()
+    /// The hold card (P0, D17): on the plain chrome colour, no map and no numbers — a pause glyph, the title,
+    /// "Voice keeps guiding" while a route runs with the voice on, and "Resumes when you open the app,
+    /// stopped". No hit regions: the controller ignores dash input while the model holds.
+    private func holdList(title: String) -> DashDisplayList {
         let c = layoutContext
-        var cmds = sc.commands
-        let full = DashRect(x: 0, y: 0, width: model.canvas.width, height: model.canvas.height)
-        cmds.append(.fill(DashPath.rect(full), DashPalette.holdDimmer, .nonZero))
-        let font = c.font(18, .bold)
-        let cardW = min(c.safe.width - c.dp(48), c.dp(480))
-        let pad = c.dp(24)
-        let lines = DashTextLayout.wrap(message, maxWidth: cardW - 2 * pad, font: font, maxLines: 3, measurer: measurer)
-        let textH = Double(lines.count) * c.lineHeight(font)
-        let iconSize = c.dp(40)
-        let cardH = pad + iconSize + c.dp(12) + textH + pad
+        let L = model.language
+        var lines = [title]
+        if model.nav.mode.isNavigating && model.preferences.voiceOn { lines.append(DashText.holdVoiceGuides.localized(L)) }
+        lines.append(DashText.holdResume.localized(L))
+        let titleFont = c.font(26, .bold), lineFont = c.font(18)
+        let cardW = min(c.safe.width - c.dp(48), c.dp(520))
+        let pad = c.dp(24), gap = c.dp(8)
+        let textW = cardW - 2 * pad
+        let titleLines = DashTextLayout.lineCount(title, maxWidth: textW, font: titleFont, maxLines: 2, measurer: measurer)
+        let titleH = Double(titleLines) * c.lineHeight(titleFont)
+        let rest = lines.dropFirst().map { line -> (String, Int) in
+            (line, DashTextLayout.lineCount(line, maxWidth: textW, font: lineFont, maxLines: 2, measurer: measurer))
+        }
+        let restH = rest.reduce(0) { $0 + Double($1.1) * c.lineHeight(lineFont) + gap }
+        let iconSize = c.dp(44)
+        let cardH = pad + iconSize + c.dp(12) + titleH + restH + pad
         let card = DashRect(x: c.safe.midX - cardW / 2, y: c.safe.midY - cardH / 2, width: cardW, height: cardH)
+        var cmds: [DashDrawCommand] = []
         cmds.append(.fill(DashPath.roundedRect(card, radius: c.dp(DashPalette.cardRadius)), DashPalette.cardFill, .nonZero))
-        cmds += DashIcons.commands(.navArrow, in: DashRect(x: card.midX - iconSize / 2, y: card.minY + pad, width: iconSize, height: iconSize))
-        cmds.append(.text(message, DashRect(x: card.minX + pad, y: card.minY + pad + iconSize + c.dp(12), width: cardW - 2 * pad, height: textH),
-                          DashTextStyle(font: font, color: DashPalette.primaryText, alignment: .center, maxLines: 3)))
+        cmds.append(.stroke(DashPath.roundedRect(card.insetBy(dx: c.dp(0.75), dy: c.dp(0.75)), radius: c.dp(DashPalette.cardRadius)),
+                            DashStroke(width: c.dp(DashPalette.cardEdgeWidth), color: DashPalette.cardEdge, cap: .butt, join: .round)))
+        let iconRect = DashRect(x: card.midX - iconSize / 2, y: card.minY + pad, width: iconSize, height: iconSize)
+        cmds.append(.fill(DashPath.ellipse(in: iconRect), DashPalette.fabFill, .nonZero))
+        cmds += DashIcons.commands(.pause, in: iconRect.insetBy(dx: iconSize * 0.25, dy: iconSize * 0.25), tint: DashPalette.primaryText)
+        var y = iconRect.maxY + c.dp(12)
+        cmds.append(.text(title, DashRect(x: card.minX + pad, y: y, width: textW, height: titleH),
+                          DashTextStyle(font: titleFont, color: DashPalette.primaryText, alignment: .center, maxLines: 2)))
+        y += titleH
+        for (line, n) in rest {
+            y += gap
+            let h = Double(n) * c.lineHeight(lineFont)
+            cmds.append(.text(line, DashRect(x: card.minX + pad, y: y, width: textW, height: h),
+                              DashTextStyle(font: lineFont, color: DashPalette.holdSecondary, alignment: .center, maxLines: 2)))
+            y += h
+        }
         return DashDisplayList(size: model.canvas, background: model.chromeColor, commands: cmds, hitRegions: [])
     }
 }
