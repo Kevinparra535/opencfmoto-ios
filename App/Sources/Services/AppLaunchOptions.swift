@@ -18,6 +18,14 @@
 // | `-uiOrientation landscape`       | rotate the interface to landscape after launch                      |
 // | `-uiDashSheet music`             | with `-uiScreen dash`: open the dash's Music sheet once it shows music |
 // | `-uiSettingsAnchor music`        | with `-uiScreen settings`: scroll to "Apple Music on the dash"      |
+// | `-demoFuel ok\|low\|aged\|setup`   | with `-demoSeed`: the demo bike's fuel data (default `ok`; `setup` = no profile, Home asks «¿Cuál es tu moto?») |
+// | `-demoStill`                     | demo: the GPS route player is not started (no fix: the rider is stopped, fuel sheets open) |
+//
+// Fuel MVP screens: `-uiScreen fuel` (Garage detail at «Combustible»), `refuel` («Cargué gasolina»),
+// `fuelpicker` («¿Cuál es tu moto?», with `-demoFuel setup`), `fueledit` (the profile editor) and `fuellevel`
+// («Corregir nivel») imply `-demoStill` (a fuel sheet refuses to open while the demo GPS rides at 45 km/h);
+// `routeverdict` (the Map hub's route preview with the fuel verdict line) keeps the player (the preview needs
+// a position), and `fuelmoving` keeps it and turns the location preview on (Home's moving lock).
 //
 // An invalid `-e2eBackgroundCycle` / `-e2eBackgroundEncoder` value is ignored with a warning in the log.
 // `-e2eFakeDash` and `-uiScreen` turn the automatic «Modo bolsillo» countdown after Connect / Go off,
@@ -25,6 +33,7 @@
 
 import Foundation
 import OpenCfMotoCore
+import OpenCfMotoAppModel
 
 struct AppLaunchOptions: Equatable {
     /// `-e2eBackgroundCycle <startSec>:<durationSec>`.
@@ -60,6 +69,12 @@ struct AppLaunchOptions: Equatable {
     var e2eBackgroundCycle: BackgroundCycle?
     /// `-e2eBackgroundEncoder <policy>` (locked iPhone, Phase 0): the locked-phone policy of this run.
     var e2eBackgroundEncoder: LockedStreamPolicy?
+    /// `-demoFuel <mode>` (with `-demoSeed`): the demo bike's fuel data.
+    var demoFuel: DemoFuel.Mode = .ok
+    /// `-demoStill`: the demo GPS route player is not started (no fix arrives, so the rider is "stopped").
+    var demoStill = false
+    /// `-demoStill` came from a `-uiScreen` fuel screen, not from the argument itself.
+    var demoStillImplied = false
     /// Launch arguments that were given but not understood (logged as warnings at launch).
     var warnings: [String] = []
 
@@ -91,6 +106,16 @@ struct AppLaunchOptions: Equatable {
                 if let v = value(after: i) { uiDashSheet = v.lowercased(); i += 1 }
             case "-uiSettingsAnchor":
                 if let v = value(after: i) { uiSettingsAnchor = v.lowercased(); i += 1 }
+            case "-demoStill": demoStill = true
+            case "-demoFuel":
+                let v = value(after: i)
+                if v != nil { i += 1 }
+                if let mode = v.flatMap({ DemoFuel.Mode(rawValue: $0.lowercased()) }) {
+                    demoFuel = mode
+                } else {
+                    let allowed = DemoFuel.Mode.allCases.map(\.rawValue).joined(separator: "|")
+                    warnings.append("-demoFuel \(v ?? "(no value)") ignored: expected \(allowed)")
+                }
             case "-e2eBackgroundCycle":
                 let v = value(after: i)
                 if v != nil { i += 1 }
@@ -113,6 +138,11 @@ struct AppLaunchOptions: Equatable {
             }
             i += 1
         }
+        // The fuel sheets refuse to open while moving: their screenshots need the demo rider stopped.
+        if !demoStill, let screen = uiScreen, RootLaunchScreen.stillNames.contains(screen) {
+            demoStill = true
+            demoStillImplied = true
+        }
     }
 
     /// `15:30` → start 15 s, duration 30 s; nil unless both are finite, start ≥ 0 and duration > 0.
@@ -131,6 +161,8 @@ struct AppLaunchOptions: Equatable {
         var parts: [String] = []
         if demo { parts.append("-demo") }
         if demoSeed { parts.append("-demoSeed") }
+        if demoSeed { parts.append("-demoFuel \(demoFuel.rawValue)") }
+        if demoStill { parts.append(demoStillImplied ? "-demoStill (implied by -uiScreen \(uiScreen ?? ""))" : "-demoStill") }
         if e2eFakeDash { parts.append("-e2eFakeDash (\(e2eDash) @ \(e2eHost))") }
         if e2eMusic { parts.append("-e2eMusic") }
         if let c = e2eBackgroundCycle { parts.append("-e2eBackgroundCycle \(Self.seconds(c.start)):\(Self.seconds(c.duration))") }

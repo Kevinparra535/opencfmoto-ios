@@ -9,6 +9,8 @@
 //   confirmation of a pack opened from another app, the manual Wi-Fi join sheet, the root QR
 //   scanner sheet and the pocket-mode («Modo bolsillo») full-screen cover,
 // - the dash's "type on phone" request when the top screen has no search field (back to Home),
+// - the fuel sheets (`FuelModel.sheet`: «¿Cuál es tu moto?», «Cargué gasolina», «Corregir nivel», the
+//   profile editor), presented only after a rider tap (`FuelModel.present`), never by themselves,
 // - UI/UX P0: the «Modo bolsillo» countdown card after Connect / Go (PocketCountdownCard.swift) and
 //   what only the UI knows about it — the keyboard or a root sheet is up, or the rider moved to
 //   another screen, or touched it anywhere (WindowTouchObserver.swift): the phone is in use, so no
@@ -86,6 +88,11 @@ struct RootView: View {
                 .connectionIssueAlert(isActive: true)
                 .pendingImportAlert(isActive: true)
         }
+        .sheet(item: fuelSheetBinding) { sheet in
+            FuelSheetView(sheet: sheet)
+                .connectionIssueAlert(isActive: true)
+                .pendingImportAlert(isActive: true)
+        }
         .fullScreenCover(isPresented: rideModeBinding) {
             RideModeOverlay()
                 .connectionIssueAlert(isActive: true)
@@ -155,7 +162,53 @@ struct RootView: View {
         case .pocketOffer:
             Log.i("UI", "-uiScreen pocketOffer")
             model.ride.showPocketOfferForScreenshot()
+        case .fuel:
+            guard let id = model.garage.selected?.id else {
+                Log.w("UI", "-uiScreen fuel: no bike in the garage")
+                return
+            }
+            Log.i("UI", "-uiScreen fuel")
+            router.path = [.garage, .garageBike(id)]
+        case .refuel, .fuelPicker, .fuelEdit, .fuelLevel:
+            guard let id = model.garage.selected?.id else {
+                Log.w("UI", "-uiScreen \(screen): no bike in the garage")
+                return
+            }
+            let sheet: FuelSheet
+            switch screen {
+            case .fuelPicker: sheet = .picker(bikeId: id, fromPrompt: true)
+            case .fuelEdit: sheet = .editProfile(bikeId: id)
+            case .fuelLevel: sheet = .level(bikeId: id)
+            default: sheet = .refuel(bikeId: id, late: false)
+            }
+            let outcome = model.fuel.present(sheet) ? "opened" : "refused while moving"
+            Log.i("UI", "-uiScreen \(screen) (sheet \(outcome))")
+        case .fuelMoving:
+            // The demo GPS only reports while something needs it: the location preview turns it on, so
+            // the fuel card sees the 45 km/h ride and shows its moving lock.
+            model.ride.startLocationPreview()
+            Log.i("UI", "-uiScreen fuelMoving (location preview on)")
+        case .routeVerdict:
+            await openRouteVerdict()
         }
+    }
+
+    /// `-uiScreen routeverdict`: the Map hub previewing a route to the demo favourite «Monserrate», so the
+    /// preview card shows the fuel verdict line once the route arrives (a straight-line fallback shows none).
+    private func openRouteVerdict() async {
+        let navigation = model.navigation
+        guard let place = navigation.favorites.first(where: { $0.name == "Monserrate" }) ?? navigation.favorites.first else {
+            Log.w("UI", "-uiScreen routeverdict: no favourite to preview")
+            router.path = [.navigate]
+            return
+        }
+        // The preview needs a position: wait for the demo GPS (≤ 5 s).
+        for _ in 0 ..< 50 where model.ride.lastFix == nil {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        navigation.preview(place)
+        router.path = [.navigate]
+        Log.i("UI", "-uiScreen routeverdict")
     }
 
     /// `-uiScreen gpx`: the demo loop opened as a GPX file while a route to Home runs, as when a track
@@ -217,6 +270,7 @@ struct RootView: View {
         case .logs: LogsScreen()
         case .about: AboutScreen()
         case .mirror: MirrorScreen()
+        case let .garageBike(id): GarageBikeDetailView(bikeID: id, scrollAnchor: GarageFuelSection.anchorID)
         }
     }
 
@@ -225,6 +279,17 @@ struct RootView: View {
     /// Something is presented from the root (the root itself cannot show an alert then).
     private var isRootPresenting: Bool {
         router.scanRequest != nil || model.connection.manualJoin != nil || model.ride.isRideModeActive
+            || model.fuel.sheet != nil
+    }
+
+    /// The fuel sheet: shown while the model has one (set only by a rider tap); a swipe-down closes it.
+    private var fuelSheetBinding: Binding<FuelSheet?> {
+        Binding(
+            get: { model.fuel.sheet },
+            set: { newValue in
+                if newValue == nil, model.fuel.sheet != nil { model.fuel.dismissSheet() }
+            }
+        )
     }
 
     /// Brings the Map hub up for a GPX track waiting as a preview (after the onboarding): back to the newest
@@ -318,9 +383,9 @@ private struct RootP0Hooks: ViewModifier {
             }
     }
 
-    /// Typing, or the root scanner sheet (the model knows its own dialogs and the manual join).
+    /// Typing, the root scanner sheet or a fuel sheet (the model knows its own dialogs and the manual join).
     private var isPhoneInUse: Bool {
-        keyboardVisible || router.scanRequest != nil
+        keyboardVisible || router.scanRequest != nil || model.fuel.sheet != nil
     }
 }
 
