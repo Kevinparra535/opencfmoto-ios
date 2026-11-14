@@ -74,6 +74,10 @@ final class DashSafetyRulesTests: XCTestCase {
         noLimit.nav.speedLimit = nil
         var slowFix = m(DashFixtures.freeRide(size))
         slowFix.fix = DashFixtures.fix(kmh: 123)
+        // Fuel MVP: the low-range toast (the existing toast path, after the scene) on every canvas.
+        let fuel = fuelToastStates(size, margins).map { f in
+            State(name: f.name, model: f.model) { ui in ui.showToast(f.toast, now: t0 + 2, duration: FuelAlertPolicy.toastSeconds) }
+        }
         let maps: [State] = [
             State(name: "free ride", model: m(DashFixtures.freeRide(size))),
             State(name: "free ride, music", model: DashFixtures.withMusic(m(DashFixtures.freeRide(size)))),
@@ -91,7 +95,7 @@ final class DashSafetyRulesTests: XCTestCase {
             State(name: "preview", model: m(DashFixtures.preview(size))),
             State(name: "preview over a running route", model: navPreview),
             State(name: "arrival", model: m(DashFixtures.arrival(size))),
-        ]
+        ] + fuel
         var all = maps
         for s in maps where !s.model.inPreview && !s.model.showsArrival {
             all.append(State(name: "\(s.name) · menu", model: s.model) { ui in
@@ -125,6 +129,26 @@ final class DashSafetyRulesTests: XCTestCase {
         })
         return all
     }
+
+    /// The fuel toast states (Fuel MVP): the model and the toast text shown over it at t0 + 2 for 6 s (visible at
+    /// both checked times t0 + 1 and t0 + 7). The banner pushes the toast down: the tallest overlay stack.
+    static func fuelToastStates(_ size: DashSize, _ margins: ScreenMargins) -> [(name: String, model: DashModel, toast: String)] {
+        var low = DashFixtures.navigating(size)
+        low.margins = margins
+        low.language = .es
+        var reserve = DashFixtures.freeRide(size)
+        reserve.margins = margins
+        var banner = low
+        banner.linkBanner = "Reconectando… el tablero mantiene la última imagen"
+        return [
+            ("navigating, fuel low toast (es)", low, DashStrings.fuelToast(.low, range: FuelFormat.range(70, units: .metric), .es)),
+            ("free ride, fuel reserve toast", reserve, DashStrings.fuelToast(.reserve, range: FuelFormat.range(0, units: .metric), .en)),
+            ("navigating, link banner + longest fuel toast (es)", banner, longestFuelToast),
+        ]
+    }
+
+    /// The longest fuel toast: Spanish, under a step (47 characters).
+    static let longestFuelToast = DashStrings.fuelToast(.low, range: FuelFormat.range(8, units: .metric), .es)
 
     /// From the map while navigating: HOME, the knob to «End route…», ★.
     private static func openEndConfirmation(_ ui: DashUIController, file: StaticString = #filePath, line: UInt = #line) {
@@ -287,6 +311,44 @@ final class DashSafetyRulesTests: XCTestCase {
         case let .text(_, _, style): return style.color == DashPalette.bannerText || style.color == DashPalette.toastText
         default: return true // save / clip / restore
         }
+    }
+
+    /// Fuel MVP (BRIEF safety pin: no new dash input): the fuel toast adds no hit region, no focus target and moves
+    /// no focus — on every canvas, for each fuel toast state and the sheets opened over it.
+    func testTheFuelToastAddsNoDashInput() {
+        var checked = 0
+        for (canvas, size, margins) in Self.canvases {
+            for f in Self.fuelToastStates(size, margins) {
+                let opens: [(String, (DashUIController) -> Void)] = [
+                    ("map", { _ in }),
+                    ("menu", { ui in _ = ui.handle(.key(.home), now: Self.t0) }),
+                    ("search", { ui in _ = ui.perform(.openSearch, now: Self.t0) }),
+                ]
+                for (sheet, open) in opens {
+                    let tag = "\(canvas) \(f.name) · \(sheet)"
+                    func build(toast: Bool) -> DashUIController {
+                        let ui = DashUIController()
+                        ui.update(f.model)
+                        if toast { ui.showToast(f.toast, now: Self.t0 + 2, duration: FuelAlertPolicy.toastSeconds) }
+                        open(ui)
+                        _ = ui.displayList(now: Self.t0 + 0.5)
+                        return ui
+                    }
+                    let with = build(toast: true), without = build(toast: false)
+                    for t in [Self.t0 + 1, Self.t0 + 7] {
+                        let a = with.displayList(now: t), b = without.displayList(now: t)
+                        XCTAssertEqual(a.hitRegions, b.hitRegions, "\(tag): hit regions")
+                        XCTAssertNotEqual(a.commands.count, b.commands.count, "\(tag): the toast is drawn")
+                        XCTAssertTrue(a.commands.contains { if case let .text(s, _, _) = $0 { return s == f.toast }; return false }, tag)
+                    }
+                    XCTAssertEqual(with.state.focusOrder, without.state.focusOrder, "\(tag): focus order")
+                    XCTAssertEqual(with.state.focusedId, without.state.focusedId, "\(tag): focus")
+                    XCTAssertEqual(with.state.toast, f.toast, tag)
+                    checked += 1
+                }
+            }
+        }
+        XCTAssertEqual(checked, Self.canvases.count * 3 * 3)
     }
 
     // MARK: 4. End and a route change ask first
@@ -495,10 +557,21 @@ final class DashSafetyRulesTests: XCTestCase {
     func testSpanishCopyIsNeutralLatinAmerican() {
         // Spain-only words where a neutral one exists (owner decision): «aparcar» → estacionar, «autovía» →
         // autopista, «conducir» → manejar / viajar, «cajero» alone → cajero automático, «móvil» → teléfono.
-        let banned = ["aparca", "autovía", "conduc", "móvil", "ordenador", "vale,", "coche", "cambio de sentido"]
+        let banned = ["aparca", "autovía", "conduc", "móvil", "ordenador", "vale,", "coche", "cambio de sentido", "repost", "depósito"]
         var es: [String] = DashText.allCases.map { $0.localized(.es) }
         es += [DashStrings.endConsequence("Câmpina", .es), DashStrings.endConsequence("", .es),
                DashStrings.changeConsequence(from: "A", to: "B", .es)]
+        // Fuel MVP: the low-range toast and voice lines (metric, imperial, under a step).
+        for level in [FuelAlertLevel.low, .reserve] {
+            for km in [70.0, 8, 64.4] {
+                for units in [MapUnits.metric, .imperial] {
+                    let r = FuelFormat.range(km, units: units)
+                    es += [DashStrings.fuelToast(level, range: r, .es), DashStrings.fuelVoice(level, range: r, .es)]
+                }
+            }
+        }
+        XCTAssertTrue(es.contains("Autonomía baja: ~70 km hasta la reserva"))
+        XCTAssertTrue(es.contains("En reserva: carga gasolina pronto"))
         let nav = NavStrings(language: .es)
         es += ["Fuel", "Parking", "ATM", "Cafe", "Food", "Hotel"].map { nav.poiChipLabel($0) }
         es += [nav.phrase(.parkingMarked), nav.phrase(.parkingUpdated), nav.phrase(.destinationReached), nav.phrase(.noHomeSet),

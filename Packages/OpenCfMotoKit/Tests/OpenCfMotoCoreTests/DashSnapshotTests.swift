@@ -169,6 +169,48 @@ final class DashSnapshotTests: XCTestCase {
         snapshot("land-toast-banner", list)
     }
 
+    // MARK: Fuel MVP: the low-range toast (the existing toast path, under the top chrome, off the speed / limit)
+
+    /// The visible text of an SVG: every `<text>` element's content (tspans removed), joined by spaces.
+    private func svgText(_ svg: String) -> String {
+        var out: [String] = []
+        var rest = svg[...]
+        while let open = rest.range(of: "<text "), let close = rest.range(of: "</text>", range: open.upperBound ..< rest.endIndex) {
+            let element = rest[open.upperBound ..< close.lowerBound]
+            if let gt = element.firstIndex(of: ">") {
+                let body = String(element[element.index(after: gt)...])
+                    .replacingOccurrences(of: "<tspan[^>]*>", with: "", options: .regularExpression)
+                    .replacingOccurrences(of: "</tspan>", with: "")
+                out.append(body)
+            }
+            rest = rest[close.upperBound...]
+        }
+        return out.joined(separator: " ")
+    }
+
+    func testLandscapeFuelLowToastSpanish() {
+        var m = DashFixtures.navigating()
+        m.language = .es
+        let text = DashStrings.fuelToast(.low, range: FuelFormat.range(70, units: .metric), .es)
+        XCTAssertEqual(text, "Autonomía baja: ~70 km hasta la reserva")
+        let svg = snapshot("land-fuel-low-es", frame(m) { ui in ui.showToast(text, now: 99, duration: 6) })
+        XCTAssertTrue(svgText(svg).contains(text), "the whole toast text is drawn: \(svgText(svg))")
+    }
+
+    func testLandscapeFuelReserveToast() {
+        let text = DashStrings.fuelToast(.reserve, range: FuelFormat.range(0, units: .metric), .en)
+        let svg = snapshot("land-fuel-reserve", frame(DashFixtures.freeRide()) { ui in ui.showToast(text, now: 99, duration: 6) })
+        XCTAssertTrue(svgText(svg).contains("On reserve: refuel soon"), "the whole toast text is drawn")
+    }
+
+    func testClc450FuelLowToastSpanish() {
+        var m = DashFixtures.navigating(DashSize(width: 544, height: 512))
+        m.language = .es
+        let text = DashStrings.fuelToast(.low, range: FuelFormat.range(8, units: .metric), .es)
+        let svg = snapshot("clc450-544-fuel-low-es", frame(m) { ui in ui.showToast(text, now: 99, duration: 6) })
+        XCTAssertTrue(svgText(svg).contains(text), "the whole (longest) toast text is drawn: \(svgText(svg))")
+    }
+
     func testHoldScreen() {
         // P0 (D17): what the app serves (no message of its own): «Map paused», no map and no stale numbers.
         let ui = DashUIController()
