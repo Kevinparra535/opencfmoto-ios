@@ -53,6 +53,17 @@ enum FuelUIText {
         }
     }
 
+    /// "1/4" | "1/2" | "3/4": the segment titles of the level pickers. A segmented control ignores `.font`,
+    /// and the ¼ ½ ¾ glyphs come out a few points tall there; plain digits stay legible. VoiceOver still
+    /// gets the fraction glyph (`level(_:)`), read as a fraction rather than a date.
+    static func levelSegment(_ l: TankLevel) -> String {
+        switch l {
+        case .quarter: return "1/4"
+        case .half: return "1/2"
+        case .threeQuarters: return "3/4"
+        }
+    }
+
     /// "example.com" of a source URL (no "www."), nil when it is not an http(s) URL.
     static func host(_ source: String) -> String? {
         guard let url = URL(string: source), let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http",

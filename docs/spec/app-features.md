@@ -2455,8 +2455,8 @@ logs a full refuel; «No sé»).
 | Kind | UI | Fields | Effect |
 |---|---|---|---|
 | `full` | «Cargué gasolina» ▸ «Lleno» (default) | litres?, price?, trip meter?, «¿Cargaste hace rato?» km? | Anchor: tank full |
-| `partial` | «Parcial» | litres?, «¿Cómo quedó el tanque?» ¼ / ½ / ¾ / «No sé», price?, trip meter? | With a level: anchor at that level. With litres: adds litres × km/L (capped at the tank). With neither: the range waits for the next full |
-| `level` | «Corregir nivel» ¼ / ½ / ¾ | none | Anchor at that level; not a refuel, ignored by the stats |
+| `partial` | «Parcial» | litres?, «¿Cómo quedó el tanque?» 1/4 · 1/2 · 3/4 · «No sé», price?, trip meter? | With a level: anchor at that level. With litres: adds litres × km/L (capped at the tank). With neither: the range waits for the next full |
+| `level` | «Corregir nivel» 1/4 · 1/2 · 3/4 (history: «Ajuste de nivel · ½») | none | Anchor at that level; not a refuel, ignored by the stats |
 
 Every entry stores its wall-clock time and the app's km counter at the real refuel (`odometerKm` = counter −
 «Km desde que cargaste», never below the previous entry), and `unseenSincePrev` when the counter saw a gap or a

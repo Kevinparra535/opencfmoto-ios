@@ -88,7 +88,9 @@ struct RefuelSheet: View {
                     Section {
                         Picker(selection: $level) {
                             ForEach(TankLevel.allCases, id: \.self) { l in
-                                Text(verbatim: FuelUIText.level(l)).tag(TankLevel?.some(l))
+                                Text(verbatim: FuelUIText.levelSegment(l))
+                                    .accessibilityLabel(Text(verbatim: FuelUIText.level(l)))
+                                    .tag(TankLevel?.some(l))
                             }
                             Text("Not sure").tag(TankLevel?.none)
                         } label: {
@@ -329,7 +331,9 @@ struct FuelLevelSheet: View {
                 Section {
                     Picker(selection: $level) {
                         ForEach(TankLevel.allCases, id: \.self) { l in
-                            Text(verbatim: FuelUIText.level(l)).tag(TankLevel?.some(l))
+                            Text(verbatim: FuelUIText.levelSegment(l))
+                                .accessibilityLabel(Text(verbatim: FuelUIText.level(l)))
+                                .tag(TankLevel?.some(l))
                         }
                     } label: {
                         Text("What does the gauge show?")

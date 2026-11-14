@@ -166,13 +166,13 @@ parada: en marcha la app no deja escribir y dice «Detente para…».
    vuelva el Wi-Fi), camina 500 m o más con el iPhone y vuelve. Al reconectar, «Desde tu última carga» no
    debe haber crecido por la caminata.
 5. **Aviso de autonomía baja**, con la moto parada y conectada (por ejemplo, justo antes de cargar
-   gasolina): Garaje ▸ tu moto ▸ Combustible ▸ **Corregir nivel** ▸ **¼** ▸ **Guardar**. En unos
+   gasolina): Garaje ▸ tu moto ▸ Combustible ▸ **Corregir nivel** ▸ **1/4** ▸ **Guardar**. En unos
    segundos el tablero muestra **una vez** «Autonomía baja: ~40 km hasta la reserva» (con una 450MT)
    durante 6 s, debajo de la barra de arriba, sin tapar la velocidad ni el límite; con los avisos de voz
    activados se oye «Autonomía baja. Unos 40 kilómetros hasta la reserva.». No se repite. En modo
    espejo solo se oye.
    - **Nunca encima de una tarjeta** (opcional, con una ruta en marcha): deja lista en el iPhone la
-     pantalla de **Corregir nivel** con **¼** elegido, sin guardar. En el tablero abre ⋮ ▸ «Terminar la
+     pantalla de **Corregir nivel** con **1/4** elegido, sin guardar. En el tablero abre ⋮ ▸ «Terminar la
      ruta…» y, con la tarjeta «¿Terminar la ruta?» abierta, toca **Guardar** en el iPhone. El aviso
      **no** sale encima de la tarjeta: sale cuando se cierra (Seguir, o sola a los 8 s). La voz no
      espera a la tarjeta, pero nunca corta una indicación de giro: espera a que termine.
