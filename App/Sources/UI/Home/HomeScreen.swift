@@ -7,6 +7,7 @@
 // UI/UX P0: the Map tile works in every link state (UX-04: planning never waits for the bike), Stop
 // is a neutral button with red words instead of Connect's orange (UX-11), text on the orange fills is
 // dark (UX-06), and a link that drops while the bike is stopped reads calm (no alarm at a stop).
+// Fuel MVP: the fuel card (FuelHomeCard.swift) under Connect / Pocket mode.
 
 import SwiftUI
 import OpenCfMotoAppModel
@@ -48,6 +49,8 @@ struct HomeScreen: View {
         if model.ride.isProjecting {
             HomeRideModeButton()
         }
+        // Fuel MVP: the range estimate, or «¿Cuál es tu moto?» (a card, never a sheet by itself).
+        FuelHomeCard()
     }
 
     @ViewBuilder

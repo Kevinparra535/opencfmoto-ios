@@ -52,6 +52,21 @@ shoot navigate 9 "${DEMO[@]}" -uiScreen navigate
 for s in trips settings controls logs garage about mirror onboarding scan ride; do
   shoot "$s" 5 "${DEMO[@]}" -uiScreen "$s"
 done
+# Fuel MVP «Combustible» (-demoFuel ok|low|aged|setup; the fuel sheets refuse to open while moving, so
+# -uiScreen fuel / refuel / fuelpicker imply -demoStill: the demo GPS player is not started). `home` keeps
+# the demo ride at 45 km/h: its fuel card shows the moving lock line («Detente para …»), as home_fuel_moving.
+shoot fuel 6 "${DEMO[@]}" -uiScreen fuel
+shoot es_fuel 6 "${DEMO[@]}" -uiScreen fuel -AppleLanguages "(es)" -AppleLocale es_ES
+shoot refuel 5 "${DEMO[@]}" -uiScreen refuel
+shoot es_refuel 5 "${DEMO[@]}" -uiScreen refuel -AppleLanguages "(es)" -AppleLocale es_ES
+shoot fuel_picker 5 "${DEMO[@]}" -demoFuel setup -uiScreen fuelpicker
+shoot es_fuel_picker 5 "${DEMO[@]}" -demoFuel setup -uiScreen fuelpicker -AppleLanguages "(es)" -AppleLocale es_ES
+shoot home_fuel_setup 5 "${DEMO[@]}" -demoFuel setup -demoStill
+shoot es_home_fuel_low 5 "${DEMO[@]}" -demoFuel low -demoStill -AppleLanguages "(es)" -AppleLocale es_ES
+shoot es_home_fuel_aged 5 "${DEMO[@]}" -demoFuel aged -demoStill -AppleLanguages "(es)" -AppleLocale es_ES
+shoot home_fuel_moving 5 "${DEMO[@]}" -demoFuel ok
+shoot route_verdict 12 "${DEMO[@]}" -uiScreen routeverdict
+shoot es_route_verdict 12 "${DEMO[@]}" -uiScreen routeverdict -AppleLanguages "(es)" -AppleLocale es_ES
 # An opened GPX track shown as a preview over a running route (UI/UX P0, UX-17).
 shoot gpx_preview 9 "${DEMO[@]}" -uiScreen gpx
 shoot es_gpx_preview 9 "${DEMO[@]}" -uiScreen gpx -AppleLanguages "(es)" -AppleLocale es_ES

@@ -24,7 +24,8 @@
 //
 // Test launch arguments (AppLaunchOptions.swift; the CI simulator job uses them): `-demoSeed` seeds
 // demo content (DemoSeed.swift), `-e2eFakeDash` runs the REAL link stack against the Python fake
-// dash on 127.0.0.1 (E2EFakeDash.swift), `-uiScreen` / `-uiOrientation` are applied by RootView.
+// dash on 127.0.0.1 (E2EFakeDash.swift), `-uiScreen` / `-uiOrientation` are applied by RootView,
+// `-demoFuel` picks the demo bike's fuel data and `-demoStill` leaves the demo GPS player stopped.
 
 import Foundation
 import OpenCfMotoCore
@@ -112,13 +113,16 @@ final class AppPlatform {
             // The Simulator has no music library: a fake Music app (seeded: three songs with covers).
             services.music = options.demoSeed ? DemoSeed.music(clock: clock, store: services.keyValueStore)
                 : DemoSeed.emptyMusic(clock: clock)
-            if options.demoSeed { DemoSeed.apply(to: services) }
+            if options.demoSeed { DemoSeed.apply(to: services, fuelMode: options.demoFuel) }
             model = AppModel(services: services)
             let player = DemoRoutePlayer(location: location, now: services.now)
-            player.start()
+            // `-demoStill` (the fuel screenshots): no demo fix, so the rider is "stopped" and the fuel sheets
+            // open (they refuse while moving; the loop always rides at 45 km/h).
+            if !options.demoStill { player.start() }
             demoPlayer = player
             e2eHarness = nil
-            Log.i("APP", "demo mode: simulated bike, Wi-Fi and GPS (route loop at 45 km/h)")
+            Log.i("APP", options.demoStill ? "demo mode: simulated bike and Wi-Fi, GPS player not started (-demoStill)"
+                : "demo mode: simulated bike, Wi-Fi and GPS (route loop at 45 km/h)")
         } else {
             model = AppModel(services: Self.realServices(flavor: flavor, clock: clock, http: http, projection: projection))
             demoPlayer = nil

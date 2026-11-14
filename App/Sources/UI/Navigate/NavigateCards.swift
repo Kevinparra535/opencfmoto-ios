@@ -57,6 +57,9 @@ struct NavigatePreviewCard: View {
                 }
             }
 
+            // Fuel MVP: «Llegas con ~60 km antes de la reserva» / «Justo: carga antes de salir» / …
+            FuelVerdictLine()
+
             HStack(spacing: 10) {
                 Button {
                     navigation.go()

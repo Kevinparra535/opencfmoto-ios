@@ -139,7 +139,10 @@ public final class FuelModel {
 
     // MARK: - Read any bike
 
+    /// Any bike's fuel state. Observable for SwiftUI (reads `revision`, bumped on every change of a bike's
+    /// data), so the Garage section of a bike that is not `current` refreshes too.
     public func state(for bikeId: String) -> FuelBikeState {
+        _ = revision
         let c = cache(bikeId)
         return FuelBikeState(bikeId: bikeId, profile: c.profile, entry: c.profile?.catalogId.flatMap(FuelCatalog.entry(id:)),
                              log: c.log.entries, stats: c.stats, estimate: estimate(c), odometerKm: c.odometer.state.totalKm,

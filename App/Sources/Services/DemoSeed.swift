@@ -7,6 +7,9 @@
 // Everything goes to the in-memory stores / temp folders of `AppServices.preview`, so nothing
 // survives the process. Apple Music on the dash: `music(clock:store:)` is the fake Music app of the
 // demo and of the E2E run (`-e2eMusic`): three fictional songs with drawn covers, playing at 2:13.
+// Fuel MVP: the demo bike's fuel data (`-demoFuel ok|low|aged|setup`, DemoFuel in OpenCfMotoAppModel): a
+// catalog profile of the fictional 675 SR-R, three refuels and the km counter — or, for `setup`, none, so
+// Home asks «¿Cuál es tu moto?». Demo data only; no position is seeded.
 
 import Foundation
 import OpenCfMotoCore
@@ -16,7 +19,7 @@ enum DemoSeed {
     /// A CFDL16 dash (675 SR-R) pairing QR with a display name.
     static let bikeQR = "http://www.carbit.com.cn/downsdk/657/658/_sdk?modelid=37416&sn=Demo&action=1&ssid=CFMOTO-6GUV675&pwd=demo-only-password&auth=wpa2-psk&name=675%20SR-R"
 
-    static func apply(to services: AppServices, now: Date = Date()) {
+    static func apply(to services: AppServices, now: Date = Date(), fuelMode: DemoFuel.Mode = .ok) {
         let store = services.keyValueStore
         store.set(true, forKey: "onboarding_done") // PermissionsModel.onboardingDoneKey
 
@@ -24,6 +27,7 @@ enum DemoSeed {
         if let qr = BikeQR.parse(bikeQR) {
             let bike = garage.save(qr)
             garage.select(bike.id)
+            DemoFuel.seed(store: store, garage: garage, bikeId: bike.id, mode: fuelMode, now: now)
         }
         SettingsStore(store: store).update(forBike: nil) { $0.autoConnect = false }
 
@@ -57,7 +61,7 @@ enum DemoSeed {
                 Log.w("APP", "demo seed: trip not saved: \(error)")
             }
         }
-        Log.i("APP", "demo seed: bike, \(plans.count) trips, home + \(favorites.count) favourites")
+        Log.i("APP", "demo seed: bike (fuel \(fuelMode.rawValue)), \(plans.count) trips, home + \(favorites.count) favourites")
     }
 
     // MARK: - Apple Music (fake)

@@ -151,6 +151,16 @@
         }
       }
     },
+    "A full tank calculates it again.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Al llenar el tanque se calcula de nuevo."
+          }
+        }
+      }
+    },
     "A gesture navigates to a saved place that is not set yet — add its address below.": {
       "localizations": {
         "es": {
@@ -177,6 +187,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Acerca de"
+          }
+        }
+      }
+    },
+    "About %@ to reserve": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unos %@ hasta la reserva"
           }
         }
       }
@@ -711,6 +731,16 @@
         }
       }
     },
+    "Between %@ and %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entre %@ y %@"
+          }
+        }
+      }
+    },
     "Bike": {
       "localizations": {
         "es": {
@@ -1051,6 +1081,16 @@
         }
       }
     },
+    "Change model": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambiar moto"
+          }
+        }
+      }
+    },
     "Change photo": {
       "localizations": {
         "es": {
@@ -1061,12 +1101,72 @@
         }
       }
     },
+    "Check and save": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revisa y guarda"
+          }
+        }
+      }
+    },
+    "Check this value": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revisa este valor"
+          }
+        }
+      }
+    },
+    "Check your bike's gauge: the app couldn't measure the km": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revisa el indicador de la moto: la app no pudo medir los km"
+          }
+        }
+      }
+    },
+    "Check your bike's gauge: you may have ridden without the app": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revisa el indicador de la moto: puede que hayas rodado sin la app"
+          }
+        }
+      }
+    },
+    "Choose": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elegir"
+          }
+        }
+      }
+    },
     "Choose GPX file…": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Elegir archivo GPX…"
+          }
+        }
+      }
+    },
+    "Choose the model": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elegir moto"
           }
         }
       }
@@ -1251,12 +1351,52 @@
         }
       }
     },
+    "Copied from another bike": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copiado de otra moto"
+          }
+        }
+      }
+    },
     "Copy": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Copiar"
+          }
+        }
+      }
+    },
+    "Copy from %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copiar de %@"
+          }
+        }
+      }
+    },
+    "Correct level": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Corregir nivel"
+          }
+        }
+      }
+    },
+    "Cost per %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Costo por %@"
           }
         }
       }
@@ -1461,6 +1601,16 @@
         }
       }
     },
+    "Delete this refuel?": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Eliminar esta carga?"
+          }
+        }
+      }
+    },
     "Delete trip": {
       "localizations": {
         "es": {
@@ -1507,6 +1657,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Detectar desde la moto (recomendado)"
+          }
+        }
+      }
+    },
+    "Did you refuel?": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cargaste gasolina?"
+          }
+        }
+      }
+    },
+    "Did you refuel? Update it to know if you get there": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cargaste gasolina? Actualízalo para saber si llegas"
           }
         }
       }
@@ -1651,6 +1821,26 @@
         }
       }
     },
+    "Edit": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editar"
+          }
+        }
+      }
+    },
+    "Edited by you": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editado por ti"
+          }
+        }
+      }
+    },
     "Empty file": {
       "localizations": {
         "es": {
@@ -1701,6 +1891,26 @@
         }
       }
     },
+    "Enter by hand": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingresar a mano"
+          }
+        }
+      }
+    },
+    "Entered by hand": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingresado a mano"
+          }
+        }
+      }
+    },
     "Error — see logs": {
       "localizations": {
         "es": {
@@ -1717,6 +1927,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Errores"
+          }
+        }
+      }
+    },
+    "Estimate: it adjusts with your refuels": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimado: se ajusta con tus cargas"
+          }
+        }
+      }
+    },
+    "Estimated economy": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rendimiento estimado"
           }
         }
       }
@@ -1837,6 +2067,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Rellenar"
+          }
+        }
+      }
+    },
+    "Fill the tank to know if you get there": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Llena el tanque para saber si llegas"
           }
         }
       }
@@ -2021,6 +2261,56 @@
         }
       }
     },
+    "Fuel & range": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Combustible"
+          }
+        }
+      }
+    },
+    "Fuel economy": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rendimiento"
+          }
+        }
+      }
+    },
+    "Fuel economy (%@)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rendimiento (%@)"
+          }
+        }
+      }
+    },
+    "Fuel range": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autonomía"
+          }
+        }
+      }
+    },
+    "Full": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lleno"
+          }
+        }
+      }
+    },
     "Full credits": {
       "localizations": {
         "es": {
@@ -2067,6 +2357,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "GPS fijado ±%@ m"
+          }
+        }
+      }
+    },
+    "Gallons (optional)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Galones (opcional)"
           }
         }
       }
@@ -2251,12 +2551,32 @@
         }
       }
     },
+    "How full is it now?": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cómo quedó el tanque?"
+          }
+        }
+      }
+    },
     "How to join": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Cómo conectarse"
+          }
+        }
+      }
+    },
+    "I refueled": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cargué gasolina"
           }
         }
       }
@@ -2471,6 +2791,36 @@
         }
       }
     },
+    "Is the tank full now?": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Tienes el tanque lleno ahora?"
+          }
+        }
+      }
+    },
+    "It isn't a refuel: it doesn't count toward the measured economy.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No es una carga: no cuenta para el rendimiento medido."
+          }
+        }
+      }
+    },
+    "Its dash fits these models. Pick yours: the tank changes between models.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Su tablero encaja con estos modelos. Elige el tuyo: el tanque cambia entre modelos."
+          }
+        }
+      }
+    },
     "Join the bike Wi-Fi": {
       "localizations": {
         "es": {
@@ -2507,6 +2857,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Te quedas en esta pantalla; el tablero sigue en vivo"
+          }
+        }
+      }
+    },
+    "Km since you refueled": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Km desde que cargaste"
           }
         }
       }
@@ -2571,6 +2931,16 @@
         }
       }
     },
+    "Later": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Luego"
+          }
+        }
+      }
+    },
     "Learned canvas": {
       "localizations": {
         "es": {
@@ -2597,6 +2967,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nivel"
+          }
+        }
+      }
+    },
+    "Level correction": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajuste de nivel"
+          }
+        }
+      }
+    },
+    "Level correction · %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajuste de nivel · %@"
           }
         }
       }
@@ -2647,6 +3037,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Vinculando al panel..."
+          }
+        }
+      }
+    },
+    "Litres (optional)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Litros (opcional)"
           }
         }
       }
@@ -2771,6 +3171,26 @@
         }
       }
     },
+    "Log a refuel to know if you get there": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registra una carga para saber si llegas"
+          }
+        }
+      }
+    },
+    "Log a refuel to start.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registra una carga para empezar."
+          }
+        }
+      }
+    },
     "Log trips automatically": {
       "localizations": {
         "es": {
@@ -2807,6 +3227,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Se perdió el enlace con la moto"
+          }
+        }
+      }
+    },
+    "Low range": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autonomía baja"
           }
         }
       }
@@ -2961,6 +3391,16 @@
         }
       }
     },
+    "Measured": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medido"
+          }
+        }
+      }
+    },
     "Menu": {
       "localizations": {
         "es": {
@@ -2977,6 +3417,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Métrico"
+          }
+        }
+      }
+    },
+    "Miles since you refueled": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Millas desde que cargaste"
           }
         }
       }
@@ -3037,6 +3487,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "La duplicación se detiene cuando el iPhone se bloquea. Para ir con el teléfono en el bolsillo, usa Conectar: el mapa de OpenCfMoto."
+          }
+        }
+      }
+    },
+    "Model": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modelo"
           }
         }
       }
@@ -3241,12 +3701,32 @@
         }
       }
     },
+    "No models match. Try only the number, like 450.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ningún modelo coincide. Prueba solo con el número, como 450."
+          }
+        }
+      }
+    },
     "No preset — shipped defaults / your custom map": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Sin preajuste: valores de fábrica o tu mapa personalizado"
+          }
+        }
+      }
+    },
+    "No refuels yet": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aún no hay cargas"
           }
         }
       }
@@ -3321,12 +3801,32 @@
         }
       }
     },
+    "Not measured yet: log two full tanks with litres.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aún sin medir: registra dos llenos con litros."
+          }
+        }
+      }
+    },
     "Not now": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Ahora no"
+          }
+        }
+      }
+    },
+    "Not sure": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No sé"
           }
         }
       }
@@ -3407,6 +3907,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "La aplicación oficial de CFMoto está estorbando"
+          }
+        }
+      }
+    },
+    "Official figure · %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dato oficial · %@"
+          }
+        }
+      }
+    },
+    "Official tank": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tanque oficial"
+          }
+        }
+      }
+    },
+    "On reserve": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En reserva"
           }
         }
       }
@@ -3701,6 +4231,16 @@
         }
       }
     },
+    "Other bike": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Otra moto"
+          }
+        }
+      }
+    },
     "Pair your bike": {
       "localizations": {
         "es": {
@@ -3751,6 +4291,16 @@
         }
       }
     },
+    "Partial": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parcial"
+          }
+        }
+      }
+    },
     "Password": {
       "localizations": {
         "es": {
@@ -3781,6 +4331,26 @@
         }
       }
     },
+    "Per gallon": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Por galón"
+          }
+        }
+      }
+    },
+    "Per litre": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Por litro"
+          }
+        }
+      }
+    },
     "Per-bike settings are saved for %@.": {
       "localizations": {
         "es": {
@@ -3807,6 +4377,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mando multimedia del teléfono"
+          }
+        }
+      }
+    },
+    "Pick the model of %@ to estimate its fuel range.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elige el modelo de %@ para estimar su autonomía."
           }
         }
       }
@@ -3971,6 +4551,16 @@
         }
       }
     },
+    "Price (optional)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Precio (opcional)"
+          }
+        }
+      }
+    },
     "Privacy & logs": {
       "localizations": {
         "es": {
@@ -4001,6 +4591,16 @@
         }
       }
     },
+    "Published figure · %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dato publicado · %@"
+          }
+        }
+      }
+    },
     "Put the phone away: the dash stays live.": {
       "localizations": {
         "es": {
@@ -4017,6 +4617,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "No se pudo leer el QR de la foto"
+          }
+        }
+      }
+    },
+    "Range not calculated: your last refuel has no litres.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autonomía sin calcular: tu última carga no tiene litros."
           }
         }
       }
@@ -4097,6 +4707,56 @@
           "stringUnit": {
             "state": "translated",
             "value": "La app se recuperó de un cierre inesperado"
+          }
+        }
+      }
+    },
+    "Refuel history": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historial de cargas"
+          }
+        }
+      }
+    },
+    "Refuel logged": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carga registrada"
+          }
+        }
+      }
+    },
+    "Refuel logged. You can undo it.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carga registrada. Puedes deshacerla."
+          }
+        }
+      }
+    },
+    "Refuel soon": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carga gasolina pronto"
+          }
+        }
+      }
+    },
+    "Refueled a while ago?": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cargaste hace rato?"
           }
         }
       }
@@ -4217,6 +4877,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Informar de un problema"
+          }
+        }
+      }
+    },
+    "Reserve": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reserva"
           }
         }
       }
@@ -4621,6 +5291,16 @@
         }
       }
     },
+    "Search model": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buscar modelo"
+          }
+        }
+      }
+    },
     "Search places, plan a route or load a GPX track": {
       "localizations": {
         "es": {
@@ -4901,6 +5581,16 @@
         }
       }
     },
+    "Show more": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver más"
+          }
+        }
+      }
+    },
     "Show onboarding again": {
       "localizations": {
         "es": {
@@ -4957,6 +5647,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Muestra la vista previa de la ruta"
+          }
+        }
+      }
+    },
+    "Since your last refuel: %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desde tu última carga: %@"
           }
         }
       }
@@ -5181,6 +5881,36 @@
         }
       }
     },
+    "Stop to choose your bike": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detente para elegir tu moto"
+          }
+        }
+      }
+    },
+    "Stop to edit": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detente para editar"
+          }
+        }
+      }
+    },
+    "Stop to log the refuel": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detente para registrar la carga"
+          }
+        }
+      }
+    },
     "Stopped": {
       "localizations": {
         "es": {
@@ -5241,12 +5971,52 @@
         }
       }
     },
+    "Tank": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tanque"
+          }
+        }
+      }
+    },
+    "Tank %@ · ~%@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tanque %@ · ~%@"
+          }
+        }
+      }
+    },
+    "Tank (%@)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tanque (%@)"
+          }
+        }
+      }
+    },
     "Tap the button, choose OpenCfMoto Mirror, then Start Broadcast.": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Toca el botón, elige OpenCfMoto Mirror y luego Iniciar transmisión."
+          }
+        }
+      }
+    },
+    "Tap to update": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca para actualizar"
           }
         }
       }
@@ -5267,6 +6037,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Enseñar mi manillar"
+          }
+        }
+      }
+    },
+    "Tell us which bike it is to estimate its range.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dinos cuál es tu moto para estimar su autonomía."
           }
         }
       }
@@ -5297,6 +6077,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "La app se cerró inesperadamente la última vez. Los detalles se incluyen al compartir los registros o informar de un problema."
+          }
+        }
+      }
+    },
+    "The app couldn't measure the km (no precise GPS). Check your bike's gauge.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La app no pudo medir los km (sin GPS preciso). Revisa el indicador de la moto."
           }
         }
       }
@@ -5381,6 +6171,16 @@
         }
       }
     },
+    "The range counts down to this level, never to an empty tank.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La autonomía se cuenta hasta este nivel, nunca hasta vaciar el tanque."
+          }
+        }
+      }
+    },
     "The report includes the app version, the active bike profile, the link state and the recent log.": {
       "localizations": {
         "es": {
@@ -5461,6 +6261,16 @@
         }
       }
     },
+    "This forgets its pairing, photo, settings and fuel log. You can re-scan the dash QR or enter Wi-Fi again later.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esto olvida su emparejamiento, foto, ajustes y registro de combustible. Puedes volver a escanear el QR del tablero o ingresar el Wi-Fi más tarde."
+          }
+        }
+      }
+    },
     "This iPhone does not allow camera access (Screen Time or a profile). Import the QR from a photo or enter the Wi-Fi manually.": {
       "localizations": {
         "es": {
@@ -5477,6 +6287,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Descarta esta grabación sin guardarla"
+          }
+        }
+      }
+    },
+    "Tight: refuel before you leave": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Justo: carga antes de salir"
           }
         }
       }
@@ -5551,6 +6371,26 @@
         }
       }
     },
+    "Total": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Total"
+          }
+        }
+      }
+    },
+    "Total %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Total %@"
+          }
+        }
+      }
+    },
     "Touch dashes (800NK Advanced, 800MT): just tap the dash. Handlebar control is meant for non-touch dashes such as the 450SR.": {
       "localizations": {
         "es": {
@@ -5617,6 +6457,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "El viaje no tiene puntos GPS"
+          }
+        }
+      }
+    },
+    "Trip meter (optional)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trip de la moto (opcional)"
           }
         }
       }
@@ -5741,6 +6591,26 @@
         }
       }
     },
+    "Under %@ to reserve": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menos de %@ hasta la reserva"
+          }
+        }
+      }
+    },
+    "Undo": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deshacer"
+          }
+        }
+      }
+    },
     "Units": {
       "localizations": {
         "es": {
@@ -5787,6 +6657,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Úsalo bajo tu propia responsabilidad. Fija la ruta antes de salir y nunca toques el teléfono ni el tablero mientras manejas."
+          }
+        }
+      }
+    },
+    "Use the measured economy": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usar el rendimiento medido"
           }
         }
       }
@@ -5921,12 +6801,42 @@
         }
       }
     },
+    "We couldn't tell the model from the dash. Search for it or enter it by hand.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No pudimos saber el modelo por el tablero. Búscalo o ingrésalo a mano."
+          }
+        }
+      }
+    },
     "Welcome to OpenCfMoto": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Te damos la bienvenida a OpenCfMoto"
+          }
+        }
+      }
+    },
+    "What does the gauge show?": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cuánto marca el indicador?"
+          }
+        }
+      }
+    },
+    "What the trip meter showed before you reset it: the %@ since your previous refuel. It makes the measured economy exact.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lo que marcaba el trip antes de reiniciarlo: los %@ desde tu carga anterior. Hace exacto el rendimiento medido."
           }
         }
       }
@@ -5947,6 +6857,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Al abrir la app, conecta automáticamente con la moto activa. iOS no puede buscar redes Wi-Fi, así que simplemente lo intenta una vez."
+          }
+        }
+      }
+    },
+    "Which bike is it?": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cuál es tu moto?"
           }
         }
       }
@@ -6041,12 +6961,42 @@
         }
       }
     },
+    "Without litres or a level, the range waits for your next full tank.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin litros ni nivel, la autonomía queda en espera hasta tu próximo lleno."
+          }
+        }
+      }
+    },
     "Year (optional)": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Año (opcional)"
+          }
+        }
+      }
+    },
+    "Yes, it's full": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sí, está lleno"
+          }
+        }
+      }
+    },
+    "You may have ridden without the app. Check your bike's gauge.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puede que hayas rodado sin la app. Revisa el indicador de la moto."
           }
         }
       }
@@ -6061,12 +7011,72 @@
         }
       }
     },
+    "You reach it with ~%@ before the reserve": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Llegas con ~%@ antes de la reserva"
+          }
+        }
+      }
+    },
+    "You'll need about %lld refuels on the way": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Necesitas cargar unas %lld veces en el camino"
+          }
+        }
+      }
+    },
+    "You'll need to refuel on the way": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Necesitas cargar gasolina en el camino"
+          }
+        }
+      }
+    },
     "You're all set": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Todo listo"
+          }
+        }
+      }
+    },
+    "Your bike's fuel gauge has the final word": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El indicador de la moto manda"
+          }
+        }
+      }
+    },
+    "Your bike's fuel gauge has the final word. The range is a calculation from the km the app measures while it is connected to the bike.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El indicador de la moto manda. La autonomía es un cálculo con los km que mide la app mientras está conectada a la moto."
+          }
+        }
+      }
+    },
+    "Your last refuel was %lld days ago. Check your bike's gauge.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu última carga fue hace %lld días. Revisa el indicador de la moto."
           }
         }
       }
@@ -6217,6 +7227,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "mantén presionado ◀ (solo tableros con teclas de pista)"
+          }
+        }
+      }
+    },
+    "~%@ from your refuels (%lld)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "~%@ de tus cargas (%lld)"
+          }
+        }
+      }
+    },
+    "~%@ to reserve": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "~%@ hasta la reserva"
           }
         }
       }

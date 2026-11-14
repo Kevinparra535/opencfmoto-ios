@@ -20,6 +20,8 @@ enum MainRoute: Hashable {
     case logs
     case about
     case mirror
+    /// A Garage bike's detail by bike id, scrolled to «Combustible» (`-uiScreen fuel`).
+    case garageBike(String)
 }
 
 /// What to start once a scanner sheet paired a bike (Android: Connect, or the mirror link if the

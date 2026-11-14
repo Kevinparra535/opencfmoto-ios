@@ -2,6 +2,8 @@
 // Ported from OpenCfMoto (Android) GarageActivity.kt:177-240 (the per-bike action list: Use this
 // bike, Rename, Add / Change / Remove photo, Remove bike) plus an iOS details card: SSID, password
 // (hidden, reveal + copy), MAC, model id and the dash canvas learned on the last connection.
+// Fuel MVP: the «Combustible» section (GarageFuelSection.swift) between "Dash" and "Remove bike";
+// `scrollAnchor` "fuel" scrolls to it (`-uiScreen fuel`).
 
 import SwiftUI
 import PhotosUI
@@ -10,6 +12,8 @@ import OpenCfMotoCore
 
 struct GarageBikeDetailView: View {
     let bikeID: String
+    /// A section to scroll to once after the first layout pass ("fuel": «Combustible»).
+    var scrollAnchor: String?
 
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -18,6 +22,7 @@ struct GarageBikeDetailView: View {
     @State private var showsRemoveConfirmation = false
     @State private var photoItem: PhotosPickerItem?
     @State private var isSavingPhoto = false
+    @State private var scrollTarget: String?
 
     var body: some View {
         Group {
@@ -38,7 +43,26 @@ struct GarageBikeDetailView: View {
         let qr = garage.qr(for: bike.id)
         let photoURL = garage.photoURL(for: bike.id)
         let canvas = garage.learnedCanvas(for: bike.id)
-        return List {
+        return ScrollViewReader { proxy in
+            list(for: bike, isActive: isActive, qr: qr, photoURL: photoURL, canvas: canvas)
+                .task { await armScrollAnchor() }
+                .onChange(of: scrollTarget) { _, row in
+                    guard let row else { return }
+                    withAnimation { proxy.scrollTo(row, anchor: .top) }
+                }
+        }
+    }
+
+    /// Scrolls to `scrollAnchor` once the list is laid out (CI screenshots: `-uiScreen fuel`).
+    private func armScrollAnchor() async {
+        guard let anchor = scrollAnchor, scrollTarget == nil else { return }
+        try? await Task.sleep(for: .milliseconds(500))
+        scrollTarget = anchor
+    }
+
+    private func list(for bike: GarageBike, isActive: Bool, qr: BikeQR?, photoURL: URL?,
+                      canvas: VideoCanvas?) -> some View {
+        List {
             Section {
                 BikePhotoView(url: photoURL, maxPixel: 1200)
                     .frame(height: 190)
@@ -146,6 +170,8 @@ struct GarageBikeDetailView: View {
             }
             .listRowBackground(Theme.surface)
 
+            GarageFuelSection(bikeID: bike.id)
+
             Section {
                 Button(role: .destructive) {
                     showsRemoveConfirmation = true
@@ -177,7 +203,7 @@ struct GarageBikeDetailView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This forgets its pairing, photo and settings. You can re-scan the dash QR or enter Wi-Fi again later.")
+            Text("This forgets its pairing, photo, settings and fuel log. You can re-scan the dash QR or enter Wi-Fi again later.")
         }
     }
 
