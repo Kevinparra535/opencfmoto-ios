@@ -119,7 +119,8 @@ que actives la grabación) ni sale a internet.
 
 Fuera de estos servicios y del tablero, la app no se conecta a nada: ni a GitHub ni a ningún servidor
 nuestro. La autonomía estimada («Combustible») no añade ningún servicio: se calcula en el iPhone. Los
-enlaces de la pantalla Acerca de se abren en Safari solo si los tocas.
+enlaces de la pantalla Acerca de, y los de la fuente de cada dato del catálogo de combustible («Dato
+oficial» / «Dato publicado»), se abren en Safari solo si los tocas.
 
 ## Registros e informes de problemas
 
@@ -290,7 +291,8 @@ recording) and never goes to the internet.
 
 Apart from these services and the dash, the app connects to nothing: not to GitHub, not to any server of
 ours. The estimated fuel range ("Fuel & range") adds no service: it is worked out on the iPhone. The
-links on the About screen open in Safari only if you tap them.
+links on the About screen, and the source links of the fuel catalog figures ("Official figure" /
+"Published figure"), open in Safari only if you tap them.
 
 ### Logs and problem reports
 
