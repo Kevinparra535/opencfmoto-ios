@@ -40,6 +40,9 @@ public final class FuelModel {
     public private(set) var undoOffer: FuelUndoOffer?
     /// Bumped whenever a bike's cached fuel data changes (keeps `setupPrompt` observable).
     private var revision: UInt64 = 0
+    /// Bumped once the last moving fix is old enough for the moving lock to lift: `canLogNow` depends on the
+    /// clock, which SwiftUI cannot observe, and the GPS may stop right after a fast fix (LOCK-1).
+    private var lockRecheck: UInt64 = 0
     /// The pump's unit the rider chose (nil = never chosen: the default applies).
     private var chosenVolumeUnit: FuelVolumeUnit?
 
@@ -69,6 +72,7 @@ public final class FuelModel {
     /// Phone entry allowed: stopped (≤ 5 km/h, or no fix fresher than 10 s). Gates every sheet and every typed
     /// write (the rider never types while riding).
     public var canLogNow: Bool {
+        _ = lockRecheck
         let fix = lastFixProvider.map { $0() } ?? core.services.location.lastFix
         return LinkLossAlarmPolicy.isStopped(lastFix: fix, now: core.services.now())
     }
@@ -88,9 +92,20 @@ public final class FuelModel {
     @ObservationIgnored var lastFixProvider: (() -> LocationFix?)?
     @ObservationIgnored var onDashAlert: ((FuelDashAlert) -> Void)?
     @ObservationIgnored var onDashAlertCancel: (() -> Void)?
+    /// The announced alert turned pointless before any channel delivered it (the estimate turned aged /
+    /// unknown): RideModel empties the slot and, when nothing was delivered, calls `fuelAlertDropped`.
+    @ObservationIgnored var onDashAlertUndeliveredDrop: (() -> Void)?
     @ObservationIgnored var regionCodeProvider: () -> String? = { Locale.current.region?.identifier }
     @ObservationIgnored var undoWindow: TimeInterval = 10
     @ObservationIgnored var blindAfter: TimeInterval = 120
+    /// The moving-lock recheck delay after a moving fix (nil = when that fix is `maxFixAge` + 0.5 s old).
+    @ObservationIgnored var lockRecheckAfter: TimeInterval?
+    /// A partial fill may hold at most this share of the rated tank (a little over it: a brimmed filler neck).
+    /// More is a slip — a missed decimal comma («50» for «5,0»), gallons typed as litres (5 gal = 18.9 L on the
+    /// 450MT's 17.5 L) — that would otherwise read as a full tank.
+    public static let maxFillOverTank = 1.05
+    /// A refuel logged before the stream's first fix takes that fix's unseen chord when it comes this soon.
+    static let rebaseWindowMs: Int64 = 300_000
 
     // MARK: Private state
 
@@ -118,6 +133,25 @@ public final class FuelModel {
     @ObservationIgnored private var undoLatch: FuelAlertLevel?
     @ObservationIgnored private var undoTask: Task<Void, Never>?
     @ObservationIgnored private var blindTask: Task<Void, Never>?
+    @ObservationIgnored private var lockTask: Task<Void, Never>?
+
+    /// What an open blind spell has seen (in memory; a spell loaded from storage has none: recorded as before).
+    /// It is recorded as a `noGps` mark only with a sign the app may have missed km: approximate / denied
+    /// location, a rejected fix that strayed from the last position, or no fix at all (a dead GPS). Fixes
+    /// near the last position (a connected bike standing indoors) leave the tank trustworthy: real movement
+    /// shows at the next good fix (rule G).
+    struct BlindEvidence: Equatable {
+        var sawApproxOrDenied = false
+        var sawFix = false
+        var strayed = false
+        var records: Bool { sawApproxOrDenied || strayed || !sawFix }
+    }
+    @ObservationIgnored private var blindEvidence: [String: BlindEvidence] = [:]
+    /// An anchor entry logged while no stream ran (before Connect or the first fix): the first accepted fix's
+    /// unseen chord, if it comes within `rebaseWindowMs`, belongs to before it.
+    @ObservationIgnored private var pendingRebase: [String: (entryId: String, atMs: Int64)] = [:]
+    /// The alert level last dropped undelivered per bike: its re-fires are not logged again (ALERT-4).
+    @ObservationIgnored private var lastDropped: (bikeId: String, level: FuelAlertLevel)?
     /// The last announced alert and the latch it replaced (restored when RideModel drops the alert).
     @ObservationIgnored private var announced: (bikeId: String, level: FuelAlertLevel, previous: FuelAlertLevel?)?
     /// The estimate kind last logged per bike (transitions only).
@@ -234,14 +268,42 @@ public final class FuelModel {
         guard knows(bikeId) else { return .noSuchBike }
         guard canLogNow else { return .refusedWhileMoving }
         if let field = input.invalidField() { return .invalid(field) }
-        let now = nowMs
         var c = cache(bikeId)
+        // A partial larger than the tank (a missed comma, gallons typed as litres) would read as a full tank.
+        if input.kind == .partial, let l = input.litres, let t = c.profile?.tankL, l > t * Self.maxFillOverTank {
+            return .invalid(.litres)
+        }
+        let now = nowMs
+        let floor = c.log.entries.last?.odometerKm ?? 0
+        // «¿Cargaste hace rato?» beyond what the app counted since the last entry: those km were ridden unseen
+        // (before Connect, a resume chord); the counter takes the rider's number, so the entry sits at the
+        // last entry and the km since it are exactly `lateKm`.
+        var raisedForLate = false
+        if let late = input.lateKm, late > c.odometer.state.totalKm - floor {
+            c.odometer.raiseTotalUnmarked(to: floor + late)
+            raisedForLate = true
+        }
         let state = c.odometer.state
-        let unseen = (state.lastUnseenAtMs ?? .min) > (c.log.entries.last?.atMs ?? .min)
-            || (state.openBlindSinceMs.map { now - $0 >= FuelOdometer.blindAfterMs } ?? false)
+        let spellCounts = blindEvidenceRecords(bikeId)
+        var unseen = (state.lastUnseenAtMs ?? .min) > (c.log.entries.last?.atMs ?? .min)
+            || (spellCounts && (state.openBlindSinceMs.map { now - $0 >= FuelOdometer.blindAfterMs } ?? false))
+        if raisedForLate, !c.log.entries.isEmpty { unseen = true } // the interval before it missed km
         let entry = c.log.add(input, nowMs: now, odometerKm: state.totalKm, unseen: unseen)
+        var splitSpell = false
+        if entry.isAnchor, c.odometer.state.openBlindSinceMs != nil {
+            // The spell's part before the anchor belongs to the previous tank; the new tank ages by its own.
+            c.odometer.splitBlind(atMs: now, record: spellCounts)
+            blindEvidence[bikeId] = BlindEvidence()
+            splitSpell = true
+        }
+        if entry.isAnchor, !c.odometer.isStreaming {
+            pendingRebase[bikeId] = (entry.id, now)
+        } else {
+            pendingRebase[bikeId] = nil
+        }
         c.odometerLocked = false
         caches[bikeId] = c
+        if splitSpell { scheduleBlindRefresh() }
         persistLog(bikeId)
         persistOdometer(bikeId, force: true)
         recomputeStats(bikeId)
@@ -249,7 +311,7 @@ public final class FuelModel {
         rearm(bikeId)
         undoLatch = previous
         offerUndo(FuelUndoOffer(bikeId: bikeId, entryId: entry.id))
-        Log.i(Self.tag, "refuel logged: \(entry.kind.rawValue), litres=\(Self.yesNo(entry.litres != nil)), price=\(Self.yesNo(entry.cost != nil || entry.pricePerLitre != nil)), trip=\(Self.yesNo(entry.tripMeterKm != nil)), late=\(Self.yesNo(entry.lateKm != nil)), unseen=\(Self.yesNo(unseen))")
+        Log.i(Self.tag, "refuel logged: \(entry.kind.rawValue), litres=\(Self.yesNo(entry.litres != nil)), price=\(Self.yesNo(entry.cost != nil || entry.pricePerLitre != nil)), trip=\(Self.yesNo(entry.tripMeterKm != nil)), late=\(Self.yesNo(entry.lateKm != nil)), unseen=\(Self.yesNo(unseen))\(raisedForLate ? ", counter raised to the late km" : "")")
         changed(bikeId)
         return .logged(entry)
     }
@@ -303,6 +365,7 @@ public final class FuelModel {
             removed = c.log.delete(id: offer.entryId)
         }
         guard let removed else { return }
+        if pendingRebase[offer.bikeId]?.entryId == removed.id { pendingRebase[offer.bikeId] = nil }
         let restored = undoLatch
         c.alert = restored
         caches[offer.bikeId] = c
@@ -319,6 +382,7 @@ public final class FuelModel {
         var c = cache(bikeId)
         guard let removed = c.log.delete(id: id) else { return }
         caches[bikeId] = c
+        if pendingRebase[bikeId]?.entryId == id { pendingRebase[bikeId] = nil }
         if undoOffer?.entryId == id { clearUndo() }
         persistLog(bikeId)
         persistOdometer(bikeId, force: true)
@@ -344,6 +408,7 @@ public final class FuelModel {
 
     /// Every fix that reached RideModel (AppModel wires `ride.onLocationFix`).
     func ingest(_ fix: LocationFix) {
+        armLockRecheck(after: fix)
         guard isCountableProvider?() == true, let bikeId = sessionBikeProvider?(), knows(bikeId) else {
             // Not countable (parked, phone-only, no session): the stream ends; the next countable fix resumes.
             if let s = streamBikeId, caches[s]?.odometer.isStreaming == true { endStream(s, reason: "not countable") }
@@ -359,14 +424,33 @@ public final class FuelModel {
         let wasOpen = c.odometer.state.openBlindSinceMs != nil
         let before = c.odometer.state.totalKm
         let location = core.services.location
-        if !location.permission.isAuthorized || !location.isPrecise { c.odometer.noteBlind(atMs: nowMs) }
-        let step = c.odometer.ingest(fix)
+        let approximate = !location.permission.isAuthorized || !location.isPrecise
+        if approximate { c.odometer.noteBlind(atMs: nowMs) }
+        let anchorBefore = c.odometer.state.last
+        var step = c.odometer.ingest(fix)
         if case .rejected(.inaccurate) = step { c.odometer.noteBlind(atMs: fix.timeMs) }
         if c.odometer.state.totalKm != before { c.odometerDirty = true }
         let isOpen = c.odometer.state.openBlindSinceMs != nil
+        if isOpen {
+            var ev = wasOpen ? (blindEvidence[bikeId] ?? Self.unknownEvidence) : BlindEvidence()
+            if approximate { ev.sawApproxOrDenied = true }
+            if step != .rejected(.invalidCoordinate) { ev.sawFix = true }
+            if case .rejected(.inaccurate) = step, FuelOdometer.strays(fix, from: anchorBefore) { ev.strayed = true }
+            blindEvidence[bikeId] = ev
+        } else {
+            blindEvidence[bikeId] = nil
+        }
         caches[bikeId] = c
         var persistNow = false
+        if step.isAccepted, let pending = pendingRebase.removeValue(forKey: bikeId),
+           rebase(bikeId, pending: pending, step: step, fix: fix) {
+            persistNow = true
+            step = .resumed
+        }
         switch step {
+        case .gap(chordMetres: 0):
+            persistNow = true
+            Log.i(Self.tag, "re-anchored \u{2265} 1 km away after rejected fixes \u{2014} estimate marked aged")
         case let .gap(chord):
             persistNow = true
             Log.i(Self.tag, "gap detected: ~\(Self.kmText(chord)) unseen \u{2014} estimate marked aged")
@@ -407,7 +491,10 @@ public final class FuelModel {
         if let s = streamBikeId, s != bikeId { endStream(s, reason: "bike switched") }
         streamBikeId = bikeId
         refreshCurrentBike()
-        openBlindSpellIfSetUp(bikeId, cause: "not measured yet")
+        let location = core.services.location
+        let approximate = !location.permission.isAuthorized || !location.isPrecise
+        openBlindSpellIfSetUp(bikeId, cause: approximate ? "approximate or denied location" : "not measured yet",
+                              approximate: approximate)
         rebuildCurrent()
     }
 
@@ -421,7 +508,9 @@ public final class FuelModel {
         c.alert = a.previous
         caches[a.bikeId] = c
         store.setAlertLevel(a.previous, bikeId: a.bikeId)
-        Log.i(Self.tag, "alert dropped: \(alert.level.rawValue) \u{2014} latch restored")
+        let repeated = lastDropped?.bikeId == a.bikeId && lastDropped?.level == alert.level
+        lastDropped = (a.bikeId, alert.level)
+        if !repeated { Log.i(Self.tag, "alert dropped: \(alert.level.rawValue) \u{2014} latch restored") }
     }
 
     /// GarageModel removed a bike (its keys are gone): drop every cache and never write for it again.
@@ -432,7 +521,13 @@ public final class FuelModel {
         if streamBikeId == bikeId { streamBikeId = nil }
         if undoOffer?.bikeId == bikeId { clearUndo() }
         if sheet?.bikeId == bikeId { sheet = nil }
-        if announced?.bikeId == bikeId { announced = nil }
+        if announced?.bikeId == bikeId {
+            announced = nil
+            onDashAlertCancel?()
+        }
+        if lastDropped?.bikeId == bikeId { lastDropped = nil }
+        blindEvidence[bikeId] = nil
+        pendingRebase[bikeId] = nil
         revision &+= 1
         refreshCurrentBike()
     }
@@ -445,9 +540,10 @@ public final class FuelModel {
             if isCountableProvider?() == true, let bikeId = sessionBikeProvider?(), knows(bikeId) {
                 let location = core.services.location
                 if !location.permission.isAuthorized || !location.isPrecise {
-                    openBlindSpellIfSetUp(bikeId, cause: "approximate or denied location")
+                    openBlindSpellIfSetUp(bikeId, cause: "approximate or denied location", approximate: true)
                 }
             }
+            lockRecheck &+= 1
             rebuildCurrent()
         case .inactive:
             break
@@ -534,6 +630,7 @@ public final class FuelModel {
         store.setAlertLevel(next, bikeId: bikeId)
         if lowered {
             if announced?.bikeId == bikeId { announced = nil }
+            if lastDropped?.bikeId == bikeId { lastDropped = nil }
             onDashAlertCancel?()
         }
     }
@@ -546,13 +643,20 @@ public final class FuelModel {
         let rearmed = FuelAlertPolicy.rearmed(old, estimate: e)
         if Self.lowers(old, to: rearmed) {
             if announced?.bikeId == bikeId { announced = nil }
+            if lastDropped?.bikeId == bikeId { lastDropped = nil }
             onDashAlertCancel?()
+        } else if !e.isTrustworthy, announced?.bikeId == bikeId {
+            // Turned aged / unknown while the alert may still wait: never shown on an unsure number. RideModel
+            // drops it only if nothing was delivered (then `fuelAlertDropped` restores the latch).
+            onDashAlertUndeliveredDrop?()
         }
         var latch = rearmed
         if let level = FuelAlertPolicy.alertToFire(estimate: e, alerted: rearmed) {
             latch = level
             announced = (bikeId, level, rearmed)
-            Log.i(Self.tag, "alert: \(level.rawValue) (\(FuelFormat.range(e.kmToReserve ?? 0, units: units).text) to reserve)")
+            if !(lastDropped?.bikeId == bikeId && lastDropped?.level == level) {
+                Log.i(Self.tag, "alert: \(level.rawValue) (\(FuelFormat.range(e.kmToReserve ?? 0, units: units).text) to reserve)")
+            }
             onDashAlert?(FuelDashAlert(level: level, kmToReserve: e.kmToReserve ?? 0))
         }
         guard latch != old else { return }
@@ -571,19 +675,32 @@ public final class FuelModel {
     private func endStream(_ bikeId: String, reason: String) {
         guard var c = caches[bikeId] else { return }
         let wasStreaming = c.odometer.isStreaming
-        let hadSpell = c.odometer.state.openBlindSinceMs != nil
-        c.odometer.endStream(atMs: nowMs)
+        let open = c.odometer.state.openBlindSinceMs
+        let record = blindEvidenceRecords(bikeId)
+        c.odometer.endStream(atMs: nowMs, recordBlind: record)
+        blindEvidence[bikeId] = nil
         caches[bikeId] = c
-        guard c.isSetUp, wasStreaming || hadSpell else { return }
+        guard c.isSetUp, wasStreaming || open != nil else { return }
         persistOdometer(bikeId, force: true)
+        if let open, !record, nowMs - open >= FuelOdometer.blindAfterMs {
+            Log.i(Self.tag, "blind spell dropped: precise fixes near the last position, nothing missed")
+        }
         Log.i(Self.tag, "stream ended for \(bikeId) (\(reason)), total persisted")
         if bikeId == currentBikeId { rebuildCurrent() }
     }
 
-    private func openBlindSpellIfSetUp(_ bikeId: String, cause: String) {
+    private func openBlindSpellIfSetUp(_ bikeId: String, cause: String, approximate: Bool) {
         var c = cache(bikeId)
-        guard c.isSetUp, c.odometer.state.openBlindSinceMs == nil else { return }
+        guard c.isSetUp else { return }
+        guard c.odometer.state.openBlindSinceMs == nil else {
+            if approximate, var ev = blindEvidence[bikeId] {
+                ev.sawApproxOrDenied = true
+                blindEvidence[bikeId] = ev
+            }
+            return
+        }
         c.odometer.noteBlind(atMs: nowMs)
+        blindEvidence[bikeId] = BlindEvidence(sawApproxOrDenied: approximate)
         caches[bikeId] = c
         persistOdometer(bikeId, force: true)
         Log.i(Self.tag, "blind spell opened (\(cause))")
@@ -596,6 +713,58 @@ public final class FuelModel {
         if !location.permission.isAuthorized { return "location denied" }
         if !location.isPrecise { return "approximate location" }
         return "no usable fix"
+    }
+
+    /// A spell with no in-memory evidence (loaded open after a relaunch): recorded, as before.
+    private static let unknownEvidence = BlindEvidence(sawApproxOrDenied: true)
+
+    /// Whether the open spell (if any) would be recorded as a `noGps` mark.
+    private func blindEvidenceRecords(_ bikeId: String) -> Bool {
+        blindEvidence[bikeId]?.records ?? true
+    }
+
+    /// The first accepted fix after an anchor logged with no stream running: its unseen chord (rule G, the
+    /// ride to the pump without the app) belongs to the previous tank when it comes within 5 min of the log —
+    /// the entry moves to after the chord, takes the gap's `unseenSincePrev` and the new tank is not aged.
+    /// Later, the rider may have ridden after logging: the chord stays in the new tank (aged, the safe side).
+    private func rebase(_ bikeId: String, pending: (entryId: String, atMs: Int64), step: FuelOdometerStep,
+                        fix: LocationFix) -> Bool {
+        let isGap: Bool
+        switch step {
+        case .gap(chordMetres: 0): return false // a re-anchor adds nothing
+        case .gap: isGap = true
+        case .bridged: isGap = false
+        default: return false
+        }
+        guard fix.timeMs - pending.atMs <= Self.rebaseWindowMs, var c = caches[bikeId],
+              let last = c.log.entries.last, last.id == pending.entryId else { return false }
+        var e = last
+        e.odometerKm = max(e.odometerKm, c.odometer.state.totalKm - (e.lateKm ?? 0))
+        if isGap {
+            e.unseenSincePrev = true
+            c.odometer.removeGapMark(atMs: fix.timeMs)
+        }
+        c.log.entries[c.log.entries.count - 1] = e
+        caches[bikeId] = c
+        persistLog(bikeId)
+        recomputeStats(bikeId)
+        revision &+= 1
+        Log.i(Self.tag, "the first fix's unseen ride came right after the \(e.kind.rawValue) entry \u{2014} counted before it")
+        return true
+    }
+
+    /// Re-renders `canLogNow` once a moving fix is too old to lock (no newer fix may come: the GPS stops).
+    private func armLockRecheck(after fix: LocationFix) {
+        let now = core.services.now()
+        guard !LinkLossAlarmPolicy.isStopped(lastFix: fix, now: now) else { return }
+        lockTask?.cancel()
+        let delay = lockRecheckAfter
+            ?? max(0, Double(fix.timeMs) / 1000 + LinkLossAlarmPolicy.maxFixAge + 0.5 - now.timeIntervalSince1970)
+        lockTask = Task { [weak self] in
+            await sleepSeconds(delay)
+            guard !Task.isCancelled, let self else { return }
+            self.lockRecheck &+= 1
+        }
     }
 
     /// The live `noGps` age needs a refresh once a spell may have aged (no fix may arrive to trigger one).

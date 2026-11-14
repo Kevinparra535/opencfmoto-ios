@@ -7,16 +7,20 @@ import Foundation
 
 public enum RefuelKind: String, Sendable, Codable {
     case full, partial
-    /// «Corregir nivel»: the rider reads the gauge (¼ ½ ¾) WITHOUT refuelling. Not a refuel: no litres, no
+    /// «Corregir nivel»: the rider reads the gauge (reserve ¼ ½ ¾) WITHOUT refuelling. Not a refuel: no litres, no
     /// price, no trip meter; an anchor for the estimate; ignored by FuelStats.
     case level
 }
 
 public enum TankLevel: String, Sendable, Codable, CaseIterable {
+    /// The bike's reserve light: the tank stands at the profile's reserve (RangeEstimator: `reserve` at 0 km).
+    case reserve
     case quarter, half, threeQuarters
 
-    public var fraction: Double {
+    /// The share of the tank: the profile's reserve % for `.reserve`, else ¼ ½ ¾.
+    public func fraction(reservePct: Int) -> Double {
         switch self {
+        case .reserve: return Double(reservePct) / 100
         case .quarter: return 0.25
         case .half: return 0.5
         case .threeQuarters: return 0.75
@@ -144,7 +148,8 @@ public struct RefuelLog: Sendable, Equatable, Codable {
     }
 
     /// Appends an entry built from `input` at `nowMs` and the current odometer:
-    /// `odometerKm = max(lastEntry.odometerKm, odometerKm − (lateKm ?? 0))` (≥ 0); `levelAfter` is dropped for a
+    /// `odometerKm = max(lastEntry.odometerKm, odometerKm − (lateKm ?? 0))` (≥ 0; FuelModel first raises the
+    /// counter when `lateKm` exceeds what it counted since the last entry, so the rider's km are kept); `levelAfter` is dropped for a
     /// full entry, litres / prices / trip meter for a level entry; `unseenSincePrev = unseen ? true : nil`.
     /// Returns the entry. The input must be valid (`invalidField() == nil`).
     @discardableResult

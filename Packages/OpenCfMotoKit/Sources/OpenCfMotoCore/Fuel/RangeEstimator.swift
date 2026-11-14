@@ -6,7 +6,7 @@
 //
 // Maths (T = tank L, k = effective km/L, r = reserve %/100, odo = the app's km counter):
 // 1. no profile → unknown(noProfile); no anchor entry (full, partial with a level, level) → unknown(noRefuel);
-// 2. A = the newest anchor: fuel = T (full) or level × T; prev = A.odometerKm;
+// 2. A = the newest anchor: fuel = T (full) or level × T (the reserve level: r × T); prev = A.odometerKm;
 // 3. each partial after A: no litres → unknown(partialWithoutAmount); else
 //    fuel = min(T, max(0, fuel − (E.odometerKm − prev) / k) + E.litres), prev = E.odometerKm;
 // 4. kmSinceLast = max(0, odo − prev); kmToEmpty = fuel × k − kmSinceLast;
@@ -124,7 +124,7 @@ public enum RangeEstimator {
         let (k, source) = effectiveKmPerL(profile: profile, stats: stats)
         guard t.isFinite, t > 0, k.isFinite, k > 0 else { return .unknown(.noProfile) }
         let r = Double(profile.reservePct) / 100
-        var fuel = anchor.kind == .full ? t : (anchor.levelAfter?.fraction ?? 1) * t
+        var fuel = anchor.kind == .full ? t : (anchor.levelAfter?.fraction(reservePct: profile.reservePct) ?? 1) * t
         var prev = anchor.odometerKm
         for e in log[(ai + 1)...] {
             guard let litres = e.litres else {

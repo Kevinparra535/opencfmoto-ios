@@ -105,7 +105,10 @@ final class RefuelLogTests: XCTestCase {
         XCTAssertEqual(RefuelInput(kind: .level, levelAfter: .half, pricePerLitre: 4).invalidField(), .price)
         XCTAssertEqual(RefuelInput(kind: .level, levelAfter: .half, totalPrice: 4).invalidField(), .price)
         XCTAssertEqual(RefuelInput(kind: .level, levelAfter: .half, tripMeterKm: 4).invalidField(), .tripMeter)
-        XCTAssertEqual(TankLevel.allCases.map(\.fraction), [0.25, 0.5, 0.75])
+        XCTAssertEqual(TankLevel.allCases, [.reserve, .quarter, .half, .threeQuarters], "the reserve first: the pickers' order")
+        XCTAssertEqual(TankLevel.allCases.map { $0.fraction(reservePct: 12) }, [0.12, 0.25, 0.5, 0.75])
+        XCTAssertEqual(TankLevel.reserve.fraction(reservePct: 20), 0.2)
+        XCTAssertNil(RefuelInput(kind: .level, levelAfter: .reserve).invalidField())
     }
 
     func testJSONRoundTrip() throws {

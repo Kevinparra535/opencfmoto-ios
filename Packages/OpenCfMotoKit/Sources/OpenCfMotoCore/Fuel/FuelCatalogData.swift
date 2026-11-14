@@ -11,8 +11,11 @@
 //   default ("estimate: <rule>"), else the URL of the published figure;
 // - the 450MT seeds at 20.5 km/L (published 4.5–4.8 L/100 km; never the optimistic 26 km/L of other apps);
 // - `cfmoto-700cl-x` is searchable but in no dash-family candidate list (no pairing QR as a rule).
-// Every figure was read from search-result text for the cited URL: spot-check the official URLs before a
-// release that ships the catalog (docs/PRUEBA-EN-LA-MOTO.md release checklist).
+// Every figure was read from search-result text for the cited URL. Before a release that ships the catalog,
+// open every tankSource (the press rows first: 700MT 18 L, 800NK Advanced, X-Cape 650, X-Cape 700,
+// Seiemmezzo) and every consumptionSource, and check each seed is at or below the lowest real-riding figure
+// on that page and on the other pages CATALOG.md cites for the row (docs/PRUEBA-EN-LA-MOTO.md release
+// checklist).
 
 import Foundation
 
@@ -150,10 +153,10 @@ extension FuelCatalog {
             id: "motomorini-x-cape-650", brand: .morini, model: "X-Cape 650",
             aliases: ["X-Cape 649", "Xcape 649", "X-Cape 650X", "X-Cape 650T"],
             marketNote: "2021-2024", fromYear: 2021, toYear: 2024,
-            tankL: 18.0, seedKmPerL: 20.0,
+            tankL: 18.0, seedKmPerL: 15.5,
             tankKind: .published, tankSource: "https://www.autocarindia.com/bikes/moto-morini/x-cape/650",
             consumptionKind: .published,
-            consumptionSource: "https://www.insella.it/da-sapere/vivere-moto/moto-morini-x-cape-650-ecco-velocita-massima-accelerazione-consumi-61229"),
+            consumptionSource: "https://www.bennetts.co.uk/bikesocial/reviews/bikes/moto-morini/x-cape-650-2022-review"),
         FuelCatalogEntry(
             id: "motomorini-x-cape-700", brand: .morini, model: "X-Cape 700",
             aliases: [],

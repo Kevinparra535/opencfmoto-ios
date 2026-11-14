@@ -15,8 +15,9 @@
 //      (TripRecorder drops these; the counter must not lose km to batching);
 //    dt > 120 s → rule G;
 // 4. resume (first fix of a stream: session start, after `endStream`, a relaunch), against the persisted
-//    anchor rounded to 3 decimals (~110 m): none → started; not newer → rejected (outOfOrder: iOS often hands
-//    a stale cached fix first); dt ≤ 120 s and v ≤ 70 → add d when v ≥ 0.8 (else resumed); otherwise rule G;
+//    anchor rounded to 3 decimals (~110 m, up to ~79 m off): none → started; not newer → rejected (outOfOrder:
+//    iOS often hands a stale cached fix first); dt ≤ 120 s and v ≤ 70 → add d when moving: v ≥ 0.8 and (the
+//    fix's speed ≥ 0.8 or d > 80 m — the anchor's rounding alone never adds km), else resumed; otherwise rule G;
 // 5. rule G (the bike may have moved unseen): v > 70 → rejected (implausibleJump); d < 1 km → resumed;
 //    else the chord is ALWAYS added (a lower bound of the unseen ride) and it is a quiet bridge (not aged)
 //    when dt ≤ 15 min, 33 m/s × dt − d ≤ 10 km, and (same stream or v ≤ 40 m/s); otherwise a gap (aged).
@@ -24,6 +25,8 @@
 // (nothing added), so one bad fix or a phone clock stepping back cannot freeze the counter. An out-of-order
 // fix strikes only when it is more than 5 min older than the previous accepted one: duplicates, late batched
 // fixes and the cached fixes iOS re-delivers after a relaunch are rejected for good, never counted twice.
+// An in-stream re-anchor at least 1 km from the previous fix also records a gap (`gap(chordMetres: 0)`,
+// nothing added): the km ridden while the fixes were rejected were not counted, so the estimate ages.
 // Every accepted fix becomes the stream's previous fix and the anchor, and closes an open blind spell.
 // The counter only grows.
 
@@ -98,7 +101,8 @@ public enum FuelOdometerStep: Sendable, Equatable {
     case rejected(FuelFixRejection), started, resumed, stationary, added(metres: Double)
     /// Rule G: the chord was added, NOT aged.
     case bridged(chordMetres: Double)
-    /// Rule G: the chord was added and the estimate is aged until the next anchor.
+    /// Rule G: the chord was added and the estimate is aged until the next anchor. `chordMetres == 0`: an
+    /// in-stream 3-strike re-anchor ≥ 1 km away (nothing added, aged all the same).
     case gap(chordMetres: Double)
 
     public var isAccepted: Bool {
@@ -123,6 +127,9 @@ public struct FuelOdometer: Sendable, Equatable {
     public static let maxUnseenExcessM = 10_000.0
     /// A resume (no in-memory fix) bridges only up to 144 km/h.
     public static let resumeBridgeMaxSpeedMs = 40.0
+    /// The most the 3-decimal anchor can be off (≈ 78.6 m at the equator): a resume within 120 s adds its
+    /// distance without a moving fix speed only beyond it.
+    public static let anchorRoundingM = 80.0
     /// An open blind spell ages the estimate after 2 min.
     public static let blindAfterMs: Int64 = 120_000
     public static let reanchorAfterRejections = 3
@@ -168,6 +175,14 @@ public struct FuelOdometer: Sendable, Equatable {
             if why == .outOfOrder, let ref = referenceMs, ref - fix.timeMs <= Self.reanchorBackstepMs { return step }
             strikes += 1
             guard strikes >= Self.reanchorAfterRejections else { return step }
+            // In-stream, the fixes rejected meanwhile may have ridden on: a re-anchor ≥ 1 km away ages the
+            // estimate (the jump itself is never added). A resume re-anchor (cached fixes after a relaunch)
+            // or one about where the bike was (a clock step-back) adds no mark.
+            if let p = previous, Self.distance(p.lat, p.lon, fix.lat, fix.lon) >= Self.gapMinM {
+                appendGap(fix.timeMs)
+                accept(fix)
+                return .gap(chordMetres: 0)
+            }
             accept(fix)
             return .resumed
         }
@@ -201,7 +216,9 @@ public struct FuelOdometer: Sendable, Equatable {
         let d = Self.distance(a.lat, a.lon, fix.lat, fix.lon)
         let v = d / (Double(dt) / 1000)
         if dt <= Self.maxBridgeMs, v <= Self.maxPlausibleSpeedMs {
-            guard v >= Self.minMovingSpeedMs else { return .resumed }
+            // d includes the anchor's rounding (up to ~79 m): a standing bike must not gain it on every resume.
+            guard v >= Self.minMovingSpeedMs,
+                  (fix.speedMps ?? 0) >= Self.minMovingSpeedMs || d > Self.anchorRoundingM else { return .resumed }
             add(d)
             return .added(metres: d)
         }
@@ -218,9 +235,18 @@ public struct FuelOdometer: Sendable, Equatable {
         if dt <= Self.quietBridgeMaxMs, excess <= Self.maxUnseenExcessM, sameStream || v <= Self.resumeBridgeMaxSpeedMs {
             return .bridged(chordMetres: d)
         }
-        state.gapsMs.append(fix.timeMs)
-        if state.gapsMs.count > Self.maxStoredGaps { state.gapsMs.removeFirst(state.gapsMs.count - Self.maxStoredGaps) }
+        appendGap(fix.timeMs)
         return .gap(chordMetres: d)
+    }
+
+    private mutating func appendGap(_ atMs: Int64) {
+        state.gapsMs.append(atMs)
+        if state.gapsMs.count > Self.maxStoredGaps { state.gapsMs.removeFirst(state.gapsMs.count - Self.maxStoredGaps) }
+    }
+
+    private mutating func appendNoGps(_ startMs: Int64) {
+        state.noGpsMs.append(startMs)
+        if state.noGpsMs.count > Self.maxStoredGaps { state.noGpsMs.removeFirst(state.noGpsMs.count - Self.maxStoredGaps) }
     }
 
     private mutating func add(_ metres: Double) {
@@ -242,17 +268,25 @@ public struct FuelOdometer: Sendable, Equatable {
 
     /// The stream of fixes stopped (session ended, parked, bike switched, removal): the next fix resumes
     /// against the anchor. An open blind spell at least `blindAfterMs` old at `atMs` is recorded in
-    /// `noGpsMs`; any open spell is cleared.
-    public mutating func endStream(atMs: Int64) {
+    /// `noGpsMs` when `recordBlind` (FuelModel passes false when the spell shows no sign of missed km: fixes
+    /// came, all near the last position, with precise location); any open spell is cleared.
+    public mutating func endStream(atMs: Int64, recordBlind: Bool = true) {
         previous = nil
         strikes = 0
         if let open = state.openBlindSinceMs {
-            if atMs - open >= Self.blindAfterMs {
-                state.noGpsMs.append(open)
-                if state.noGpsMs.count > Self.maxStoredGaps { state.noGpsMs.removeFirst(state.noGpsMs.count - Self.maxStoredGaps) }
-            }
+            if recordBlind, atMs - open >= Self.blindAfterMs { appendNoGps(open) }
             state.openBlindSinceMs = nil
         }
+    }
+
+    /// An anchor entry (a refuel, a level correction) was logged at `atMs` while a blind spell is open: the
+    /// part of the spell before it belongs to the previous tank. It is recorded in `noGpsMs` when it is at
+    /// least `blindAfterMs` old and `record` (the entry itself is stamped `unseenSincePrev` by FuelModel); the
+    /// spell goes on from `atMs + 1`, after the new anchor, so the new tank ages only by its own blind time.
+    public mutating func splitBlind(atMs: Int64, record: Bool = true) {
+        guard let open = state.openBlindSinceMs, open <= atMs else { return }
+        if record, atMs - open >= Self.blindAfterMs { appendNoGps(open) }
+        state.openBlindSinceMs = atMs + 1
     }
 
     /// Raises the total (counter consistency on load: never below the newest refuel entry) and records a gap
@@ -260,8 +294,33 @@ public struct FuelOdometer: Sendable, Equatable {
     public mutating func raiseTotal(to km: Double, gapAtMs atMs: Int64) {
         guard km.isFinite, km > state.totalKm else { return }
         state.totalKm = km
-        state.gapsMs.append(atMs)
-        if state.gapsMs.count > Self.maxStoredGaps { state.gapsMs.removeFirst(state.gapsMs.count - Self.maxStoredGaps) }
+        appendGap(atMs)
+    }
+
+    /// Raises the total WITHOUT a mark: the km the rider says were ridden since the refuel («¿Cargaste hace
+    /// rato?») beyond what the app counted since the previous entry (FuelModel.logRefuel). The rider's own
+    /// number, so the estimate stays trustworthy.
+    public mutating func raiseTotalUnmarked(to km: Double) {
+        guard km.isFinite, km > state.totalKm else { return }
+        state.totalKm = km
+    }
+
+    /// Removes the newest gap mark when it is the one recorded at `atMs` (FuelModel attributes that resume's
+    /// chord to before a refuel logged just before it). Returns whether one was removed.
+    @discardableResult
+    public mutating func removeGapMark(atMs: Int64) -> Bool {
+        guard state.gapsMs.last == atMs else { return false }
+        state.gapsMs.removeLast()
+        return true
+    }
+
+    /// A rejected (inaccurate) fix farther from the anchor than its own accuracy and at least `gapMinM`: the
+    /// bike may be moving where the app cannot measure (evidence for a blind spell, FuelModel). False without
+    /// an anchor or a usable coordinate.
+    public static func strays(_ fix: LocationFix, from anchor: FuelOdometerAnchor?) -> Bool {
+        guard let a = anchor, fix.lat.isFinite, fix.lon.isFinite else { return false }
+        let acc = fix.accuracyM.map { $0.isFinite ? max(0, $0) : 0 } ?? 0
+        return distance(a.lat, a.lon, fix.lat, fix.lon) > max(acc, gapMinM)
     }
 
     /// 3-decimal rounding (half away from zero).

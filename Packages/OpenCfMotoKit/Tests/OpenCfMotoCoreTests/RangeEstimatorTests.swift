@@ -50,6 +50,18 @@ final class RangeEstimatorTests: XCTestCase {
         XCTAssertFalse(estimate(fullAt1000, odo: 1394.675).isTrustworthy, "never alerts / «Llegas»")
     }
 
+    /// Review UI-3: «Corregir nivel ▸ Reserva» (the reserve light) anchors at the profile's reserve: `reserve`
+    /// at 0 km and after 10 km, never a trustworthy «~40 km».
+    func testAReserveLevelAnchorsAtTheReserve() {
+        let lv = fullAt1000 + [T.level("l", odo: 1100, .reserve)]
+        XCTAssertEqual(estimate(lv, odo: 1100).state, .reserve)
+        XCTAssertTrue(estimate(lv, odo: 1100).isTrustworthy)
+        XCTAssertEqual(estimate(lv, odo: 1110).state, .reserve, "10 km on: still reserve, not checkRefuel")
+        XCTAssertEqual(estimate(lv, odo: 1100, profile: T.mt450(reserve: 20)).state, .reserve, "follows the reserve %")
+        // a partial that says the tank is at the reserve light anchors there too
+        XCTAssertEqual(estimate(fullAt1000 + [T.partial("p", odo: 1200, litres: 1, level: .reserve)], odo: 1200).state, .reserve)
+    }
+
     func testReservePercent() {
         XCTAssertEqual(km(estimate(fullAt1000, odo: 1000, profile: T.mt450(reserve: 20))) ?? 0, 287.0, accuracy: 1e-6)
         XCTAssertEqual(km(estimate(fullAt1000, odo: 1000, profile: T.mt450(reserve: 5))) ?? 0, 16.625 * 20.5, accuracy: 1e-6)

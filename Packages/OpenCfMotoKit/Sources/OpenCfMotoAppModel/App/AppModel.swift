@@ -300,6 +300,7 @@ public final class AppModel {
         fuel.lastFixProvider = { [weak ride] in ride?.lastFix }
         fuel.onDashAlert = { [weak ride] alert in ride?.announceFuel(alert) }
         fuel.onDashAlertCancel = { [weak ride] in ride?.cancelFuelAlert() }
+        fuel.onDashAlertUndeliveredDrop = { [weak ride] in ride?.dropFuelAlertIfUndelivered() }
         ride.onFuelAlertDropped = { [weak fuel] alert in fuel?.fuelAlertDropped(alert) }
         garage.observeRemoval { [weak fuel] id in fuel?.bikeRemoved(id) }
     }

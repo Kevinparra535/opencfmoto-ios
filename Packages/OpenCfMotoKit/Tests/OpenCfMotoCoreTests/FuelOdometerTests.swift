@@ -105,7 +105,10 @@ final class FuelOdometerTests: XCTestCase {
         o.ingest(fix(t0, north: 0))
         XCTAssertEqual(o.ingest(fix(t0 + 2000, north: 5000)), .rejected(.implausibleJump))
         XCTAssertEqual(o.ingest(fix(t0 + 3000, north: 5010)), .rejected(.implausibleJump))
-        XCTAssertEqual(o.ingest(fix(t0 + 4000, north: 5020)), .resumed, "3 in a row: re-anchor")
+        // 3 in a row: re-anchor. 5 km from the previous fix: the km ridden meanwhile were not counted, so it
+        // ages as a gap (nothing added). Was `.resumed` before review finding ODO-2 (a silent loss).
+        XCTAssertEqual(o.ingest(fix(t0 + 4000, north: 5020)), .gap(chordMetres: 0), "3 in a row: re-anchor, aged")
+        XCTAssertEqual(o.state.gapsMs, [t0 + 4000])
         XCTAssertEqual(o.state.totalKm, 0)
         let next = fix(t0 + 5000, north: 5030)
         XCTAssertEqual(o.ingest(next), .added(metres: d(fix(t0 + 4000, north: 5020), next)))
@@ -119,9 +122,68 @@ final class FuelOdometerTests: XCTestCase {
         XCTAssertEqual(o.ingest(fix(back, north: 20)), .rejected(.outOfOrder))
         XCTAssertEqual(o.ingest(fix(back + 1000, north: 30)), .rejected(.outOfOrder))
         XCTAssertEqual(o.ingest(fix(back + 2000, north: 40)), .resumed)
+        XCTAssertEqual(o.state.gapsMs, [], "re-anchored about where it was: no mark")
         let before = o.state.totalKm
         XCTAssertEqual(o.ingest(fix(back + 3000, north: 50)), .added(metres: d(fix(back + 2000, north: 40), fix(back + 3000, north: 50))))
         XCTAssertGreaterThan(o.state.totalKm, before)
+    }
+
+    /// Review ODO-2: the fix clock steps back 240 s mid-stream (< the 5 min backstep: no strikes) while the bike
+    /// rides on at 25 m/s; when it catches up the first newer fix is ~6 km on → re-anchored AND aged.
+    func testAClockStepBackMidStreamAgesInsteadOfLosingKmSilently() {
+        var o = FuelOdometer()
+        var t = t0
+        var north = 0.0
+        o.ingest(fix(t, north: north, speed: 25))
+        for _ in 1 ... 60 {
+            t += 1000
+            north += 25
+            o.ingest(fix(t, north: north, speed: 25))
+        }
+        let counted = o.state.totalKm
+        var clock = t - 240_000
+        for _ in 1 ... 300 {
+            clock += 1000
+            north += 25
+            o.ingest(fix(clock, north: north, speed: 25))
+        }
+        XCTAssertEqual(o.state.gapsMs.count, 1, "the km ridden while every fix was rejected age the estimate")
+        XCTAssertLessThan(o.state.totalKm - counted, 7.5, "the jump itself is never added")
+        var odo = o.state
+        odo.totalKm = o.state.totalKm
+        let e = RangeEstimator.estimate(profile: FuelT.mt450(), log: [FuelT.full("f", odo: 0, at: t0 - 1000)], odometer: odo,
+                                        stats: .empty, nowMs: clock)
+        XCTAssertEqual(e.aged, .gap)
+    }
+
+    /// Review ODO-3: the resume anchor is rounded to 3 decimals (up to ~79 m off): a bike standing at a point far
+    /// from the rounding grid must not gain that distance on every short resume.
+    func testAStandingBikeGainsNothingFromTheRoundedAnchorOnShortResumes() {
+        var o = FuelOdometer()
+        let lat = 4.6505, lon = -74.0935
+        var t = t0
+        o.ingest(LocationFix(lat: lat, lon: lon, speedMps: 0, accuracyM: 5, timeMs: t))
+        for _ in 1 ... 10 {
+            o.endStream(atMs: t)
+            t += 60_000
+            XCTAssertEqual(o.ingest(LocationFix(lat: lat, lon: lon, speedMps: 0, accuracyM: 5, timeMs: t)), .resumed)
+        }
+        XCTAssertEqual(o.state.totalKm, 0)
+        // unknown speed: the same
+        o.endStream(atMs: t)
+        t += 60_000
+        XCTAssertEqual(o.ingest(LocationFix(lat: lat, lon: lon, speedMps: nil, accuracyM: 5, timeMs: t)), .resumed)
+        // a relaunch caught at a red light 1 km on (speed 0) still adds the km
+        var r = FuelOdometer()
+        r.ingest(fix(t0, north: 0))
+        r.endStream(atMs: t0)
+        guard case let .added(m) = r.ingest(fix(t0 + 60_000, north: 1000, speed: 0)) else { return XCTFail("expected added") }
+        XCTAssertEqual(m, 1000, accuracy: 80)
+        // moving (speed ≥ 0.8) adds even a short distance
+        var moving = FuelOdometer()
+        moving.ingest(fix(t0, north: 0))
+        moving.endStream(atMs: t0)
+        guard case .added = moving.ingest(fix(t0 + 30_000, north: 60, speed: 2)) else { return XCTFail("expected added") }
     }
 
     func testRuleGInStream() {
@@ -218,6 +280,63 @@ final class FuelOdometerTests: XCTestCase {
         XCTAssertNil(o.state.openBlindSinceMs)
     }
 
+    /// Review MATH-2: a spell open when an anchor is logged is split there — its part before the anchor is the
+    /// previous tank's; the new tank ages only by its own blind time (also when the stream ends much later).
+    func testSplittingABlindSpellAtAnAnchor() {
+        var o = FuelOdometer()
+        o.ingest(fix(t0, north: 0))
+        o.noteBlind(atMs: t0 + 1000)
+        let log = t0 + 1000 + 3_600_000
+        o.splitBlind(atMs: log)
+        XCTAssertEqual(o.state.noGpsMs, [t0 + 1000], "the hour before the anchor: recorded")
+        XCTAssertEqual(o.state.openBlindSinceMs, log + 1, "the spell goes on after the anchor")
+        o.endStream(atMs: log + 150 * 60_000)
+        XCTAssertEqual(o.state.noGpsMs, [t0 + 1000, log + 1])
+        let after = RangeEstimator.estimate(profile: FuelT.mt450(), log: [FuelT.full("f", odo: 0, at: log)], odometer: o.state,
+                                            stats: .empty, nowMs: log + 150 * 60_000)
+        XCTAssertEqual(after.aged, .noGps, "150 min blind after the refuel: the new tank is aged")
+        // ended a minute after the anchor: the new part is dropped, the new tank is not aged
+        var p = FuelOdometer()
+        p.noteBlind(atMs: t0)
+        p.splitBlind(atMs: t0 + 3_600_000)
+        p.endStream(atMs: t0 + 3_660_000)
+        XCTAssertEqual(p.state.noGpsMs, [t0])
+        let fresh = RangeEstimator.estimate(profile: FuelT.mt450(), log: [FuelT.full("f", odo: 0, at: t0 + 3_600_000)],
+                                            odometer: p.state, stats: .empty, nowMs: t0 + 3_660_000)
+        XCTAssertNil(fresh.aged)
+        // short before the anchor, or not recorded: no mark
+        var q = FuelOdometer()
+        q.noteBlind(atMs: t0)
+        q.splitBlind(atMs: t0 + FuelOdometer.blindAfterMs - 1)
+        XCTAssertEqual(q.state.noGpsMs, [])
+        q.noteBlind(atMs: t0) // no-op: still open
+        q.splitBlind(atMs: t0 + 3_600_000, record: false)
+        XCTAssertEqual(q.state.noGpsMs, [])
+        XCTAssertEqual(q.state.openBlindSinceMs, t0 + 3_600_001)
+        // nothing open: nothing happens
+        var none = FuelOdometer()
+        none.splitBlind(atMs: t0)
+        XCTAssertNil(none.state.openBlindSinceMs)
+    }
+
+    func testEndStreamCanDropASpellThatMissedNothing() {
+        var o = FuelOdometer()
+        o.noteBlind(atMs: t0)
+        o.endStream(atMs: t0 + 600_000, recordBlind: false)
+        XCTAssertEqual(o.state.noGpsMs, [])
+        XCTAssertNil(o.state.openBlindSinceMs)
+    }
+
+    func testAStrayingInaccurateFixIsEvidence() {
+        let anchor = FuelOdometerAnchor(lat: Self.baseLat, lon: Self.baseLon, atMs: t0)
+        XCTAssertFalse(FuelOdometer.strays(fix(t0, north: 80, acc: 80), from: anchor), "indoors, near the last position")
+        XCTAssertFalse(FuelOdometer.strays(fix(t0, north: 900, acc: 65), from: anchor), "under 1 km")
+        XCTAssertFalse(FuelOdometer.strays(fix(t0, north: 1400, acc: 1500), from: anchor), "within its own accuracy")
+        XCTAssertTrue(FuelOdometer.strays(fix(t0, north: 2000, acc: 80), from: anchor), "2 km away")
+        XCTAssertTrue(FuelOdometer.strays(fix(t0, north: 2000, acc: nil), from: anchor))
+        XCTAssertFalse(FuelOdometer.strays(fix(t0, north: 2000, acc: 80), from: nil), "no anchor: nothing to compare")
+    }
+
     func testLastUnseenIsTheNewestMark() {
         var s = FuelOdometerState()
         XCTAssertNil(s.lastUnseenAtMs)
@@ -283,6 +402,27 @@ final class FuelOdometerTests: XCTestCase {
         o.raiseTotal(to: 1000, gapAtMs: t0 + 1)
         XCTAssertEqual(o.state.totalKm, 1311.4)
         XCTAssertEqual(o.state.gapsMs, [t0])
+    }
+
+    func testRaiseTotalUnmarkedOnlyGrowsAndMarksNothing() {
+        var o = FuelOdometer()
+        o.raiseTotalUnmarked(to: 40)
+        XCTAssertEqual(o.state.totalKm, 40)
+        o.raiseTotalUnmarked(to: 10)
+        o.raiseTotalUnmarked(to: .nan)
+        XCTAssertEqual(o.state.totalKm, 40)
+        XCTAssertEqual(o.state.gapsMs, [])
+        XCTAssertEqual(o.state.noGpsMs, [])
+    }
+
+    func testRemoveGapMarkTakesOnlyTheNewestMatchingMark() {
+        var o = FuelOdometer()
+        o.raiseTotal(to: 1, gapAtMs: 10)
+        o.raiseTotal(to: 2, gapAtMs: 20)
+        XCTAssertFalse(o.removeGapMark(atMs: 10), "not the newest")
+        XCTAssertTrue(o.removeGapMark(atMs: 20))
+        XCTAssertEqual(o.state.gapsMs, [10])
+        XCTAssertEqual(o.state.totalKm, 2, "the km stay")
     }
 
     func testStateJSON() throws {

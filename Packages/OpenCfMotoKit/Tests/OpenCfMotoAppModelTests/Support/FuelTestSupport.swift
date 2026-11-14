@@ -163,9 +163,10 @@ final class FuelTestEnv {
         return try? JSONDecoder().decode(FuelOdometerState.self, from: data)
     }
 
-    /// An own-UI session projecting to the dash (RideModel's toast channel open).
+    /// An own-UI session projecting to the dash and streaming (RideModel's toast channel open).
     func projectOwnUI() {
         ride.sessionChanged(active: true, mirror: false)
+        ride.linkPhaseChanged(.streaming)
         ride.projectionChanged(active: true)
     }
 

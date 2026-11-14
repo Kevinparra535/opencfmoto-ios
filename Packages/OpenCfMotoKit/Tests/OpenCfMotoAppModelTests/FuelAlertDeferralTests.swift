@@ -126,20 +126,19 @@ final class FuelAlertDeferralTests: XCTestCase {
 
     func testTheBlockingRuleCoversEveryCardAndOverlay() {
         var m = DashModel()
-        XCTAssertNil(RideModel.fuelToastBlocker(sheet: .none, model: m, toastShowing: false))
-        XCTAssertNil(RideModel.fuelToastBlocker(sheet: .none, model: nil, toastShowing: false))
-        XCTAssertEqual(RideModel.fuelToastBlocker(sheet: .confirm, model: m, toastShowing: false), "confirm card")
-        XCTAssertEqual(RideModel.fuelToastBlocker(sheet: .menu, model: m, toastShowing: false), "menu")
-        XCTAssertEqual(RideModel.fuelToastBlocker(sheet: .search, model: m, toastShowing: false), "search")
-        XCTAssertEqual(RideModel.fuelToastBlocker(sheet: .music, model: m, toastShowing: false), "Music sheet")
-        XCTAssertEqual(RideModel.fuelToastBlocker(sheet: .none, model: m, toastShowing: true), "another toast")
-        m.holdMessage = "Map paused"
-        XCTAssertEqual(RideModel.fuelToastBlocker(sheet: .none, model: m, toastShowing: false), "hold picture")
-        m.holdMessage = nil
+        XCTAssertNil(RideModel.fuelToastBlocker(sheet: .none, model: m, toastShowing: false, holdShowing: false))
+        XCTAssertNil(RideModel.fuelToastBlocker(sheet: .none, model: nil, toastShowing: false, holdShowing: false))
+        XCTAssertEqual(RideModel.fuelToastBlocker(sheet: .confirm, model: m, toastShowing: false, holdShowing: false), "confirm card")
+        XCTAssertEqual(RideModel.fuelToastBlocker(sheet: .menu, model: m, toastShowing: false, holdShowing: false), "menu")
+        XCTAssertEqual(RideModel.fuelToastBlocker(sheet: .search, model: m, toastShowing: false, holdShowing: false), "search")
+        XCTAssertEqual(RideModel.fuelToastBlocker(sheet: .music, model: m, toastShowing: false, holdShowing: false), "Music sheet")
+        XCTAssertEqual(RideModel.fuelToastBlocker(sheet: .none, model: m, toastShowing: true, holdShowing: false), "another toast")
+        XCTAssertEqual(RideModel.fuelToastBlocker(sheet: .none, model: m, toastShowing: false, holdShowing: true), "hold picture",
+                       "the engine's hold picture (locked phone), which RideModel never puts in the model")
         m.nav.arrival = ArrivalCard(title: "Destino", meta: "")
-        XCTAssertEqual(RideModel.fuelToastBlocker(sheet: .none, model: m, toastShowing: false), "arrival card")
+        XCTAssertEqual(RideModel.fuelToastBlocker(sheet: .none, model: m, toastShowing: false, holdShowing: false), "arrival card")
         m.nav.preview = RoutePreview(place: Place(name: "x", lat: 1, lon: 1))
-        XCTAssertEqual(RideModel.fuelToastBlocker(sheet: .none, model: m, toastShowing: false), "dash preview")
+        XCTAssertEqual(RideModel.fuelToastBlocker(sheet: .none, model: m, toastShowing: false, holdShowing: false), "dash preview")
     }
 
     // MARK: Voice channel
