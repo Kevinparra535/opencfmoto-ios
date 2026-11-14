@@ -1600,8 +1600,9 @@ The dash's only fuel element in the MVP is one transient toast, with no new inpu
 hasta la reserva» / "Low range: ~70 km to reserve" once when the phone's range estimate crosses into low
 (≤ 80 km to the reserve) and «En reserva: carga gasolina pronto» / "On reserve: refuel soon" once at the
 reserve, for 6 s through the existing `showToast` path (`DashLayout.overlayPill`, below the top chrome, ≤ 2
-lines, never over the gauge or the limit sign), plus a voice line when voice prompts are on. It waits while a
-sheet, the confirm or arrival card, a preview, the hold picture or another toast is up, and the voice waits
+lines, never over the gauge or the limit sign), plus a voice line when voice prompts are on. It waits until the
+own UI is live on the dash (projecting and streaming) and while a sheet, the confirm or arrival card, a preview,
+the hold picture (the engine's, e.g. a locked phone) or another toast is up, and the voice waits
 for silence and for no turn cue within 500 m; Mirror sessions get the voice only. No `DashModel` field, intent,
 hit region or focus target. Rules, strings and the estimate: `app-features.md` §15.8.
 

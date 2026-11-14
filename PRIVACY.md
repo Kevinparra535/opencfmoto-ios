@@ -40,15 +40,20 @@ borrar la app; lo demás se borra con la app.
 - **Tus lugares**: casa, favoritos, marcadores, los últimos destinos y dónde aparcaste.
 - **Combustible** (la autonomía estimada), solo de las motos en las que lo configuras (eliges el modelo
   o registras una carga): el perfil de combustible de la moto (modelo, tanque, rendimiento y reserva);
-  las cargas de gasolina que registras, con su fecha y hora, si fue lleno o parcial y, si los escribes,
-  los litros, el precio, el trip de la moto y los ajustes de nivel; el contador de km que mide la app, y
+  las cargas de gasolina que registras, con su fecha y hora, si fue lleno o parcial, el contador de la
+  app en ese momento y si antes hubo km que la app no vio y, si los escribes, los litros, el precio, el
+  trip de la moto, los km desde que cargaste y los ajustes de nivel; el contador de km que mide la app;
   la última posición de la moto **redondeada a 3 decimales** (cerca de 100 m) con su hora, para notar si
-  la moto se movió sin la app. Los km se cuentan solo durante una conexión con la moto: si la apagas, la
-  app deja de contarlos a los 3 minutos. También guarda si ya te avisó de la autonomía baja, si tocaste
-  «Luego» y la unidad en que compras la gasolina (litros o galones). Nada de esto entra en el archivo de
-  ajustes que exportas (`opencfmoto.settings`), y al quitar la moto en Garaje («Eliminar moto») se borra
-  todo lo suyo. El tablero no le da a la app ningún dato de combustible: la autonomía se calcula en el
-  iPhone, sin consultar ningún servicio y sin enviar nada.
+  la moto se movió sin la app, y las horas en que la app notó que no pudo medir (sin GPS preciso o la
+  moto se movió sin la app), hasta 20 de cada una. Los km se cuentan solo durante una conexión con la
+  moto: si la apagas, la app deja de contarlos a los 3 minutos. También guarda si ya te avisó de la
+  autonomía baja. Aparte guarda, por moto, si tocaste «Luego» (aunque no lo configures), y una sola
+  preferencia general: la unidad en que compras la gasolina (litros o galones), que no se borra con la
+  moto. Nada de esto entra en el archivo de ajustes que exportas (`opencfmoto.settings`), y al quitar la
+  moto en Garaje («Eliminar moto») se borra todo lo suyo. Es la única forma de borrar los datos de
+  combustible de una moto: una vez configurado, la app sigue contando km y guardando esa posición
+  redondeada cada vez que conectas esa moto. El tablero no le da a la app ningún dato de combustible: la
+  autonomía se calcula en el iPhone, sin consultar ningún servicio y sin enviar nada.
 - **Tus ajustes**, con tu servidor de mapas y tu clave de openrouteservice si los pones.
 - **Los registros** (Registros): lo que hace la app (pasos de la conexión, errores, el modelo del
   tablero, el nombre de la red Wi-Fi de la moto, los nombres de los destinos y, a veces, una posición).
@@ -216,19 +221,24 @@ everything else is deleted with the app.
 - **Your places**: home, favorites, markers, recent destinations and where you parked.
 - **Fuel** (the estimated fuel range), only for the bikes where you set it up (you pick the model or log
   a refuel): the bike's fuel profile (model, tank, fuel economy and reserve); the refuels you log, with
-  their date and time, whether each was a full or a partial refuel and, if you type them, the litres,
-  the price, the bike's trip meter and level corrections; the km counter the app measures; and the
-  bike's last position **rounded to 3 decimals** (about 100 m) with its time, to notice whether the bike
-  moved without the app. Km are counted only during a connection to the bike: when you switch it off,
-  the app stops counting them after 3 minutes. It also keeps whether it already warned you about a low
-  range, whether you tapped "Later", and the pump's volume unit (litres or gallons). None of this is in
-  the settings file you export (`opencfmoto.settings`), and removing the bike in Garage ("Remove bike")
-  deletes all of it. The dash gives the app no fuel data at all: the range is worked out on the iPhone,
+  their date and time, whether each was a full or a partial refuel, the app's counter at that moment and
+  whether the app missed km before it and, if you type them, the liters, the price, the bike's trip
+  meter, the km since you refueled and level corrections; the km counter the app measures; the bike's
+  last position **rounded to 3 decimals** (about 100 m) with its time, to notice whether the bike moved
+  without the app; and the times when the app noticed it could not measure (no precise GPS, or the bike
+  moved without the app), up to 20 of each. Km are counted only during a connection to the bike: when
+  you switch it off, the app stops counting them after 3 minutes. It also keeps whether it already
+  warned you about a low range. Separately it keeps, per bike, whether you tapped "Later" (even if you
+  never set it up), and one general preference: the pump's volume unit (liters or gallons), which is not
+  deleted with the bike. None of this is in the settings file you export (`opencfmoto.settings`), and
+  removing the bike in Garage ("Remove bike") deletes all of it. That is the only way to delete a bike's
+  fuel data: once set up, the app keeps counting km and storing that rounded position whenever you
+  connect that bike. The dash gives the app no fuel data at all: the range is worked out on the iPhone,
   without querying any service and without sending anything.
 - **Your settings**, including your tile server and openrouteservice key if you set them.
 - **The logs** (Logs): what the app does (connection steps, errors, the dash model, the bike's Wi-Fi
   network name, destination names and, at times, a position). The fuel lines name the chosen model,
-  whether a refuel has litres or a price (not how much) and the rounded range; never litres, prices or
+  whether a refuel has liters or a price (not how much) and the rounded range; never liters, prices or
   positions. A copy without passwords or serial numbers is saved when the app goes to the background
   (and every half minute while it is connected), so it is not lost if iOS closes the app; the next
   launch restores it and deletes it. If iOS hands the
@@ -304,7 +314,7 @@ models and destination names do stay: read them before you post them. If you att
 GitHub issue, remove locations too. The problem report also carries the model ID from the bike's QR
 code, the first 4 characters of the dash identifier (they name the dash family, as in the logs; not
 the serial number) and the model chosen under "Fuel & range" with the number of refuels logged; never
-litres, prices or positions.
+liters, prices or positions.
 
 iOS may send Apple its own diagnostic data if you allowed it in Settings ▸ Privacy & Security ▸
 Analytics & Improvements. That is iOS, not the app, and it does not reach us; with the TestFlight beta,

@@ -157,7 +157,9 @@ parada: en marcha la app no deja escribir y dice «Detente para…».
    si quieres ▸ **Guardar**, y reinicia el trip de la moto. La tarjeta muestra la autonomía (con una 450MT
    recién llena, unos «~310 km hasta la reserva») y debajo **«Carga registrada · Deshacer»** durante 10 s.
    Toca **Deshacer** una vez: la carga desaparece del Historial de cargas (Garaje ▸ tu moto ▸
-   Combustible). Vuelve a registrarla.
+   Combustible). Vuelve a registrarla. Si cargaste **antes de conectar** y ya rodaste, abre
+   **¿Cargaste hace rato?** y escribe los km desde que cargaste: la autonomía resta justo esos km (con
+   una 450MT llena y 40 km, «~270 km hasta la reserva»), sin «?».
 3. **Rueda conectado** (Conectar y Modo bolsillo) al menos 30 km. Al llegar, compara en la tarjeta
    «Desde tu última carga: N km» con el **trip de la moto**, y la autonomía con el **indicador de
    gasolina** de la moto. Anota los números: unos pocos % de diferencia son normales (el GPS mide algo
@@ -170,7 +172,9 @@ parada: en marcha la app no deja escribir y dice «Detente para…».
    segundos el tablero muestra **una vez** «Autonomía baja: ~40 km hasta la reserva» (con una 450MT)
    durante 6 s, debajo de la barra de arriba, sin tapar la velocidad ni el límite; con los avisos de voz
    activados se oye «Autonomía baja. Unos 40 kilómetros hasta la reserva.». No se repite. En modo
-   espejo solo se oye.
+   espejo solo se oye. Si corriges el nivel antes de conectar, el aviso se oye en cuanto la app cuenta
+   km y sale en el tablero cuando este ya muestra el mapa (nunca mientras dice «Reconectando…» ni con el
+   iPhone bloqueado en la imagen de espera).
    - **Nunca encima de una tarjeta** (opcional, con una ruta en marcha): deja lista en el iPhone la
      pantalla de **Corregir nivel** con **1/4** elegido, sin guardar. En el tablero abre ⋮ ▸ «Terminar la
      ruta…» y, con la tarjeta «¿Terminar la ruta?» abierta, toca **Guardar** en el iPhone. El aviso
@@ -182,20 +186,31 @@ parada: en marcha la app no deja escribir y dice «Detente para…».
 7. **Una carga vuelve a armar el aviso**: vuelve a poner la reserva en 12 % y, al llenar el tanque,
    registra la carga llena (paso 2). La tarjeta vuelve a «~… km hasta la reserva» y el próximo aviso
    saldrá cuando la autonomía vuelva a bajar. Si no vas a cargar ahora, borra el «Ajuste de nivel · ¼»
-   del Historial de cargas (desliza ▸ **Eliminar**): la autonomía vuelve a contar desde tu última carga.
+   del Historial de cargas (desliza ▸ **Eliminar** ▸ «¿Eliminar este ajuste de nivel?»): la autonomía
+   vuelve a contar desde tu última carga. Con la luz de reserva de la moto encendida, **Corregir nivel**
+   ▸ **Reserva** deja la tarjeta en «En reserva».
 8. **Sin GPS preciso** (en casa, con la moto encendida y parada): en Ajustes de iOS ▸ OpenCfMoto ▸
    Ubicación, desactiva **Ubicación exacta**, conecta y espera 2 minutos. La tarjeta muestra la cifra
    con «?» y «La app no pudo medir los km (sin GPS preciso). Revisa el indicador de la moto.». Vuelve a
    activar **Ubicación exacta**; si el aviso sigue, se quita con tu próxima carga o con **Corregir
-   nivel**.
+   nivel**. Con **Ubicación exacta** activada pero bajo techo (en casa, en un garaje subterráneo), la
+   cifra sale con «?» mientras no hay buen GPS; si desconectas sin haber movido la moto, la «?» se va
+   (la app no perdió km). Si la moto se movió o no llegó ninguna posición, la «?» queda hasta tu próxima
+   carga.
 9. **Ruta**: en **Mapa** busca un destino. Bajo las rutas aparece una línea con el ícono de gasolina: «Llegas con
    ~N km antes de la reserva», «Justo: carga antes de salir» o «Necesitas cargar gasolina en el
    camino». Dinos si cuadra con lo que esperabas.
 
-Para quien publica una build con el catálogo de combustible: antes de subirla a TestFlight, abre las
-direcciones oficiales de tanque (`tankSource` de las filas con `tankKind: .official`) de
-`Packages/OpenCfMotoKit/Sources/OpenCfMotoCore/Fuel/FuelCatalogData.swift` y comprueba los litros: se
-tomaron del texto de los resultados de búsqueda, no de la página misma.
+Para quien publica una build con el catálogo de combustible: antes de subirla a TestFlight, abre en
+`Packages/OpenCfMotoKit/Sources/OpenCfMotoCore/Fuel/FuelCatalogData.swift` cada `tankSource` —primero las
+filas de prensa (`tankKind: .published`): 700MT 18 L, 800NK Advanced, X-Cape 650, X-Cape 700 y
+Seiemmezzo— y cada `consumptionSource`. Comprueba los litros, y que cada rendimiento (`seedKmPerL`) sea
+igual o menor que la cifra más baja de uso real en esa página y en las otras pruebas publicadas del
+mismo modelo (la regla de la semilla: la prueba independiente más baja, redondeada hacia abajo). Revisa
+sobre todo el **Seiemmezzo** (19,5 km/L por una cifra de autopista): si la prueba de Autotrader UK
+(«just over 50 mpg» UK medidas de lleno a lleno, unos 17,7 km/L) se confirma, baja su semilla a 17,5 y
+cítala; si no, a 19,0 por la cifra de MCN (54 mpg UK). Las cifras se tomaron del texto de los resultados
+de búsqueda, no de la página misma.
 
 ## Teléfono bloqueado: prueba de diagnóstico (fase 0)
 

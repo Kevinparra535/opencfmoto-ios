@@ -234,10 +234,13 @@ Sigue la guía paso a paso [docs/PRUEBA-EN-LA-MOTO.md](docs/PRUEBA-EN-LA-MOTO.md
   **Modo bolsillo** sigue siendo el modo fiable.
 - **Permiso de red local**: iOS lo pide la primera vez que la app busca el tablero; si lo
   deniegas, actívalo en Ajustes ▸ OpenCfMoto ▸ Red local.
-- **Autonomía**: la app solo ve los km que mide mientras está conectada a la moto. Si ruedas sin la
-  app, o con la ubicación aproximada, la cifra sale como dudosa («~250 km?») hasta tu próxima carga o
-  «Corregir nivel». El catálogo trae los CFMOTO y Moto Morini de los tableros compatibles; para otra
-  moto, ingresa el tanque y el rendimiento a mano.
+- **Autonomía**: la app solo ve los km que mide mientras está conectada a la moto. Solo nota que
+  rodaste sin ella si la moto aparece a más de ~1 km de donde la vio por última vez (y entonces solo
+  suma la línea recta); una vuelta que termina donde empezó, por ejemplo de casa a casa, no se ve.
+  Después de rodar sin la app, toca «Corregir nivel» con lo que marca el indicador de la moto. Con la
+  ubicación aproximada la cifra sale como dudosa («~250 km?») hasta tu próxima carga o «Corregir
+  nivel». El catálogo trae los CFMOTO y Moto Morini de los tableros compatibles; para otra moto,
+  ingresa el tanque y el rendimiento a mano.
 - **Botones del manillar**: solo llegan a la app que está «reproduciendo» (Now Playing). La
   opción es experimental y voluntaria: reproduce audio silencioso y **pausa la música de otras
   apps** mientras está activa; no todos los tableros envían esos botones; la pulsación larga de ★
@@ -549,10 +552,13 @@ no Wi-Fi or dash, and a demo GPS route so you can watch the dash UI on the phone
   which is not guaranteed while locked. **Pocket mode** remains the reliable mode.
 - **Local Network permission**: iOS asks for it the first time the app looks for the dash; if you
   deny it, turn it on in Settings ▸ OpenCfMoto ▸ Local Network.
-- **Fuel range**: the app only sees the km it measures while it is connected to the bike. If you ride
-  without the app, or with approximate location, the number shows as unsure ("~250 km?") until your
-  next refuel or "Correct level". The catalog holds the CFMOTO and Moto Morini models of the supported
-  dashes; for another bike, enter the tank and the fuel economy by hand.
+- **Fuel range**: the app only sees the km it measures while it is connected to the bike. It only
+  notices a ride without it when the bike turns up more than about 1 km from where it last saw it (and
+  then adds only the straight line); a ride that ends where it started, such as home to home, stays
+  invisible. After riding without the app, tap "Correct level" with what the bike's gauge shows. With
+  approximate location the number shows as unsure ("~250 km?") until your next refuel or "Correct
+  level". The catalog holds the CFMOTO and Moto Morini models of the supported dashes; for another
+  bike, enter the tank and the fuel economy by hand.
 - **Handlebar buttons**: they only reach the app that is "playing" (Now Playing). The option is
   experimental and opt-in: it plays silent audio and **pauses other apps' music** while on; not
   every dash sends those buttons; a ★ long press cannot be detected on iOS; the ▲/▼ volume keys only
