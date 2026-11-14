@@ -147,7 +147,10 @@ public final class ConnectionModel {
     /// .error phase whose link keeps re-arming). The big button must offer Stop whenever this is true,
     /// not only when `phase.showsStop` (review finding CL-1).
     public private(set) var isSessionActive = false {
-        didSet { onSessionActiveChange?(isSessionActive) }
+        didSet {
+            onSessionActiveChange?(isSessionActive)
+            noteFuelCountable()
+        }
     }
 
     /// ADDITION (locked iPhone, Phase 0): the session's bike Wi-Fi is gone right now — lost and not
@@ -177,6 +180,24 @@ public final class ConnectionModel {
     /// (false). AppModel clears the unclean-background-exit marker at the session end.
     @ObservationIgnored var onSessionActiveChange: ((Bool) -> Void)?
 
+    /// ADDITION (fuel MVP): the running session's bike (read-only for other models).
+    var sessionBikeId: String? { session?.bike.id }
+    /// ADDITION (fuel MVP): fuel km count only now — a session runs, it is not parked, and the phase is neither
+    /// `.waitingForBike` nor `.error`. `.reconnecting` (the 180 s Wi-Fi grace) still counts: a Wi-Fi blip while
+    /// riding must not lose km. Parked, the rider may walk or take a bus with the phone: nothing counts.
+    var isFuelCountable: Bool { isSessionActive && !isParked && phase != .waitingForBike && phase != .error }
+    /// ADDITION (fuel MVP): fired on the main actor when `isFuelCountable` changes (every phase change, the
+    /// session start / end and every park / un-park).
+    @ObservationIgnored var onFuelCountableChange: ((Bool) -> Void)?
+    @ObservationIgnored private var lastFuelCountable = false
+
+    private func noteFuelCountable() {
+        let now = isFuelCountable
+        guard now != lastFuelCountable else { return }
+        lastFuelCountable = now
+        onFuelCountableChange?(now)
+    }
+
     // MARK: Internal state
 
     @ObservationIgnored var tuning = ConnectionTuning()
@@ -197,7 +218,9 @@ public final class ConnectionModel {
     @ObservationIgnored private var manualJoinToken: UInt64 = 0
     @ObservationIgnored private(set) var linkState: LinkState = .idle
     @ObservationIgnored private var wifiLostAt: TimeInterval?
-    @ObservationIgnored private(set) var isParked = false
+    @ObservationIgnored private(set) var isParked = false {
+        didSet { noteFuelCountable() }
+    }
     /// The Wi-Fi the session actually joined (gateway + phone /24): the fingerprint that recognises the
     /// bike network when the SSID is unknown (free flavor; no precise location for networks the app
     /// did not configure). Refreshed by every SSID-confirmed re-acquire.
@@ -598,6 +621,7 @@ public final class ConnectionModel {
     }
 
     private func setPhase(_ newPhase: ConnectionPhase, detail newDetail: String? = nil) {
+        defer { noteFuelCountable() }
         let d = newDetail ?? detail
         guard newPhase != phase || d != detail else { return }
         let phaseChanged = newPhase != phase

@@ -20,8 +20,10 @@
 // 5. rule G (the bike may have moved unseen): v > 70 → rejected (implausibleJump); d < 1 km → resumed;
 //    else the chord is ALWAYS added (a lower bound of the unseen ride) and it is a quiet bridge (not aged)
 //    when dt ≤ 15 min, 33 m/s × dt − d ≤ 10 km, and (same stream or v ≤ 40 m/s); otherwise a gap (aged).
-// 3-strike re-anchor: the 3rd consecutive outOfOrder / implausibleJump rejection is accepted as `resumed`
-// (nothing added), so one bad fix or a phone clock stepping back cannot freeze the counter.
+// 3-strike re-anchor: the 3rd consecutive implausibleJump / outOfOrder rejection is accepted as `resumed`
+// (nothing added), so one bad fix or a phone clock stepping back cannot freeze the counter. An out-of-order
+// fix strikes only when it is more than 5 min older than the previous accepted one: duplicates, late batched
+// fixes and the cached fixes iOS re-delivers after a relaunch are rejected for good, never counted twice.
 // Every accepted fix becomes the stream's previous fix and the anchor, and closes an open blind spell.
 // The counter only grows.
 
@@ -124,6 +126,9 @@ public struct FuelOdometer: Sendable, Equatable {
     /// An open blind spell ages the estimate after 2 min.
     public static let blindAfterMs: Int64 = 120_000
     public static let reanchorAfterRejections = 3
+    /// An out-of-order fix strikes (toward the re-anchor) only when it is more than this much older than the
+    /// previous accepted fix: a phone clock stepping back, not re-delivered history.
+    public static let reanchorBackstepMs: Int64 = 300_000
     public static let maxStoredGaps = 20
     /// FuelModel persists a changed counter at most this often (fix time).
     public static let persistIntervalMs: Int64 = 15_000
@@ -150,6 +155,7 @@ public struct FuelOdometer: Sendable, Equatable {
             return .rejected(.inaccurate)
         }
         let step: FuelOdometerStep
+        let referenceMs = previous?.timeMs ?? state.last?.atMs
         if let p = previous {
             step = inStream(fix, from: p)
         } else {
@@ -157,6 +163,9 @@ public struct FuelOdometer: Sendable, Equatable {
         }
         if case let .rejected(why) = step {
             guard why == .outOfOrder || why == .implausibleJump else { return step }
+            // Re-delivered history (a duplicate, a late batched fix, iOS's cached fixes after a relaunch) is at
+            // most a few minutes old: it never strikes, so it can never be counted twice after a re-anchor.
+            if why == .outOfOrder, let ref = referenceMs, ref - fix.timeMs <= Self.reanchorBackstepMs { return step }
             strikes += 1
             guard strikes >= Self.reanchorAfterRejections else { return step }
             accept(fix)

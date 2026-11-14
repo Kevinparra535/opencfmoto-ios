@@ -38,6 +38,8 @@ public final class AppModel {
     public let logs: LogsModel
     public let trips: TripsModel
     public let navigation: NavigationModel
+    /// Fuel MVP «Combustible»: range estimate, refuel log, «¿Cuál es tu moto?».
+    public let fuel: FuelModel
     public let controls: ControlsModel
     /// Apple Music on the dash (iOS addition).
     public let music: MusicModel
@@ -80,6 +82,7 @@ public final class AppModel {
         logs = LogsModel(core: core)
         trips = TripsModel(core: core)
         navigation = NavigationModel(core: core)
+        fuel = FuelModel(core: core, garage: garage, settings: settings, navigation: navigation)
         controls = ControlsModel(core: core, settings: settings)
         music = MusicModel(core: core)
         ride = RideModel(core: core, settings: settings, navigation: navigation, trips: trips)
@@ -121,6 +124,7 @@ public final class AppModel {
         ride.scenePhaseChanged(phase)
         connection.scenePhaseChanged(phase)
         music.scenePhaseChanged(phase)
+        fuel.scenePhaseChanged(phase)
         if phase == .background {
             // A jetsam kill or a force-quit from here on must not lose the ride log (review SPEC:CL-6).
             logs.persistSession()
@@ -277,9 +281,27 @@ public final class AppModel {
         // Locked iPhone (Phase 0): a session that ended can no longer end "during a dash session".
         connection.onSessionActiveChange = { [weak self] active in
             if !active { self?.clearBackgroundMarker() }
+            self?.fuel.sessionChanged(active: active)
         }
         ride.pocketOfferBusyReason = { [weak self] in self?.pocketOfferBusyReason() }
         wireMusic()
+        wireFuel()
+    }
+
+    /// Fuel MVP: the km counter feed (every RideModel fix, counted only while the session is countable), the
+    /// session bike, the live CLIENT_INFO for «¿Cuál es tu moto?», the moving lock, the dash alert and removal.
+    private func wireFuel() {
+        let fuel = self.fuel
+        ride.onLocationFix = { [weak fuel] fix in fuel?.ingest(fix) }
+        fuel.sessionBikeProvider = { [weak connection] in connection?.sessionBikeId }
+        fuel.isCountableProvider = { [weak connection] in connection?.isFuelCountable ?? false }
+        connection.onFuelCountableChange = { [weak fuel] on in fuel?.countableChanged(on) }
+        fuel.liveDashInfoProvider = { [weak connection] in connection?.diagnostics.dashInfo }
+        fuel.lastFixProvider = { [weak ride] in ride?.lastFix }
+        fuel.onDashAlert = { [weak ride] alert in ride?.announceFuel(alert) }
+        fuel.onDashAlertCancel = { [weak ride] in ride?.cancelFuelAlert() }
+        ride.onFuelAlertDropped = { [weak fuel] alert in fuel?.fuelAlertDropped(alert) }
+        garage.observeRemoval { [weak fuel] id in fuel?.bikeRemoved(id) }
     }
 
     /// Apple Music on the dash (contract §8.3): the dash model / intents ↔ MusicModel, and who holds
@@ -449,6 +471,18 @@ public final class AppModel {
         }
         if let c = diag.canvas { d["canvas"] = c.description }
         d["music"] = music.diagnostics
+        // Fuel MVP (promote catalog rows from field reports): the stored QR's model id (no connect needed), the
+        // 4-character dash family prefix of the HUID (never the serial) and the fuel set-up — no litres, prices
+        // or positions.
+        if let id = connection.sessionBikeId ?? core.garage.selected?.id {
+            d["modelId"] = core.garage.qr(for: id)?.modelId ?? "none"
+            let fuelState = fuel.state(for: id)
+            let kind = fuelState.profile.map { $0.catalogId.map { "catalog:\($0)" } ?? "manual" } ?? "none"
+            d["fuel"] = kind + (fuelState.log.isEmpty ? "" : ", log \(fuelState.log.count)")
+        }
+        if let huid = diag.dashInfo?.huid, !huid.isEmpty, connection.sessionBikeId != nil {
+            d["huidPrefix"] = String(huid.prefix(4))
+        }
         return d
     }
 }

@@ -132,6 +132,7 @@ public final class GarageModel {
         guard let removed = core.garage.remove(id) else { return }
         if let name = removed.photoFileName { deletePhotoFile(named: name) }
         Log.i(Self.tagGarage, "removed \(removed.name) (ssid=\(removed.ssid))")
+        for handler in removalHandlers { handler(removed.id) } // fuel MVP: FuelModel drops its caches
         refresh()
     }
 
@@ -154,6 +155,14 @@ public final class GarageModel {
     }
 
     @ObservationIgnored private var selectionHandlers: [@MainActor (GarageBike?) -> Void] = []
+
+    /// ADDITION (fuel MVP): called with the id of a removed bike, after `Garage.remove` deleted its data
+    /// (every `*#<id>` key, fuel included) and before the published list changes (main actor).
+    func observeRemoval(_ handler: @escaping @MainActor (String) -> Void) {
+        removalHandlers.append(handler)
+    }
+
+    @ObservationIgnored private var removalHandlers: [@MainActor (String) -> Void] = []
 
     // MARK: Private
 

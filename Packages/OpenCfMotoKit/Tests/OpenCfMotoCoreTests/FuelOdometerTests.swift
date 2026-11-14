@@ -77,11 +77,16 @@ final class FuelOdometerTests: XCTestCase {
         XCTAssertEqual(o.ingest(f), .rejected(.outOfOrder), "the same fix again")
         XCTAssertEqual(o.ingest(fix(t0 + 500, north: 5)), .rejected(.outOfOrder))
         XCTAssertEqual(o.state.totalKm, total)
-        // an accepted fix resets the strike count
-        XCTAssertEqual(o.ingest(fix(t0 + 2000, north: 20)), .added(metres: d(f, fix(t0 + 2000, north: 20))))
-        XCTAssertEqual(o.ingest(fix(t0 + 2000, north: 20)), .rejected(.outOfOrder))
-        XCTAssertEqual(o.ingest(fix(t0 + 2000, north: 20)), .rejected(.outOfOrder))
-        XCTAssertEqual(o.ingest(fix(t0 + 2000, north: 20)), .resumed, "the 3rd strike re-anchors, adding nothing")
+        // re-delivered history never strikes: rejected for good, however often it comes
+        let g = fix(t0 + 2000, north: 20)
+        XCTAssertEqual(o.ingest(g), .added(metres: d(f, g)))
+        for _ in 0 ..< 5 { XCTAssertEqual(o.ingest(g), .rejected(.outOfOrder)) }
+        for k in 1 ... 5 { XCTAssertEqual(o.ingest(fix(t0 + 2000 - Int64(k) * 200, north: 20 - Double(k) * 2)), .rejected(.outOfOrder)) }
+        XCTAssertEqual(o.state.totalKm, (d(fix(t0, north: 0), f) + d(f, g)) / 1000, accuracy: 1e-12)
+        // a whole re-delivered track after a relaunch is never counted twice
+        var relaunched = FuelOdometer(state: o.state)
+        for k in 0 ..< 30 { XCTAssertEqual(relaunched.ingest(fix(t0 - 28_000 + Int64(k) * 1000, north: Double(k))), .rejected(.outOfOrder)) }
+        XCTAssertEqual(relaunched.state.totalKm, o.state.totalKm)
     }
 
     func testBridgeWindow() {

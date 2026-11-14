@@ -161,7 +161,8 @@ public final class PreviewLocation: LocationProviding {
 @MainActor
 public final class PreviewSpeech: SpeechProviding {
     public var isMuted = false
-    public private(set) var isSpeaking = false
+    /// Settable (fuel MVP): tests hold the voice busy.
+    public var isSpeaking = false
     public private(set) var spoken: [String] = []
 
     public init() {}

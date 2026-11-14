@@ -209,6 +209,32 @@ public final class RideModel {
     /// What `onDashActivityChange` reported last.
     @ObservationIgnored private(set) var isDashUIActive = false
 
+    // MARK: Fuel MVP — wired by AppModel to FuelModel
+
+    /// ADDITION (fuel MVP): every fix after navigation and trips (AppModel → FuelModel.ingest).
+    @ObservationIgnored var onLocationFix: ((LocationFix) -> Void)?
+    /// ADDITION (fuel MVP): a pending fuel alert that could not be delivered on any channel (60 s, or the
+    /// session ended): FuelModel restores its latch so the next odometer change retries with a fresh number.
+    @ObservationIgnored var onFuelAlertDropped: ((FuelDashAlert) -> Void)?
+    /// The most a fuel alert waits for a clear dash / voice before it is dropped.
+    nonisolated static let fuelAlertMaxDeferral: TimeInterval = 60
+    /// The fuel voice line never starts while a turn cue is this close.
+    nonisolated static let fuelVoiceTurnClearanceM = 500.0
+
+    /// The ONE pending fuel alert (a newer one replaces it; the slot never queues two).
+    struct PendingFuelAlert {
+        var alert: FuelDashAlert
+        var since: TimeInterval
+        var toastDue: Bool
+        var voiceDue: Bool
+        var toastDelivered = false
+        var voiceDelivered = false
+        var lastWait: String?
+        var deliveredAny: Bool { toastDelivered || voiceDelivered }
+        var done: Bool { (!toastDue || toastDelivered) && (!voiceDue || voiceDelivered) }
+    }
+    @ObservationIgnored private(set) var pendingFuelAlert: PendingFuelAlert?
+
     public init(core: AppCore, settings: SettingsModel, navigation: NavigationModel, trips: TripsModel) {
         self.core = core
         self.settings = settings
@@ -462,6 +488,7 @@ public final class RideModel {
         sessionIsMirror = active && mirror
         guard changed else { return }
         autoLogSuppressed = false
+        if !active { dropPendingFuelAlertAtSessionEnd() }
         if isRecordingDashVideo, active, let wasMirror = dashVideoSourceIsMirror, wasMirror != sessionIsMirror {
             // The recording follows what is sent to the dash: a new file on the other source.
             stopDashVideoRecording()
@@ -739,6 +766,7 @@ public final class RideModel {
         if text != speedText { speedText = text }
         updateGpsStatus()
         setNeedsModelUpdate()
+        onLocationFix?(fix) // fuel MVP: the km counter (independent of trip logging)
     }
 
     private func handleHeading(_ raw: Double) {
@@ -905,6 +933,127 @@ public final class RideModel {
         core.services.speech.speak(text)
     }
 
+    /// A toast of `duration` may be on screen: the UI tick redraws the phone preview until it expires.
+    private func watchToast(for duration: TimeInterval) {
+        toastWatchUntil = max(toastWatchUntil, clock.now() + duration + 0.5)
+    }
+
+    // MARK: - Fuel alert (fuel MVP)
+
+    /// ADDITION (fuel MVP): the low-range / reserve alert. A toast while the own UI is projected (not in a Mirror
+    /// session), for `FuelAlertPolicy.toastSeconds`; the voice line when voice prompts are on. Never shown or
+    /// spoken over something more important: it waits in ONE pending slot (a newer alert replaces it).
+    func announceFuel(_ alert: FuelDashAlert) {
+        let now = clock.now()
+        pendingFuelAlert = PendingFuelAlert(alert: alert, since: now, toastDue: isProjecting && !sessionIsMirror,
+                                            voiceDue: cachedSettings.map.voiceOn)
+        retryPendingFuelAlert(now: now)
+    }
+
+    /// ADDITION (fuel MVP): drops a pending fuel alert silently (a refuel / an edit made it pointless).
+    func cancelFuelAlert() {
+        guard pendingFuelAlert != nil else { return }
+        pendingFuelAlert = nil
+        Log.i("RIDE", "fuel alert cancelled")
+    }
+
+    /// ADDITION (fuel MVP): delivers each due channel of the pending fuel alert as soon as it is clear; drops
+    /// the rest after `fuelAlertMaxDeferral`. Called from the UI tick (~10 Hz while a session runs) and by tests.
+    func retryPendingFuelAlert(now: TimeInterval) {
+        guard var p = pendingFuelAlert else { return }
+        var waits: [String] = []
+        if p.toastDue, !p.toastDelivered {
+            if let busy = fuelToastBlocker(now: now) {
+                waits.append(busy)
+            } else {
+                let text = DashStrings.fuelToast(p.alert.level, range: FuelFormat.range(p.alert.kmToReserve, units: cachedSettings.map.units),
+                                                 dashLanguage)
+                ui.showToast(text, now: now, duration: FuelAlertPolicy.toastSeconds)
+                watchToast(for: FuelAlertPolicy.toastSeconds)
+                uiChanged()
+                p.toastDelivered = true
+                Log.i("RIDE", "fuel alert shown on the dash: \(p.alert.level.rawValue)")
+            }
+        }
+        if p.voiceDue, !p.voiceDelivered {
+            if let busy = fuelVoiceBlocker() {
+                waits.append(busy)
+            } else {
+                speak(DashStrings.fuelVoice(p.alert.level, range: FuelFormat.range(p.alert.kmToReserve, units: cachedSettings.map.units),
+                                            dashLanguage))
+                p.voiceDelivered = true
+                Log.i("RIDE", "fuel alert spoken: \(p.alert.level.rawValue)")
+            }
+        }
+        if p.done {
+            pendingFuelAlert = nil
+            return
+        }
+        if now - p.since >= Self.fuelAlertMaxDeferral {
+            pendingFuelAlert = nil
+            Log.i("RIDE", "fuel alert dropped after \(Int(Self.fuelAlertMaxDeferral)) s (\(waits.joined(separator: ", "))): \(p.alert.level.rawValue)")
+            if !p.deliveredAny { onFuelAlertDropped?(p.alert) }
+            return
+        }
+        let wait = waits.joined(separator: ", ")
+        if wait != p.lastWait {
+            p.lastWait = wait
+            Log.i("RIDE", "fuel alert waiting: \(wait)")
+        }
+        pendingFuelAlert = p
+    }
+
+    /// Why the fuel toast cannot be drawn now (nil = clear): a sheet or card on the dash, the arrival card, a
+    /// preview, the hold picture, or another toast (it never replaces one: `overlays` draws over anything).
+    private func fuelToastBlocker(now: TimeInterval) -> String? {
+        Self.fuelToastBlocker(sheet: ui.state.sheet, model: lastModel, toastShowing: isToastShowing(now: now))
+    }
+
+    nonisolated static func fuelToastBlocker(sheet: DashSheet, model: DashModel?, toastShowing: Bool) -> String? {
+        switch sheet {
+        case .confirm: return "confirm card"
+        case .menu: return "menu"
+        case .search: return "search"
+        case .music: return "Music sheet"
+        case .none: break
+        }
+        if model?.holdMessage != nil { return "hold picture" }
+        if model?.showsArrival == true { return "arrival card" }
+        if model?.inPreview == true { return "dash preview" }
+        if toastShowing { return "another toast" }
+        return nil
+    }
+
+    /// The controller's toast, expired as of `now` (the state is advanced only when a toast was reported).
+    private func isToastShowing(now: TimeInterval) -> Bool {
+        guard ui.state.toast != nil else { return false }
+        _ = ui.displayList(now: now) // advances the controller: an expired toast goes
+        return ui.state.toast != nil
+    }
+
+    /// Why the fuel voice line cannot start now (nil = clear): something is being spoken (a new line would cut
+    /// it), or the next turn cue is within 500 m.
+    private func fuelVoiceBlocker() -> String? {
+        Self.fuelVoiceBlocker(isSpeaking: core.services.speech.isSpeaking, model: lastModel)
+    }
+
+    nonisolated static func fuelVoiceBlocker(isSpeaking: Bool, model: DashModel?) -> String? {
+        if isSpeaking { return "voice busy" }
+        if model?.navigating == true, let d = model?.nav.progress?.upcomingTurn?.distanceFromRiderM, d <= fuelVoiceTurnClearanceM {
+            return "turn cue near"
+        }
+        return nil
+    }
+
+    /// The session ended with an alert still pending: dropped the same way (the latch is restored when no
+    /// channel delivered it).
+    private func dropPendingFuelAlertAtSessionEnd() {
+        guard let p = pendingFuelAlert else { return }
+        pendingFuelAlert = nil
+        Log.i("RIDE", "fuel alert dropped (session ended): \(p.alert.level.rawValue)")
+        if !p.deliveredAny { onFuelAlertDropped?(p.alert) }
+    }
+
     // MARK: - Timers
 
     private func updateLoops() {
@@ -951,6 +1100,7 @@ public final class RideModel {
             perform(intents, fromDash: true)
             uiChanged()
         }
+        if pendingFuelAlert != nil { retryPendingFuelAlert(now: now) }
         if now < toastWatchUntil {
             let toast = ui.state.toast
             if toast != lastToastText {
