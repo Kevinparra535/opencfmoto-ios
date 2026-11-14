@@ -22,9 +22,10 @@
 // | `-demoStill`                     | demo: the GPS route player is not started (no fix: the rider is stopped, fuel sheets open) |
 //
 // Fuel MVP screens: `-uiScreen fuel` (Garage detail at «Combustible»), `refuel` («Cargué gasolina»),
-// `fuelpicker` («¿Cuál es tu moto?», with `-demoFuel setup`) imply `-demoStill` (a fuel sheet refuses to
-// open while the demo GPS rides at 45 km/h); `routeverdict` (the Map hub's route preview with the fuel
-// verdict line) keeps the player (the preview needs a position).
+// `fuelpicker` («¿Cuál es tu moto?», with `-demoFuel setup`), `fueledit` (the profile editor) and `fuellevel`
+// («Corregir nivel») imply `-demoStill` (a fuel sheet refuses to open while the demo GPS rides at 45 km/h);
+// `routeverdict` (the Map hub's route preview with the fuel verdict line) keeps the player (the preview needs
+// a position), and `fuelmoving` keeps it and turns the location preview on (Home's moving lock).
 //
 // An invalid `-e2eBackgroundCycle` / `-e2eBackgroundEncoder` value is ignored with a warning in the log.
 // `-e2eFakeDash` and `-uiScreen` turn the automatic «Modo bolsillo» countdown after Connect / Go off,

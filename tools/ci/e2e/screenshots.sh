@@ -53,8 +53,10 @@ for s in trips settings controls logs garage about mirror onboarding scan ride; 
   shoot "$s" 5 "${DEMO[@]}" -uiScreen "$s"
 done
 # Fuel MVP «Combustible» (-demoFuel ok|low|aged|setup; the fuel sheets refuse to open while moving, so
-# -uiScreen fuel / refuel / fuelpicker imply -demoStill: the demo GPS player is not started). `home` keeps
-# the demo ride at 45 km/h: its fuel card shows the moving lock line («Detente para …»), as home_fuel_moving.
+# -uiScreen fuel / refuel / fuelpicker / fueledit / fuellevel imply -demoStill: the demo GPS player is not
+# started). On Home the demo GPS reports only while something needs it (a session, a route, the Map), so
+# `home` shows the card unlocked; -uiScreen fuelmoving turns the location preview on: the 45 km/h demo ride
+# then shows the moving lock («Detente para registrar la carga»).
 shoot fuel 6 "${DEMO[@]}" -uiScreen fuel
 shoot es_fuel 6 "${DEMO[@]}" -uiScreen fuel -AppleLanguages "(es)" -AppleLocale es_ES
 shoot refuel 5 "${DEMO[@]}" -uiScreen refuel
@@ -64,7 +66,11 @@ shoot es_fuel_picker 5 "${DEMO[@]}" -demoFuel setup -uiScreen fuelpicker -AppleL
 shoot home_fuel_setup 5 "${DEMO[@]}" -demoFuel setup -demoStill
 shoot es_home_fuel_low 5 "${DEMO[@]}" -demoFuel low -demoStill -AppleLanguages "(es)" -AppleLocale es_ES
 shoot es_home_fuel_aged 5 "${DEMO[@]}" -demoFuel aged -demoStill -AppleLanguages "(es)" -AppleLocale es_ES
-shoot home_fuel_moving 5 "${DEMO[@]}" -demoFuel ok
+shoot home_fuel_moving 6 "${DEMO[@]}" -demoFuel ok -uiScreen fuelmoving
+shoot es_home_fuel_moving 6 "${DEMO[@]}" -demoFuel ok -uiScreen fuelmoving -AppleLanguages "(es)" -AppleLocale es_ES
+shoot fuel_edit 5 "${DEMO[@]}" -uiScreen fueledit
+shoot es_fuel_edit 5 "${DEMO[@]}" -uiScreen fueledit -AppleLanguages "(es)" -AppleLocale es_ES
+shoot es_fuel_level 5 "${DEMO[@]}" -uiScreen fuellevel -AppleLanguages "(es)" -AppleLocale es_ES
 shoot route_verdict 12 "${DEMO[@]}" -uiScreen routeverdict
 shoot es_route_verdict 12 "${DEMO[@]}" -uiScreen routeverdict -AppleLanguages "(es)" -AppleLocale es_ES
 # An opened GPX track shown as a preview over a running route (UI/UX P0, UX-17).

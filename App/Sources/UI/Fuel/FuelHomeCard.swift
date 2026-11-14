@@ -244,28 +244,46 @@ private struct FuelRangeCard: View {
             }
             .buttonStyle(FuelPrimaryButtonStyle())
             .disabled(!canLog)
-        } else {
-            let late = Self.isCheckRefuel(e)
-            HStack(spacing: 10) {
-                Button {
-                    fuel.present(.refuel(bikeId: bikeId, late: late))
-                } label: {
-                    Label("I refueled", systemImage: "fuelpump.fill")
+        } else if e.aged != nil {
+            // Side by side when both labels fit on one line, else stacked (long Spanish labels, large text).
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    refuelButton(e, canLog: canLog)
+                    levelButton(canLog: canLog)
                 }
-                .buttonStyle(FuelPrimaryButtonStyle())
-                .disabled(!canLog)
-
-                if e.aged != nil {
-                    Button {
-                        fuel.present(.level(bikeId: bikeId))
-                    } label: {
-                        Text("Correct level")
-                    }
-                    .buttonStyle(FuelTonalButtonStyle())
-                    .disabled(!canLog)
+                VStack(spacing: 10) {
+                    refuelButton(e, canLog: canLog)
+                    levelButton(canLog: canLog)
                 }
             }
+        } else {
+            refuelButton(e, canLog: canLog)
         }
+    }
+
+    private func refuelButton(_ e: FuelEstimate, canLog: Bool) -> some View {
+        let fuel = model.fuel
+        let bikeId = state.bikeId
+        let late = Self.isCheckRefuel(e)
+        return Button {
+            fuel.present(.refuel(bikeId: bikeId, late: late))
+        } label: {
+            Label("I refueled", systemImage: "fuelpump.fill")
+        }
+        .buttonStyle(FuelPrimaryButtonStyle())
+        .disabled(!canLog)
+    }
+
+    private func levelButton(canLog: Bool) -> some View {
+        let fuel = model.fuel
+        let bikeId = state.bikeId
+        return Button {
+            fuel.present(.level(bikeId: bikeId))
+        } label: {
+            Text("Correct level")
+        }
+        .buttonStyle(FuelTonalButtonStyle())
+        .disabled(!canLog)
     }
 
     // MARK: Helpers

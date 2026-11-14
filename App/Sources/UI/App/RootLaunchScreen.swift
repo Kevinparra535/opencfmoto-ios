@@ -31,15 +31,21 @@ enum RootLaunchScreen: Equatable {
     case fuelPicker
     /// Fuel MVP: the Map hub previewing a route to a demo favourite, with the fuel verdict line.
     case routeVerdict
+    /// Fuel MVP: Home with the profile editor («Editar» of the Garage) open.
+    case fuelEdit
+    /// Fuel MVP: Home with «Corregir nivel» open.
+    case fuelLevel
+    /// Fuel MVP: Home while the demo GPS rides at 45 km/h (location preview on): the fuel card's moving lock.
+    case fuelMoving
 
     /// The names accepted by `-uiScreen` (lower-case).
     static let names = ["home", "dash", "navigate", "trips", "settings", "controls", "logs", "garage", "about",
                         "mirror", "onboarding", "scan", "ride", "gpx", "pocketoffer", "fuel", "refuel", "fuelpicker",
-                        "routeverdict"]
+                        "routeverdict", "fueledit", "fuellevel", "fuelmoving"]
 
     /// The screens that need the rider stopped (a fuel sheet refuses to open while moving): they imply
     /// `-demoStill` (AppLaunchOptions).
-    static let stillNames: Set<String> = ["fuel", "refuel", "fuelpicker", "fuel_picker"]
+    static let stillNames: Set<String> = ["fuel", "refuel", "fuelpicker", "fuel_picker", "fueledit", "fuellevel"]
 
     init?(name: String?) {
         guard let name else { return nil }
@@ -63,6 +69,9 @@ enum RootLaunchScreen: Equatable {
         case "refuel": self = .refuel
         case "fuelpicker", "fuel_picker": self = .fuelPicker
         case "routeverdict", "route_verdict": self = .routeVerdict
+        case "fueledit": self = .fuelEdit
+        case "fuellevel": self = .fuelLevel
+        case "fuelmoving": self = .fuelMoving
         default: return nil
         }
     }

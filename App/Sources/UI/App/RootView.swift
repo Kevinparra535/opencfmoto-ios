@@ -169,15 +169,25 @@ struct RootView: View {
             }
             Log.i("UI", "-uiScreen fuel")
             router.path = [.garage, .garageBike(id)]
-        case .refuel, .fuelPicker:
-            let name = screen == .refuel ? "refuel" : "fuelpicker"
+        case .refuel, .fuelPicker, .fuelEdit, .fuelLevel:
             guard let id = model.garage.selected?.id else {
-                Log.w("UI", "-uiScreen \(name): no bike in the garage")
+                Log.w("UI", "-uiScreen \(screen): no bike in the garage")
                 return
             }
-            let sheet: FuelSheet = screen == .refuel ? .refuel(bikeId: id, late: false) : .picker(bikeId: id, fromPrompt: true)
+            let sheet: FuelSheet
+            switch screen {
+            case .fuelPicker: sheet = .picker(bikeId: id, fromPrompt: true)
+            case .fuelEdit: sheet = .editProfile(bikeId: id)
+            case .fuelLevel: sheet = .level(bikeId: id)
+            default: sheet = .refuel(bikeId: id, late: false)
+            }
             let outcome = model.fuel.present(sheet) ? "opened" : "refused while moving"
-            Log.i("UI", "-uiScreen \(name) (sheet \(outcome))")
+            Log.i("UI", "-uiScreen \(screen) (sheet \(outcome))")
+        case .fuelMoving:
+            // The demo GPS only reports while something needs it: the location preview turns it on, so
+            // the fuel card sees the 45 km/h ride and shows its moving lock.
+            model.ride.startLocationPreview()
+            Log.i("UI", "-uiScreen fuelMoving (location preview on)")
         case .routeVerdict:
             await openRouteVerdict()
         }
