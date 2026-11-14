@@ -48,7 +48,9 @@ struct GarageBikeDetailView: View {
                 .task { await armScrollAnchor() }
                 .onChange(of: scrollTarget) { _, row in
                     guard let row else { return }
-                    withAnimation { proxy.scrollTo(row, anchor: .top) }
+                    withAnimation {
+                        proxy.scrollTo(row, anchor: row == GarageFuelSection.anchorID ? GarageFuelSection.anchorPoint : .top)
+                    }
                 }
         }
     }

@@ -71,7 +71,9 @@ struct FuelProfileEditor: View {
                 numberField(text: tankBinding, unit: FuelFormat.volumeUnit(volumeUnit), field: .tank,
                             isInvalid: tankL == nil && !tankText.isEmpty)
             } header: {
+                // No upper-casing: the unit keeps its case («L», «km/L», «mpg»).
                 Text("Tank (\(FuelFormat.volumeUnit(volumeUnit)))")
+                    .textCase(nil)
             } footer: {
                 if tankL == nil, !tankText.isEmpty {
                     rangeHint(FuelProfile.tankRange.lowerBound, FuelProfile.tankRange.upperBound,
@@ -94,6 +96,7 @@ struct FuelProfileEditor: View {
                             isInvalid: kmPerL == nil && !economyText.isEmpty)
             } header: {
                 Text("Fuel economy (\("~" + FuelFormat.economyUnit(units)))")
+                    .textCase(nil)
             } footer: {
                 VStack(alignment: .leading, spacing: 4) {
                     if kmPerL == nil, !economyText.isEmpty {

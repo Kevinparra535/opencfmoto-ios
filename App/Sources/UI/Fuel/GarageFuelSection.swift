@@ -14,8 +14,10 @@ import OpenCfMotoAppModel
 struct GarageFuelSection: View {
     let bikeID: String
 
-    /// The row the Garage detail scrolls to for `-uiScreen fuel`.
+    /// The row the Garage detail scrolls to for `-uiScreen fuel` (the section's first row).
     static let anchorID = "fuel"
+    /// Where that row lands: a little below the top, so the «Combustible» header shows above it.
+    static let anchorPoint = UnitPoint(x: 0.5, y: 0.1)
 
     @Environment(AppModel.self) private var model
 
@@ -34,14 +36,13 @@ struct GarageFuelSection: View {
                     Label("Choose the model", systemImage: "fuelpump")
                 }
                 .disabled(!canLog)
+                .id(Self.anchorID)
                 if !canLog {
                     FuelMovingLine("Stop to choose your bike")
                 }
             }
         } header: {
-            // The scroll anchor sits on the header, so «Combustible» shows above its first row.
             Text("Fuel & range")
-                .id(Self.anchorID)
         } footer: {
             if state.profile == nil {
                 Text("Tell us which bike it is to estimate its range.")
@@ -94,6 +95,7 @@ struct GarageFuelSection: View {
         } label: {
             Text("Model")
         }
+        .id(Self.anchorID)
 
         LabeledContent {
             Text(verbatim: FuelUIText.volume(profile.tankL, fuel.volumeUnit))
