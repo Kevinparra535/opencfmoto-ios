@@ -1,0 +1,158 @@
+[   0.001] fakedash 1.0 — scenario cfdl26, dash cfdl26: CFDL26 (CFMoto 1000 MT-X) 800x951 portrait, sdk 1.1.4, notify burst
+[   0.001] waiting for the phone probe on 127.0.0.1:10930 (connect-back to the probe source on ports 10922/10921/10920)
+[   5.555] [probe] PROBE from 127.0.0.1:63156 → 0x70000011 {"status":true}
+[   5.556] [s1] connect-back session to 127.0.0.1 (CFDL26 (CFMoto 1000 MT-X) 800x951 portrait, sdk 1.1.4, notify burst)
+[   5.759] [s1] [ctrl1] connected to 127.0.0.1:10922
+[   5.760] [s1][ctrl1] → 0x10000 CHANNEL_CAR_CTRL
+[   5.761] [s1][ctrl1] ← 0x10001 CAR_CTRL_ACK (1.4 ms)
+[   5.822] [s1][ctrl1] → 0x10010 CLIENT_INFO {"HUID":"6WX0AT231300200","HUName":"CFMOTO-805120","package_name":"com.cfmoto.cfdashmotopl…
+[   5.822] [s1][ctrl1] ← 0x10011 CLIENT_INFO_RLY (6.8 ms) {"pxcVersion":"1.0.2","phoneUUID":"24fb2539-078f-4032-86a1-ceef4e60ebaa","phoneBrand":"App…
+[   5.875] [s1][ctrl1] → 0x10690 QUERY_SPEED {"usbSpeed":0,"wifiSpeed":0}
+[   5.876] [s1][ctrl1] ← 0x10691 QUERY_SPEED_RLY (0.5 ms)
+[   5.939] [s1] [ctrl2] connected to 127.0.0.1:10922
+[   5.939] [s1][ctrl2] → 0x20000 CHANNEL_CAR_DATA
+[   5.940] [s1][ctrl2] ← 0x20001 CAR_DATA_ACK (0.8 ms)
+[   6.102] [s1][ctrl2] → 0x10780 LOG_REPORT {"log":"EasyConn mdns success (fakedash simulated log)"}
+[   6.102] [s1][ctrl2] ← 0x10781 LOG_REPORT_ACK (0.8 ms)
+[   6.104] [s1][ctrl2] → 0x103e0 CHECK_SN {"client_set":"easy_conn","sn":"DSXXZMHNFV3DEXEBB3PZ2"}
+[   6.104] [s1][ctrl2] ← 0x103e1 CHECK_SN_ACK (0.8 ms)
+[   6.104] [s1][ctrl2] ← 0x201c0 CHECK_SN_RESULT (0.8 ms) {"isOk":true,"errCode":0,"errMsg":"","id":"DSXXZMHNFV3DEXEBB3PZ2","client_set":"easy_conn"…
+[   6.134] [s1][ctrl2] → 0x201c1 CHECK_SN_RESULT_ACK
+[   6.216] [s1][ctrl2] → 0x103a0 OTA_FTP_INFO {"port":11021,"userName":"carbit_ec_ftp_ota","pwd":"PLACEHOLDER-not-a-real-password"}
+[   6.256] [s1][ctrl2] ← 0x103a1 OTA_FTP_INFO_ACK (120.9 ms)
+[   6.261] [s1][ctrl2] → 0x10020 MEDIA_FEATURE_CFG {"music":1,"talkie":0,"tts":1,"vr":0,"autoChangeToBT":0}
+[   6.261] [s1][ctrl2] ← 0x10021 MEDIA_FEATURE_CFG_ACK (1.6 ms)
+[   6.267] [s1][ctrl2] → 0x10040 NOTIFY_0x10040(maxNaviIcon) {"maxNaviIcon":161,"supportFunction":0}
+[   6.267] [s1][ctrl2] ← 0x10041 ACK_0x10041 (0.6 ms)
+[   6.275] [s1][ctrl2] → 0x10600 HU_TIME_SYNC <45 B feffffff329200000100000000000000>
+[   6.275] [s1][ctrl2] ← 0x10601 HU_TIME_SYNC_ACK (1.5 ms) <45 B feffffff329200000100000000000000>
+[   6.282] [s1][ctrl2] → 0x10750 NOTIFY_0x10750
+[   6.283] [s1][ctrl2] ← 0x10751 ACK_0x10751 (1.4 ms)
+[   6.291] [s1][ctrl2] → 0x10430 NOTIFY_0x10430
+[   6.291] [s1][ctrl2] ← 0x10431 ACK_0x10431 (0.8 ms)
+[   6.298] [s1][ctrl2] → 0x10450 HU_QUERY_TIME
+[   6.300] [s1][ctrl2] ← 0x10451 HU_QUERY_TIME_ACK (1.9 ms)
+[   6.305] [s1][ctrl2] → 0x10460 NOTIFY_0x10460(bluetooth) {"bluetooth":4129}
+[   6.305] [s1][ctrl2] ← 0x10461 ACK_0x10461 (1.3 ms)
+[   6.365] [s1] [mctrl] connected to 127.0.0.1:10921
+[   6.365] [s1][mctrl] → 16 REQ_RV_CONFIG_CAPTURE (204 B)
+[   6.371] [s1][mctrl] ← 17 RLY_RV_CONFIG_CAPTURE (5.7 ms) 020000002003b00301
+[   6.371] [s1] canvas 800x944 (requested 800x951)
+[   6.372] [s1][mctrl] → 48 REQ_GET_VERSION
+[   6.372] [s1][mctrl] ← 49 RLY_GET_VERSION (0.6 ms) 0300000001000000
+[   6.372] [s1][mctrl] → 64 REQ_HEARTBEAT
+[   6.372] [s1][mctrl] ← 65 RLY_HEARTBEAT (0.3 ms)
+[   6.373] [s1][mctrl] → 96 REQ_CONFIGCAPTUREREXTEND (29 B)
+[   6.373] [s1][mctrl] ← 97 RLY_CONFIGCAPTUREREXTEND (0.4 ms) {"state":0}
+[   6.377] [s1][mctrl] → 112 REQ_RV_DATA_START
+[   6.378] [s1][mctrl] ← 113 RLY_RV_DATA_START (1.4 ms)
+[   6.450] [s1] [mdata] connected to 127.0.0.1:10920
+[   6.489] [s1] [mdata] ← frame #1 IDR 52253 B nal=[7,8,5,5,5,5,5,5,5,5] (2.8 ms)
+[   6.489] [s1] first frame 0.076 s after RLY 113
+[   6.489] [s1] SPS #1 at frame 1: profile 66 constraints 0xE0 level 31 800x944 poc 0 refs 2 frame_num_bits 5 vui=yes reorder=- | SPS 2742e01fa9181903bd80b502020230ad7bdf01 PPS 28de09c8
+[   6.489] [s1] SPS: profile 66 level 31 800x944 poc_type 0 refs 2 vui True 2742e01fa9181903bd80b502020230ad7bdf01
+[   6.511] [s1] [mdata] ← frame #2 P 47017 B nal=[1,1,1,1,1,1,1,1] (0.1 ms)
+[   6.576] [s1] [mdata] ← frame #3 P 33792 B nal=[1,1,1,1,1,1,1,1] (21.7 ms)
+[   7.256] [s1] [mdata] ← frame #4 P 54144 B nal=[1,1,1,1,1,1,1,1] (637.0 ms)
+[   7.340] [s1] [mdata] ← frame #5 P 67604 B nal=[1,1,1,1,1,1,1,1] (1.2 ms)
+[   7.795] [s1][ctrl1] → 0x70000000 HEARTBEAT
+[   7.797] [s1][ctrl1] ← 0x70000000 HEARTBEAT (phone)
+[   7.797] [s1][ctrl1] → 0x70000001 HEARTBEAT_ACK
+[   7.797] [s1][ctrl1] ← 0x70000001 HEARTBEAT_ACK (3.2 ms)
+[   8.025] [s1][ctrl2] → 0x70000000 HEARTBEAT
+[   8.026] [s1][ctrl2] ← 0x70000000 HEARTBEAT (phone)
+[   8.027] [s1][ctrl2] → 0x70000001 HEARTBEAT_ACK
+[   8.027] [s1][ctrl2] ← 0x70000001 HEARTBEAT_ACK (15.5 ms)
+[   8.315] [s1][ctrl2] → 0x10600 HU_TIME_SYNC <39 B feffffff329200000200000000000000>
+[   8.316] [s1][ctrl2] ← 0x10601 HU_TIME_SYNC_ACK (0.7 ms) <45 B feffffff329200000200000000000000>
+[   9.379] [s1][mctrl] ← 65 RLY_HEARTBEAT (0.4 ms)
+[   9.789] [s1][ctrl1] ← 0x70000000 HEARTBEAT (phone)
+[   9.789] [s1][ctrl1] → 0x70000001 HEARTBEAT_ACK
+[   9.796] [s1][ctrl1] → 0x70000000 HEARTBEAT
+[   9.797] [s1][ctrl1] ← 0x70000001 HEARTBEAT_ACK (0.9 ms)
+[   9.996] [s1][ctrl2] ← 0x70000000 HEARTBEAT (phone)
+[   9.996] [s1][ctrl2] → 0x70000001 HEARTBEAT_ACK
+[  10.028] [s1][ctrl2] → 0x70000000 HEARTBEAT
+[  10.028] [s1][ctrl2] ← 0x70000001 HEARTBEAT_ACK (0.5 ms)
+[  12.313] [s1][ctrl2] → 0x10750 NOTIFY_0x10750
+[  12.314] [s1][ctrl2] ← 0x10751 ACK_0x10751 (1.1 ms)
+[  18.555] [s1] [mdata] ← frame #100 P 53750 B nal=[1,1,1,1,1,1,1,1] (0.7 ms)
+[  31.184] [s1] [mdata] ← frame #200 P 12085 B nal=[1,1,1,1,1,1,1,1] (0.1 ms)
+[  36.801] [s1] session ended: completed
+
+====================================================================================================
+fakedash summary — scenario cfdl26, dash cfdl26 (CFDL26 (CFMoto 1000 MT-X) 800x951 portrait, sdk 1.1.4, notify burst)
+duration 39.4 s, 1 probe connection(s), 1 session(s), 235 frame(s) received
+Android default profile for this CLIENT_INFO: Cfdl26Portrait (supportFunction 128, supportScreenTouch absent)
+phone identity: phoneUUID=24fb2539-078f-4032-86a1-ceef4e60ebaa, pubkey=sha256:8f9119b42e4efdd3, phoneBrand=Apple, phoneModel=iPhone17,3, phoneOsVersion=35, supportFunction=128, supportScreenTouch=False
+probe t=5.555 from 127.0.0.1:63156 → accepted
+----------------------------------------------------------------------------------------------------
+session 1: phone 127.0.0.1, end: completed
+  handshake 0.554 s, canvas 800x944, frames 235, keyframes 29, avg 53737 B, first frame 0.076 s after 113
+  pulls [stream]: 235 frames in 30.33 s = 7.75 fps
+  114→frame latency: p50 18.1 ms, p95 611.6 ms, max 1435.2 ms
+  IDR interval: mean 1.08 s, max 1.84 s
+  SPS: profile_idc 66, level 31, 800x944, poc_type 0, refs 2, vui True
+  SPS #1 from frame 1 (235 frames): profile 66 constraints 0xE0 level 31 800x944 poc 0 refs 2 frame_num_bits 5 vui=yes reorder=- | SPS 2742e01fa9181903bd80b502020230ad7bdf01 PPS 28de09c8
+  phone heartbeats ctrl1: 15 beats in 31.02 s, first 2.035 s after the select, mean interval 2.01 s, max gap 2.637 s
+  phone heartbeats ctrl2: 15 beats in 30.84 s, first 2.086 s after the select, mean interval 2.014 s, max gap 2.361 s
+  0x10600→0x10601: normal→echo ×12, short→echo ×1, tsep→echo ×1, epoch→phone ×1
+  closed: ctrl1 by dash, ctrl2 by dash, mctrl by dash, mdata by dash
+decode: DECODABLE, h264 Constrained Baseline level 31, 800x944, 235/235 frames decoded, 0 decoder error line(s)
+----------------------------------------------------------------------------------------------------
+frames per command (conn direction cmd name: count):
+  ctrl1 dash->phone 0x10000 CHANNEL_CAR_CTRL                             1
+  ctrl1 dash->phone 0x10010 CLIENT_INFO                                  1
+  ctrl1 dash->phone 0x10690 QUERY_SPEED                                  1
+  ctrl1 dash->phone 0x70000000 HEARTBEAT                                 15
+  ctrl1 dash->phone 0x70000001 HEARTBEAT_ACK                             15
+  ctrl1 phone->dash 0x10001 CAR_CTRL_ACK                                 1
+  ctrl1 phone->dash 0x10011 CLIENT_INFO_RLY                              1
+  ctrl1 phone->dash 0x10691 QUERY_SPEED_RLY                              1
+  ctrl1 phone->dash 0x70000000 HEARTBEAT                                 15
+  ctrl1 phone->dash 0x70000001 HEARTBEAT_ACK                             15
+  ctrl2 dash->phone 0x10020 MEDIA_FEATURE_CFG                            1
+  ctrl2 dash->phone 0x10040 NOTIFY_0x10040(maxNaviIcon)                  1
+  ctrl2 dash->phone 0x103a0 OTA_FTP_INFO                                 1
+  ctrl2 dash->phone 0x103e0 CHECK_SN                                     1
+  ctrl2 dash->phone 0x10430 NOTIFY_0x10430                               1
+  ctrl2 dash->phone 0x10450 HU_QUERY_TIME                                1
+  ctrl2 dash->phone 0x10460 NOTIFY_0x10460(bluetooth)                    1
+  ctrl2 dash->phone 0x10600 HU_TIME_SYNC                                 15
+  ctrl2 dash->phone 0x10750 NOTIFY_0x10750                               6
+  ctrl2 dash->phone 0x10780 LOG_REPORT                                   1
+  ctrl2 dash->phone 0x20000 CHANNEL_CAR_DATA                             1
+  ctrl2 dash->phone 0x201c1 CHECK_SN_RESULT_ACK                          1
+  ctrl2 dash->phone 0x70000000 HEARTBEAT                                 15
+  ctrl2 dash->phone 0x70000001 HEARTBEAT_ACK                             15
+  ctrl2 phone->dash 0x10021 MEDIA_FEATURE_CFG_ACK                        1
+  ctrl2 phone->dash 0x10041 ACK_0x10041                                  1
+  ctrl2 phone->dash 0x103a1 OTA_FTP_INFO_ACK                             1
+  ctrl2 phone->dash 0x103e1 CHECK_SN_ACK                                 1
+  ctrl2 phone->dash 0x10431 ACK_0x10431                                  1
+  ctrl2 phone->dash 0x10451 HU_QUERY_TIME_ACK                            1
+  ctrl2 phone->dash 0x10461 ACK_0x10461                                  1
+  ctrl2 phone->dash 0x10601 HU_TIME_SYNC_ACK                             15
+  ctrl2 phone->dash 0x10751 ACK_0x10751                                  6
+  ctrl2 phone->dash 0x10781 LOG_REPORT_ACK                               1
+  ctrl2 phone->dash 0x20001 CAR_DATA_ACK                                 1
+  ctrl2 phone->dash 0x201c0 CHECK_SN_RESULT                              1
+  ctrl2 phone->dash 0x70000000 HEARTBEAT                                 15
+  ctrl2 phone->dash 0x70000001 HEARTBEAT_ACK                             14
+  mctrl dash->phone 0x10 REQ_RV_CONFIG_CAPTURE                           1
+  mctrl dash->phone 0x30 REQ_GET_VERSION                                 1
+  mctrl dash->phone 0x40 REQ_HEARTBEAT                                   11
+  mctrl dash->phone 0x60 REQ_CONFIGCAPTUREREXTEND                        1
+  mctrl dash->phone 0x70 REQ_RV_DATA_START                               1
+  mctrl phone->dash 0x11 RLY_RV_CONFIG_CAPTURE                           1
+  mctrl phone->dash 0x31 RLY_GET_VERSION                                 1
+  mctrl phone->dash 0x41 RLY_HEARTBEAT                                   11
+  mctrl phone->dash 0x61 RLY_CONFIGCAPTUREREXTEND                        1
+  mctrl phone->dash 0x71 RLY_RV_DATA_START                               1
+  mdata dash->phone 0x72 REQ_RV_DATA_NEXT                                235
+  mdata phone->dash raw frame                                            235
+  probe dash->phone 0x70000011 MDNS_RESPOND_ACK                          1
+  probe phone->dash 0x70000010 MDNS_RESPOND(probe)                       1
+----------------------------------------------------------------------------------------------------
+RESULT: PASS — 0 violation(s), 0 warning(s)
+====================================================================================================

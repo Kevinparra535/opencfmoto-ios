@@ -1,0 +1,18 @@
+{
+    "programs": [
+
+    ],
+    "stream_groups": [
+
+    ],
+    "streams": [
+        {
+            "codec_name": "h264",
+            "profile": "Constrained Baseline",
+            "width": 1280,
+            "height": 576,
+            "level": 31,
+            "nb_read_frames": "155"
+        }
+    ]
+}

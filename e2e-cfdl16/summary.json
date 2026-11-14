@@ -1,0 +1,222 @@
+{
+  "tool": "fakedash 1.0",
+  "scenario": "cfdl16",
+  "dash": "cfdl16",
+  "dash_title": "CFDL16 (CFMoto 675 SR-R) 800x386 landscape, non-touch, sdk 0.9.29.1",
+  "started": "2026-11-14T07:44:56",
+  "duration_s": 56.119,
+  "goal_reached": true,
+  "result": "PASS",
+  "violations": 0,
+  "warnings": 0,
+  "expected_profile_android_default": {
+    "name": "LegacyCfdl16",
+    "supportFunction": 0,
+    "supportScreenTouch": false,
+    "scores": {
+      "Nk800": 0,
+      "Cfdl26NkTouch": 0,
+      "MoriniMlSoftAp": 1,
+      "Cfdl16MotoPlayLandscape": 3,
+      "ClC450": 0,
+      "Cfdl26Landscape": -1,
+      "Cfdl26Portrait": 0,
+      "LegacyCfdl16": 10
+    }
+  },
+  "identity": {
+    "phoneUUID": "de4ed86d-638b-480a-8028-2509e2e239f9",
+    "pubkey": "sha256:1bb99dcd11ee807f",
+    "phoneBrand": "Apple",
+    "phoneModel": "iPhone17,3",
+    "phoneOsVersion": "35",
+    "supportFunction": 0,
+    "supportScreenTouch": false
+  },
+  "probes": [
+    {
+      "t": 4.485,
+      "ip": "127.0.0.1",
+      "port": 62111,
+      "result": "accepted",
+      "valid": true
+    }
+  ],
+  "sessions": [
+    {
+      "cycle": 1,
+      "phone_ip": "127.0.0.1",
+      "plan": {
+        "stream_s": 45.0,
+        "stall_s": 0.0,
+        "resume_s": 0.0,
+        "touch": false
+      },
+      "probe_t": 4.485,
+      "start_t": 4.508,
+      "end_t": 50.189,
+      "end_reason": "completed",
+      "handshake_s": 0.245,
+      "canvas": "800x384",
+      "frames": 434,
+      "keyframes": 44,
+      "bytes": 9588759,
+      "avg_frame_bytes": 22093,
+      "first_frame_after_113_s": 0.076,
+      "pull_latency_ms": {
+        "p50": 0.35,
+        "p95": 575.76,
+        "max": 685.72
+      },
+      "pull_phases": [
+        {
+          "label": "stream",
+          "seconds": 45.02,
+          "frames": 434,
+          "fps": 9.64
+        }
+      ],
+      "idr_interval_s": {
+        "mean": 1.02,
+        "max": 1.147
+      },
+      "sps": {
+        "profile_idc": 66,
+        "constraint_flags": 224,
+        "level_idc": 31,
+        "sps_id": 0,
+        "chroma_format_idc": 1,
+        "log2_max_frame_num": 5,
+        "poc_type": 0,
+        "max_num_ref_frames": 2,
+        "frame_mbs_only": 1,
+        "width": 800,
+        "height": 384,
+        "coded_width": 800,
+        "coded_height": 384,
+        "frame_cropping": false,
+        "vui": true,
+        "full_range": 0,
+        "hex": "2742e01fa91819063602d4080808c2b5ef7c04"
+      },
+      "pps_hex": "28de09c8",
+      "sps_variants": [
+        {
+          "hex": "2742e01fa91819063602d4080808c2b5ef7c04",
+          "pps_hex": "28de09c8",
+          "first_frame": 1,
+          "frames": 434,
+          "profile": 66,
+          "level": 31,
+          "constraints": 224,
+          "poc_type": 0,
+          "refs": 2,
+          "log2_max_frame_num": 5,
+          "vui": true,
+          "reorder": null,
+          "width": 800,
+          "height": 384
+        }
+      ],
+      "heartbeats": {
+        "ctrl1": {
+          "beats": 22,
+          "life_s": 45.39,
+          "first_after_select_s": 2.008,
+          "max_gap_s": 2.076,
+          "mean_interval_s": 2.022
+        },
+        "ctrl2": {
+          "beats": 22,
+          "life_s": 45.21,
+          "first_after_select_s": 2.032,
+          "max_gap_s": 2.078,
+          "mean_interval_s": 2.018
+        }
+      },
+      "closed": {
+        "ctrl1": {
+          "by": "dash",
+          "t": 50.108
+        },
+        "ctrl2": {
+          "by": "dash",
+          "t": 50.108
+        },
+        "mctrl": {
+          "by": "dash",
+          "t": 50.109
+        },
+        "mdata": {
+          "by": "dash",
+          "t": 50.109
+        }
+      },
+      "clock_replies": {
+        "normal→echo": 20,
+        "short→echo": 1,
+        "tsep→echo": 1,
+        "epoch→phone": 1
+      }
+    }
+  ],
+  "frames_total": 434,
+  "decode": {
+    "file": "/Users/runner/work/opencfmoto-ios/opencfmoto-ios/e2e-out/e2e-cfdl16/dash.h264",
+    "codec": "h264",
+    "profile": "Constrained Baseline",
+    "level": 31,
+    "width": 800,
+    "height": 384,
+    "pix_fmt": "yuv420p",
+    "decoded_frames": 434,
+    "ffprobe_errors": [],
+    "decode_returncode": 0,
+    "decode_error_lines": 0,
+    "decode_errors": [],
+    "frames_received": 434,
+    "expected_size": "800x384",
+    "decodable": true
+  },
+  "counts": {
+    "ctrl1 dash->phone 0x10000 CHANNEL_CAR_CTRL": 1,
+    "ctrl1 dash->phone 0x10010 CLIENT_INFO": 1,
+    "ctrl1 dash->phone 0x10690 QUERY_SPEED": 1,
+    "ctrl1 dash->phone 0x70000000 HEARTBEAT": 22,
+    "ctrl1 dash->phone 0x70000001 HEARTBEAT_ACK": 22,
+    "ctrl1 phone->dash 0x10001 CAR_CTRL_ACK": 1,
+    "ctrl1 phone->dash 0x10011 CLIENT_INFO_RLY": 1,
+    "ctrl1 phone->dash 0x10691 QUERY_SPEED_RLY": 1,
+    "ctrl1 phone->dash 0x70000000 HEARTBEAT": 22,
+    "ctrl1 phone->dash 0x70000001 HEARTBEAT_ACK": 22,
+    "ctrl2 dash->phone 0x103e0 CHECK_SN": 1,
+    "ctrl2 dash->phone 0x10450 HU_QUERY_TIME": 1,
+    "ctrl2 dash->phone 0x10600 HU_TIME_SYNC": 23,
+    "ctrl2 dash->phone 0x20000 CHANNEL_CAR_DATA": 1,
+    "ctrl2 dash->phone 0x201c1 CHECK_SN_RESULT_ACK": 1,
+    "ctrl2 dash->phone 0x70000000 HEARTBEAT": 22,
+    "ctrl2 dash->phone 0x70000001 HEARTBEAT_ACK": 22,
+    "ctrl2 phone->dash 0x103e1 CHECK_SN_ACK": 1,
+    "ctrl2 phone->dash 0x10451 HU_QUERY_TIME_ACK": 1,
+    "ctrl2 phone->dash 0x10601 HU_TIME_SYNC_ACK": 23,
+    "ctrl2 phone->dash 0x20001 CAR_DATA_ACK": 1,
+    "ctrl2 phone->dash 0x201c0 CHECK_SN_RESULT": 1,
+    "ctrl2 phone->dash 0x70000000 HEARTBEAT": 22,
+    "ctrl2 phone->dash 0x70000001 HEARTBEAT_ACK": 22,
+    "mctrl dash->phone 0x10 REQ_RV_CONFIG_CAPTURE": 1,
+    "mctrl dash->phone 0x30 REQ_GET_VERSION": 1,
+    "mctrl dash->phone 0x40 REQ_HEARTBEAT": 15,
+    "mctrl dash->phone 0x60 REQ_CONFIGCAPTUREREXTEND": 1,
+    "mctrl dash->phone 0x70 REQ_RV_DATA_START": 1,
+    "mctrl phone->dash 0x11 RLY_RV_CONFIG_CAPTURE": 1,
+    "mctrl phone->dash 0x31 RLY_GET_VERSION": 1,
+    "mctrl phone->dash 0x41 RLY_HEARTBEAT": 15,
+    "mctrl phone->dash 0x61 RLY_CONFIGCAPTUREREXTEND": 1,
+    "mctrl phone->dash 0x71 RLY_RV_DATA_START": 1,
+    "mdata dash->phone 0x72 REQ_RV_DATA_NEXT": 434,
+    "mdata phone->dash raw frame": 434,
+    "probe dash->phone 0x70000011 MDNS_RESPOND_ACK": 1,
+    "probe phone->dash 0x70000010 MDNS_RESPOND(probe)": 1
+  },
+  "findings": []
+}

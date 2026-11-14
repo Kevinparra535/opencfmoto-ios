@@ -1,0 +1,346 @@
+{
+  "tool": "fakedash 1.0",
+  "scenario": "reconnect",
+  "dash": "cfdl16",
+  "dash_title": "CFDL16 (CFMoto 675 SR-R) 800x386 landscape, non-touch, sdk 0.9.29.1",
+  "started": "2026-11-14T07:47:10",
+  "duration_s": 29.511,
+  "goal_reached": true,
+  "result": "PASS",
+  "violations": 0,
+  "warnings": 0,
+  "expected_profile_android_default": {
+    "name": "LegacyCfdl16",
+    "supportFunction": 0,
+    "supportScreenTouch": false,
+    "scores": {
+      "Nk800": 0,
+      "Cfdl26NkTouch": 0,
+      "MoriniMlSoftAp": 1,
+      "Cfdl16MotoPlayLandscape": 3,
+      "ClC450": 0,
+      "Cfdl26Landscape": -1,
+      "Cfdl26Portrait": 0,
+      "LegacyCfdl16": 10
+    }
+  },
+  "identity": {
+    "phoneUUID": "969f042a-8a1d-45da-93f8-11e0e9a68816",
+    "pubkey": "sha256:a0137340f1b0bc64",
+    "phoneBrand": "Apple",
+    "phoneModel": "iPhone17,3",
+    "phoneOsVersion": "35",
+    "supportFunction": 0,
+    "supportScreenTouch": false
+  },
+  "probes": [
+    {
+      "t": 6.271,
+      "ip": "127.0.0.1",
+      "port": 63491,
+      "result": "accepted",
+      "valid": true
+    },
+    {
+      "t": 18.077,
+      "ip": "127.0.0.1",
+      "port": 63571,
+      "result": "accepted",
+      "valid": true,
+      "after_previous_session_s": 1.03
+    }
+  ],
+  "sessions": [
+    {
+      "cycle": 1,
+      "phone_ip": "127.0.0.1",
+      "plan": {
+        "stream_s": 10.0,
+        "stall_s": 0.0,
+        "resume_s": 0.0,
+        "touch": false
+      },
+      "probe_t": 6.271,
+      "start_t": 6.282,
+      "end_t": 17.047,
+      "end_reason": "completed",
+      "handshake_s": 0.24,
+      "canvas": "800x384",
+      "frames": 91,
+      "keyframes": 11,
+      "bytes": 2098601,
+      "avg_frame_bytes": 23061,
+      "first_frame_after_113_s": 0.096,
+      "pull_latency_ms": {
+        "p50": 0.53,
+        "p95": 594.32,
+        "max": 676.3
+      },
+      "pull_phases": [
+        {
+          "label": "stream",
+          "seconds": 10.17,
+          "frames": 91,
+          "fps": 8.95
+        }
+      ],
+      "idr_interval_s": {
+        "mean": 1.016,
+        "max": 1.044
+      },
+      "sps": {
+        "profile_idc": 66,
+        "constraint_flags": 224,
+        "level_idc": 31,
+        "sps_id": 0,
+        "chroma_format_idc": 1,
+        "log2_max_frame_num": 5,
+        "poc_type": 0,
+        "max_num_ref_frames": 2,
+        "frame_mbs_only": 1,
+        "width": 800,
+        "height": 384,
+        "coded_width": 800,
+        "coded_height": 384,
+        "frame_cropping": false,
+        "vui": true,
+        "full_range": 0,
+        "hex": "2742e01fa91819063602d4080808c2b5ef7c04"
+      },
+      "pps_hex": "28de09c8",
+      "sps_variants": [
+        {
+          "hex": "2742e01fa91819063602d4080808c2b5ef7c04",
+          "pps_hex": "28de09c8",
+          "first_frame": 1,
+          "frames": 91,
+          "profile": 66,
+          "level": 31,
+          "constraints": 224,
+          "poc_type": 0,
+          "refs": 2,
+          "log2_max_frame_num": 5,
+          "vui": true,
+          "reorder": null,
+          "width": 800,
+          "height": 384
+        }
+      ],
+      "heartbeats": {
+        "ctrl1": {
+          "beats": 5,
+          "life_s": 10.56,
+          "first_after_select_s": 2.006,
+          "max_gap_s": 2.053,
+          "mean_interval_s": 2.021
+        },
+        "ctrl2": {
+          "beats": 5,
+          "life_s": 10.38,
+          "first_after_select_s": 2.031,
+          "max_gap_s": 2.031,
+          "mean_interval_s": 2.01
+        }
+      },
+      "closed": {
+        "ctrl1": {
+          "by": "dash",
+          "t": 17.045
+        },
+        "ctrl2": {
+          "by": "dash",
+          "t": 17.045
+        },
+        "mctrl": {
+          "by": "dash",
+          "t": 17.045
+        },
+        "mdata": {
+          "by": "dash",
+          "t": 17.045
+        }
+      },
+      "clock_replies": {
+        "normal→echo": 3,
+        "short→echo": 1,
+        "tsep→echo": 1,
+        "epoch→phone": 1
+      }
+    },
+    {
+      "cycle": 2,
+      "phone_ip": "127.0.0.1",
+      "plan": {
+        "stream_s": 10.0,
+        "stall_s": 0.0,
+        "resume_s": 0.0,
+        "touch": false
+      },
+      "probe_t": 18.077,
+      "start_t": 18.078,
+      "end_t": 28.692,
+      "end_reason": "completed",
+      "handshake_s": 0.227,
+      "canvas": "800x384",
+      "frames": 91,
+      "keyframes": 10,
+      "bytes": 2121329,
+      "avg_frame_bytes": 23311,
+      "first_frame_after_113_s": 0.081,
+      "pull_latency_ms": {
+        "p50": 0.45,
+        "p95": 571.18,
+        "max": 755.71
+      },
+      "pull_phases": [
+        {
+          "label": "stream",
+          "seconds": 10.04,
+          "frames": 91,
+          "fps": 9.06
+        }
+      ],
+      "idr_interval_s": {
+        "mean": 1.077,
+        "max": 1.482
+      },
+      "sps": {
+        "profile_idc": 66,
+        "constraint_flags": 224,
+        "level_idc": 31,
+        "sps_id": 0,
+        "chroma_format_idc": 1,
+        "log2_max_frame_num": 5,
+        "poc_type": 0,
+        "max_num_ref_frames": 2,
+        "frame_mbs_only": 1,
+        "width": 800,
+        "height": 384,
+        "coded_width": 800,
+        "coded_height": 384,
+        "frame_cropping": false,
+        "vui": true,
+        "full_range": 0,
+        "hex": "2742e01fa91819063602d4080808c2b5ef7c04"
+      },
+      "pps_hex": "28de09c8",
+      "sps_variants": [
+        {
+          "hex": "2742e01fa91819063602d4080808c2b5ef7c04",
+          "pps_hex": "28de09c8",
+          "first_frame": 1,
+          "frames": 91,
+          "profile": 66,
+          "level": 31,
+          "constraints": 224,
+          "poc_type": 0,
+          "refs": 2,
+          "log2_max_frame_num": 5,
+          "vui": true,
+          "reorder": null,
+          "width": 800,
+          "height": 384
+        }
+      ],
+      "heartbeats": {
+        "ctrl1": {
+          "beats": 5,
+          "life_s": 10.41,
+          "first_after_select_s": 2.07,
+          "max_gap_s": 2.07,
+          "mean_interval_s": 1.989
+        },
+        "ctrl2": {
+          "beats": 5,
+          "life_s": 10.24,
+          "first_after_select_s": 1.999,
+          "max_gap_s": 2.041,
+          "mean_interval_s": 2.014
+        }
+      },
+      "closed": {
+        "ctrl1": {
+          "by": "dash",
+          "t": 28.69
+        },
+        "ctrl2": {
+          "by": "dash",
+          "t": 28.69
+        },
+        "mctrl": {
+          "by": "dash",
+          "t": 28.69
+        },
+        "mdata": {
+          "by": "dash",
+          "t": 28.69
+        }
+      },
+      "clock_replies": {
+        "normal→echo": 3,
+        "short→echo": 1,
+        "tsep→echo": 1,
+        "epoch→phone": 1
+      }
+    }
+  ],
+  "frames_total": 182,
+  "decode": {
+    "file": "/Users/runner/work/opencfmoto-ios/opencfmoto-ios/e2e-out/e2e-reconnect/dash.h264",
+    "codec": "h264",
+    "profile": "Constrained Baseline",
+    "level": 31,
+    "width": 800,
+    "height": 384,
+    "pix_fmt": "yuv420p",
+    "decoded_frames": 182,
+    "ffprobe_errors": [],
+    "decode_returncode": 0,
+    "decode_error_lines": 0,
+    "decode_errors": [],
+    "frames_received": 182,
+    "expected_size": "800x384",
+    "decodable": true
+  },
+  "counts": {
+    "ctrl1 dash->phone 0x10000 CHANNEL_CAR_CTRL": 2,
+    "ctrl1 dash->phone 0x10010 CLIENT_INFO": 2,
+    "ctrl1 dash->phone 0x10690 QUERY_SPEED": 2,
+    "ctrl1 dash->phone 0x70000000 HEARTBEAT": 10,
+    "ctrl1 dash->phone 0x70000001 HEARTBEAT_ACK": 10,
+    "ctrl1 phone->dash 0x10001 CAR_CTRL_ACK": 2,
+    "ctrl1 phone->dash 0x10011 CLIENT_INFO_RLY": 2,
+    "ctrl1 phone->dash 0x10691 QUERY_SPEED_RLY": 2,
+    "ctrl1 phone->dash 0x70000000 HEARTBEAT": 10,
+    "ctrl1 phone->dash 0x70000001 HEARTBEAT_ACK": 10,
+    "ctrl2 dash->phone 0x103e0 CHECK_SN": 2,
+    "ctrl2 dash->phone 0x10450 HU_QUERY_TIME": 2,
+    "ctrl2 dash->phone 0x10600 HU_TIME_SYNC": 12,
+    "ctrl2 dash->phone 0x20000 CHANNEL_CAR_DATA": 2,
+    "ctrl2 dash->phone 0x201c1 CHECK_SN_RESULT_ACK": 2,
+    "ctrl2 dash->phone 0x70000000 HEARTBEAT": 10,
+    "ctrl2 dash->phone 0x70000001 HEARTBEAT_ACK": 10,
+    "ctrl2 phone->dash 0x103e1 CHECK_SN_ACK": 2,
+    "ctrl2 phone->dash 0x10451 HU_QUERY_TIME_ACK": 2,
+    "ctrl2 phone->dash 0x10601 HU_TIME_SYNC_ACK": 12,
+    "ctrl2 phone->dash 0x20001 CAR_DATA_ACK": 2,
+    "ctrl2 phone->dash 0x201c0 CHECK_SN_RESULT": 2,
+    "ctrl2 phone->dash 0x70000000 HEARTBEAT": 10,
+    "ctrl2 phone->dash 0x70000001 HEARTBEAT_ACK": 10,
+    "mctrl dash->phone 0x10 REQ_RV_CONFIG_CAPTURE": 2,
+    "mctrl dash->phone 0x30 REQ_GET_VERSION": 2,
+    "mctrl dash->phone 0x40 REQ_HEARTBEAT": 8,
+    "mctrl dash->phone 0x60 REQ_CONFIGCAPTUREREXTEND": 2,
+    "mctrl dash->phone 0x70 REQ_RV_DATA_START": 2,
+    "mctrl phone->dash 0x11 RLY_RV_CONFIG_CAPTURE": 2,
+    "mctrl phone->dash 0x31 RLY_GET_VERSION": 2,
+    "mctrl phone->dash 0x41 RLY_HEARTBEAT": 8,
+    "mctrl phone->dash 0x61 RLY_CONFIGCAPTUREREXTEND": 2,
+    "mctrl phone->dash 0x71 RLY_RV_DATA_START": 2,
+    "mdata dash->phone 0x72 REQ_RV_DATA_NEXT": 182,
+    "mdata phone->dash raw frame": 182,
+    "probe dash->phone 0x70000011 MDNS_RESPOND_ACK": 2,
+    "probe phone->dash 0x70000010 MDNS_RESPOND(probe)": 2
+  },
+  "findings": []
+}
