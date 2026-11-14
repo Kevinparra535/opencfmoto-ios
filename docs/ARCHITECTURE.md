@@ -20,7 +20,7 @@ with file:line citations):
 | `session-network.md` | QR formats, Wi-Fi join, addressing, discovery ladder, session state machine + every timer, persistence, logging |
 | `input-controls.md` | dash touch (cmd 32) + ghost filter, gestures, handlebar AVRCP gestures/presets, focus engine, iOS feasibility |
 | `navigation-dash.md` | route following (GpxNav), voice, routers, search, speed limits, night, THE DASH UI (pixel geometry, palette, icons, behaviours), places |
-| `app-features.md` | settings (+ JSON pack), garage, trips, logs/redaction, problem report, home/setup flows, EN/ES strings |
+| `app-features.md` | settings (+ JSON pack), garage, trips, logs/redaction, problem report, home/setup flows, EN/ES strings; fuel range estimate (iOS only, §15) |
 | `ios-platform-facts.md` | verified iOS platform constraints (NEHotspotConfiguration, cellular pinning, background, VT, ReplayKit, MPRemoteCommandCenter) |
 
 ## 2. Repository layout
@@ -43,6 +43,7 @@ Packages/OpenCfMotoKit/         Swift package
     Settings/  SettingsTypes, SettingsStore (scoped keys), SettingsBackup (opencfmoto.settings v1)
     Storage/   KeyValueStore / SecretStore contracts + in-memory impls
     Trips/     trip model, recorder, store, stats, GPX export, thumbnail geometry
+    Fuel/      fuel range estimate: catalog, bike candidates, profile, refuel log, GPS km counter, estimator, verdict, alert latch, FuelStore
   Sources/OpenCfMotoAppModel/   The app's @Observable model layer (Observation + Core only). Talks to the
                                 platform through the ports in Contract/AppPorts.swift → builds and
                                 is unit-tested on Linux with the fakes in Testing/PreviewServices.swift.
@@ -65,6 +66,7 @@ QR scan ─▶ BikeQR ─▶ Garage/SettingsStore                               
             │                                                                              │
 CLLocation ─▶ LocationService ─▶ LocationFix ─┬─▶ NavigationSession (Core) ─▶ NavSnapshot ─┐│
             │                                 ├─▶ TripRecorder (Core)                     ││
+            │                                 ├─▶ FuelModel ─▶ FuelOdometer (Core)        ││
             │                                 └─▶ DashUIController camera                 ││
             │   NavEffect.speak ─▶ SpeechAnnouncer (AVSpeechSynthesizer)                  ││
             │                                                                             ▼│

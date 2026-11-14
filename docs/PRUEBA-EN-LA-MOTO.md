@@ -3,7 +3,9 @@
 > **In English, in short:** this is the checklist for a first ride. Install the app (easiest: the public
 > TestFlight beta, <https://testflight.apple.com/join/aWur6hxp>; or the free sideload IPA from Releases:
 > [INSTALAR.md](INSTALAR.md#english)), pair the bike by scanning the dash QR, tap **Connect** with the
-> engine off and compare what you see with the table in «En la moto». With the sideload build you join
+> engine off and compare what you see with the table in «En la moto». The «Autonomía (combustible)»
+> section checks the fuel-range estimate: pick the model, log a full refuel, compare the app's km with
+> the trip meter, and see the low-range dash alert once. With the sideload build you join
 > the bike Wi-Fi yourself: the app shows the **"Join the bike Wi-Fi"** sheet (use the sideload row of
 > the table). Then share the logs (Logs ▸ Share) in a
 > [field report](https://github.com/Kevinparra535/opencfmoto-ios/issues/new?template=field-report.yml).
@@ -11,7 +13,7 @@
 Esta guía es para la **primera prueba real** de OpenCfMoto para iOS con tu tablero CFMoto / Carbit.
 Todo lo que se pudo probar sin moto ya pasó:
 
-- **Más de 1700 pruebas automáticas.**
+- **Más de 1900 pruebas automáticas.**
 - **Comparación byte a byte del protocolo con la app Android**: en 6 escenarios se comporta igual
   (ver `docs/verification/pxc-differential.md`).
 - **La app real en el simulador de iOS conectada a un tablero simulado**, sin violaciones del
@@ -136,6 +138,65 @@ Con la moto parada y navegando hacia un destino, con el mando multimedia del tel
 8. **El mapa**: gris claro de día y gris oscuro de noche, con la ruta azul bordeada y la flecha blanca.
    Dinos si se lee bien a pleno sol.
 
+## Autonomía (combustible)
+
+La moto no le envía a la app ningún dato de gasolina: la app **estima** la autonomía con el tanque de tu
+moto y los km que mide el GPS desde tu última carga, mientras está conectada a la moto. Siempre sale con
+«~», redondeada hacia abajo y contada hasta la reserva (12 % del tanque si no la cambias), nunca hasta
+vaciar el tanque. **El indicador de la moto manda.** Todo se escribe en el iPhone y solo con la moto
+parada: en marcha la app no deja escribir y dice «Detente para…».
+
+1. **Elige tu moto** después de la primera conexión. En la pantalla de inicio aparece la tarjeta
+   **«¿Cuál es tu moto?»** (nunca una ventana que se abra sola). Si la ves con la moto andando, dice
+   «Detente para elegir tu moto» y **Elegir** no responde: no la toques en marcha. Ya detenido, toca
+   **Elegir**: con una 450MT la lista empieza por **CFMOTO 450MT** (tanque 17,5 L, ~20,5 km/L). Revisa
+   el tanque, el rendimiento y la reserva y toca **Guardar**. Anota si tu modelo estaba en la lista y en
+   qué lugar. (Si tocaste **Luego**, está en Garaje ▸ tu moto ▸ Combustible ▸
+   **Elegir moto**.)
+2. **Registra una carga llena** al llenar el tanque: **Cargué gasolina** ▸ **Lleno** ▸ litros y precio
+   si quieres ▸ **Guardar**, y reinicia el trip de la moto. La tarjeta muestra la autonomía (con una 450MT
+   recién llena, unos «~310 km hasta la reserva») y debajo **«Carga registrada · Deshacer»** durante 10 s.
+   Toca **Deshacer** una vez: la carga desaparece del Historial de cargas (Garaje ▸ tu moto ▸
+   Combustible). Vuelve a registrarla.
+3. **Rueda conectado** (Conectar y Modo bolsillo) al menos 30 km. Al llegar, compara en la tarjeta
+   «Desde tu última carga: N km» con el **trip de la moto**, y la autonomía con el **indicador de
+   gasolina** de la moto. Anota los números: unos pocos % de diferencia son normales (el GPS mide algo
+   menos en las curvas cerradas).
+4. **Caminar lejos de la moto**: apaga la moto, espera **4 minutos** (los primeros 3 la app espera a que
+   vuelva el Wi-Fi), camina 500 m o más con el iPhone y vuelve. Al reconectar, «Desde tu última carga» no
+   debe haber crecido por la caminata.
+5. **Aviso de autonomía baja**, con la moto parada y conectada (por ejemplo, justo antes de cargar
+   gasolina): Garaje ▸ tu moto ▸ Combustible ▸ **Corregir nivel** ▸ **¼** ▸ **Guardar**. En unos
+   segundos el tablero muestra **una vez** «Autonomía baja: ~40 km hasta la reserva» (con una 450MT)
+   durante 6 s, debajo de la barra de arriba, sin tapar la velocidad ni el límite; con los avisos de voz
+   activados se oye «Autonomía baja. Unos 40 kilómetros hasta la reserva.». No se repite. En modo
+   espejo solo se oye.
+   - **Nunca encima de una tarjeta** (opcional, con una ruta en marcha): deja lista en el iPhone la
+     pantalla de **Corregir nivel** con **¼** elegido, sin guardar. En el tablero abre ⋮ ▸ «Terminar la
+     ruta…» y, con la tarjeta «¿Terminar la ruta?» abierta, toca **Guardar** en el iPhone. El aviso
+     **no** sale encima de la tarjeta: sale cuando se cierra (Seguir, o sola a los 8 s). La voz no
+     espera a la tarjeta, pero nunca corta una indicación de giro: espera a que termine.
+6. **En reserva**: sube la **Reserva** al 30 % (Garaje ▸ tu moto ▸ Combustible). La tarjeta pasa a «En
+   reserva» y en unos segundos el tablero dice una vez «En reserva: carga gasolina pronto» (la voz:
+   «Estás en reserva. Carga gasolina pronto.»).
+7. **Una carga vuelve a armar el aviso**: vuelve a poner la reserva en 12 % y, al llenar el tanque,
+   registra la carga llena (paso 2). La tarjeta vuelve a «~… km hasta la reserva» y el próximo aviso
+   saldrá cuando la autonomía vuelva a bajar. Si no vas a cargar ahora, borra el «Ajuste de nivel · ¼»
+   del Historial de cargas (desliza ▸ **Eliminar**): la autonomía vuelve a contar desde tu última carga.
+8. **Sin GPS preciso** (en casa, con la moto encendida y parada): en Ajustes de iOS ▸ OpenCfMoto ▸
+   Ubicación, desactiva **Ubicación exacta**, conecta y espera 2 minutos. La tarjeta muestra la cifra
+   con «?» y «La app no pudo medir los km (sin GPS preciso). Revisa el indicador de la moto.». Vuelve a
+   activar **Ubicación exacta**; si el aviso sigue, se quita con tu próxima carga o con **Corregir
+   nivel**.
+9. **Ruta**: en **Mapa** busca un destino. Bajo las rutas aparece una línea con el ícono de gasolina: «Llegas con
+   ~N km antes de la reserva», «Justo: carga antes de salir» o «Necesitas cargar gasolina en el
+   camino». Dinos si cuadra con lo que esperabas.
+
+Para quien publica una build con el catálogo de combustible: antes de subirla a TestFlight, abre las
+direcciones oficiales de tanque (`tankSource` de las filas con `tankKind: .official`) de
+`Packages/OpenCfMotoKit/Sources/OpenCfMotoCore/Fuel/FuelCatalogData.swift` y comprueba los litros: se
+tomaron del texto de los resultados de búsqueda, no de la página misma.
+
 ## Teléfono bloqueado: prueba de diagnóstico (fase 0)
 
 Esta build **mide** qué pasa con el iPhone bloqueado; no promete el mapa en vivo. En el tablero verás
@@ -230,6 +291,10 @@ Qué significa cada resultado (con el iPhone bloqueado):
   red de la moto, abre en el tablero su pantalla de conexión / QR.
 - **Pulsaste Conectar justo cuando la app ya conectaba sola**: ese toque no la detiene (cuenta como
   Conectar). Para detenerla, vuelve a pulsar.
+- **La autonomía no cuadra con el indicador de la moto**: el indicador manda. Revisa en Garaje ▸ tu
+  moto ▸ Combustible que el modelo y el tanque son los tuyos, y registra tus llenos con litros: con dos
+  llenos con litros la app mide el rendimiento real de tu moto. Si rodaste sin la app, toca **Corregir
+  nivel** con lo que marca el indicador.
 - **El tablero muestra «Mapa en pausa»**: lo esperado si bloqueas el iPhone, salvo que iOS le
   dé a la app un codificador por software (ver «Qué significa cada resultado» en la prueba de
   diagnóstico de arriba). Para rodar, usa **Modo bolsillo** en lugar de bloquear.
@@ -244,4 +309,7 @@ Qué significa cada resultado (con el iPhone bloqueado):
    la imagen se ve derecha en el tablero girando el iPhone hacia un lado y hacia el otro. Y con los
    **botones del manillar** activados, si el recuadro de música del tablero dice «OpenCfMoto < > move»
    sin cuadros vacíos.
-5. El archivo de registros compartido (y el `.h264` si algo se ve mal).
+5. **Autonomía**: el modelo que elegiste, si estaba en la lista (y en qué lugar), el **ID de modelo** de
+   Garaje ▸ tu moto, y en cada lleno los litros, los km de la app y los del trip de la moto, y lo que
+   marcaba el indicador. Los precios no hacen falta.
+6. El archivo de registros compartido (y el `.h264` si algo se ve mal).

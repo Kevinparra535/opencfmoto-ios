@@ -1594,6 +1594,17 @@ dash state the tests build, on eight canvases.
   automático; «Llegaste»), no shouting capitals, verb labels on the menu toggles («Pan the map», «Put north
   up», «Mute voice»…).
 
+### Fuel range alert (iOS addition)
+
+The dash's only fuel element in the MVP is one transient toast, with no new input: «Autonomía baja: ~70 km
+hasta la reserva» / "Low range: ~70 km to reserve" once when the phone's range estimate crosses into low
+(≤ 80 km to the reserve) and «En reserva: carga gasolina pronto» / "On reserve: refuel soon" once at the
+reserve, for 6 s through the existing `showToast` path (`DashLayout.overlayPill`, below the top chrome, ≤ 2
+lines, never over the gauge or the limit sign), plus a voice line when voice prompts are on. It waits while a
+sheet, the confirm or arrival card, a preview, the hold picture or another toast is up, and the voice waits
+for silence and for no turn cue within 500 m; Mirror sessions get the voice only. No `DashModel` field, intent,
+hit region or focus target. Rules, strings and the estimate: `app-features.md` §15.8.
+
 ## 16. Open questions / risks
 
 * **R1 — Arrival logic.** The shipping Android code appears never to show the Arrived sheet (§4.8). Confirm intent with maintainers / a ride log (`[GPX] near dest at nav start`) before choosing iOS semantics.
