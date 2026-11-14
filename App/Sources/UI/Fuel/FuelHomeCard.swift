@@ -146,7 +146,7 @@ private struct FuelRangeCard: View {
     private func header(_ e: FuelEstimate) -> some View {
         HStack(alignment: .center, spacing: 8) {
             Image(systemName: "fuelpump.fill")
-                .foregroundStyle(tint(e))
+                .foregroundStyle(iconTint(e))
                 .accessibilityHidden(true)
             Text("Fuel range")
                 .font(.caption.weight(.bold))
@@ -280,7 +280,7 @@ private struct FuelRangeCard: View {
         return false
     }
 
-    private func tint(_ e: FuelEstimate) -> Color {
+    private func iconTint(_ e: FuelEstimate) -> Color {
         if e.aged != nil { return Theme.textSecondary }
         switch e.state {
         case .low: return Theme.busy

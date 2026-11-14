@@ -154,7 +154,6 @@ struct GarageFuelSection: View {
     /// The range, why it is unsure, and the actions.
     @ViewBuilder
     private func rangeRows(_ state: FuelBikeState, units: MapUnits, canLog: Bool) -> some View {
-        let fuel = model.fuel
         FuelStackedRow(title: "Fuel range") {
             FuelUIText.summary(state.estimate, units: units)
                 .foregroundStyle(state.estimate.aged == nil ? Theme.text : Theme.textSecondary)
@@ -285,8 +284,8 @@ private struct FuelHistoryRow: View {
                 Text(verbatim: FuelUIText.date(entry.atMs))
                     .font(.caption)
                     .foregroundStyle(Theme.textSecondary)
-                if let detail = detail(volumeUnit) {
-                    Text(verbatim: detail)
+                if let line = detailLine(volumeUnit) {
+                    Text(verbatim: line)
                         .font(.caption)
                         .monospacedDigit()
                         .foregroundStyle(Theme.textSecondary)
@@ -326,7 +325,7 @@ private struct FuelHistoryRow: View {
     }
 
     /// "12,0 L · 4,25 /L · 51" — litres, the price per volume unit, the money spent (currency-free).
-    private func detail(_ volumeUnit: FuelVolumeUnit) -> String? {
+    private func detailLine(_ volumeUnit: FuelVolumeUnit) -> String? {
         var parts: [String] = []
         if let litres = entry.litres { parts.append(FuelUIText.volume(litres, volumeUnit)) }
         if let ppl = entry.pricePerLitre {

@@ -166,10 +166,10 @@ enum FuelUIText {
             guard let entry else { return .edited }
             switch entry.consumptionKind {
             case .official, .published:
-                guard let host = host(entry.consumptionSource), let url = URL(string: entry.consumptionSource) else {
+                guard let name = Self.host(entry.consumptionSource), let url = URL(string: entry.consumptionSource) else {
                     return .estimate
                 }
-                return entry.consumptionKind == .official ? .official(host: host, url: url) : .published(host: host, url: url)
+                return entry.consumptionKind == .official ? .official(host: name, url: url) : .published(host: name, url: url)
             case .estimate:
                 return .estimate
             }
