@@ -11,8 +11,11 @@
 > pero **no** está en esta app. Esta app incluye código traducido de AOSP e iconos Material de Google
 > (Apache-2.0) y usa datos de OpenStreetMap (© colaboradores de OpenStreetMap, ODbL) a través de
 > servicios públicos: teselas de la Fundación OpenStreetMap, Photon de komoot, Nominatim, Overpass,
-> Valhalla de FOSSGIS, OSRM y, con tu propia clave, openrouteservice de HeiGIT. Gracias a todos los
-> que probaron motos y compartieron registros. ¿Falta alguien o hay un error? Abre una incidencia.
+> Valhalla de FOSSGIS, OSRM y, con tu propia clave, openrouteservice de HeiGIT. La idea de la autonomía
+> estimada viene de Road Trip, otra app del autor de este port para iOS (sin código copiado); los
+> litros del tanque y los rendimientos del catálogo salen de páginas de los fabricantes y de la prensa,
+> citadas fila por fila. Gracias a todos los que probaron motos y compartieron registros. ¿Falta alguien
+> o hay un error? Abre una incidencia.
 
 This file lists the people, projects, code and services that OpenCfMoto for iOS is built on.
 If a credit is missing or wrong, please [open an issue](https://github.com/Kevinparra535/opencfmoto-ios/issues).
@@ -102,6 +105,12 @@ These algorithms are implemented from their public specifications, with no code 
 encoded polyline format (precision 6), the Vincenty inverse formula, haversine, Web Mercator /
 slippy-map tiles, SipHash-2-4 (Jean-Philippe Aumasson and Daniel J. Bernstein), and H.264 / Annex B
 parsing (ITU-T H.264).
+
+The fuel-range idea (km to the reserve from the bike's tank and the rider's refuels) comes from
+**Road Trip**, an app by the author of this iOS port; no code was ported from it and its bike data is
+not used. The maths is written fresh in `Packages/OpenCfMotoKit/Sources/OpenCfMotoCore/Fuel/`, and
+the tank and fuel-economy figures of the bundled catalog come from manufacturers' and press pages,
+each one cited next to its row in `FuelCatalogData.swift`.
 
 Apple's frameworks (SwiftUI, MapKit, MusicKit, VideoToolbox, ReplayKit and the rest of the iOS SDK)
 are part of the platform, not third-party code in this repository.

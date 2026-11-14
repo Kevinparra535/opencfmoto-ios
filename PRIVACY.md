@@ -2,7 +2,7 @@
 
 *Español primero · [English below](#english)*
 
-Última actualización: 9 de noviembre de 2026. Esta página describe lo que hace la app de iPhone
+Última actualización: 14 de noviembre de 2026. Esta página describe lo que hace la app de iPhone
 **OpenCfMoto para iOS** según el código de este repositorio: la beta pública de TestFlight, la versión
 para sideload de [Releases](https://github.com/Kevinparra535/opencfmoto-ios/releases), las copias de
 TestFlight que cada persona compila para sí y las que se compilan con Xcode.
@@ -14,19 +14,20 @@ TestFlight que cada persona compila para sí y las que se compilan con Xcode.
   nada de tu iPhone. La excepción es TestFlight, de Apple: con la beta pública, TestFlight nos muestra
   los fallos y el uso de la app y los comentarios que envíes, sin tu nombre ni tu correo (salvo el correo
   que escribas en un comentario; ver [Si la instalas con TestFlight](#si-la-instalas-con-testflight)).
-- **Tus datos se quedan en tu iPhone** (motos, viajes, lugares, registros) hasta que tú los compartes.
+- **Tus datos se quedan en tu iPhone** (motos, viajes, lugares, cargas de gasolina, registros) hasta que
+  tú los compartes.
 - **El mapa, las búsquedas, las rutas y los límites de velocidad** salen de servicios públicos basados
   en OpenStreetMap y, en las pantallas del iPhone, de Apple. Ven tu dirección IP y lo que se les pide,
   que incluye posiciones (detalle abajo).
 
 ## Lo que se queda en tu iPhone
 
-Todo esto se guarda solo en tu iPhone. Las motos, viajes, lugares, ajustes y registros entran en las
-copias de seguridad del iPhone (iCloud o el computador) si las usas; las teselas del mapa y los archivos
-para compartir (también las grabaciones del tablero), no. La contraseña Wi-Fi va en el llavero, solo en
-este iPhone: no pasa a otro iPhone ni al llavero de iCloud, e iOS puede conservarla aunque borres la app.
-Para borrarla, quita la moto en Garaje («Eliminar moto») antes de borrar la app; lo demás se borra con
-la app.
+Todo esto se guarda solo en tu iPhone. Las motos, viajes, lugares, ajustes, datos de combustible y
+registros entran en las copias de seguridad del iPhone (iCloud o el computador) si las usas; las teselas
+del mapa y los archivos para compartir (también las grabaciones del tablero), no. La contraseña Wi-Fi va
+en el llavero, solo en este iPhone: no pasa a otro iPhone ni al llavero de iCloud, e iOS puede
+conservarla aunque borres la app. Para borrarla, quita la moto en Garaje («Eliminar moto») antes de
+borrar la app; lo demás se borra con la app.
 
 - **Tus motos** (Garaje): nombre, modelo, nombre de la red Wi-Fi de la moto y lo que el tablero cuenta de
   sí mismo (modelo, número de serie). La **contraseña Wi-Fi** de cada moto va en el llavero (Keychain)
@@ -37,9 +38,22 @@ la app.
   «Grabar la ruta» en el tablero): el recorrido GPS, la distancia, las velocidades y las horas de cada
   uno.
 - **Tus lugares**: casa, favoritos, marcadores, los últimos destinos y dónde aparcaste.
+- **Combustible** (la autonomía estimada), solo de las motos en las que lo configuras (eliges el modelo
+  o registras una carga): el perfil de combustible de la moto (modelo, tanque, rendimiento y reserva);
+  las cargas de gasolina que registras, con su fecha y hora, si fue lleno o parcial y, si los escribes,
+  los litros, el precio, el trip de la moto y los ajustes de nivel; el contador de km que mide la app, y
+  la última posición de la moto **redondeada a 3 decimales** (cerca de 100 m) con su hora, para notar si
+  la moto se movió sin la app. Los km se cuentan solo durante una conexión con la moto: si la apagas, la
+  app deja de contarlos a los 3 minutos. También guarda si ya te avisó de la autonomía baja, si tocaste
+  «Luego» y la unidad en que compras la gasolina (litros o galones). Nada de esto entra en el archivo de
+  ajustes que exportas (`opencfmoto.settings`), y al quitar la moto en Garaje («Eliminar moto») se borra
+  todo lo suyo. El tablero no le da a la app ningún dato de combustible: la autonomía se calcula en el
+  iPhone, sin consultar ningún servicio y sin enviar nada.
 - **Tus ajustes**, con tu servidor de mapas y tu clave de openrouteservice si los pones.
 - **Los registros** (Registros): lo que hace la app (pasos de la conexión, errores, el modelo del
   tablero, el nombre de la red Wi-Fi de la moto, los nombres de los destinos y, a veces, una posición).
+  Las líneas de «Combustible» dicen el modelo elegido, si una carga lleva litros o precio (no cuánto) y la
+  autonomía redondeada; nunca litros, precios ni posiciones.
   Una copia, sin contraseñas ni números de serie, se guarda al pasar la app a segundo plano (y cada medio
   minuto mientras está conectada) para no perderla si iOS la cierra; el siguiente arranque la recupera y
   la borra. Si iOS entrega a la app el informe de un cierre inesperado (MetricKit), la app lo guarda con
@@ -104,7 +118,8 @@ iOS muestra el indicador rojo. La app la envía al tablero por el Wi-Fi de la mo
 que actives la grabación) ni sale a internet.
 
 Fuera de estos servicios y del tablero, la app no se conecta a nada: ni a GitHub ni a ningún servidor
-nuestro. Los enlaces de la pantalla Acerca de se abren en Safari solo si los tocas.
+nuestro. La autonomía estimada («Combustible») no añade ningún servicio: se calcula en el iPhone. Los
+enlaces de la pantalla Acerca de se abren en Safari solo si los tocas.
 
 ## Registros e informes de problemas
 
@@ -114,7 +129,11 @@ compartir de iOS: eliges la app y a quién). Antes de compartirlos, la app quita
 del tablero y las claves de API en las direcciones de servidores de mapas, salvo que actives
 **Ajustes ▸ Privacidad y registros ▸ «Incluir secretos en registros compartidos»**. El nombre de la red
 Wi-Fi de la moto, los modelos y los nombres de los destinos sí quedan: léelos antes de publicarlos.
-Si vas a adjuntar registros a una incidencia pública de GitHub, quita también las ubicaciones.
+Si vas a adjuntar registros a una incidencia pública de GitHub, quita también las ubicaciones. El
+informe de problemas lleva además el ID de modelo del QR de la moto, las 4 primeras letras del
+identificador del tablero (dicen la familia del tablero, como en los registros; no el número de serie)
+y el modelo elegido en «Combustible» con el número de cargas registradas; nunca litros, precios ni
+posiciones.
 
 iOS puede enviar a Apple sus propios datos de diagnóstico si lo permitiste en Ajustes ▸ Privacidad y
 seguridad ▸ Análisis y mejoras. Eso lo hace iOS, no la app, y a nosotros no nos llega; con la beta de
@@ -161,7 +180,7 @@ en el historial del repositorio.
 
 ## English
 
-Last updated: November 9, 2026. This page describes what the **OpenCfMoto for iOS** iPhone app does,
+Last updated: November 14, 2026. This page describes what the **OpenCfMoto for iOS** iPhone app does,
 according to the code in this repository: the public TestFlight beta, the sideload build from
 [Releases](https://github.com/Kevinparra535/opencfmoto-ios/releases), the TestFlight copies each person
 builds for themselves, and builds made with Xcode.
@@ -173,19 +192,19 @@ builds for themselves, and builds made with Xcode.
   your iPhone. The exception is Apple's TestFlight: with the public beta, TestFlight shows us the app's
   crashes and usage and the feedback you send, without your name or e-mail (unless you type your e-mail
   in your feedback; see [If you install it with TestFlight](#if-you-install-it-with-testflight)).
-- **Your data stays on your iPhone** (bikes, trips, places, logs) until you share it.
+- **Your data stays on your iPhone** (bikes, trips, places, refuels, logs) until you share it.
 - **The map, search, routing and speed limits** come from public OpenStreetMap-based services and, on
   the iPhone's own screens, from Apple. They see your IP address and what is asked of them, which
   includes positions (details below).
 
 ### What stays on your iPhone
 
-All of this is kept only on your iPhone. Bikes, trips, places, settings and logs are part of your
-iPhone's backups (iCloud or a computer) if you use them; map tiles and files prepared for sharing (dash
-recordings included) are not. The Wi-Fi password is in the Keychain, on this iPhone only: it does not move
-to another iPhone or to iCloud Keychain, and iOS may keep it even after you delete the app. To erase it,
-remove the bike in Garage ("Remove bike") before deleting the app; everything else is deleted with the
-app.
+All of this is kept only on your iPhone. Bikes, trips, places, settings, fuel data and logs are part
+of your iPhone's backups (iCloud or a computer) if you use them; map tiles and files prepared for
+sharing (dash recordings included) are not. The Wi-Fi password is in the Keychain, on this iPhone
+only: it does not move to another iPhone or to iCloud Keychain, and iOS may keep it even after you
+delete the app. To erase it, remove the bike in Garage ("Remove bike") before deleting the app;
+everything else is deleted with the app.
 
 - **Your bikes** (Garage): name, model, the bike's Wi-Fi network name and what the dash reports about
   itself (model, serial number). Each bike's **Wi-Fi password** is kept in the iOS Keychain, on this
@@ -194,11 +213,24 @@ app.
   dash shows the map) and those you record with "Start recording" (or with "Record ride" on the dash):
   the GPS track, distance, speeds and times of each.
 - **Your places**: home, favorites, markers, recent destinations and where you parked.
+- **Fuel** (the estimated fuel range), only for the bikes where you set it up (you pick the model or log
+  a refuel): the bike's fuel profile (model, tank, fuel economy and reserve); the refuels you log, with
+  their date and time, whether each was a full or a partial refuel and, if you type them, the litres,
+  the price, the bike's trip meter and level corrections; the km counter the app measures; and the
+  bike's last position **rounded to 3 decimals** (about 100 m) with its time, to notice whether the bike
+  moved without the app. Km are counted only during a connection to the bike: when you switch it off,
+  the app stops counting them after 3 minutes. It also keeps whether it already warned you about a low
+  range, whether you tapped "Later", and the pump's volume unit (litres or gallons). None of this is in
+  the settings file you export (`opencfmoto.settings`), and removing the bike in Garage ("Remove bike")
+  deletes all of it. The dash gives the app no fuel data at all: the range is worked out on the iPhone,
+  without querying any service and without sending anything.
 - **Your settings**, including your tile server and openrouteservice key if you set them.
 - **The logs** (Logs): what the app does (connection steps, errors, the dash model, the bike's Wi-Fi
-  network name, destination names and, at times, a position). A copy without passwords or serial
-  numbers is saved when the app goes to the background (and every half minute while it is connected),
-  so it is not lost if iOS closes the app; the next launch restores it and deletes it. If iOS hands the
+  network name, destination names and, at times, a position). The fuel lines name the chosen model,
+  whether a refuel has litres or a price (not how much) and the rounded range; never litres, prices or
+  positions. A copy without passwords or serial numbers is saved when the app goes to the background
+  (and every half minute while it is connected), so it is not lost if iOS closes the app; the next
+  launch restores it and deletes it. If iOS hands the
   app a crash report (MetricKit), the app keeps it with the logs.
 - **Dash recordings** (Logs ▸ Link diagnostics ▸ "Record the dash video stream"): the video the dash
   receives: the map around you or, in Mirror mode, everything the iPhone screen shows (other apps and
@@ -257,7 +289,8 @@ indicator. The app sends it to the dash over the bike's Wi-Fi: it is not saved (
 recording) and never goes to the internet.
 
 Apart from these services and the dash, the app connects to nothing: not to GitHub, not to any server of
-ours. The links on the About screen open in Safari only if you tap them.
+ours. The estimated fuel range ("Fuel & range") adds no service: it is worked out on the iPhone. The
+links on the About screen open in Safari only if you tap them.
 
 ### Logs and problem reports
 
@@ -266,7 +299,10 @@ the app and the recipient). Before sharing, the app removes Wi-Fi passwords (als
 QR code), the dash's serial numbers and identifiers, and API keys in map server addresses, unless you turn
 on **Settings ▸ Privacy & logs ▸ "Include secrets in shared logs"**. The bike's Wi-Fi network name, the
 models and destination names do stay: read them before you post them. If you attach logs to a public
-GitHub issue, remove locations too.
+GitHub issue, remove locations too. The problem report also carries the model ID from the bike's QR
+code, the first 4 characters of the dash identifier (they name the dash family, as in the logs; not
+the serial number) and the model chosen under "Fuel & range" with the number of refuels logged; never
+litres, prices or positions.
 
 iOS may send Apple its own diagnostic data if you allowed it in Settings ▸ Privacy & Security ▸
 Analytics & Improvements. That is iOS, not the app, and it does not reach us; with the TestFlight beta,

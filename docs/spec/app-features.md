@@ -60,6 +60,9 @@ not covered here beyond the persisted settings.
    Map / Mirror tiles, Setup / Garage / Trip / Logs footer, a destination search field, and a tips card that
    flips to the live log (§7). On iOS drop the two Android-Auto phases and every AA setup step (§12).
 8. **Telemetry** (default ON on Android, Cloudflare Worker) — recommend **not** implementing it on iOS (§6.7, §11).
+9. **Fuel range** (iOS only, no Android counterpart): an on-phone *estimate* of the km to the reserve from the bike's
+   fuel profile and the GPS km counted while connected; per-bike scoped keys only, never exported, deleted with the
+   bike, no network (§15).
 
 ---
 
@@ -651,7 +654,7 @@ unparsable array → empty garage. The **raw QR contains the Wi-Fi password in p
 
 **Discrepancy:** the remove dialog says it "forgets its pairing, photo and settings", but Android leaves the
 per-bike scoped settings (`*#b<id>` keys), `transport_<ssid>` and `dash_geo_<ssid>` behind (`GarageActivity.kt:231`
-vs `BikeMemory.kt:94-99`). On iOS, delete them for real. [V-CODE]
+vs `BikeMemory.kt:94-99`). On iOS, delete them for real (the iOS fuel keys `fuel_*_v1#<id>` go with them, §15.10). [V-CODE]
 
 ### 4.3 Manual Wi-Fi pairing (no QR, e.g. Benelli TRK) [V-CODE]
 
@@ -2294,3 +2297,372 @@ notification channels (use Live Activities / local notifications instead).
     no Android test pins them. iOS parsing must accept both `\/` and `/`, integers with or without `.0`, and `E`
     notation.
 13. **Update/release channel** for iOS (App Store vs TestFlight vs side-load) determines whether §6.6 is needed.
+
+---
+
+## 15. Fuel range (estimate) — iOS addition, no Android counterpart
+
+Home, the Garage bike detail and the route preview show how far the bike gets **before its fuel reserve**:
+"~310 km to reserve" («~310 km hasta la reserva»). The dash link carries **no vehicle data** (no fuel level,
+odometer or consumption), so this is an **estimate** made on the phone from the bike's fuel profile and the GPS
+km the app measured since the last refuel the rider logged. It is always shown with `~`, rounded **down** to
+10 km (5 mi), counted to the reserve (never to empty), next to the standing line "Your bike's fuel gauge has the
+final word" («El indicador de la moto manda»). The feature makes **no network request and adds no host**; the
+map's Overpass **Fuel** chip (`amenity=fuel`, PRIVACY.md) is unchanged. Out of scope for this MVP: a dash refuel
+button or card, a range instrument on the dash, stations along the route, refuel-stop insertion, group rides,
+an automatic "are you at a gas station?" check, load / pace / passenger / climb factors, OBD.
+
+### 15.1 Code map
+
+Core = `Packages/OpenCfMotoKit/Sources/OpenCfMotoCore`, AppModel = `Packages/OpenCfMotoKit/Sources/OpenCfMotoAppModel`
+(both build and are tested on Linux); the SwiftUI screens are in `App/Sources/UI/Fuel/`.
+
+| Where | What |
+|---|---|
+| [`Core/Fuel/FuelCatalog.swift`](../../Packages/OpenCfMotoKit/Sources/OpenCfMotoCore/Fuel/FuelCatalog.swift), [`FuelCatalogData.swift`](../../Packages/OpenCfMotoKit/Sources/OpenCfMotoCore/Fuel/FuelCatalogData.swift) | The bundled, sourced catalog (Swift literals, no resource files) and its exact-token search (§15.2) |
+| [`Core/Fuel/BikeCandidates.swift`](../../Packages/OpenCfMotoKit/Sources/OpenCfMotoCore/Fuel/BikeCandidates.swift) | QR model id, learned canvas, profile hint, live CLIENT_INFO → dash family → ordered candidate models |
+| [`Core/Fuel/FuelProfile.swift`](../../Packages/OpenCfMotoKit/Sources/OpenCfMotoCore/Fuel/FuelProfile.swift), [`RefuelLog.swift`](../../Packages/OpenCfMotoKit/Sources/OpenCfMotoCore/Fuel/RefuelLog.swift) | The bike's tank / seed km/L / reserve, and the refuel log (add, undo last, delete) |
+| [`Core/Fuel/FuelOdometer.swift`](../../Packages/OpenCfMotoKit/Sources/OpenCfMotoCore/Fuel/FuelOdometer.swift) | The per-bike GPS km counter: plausibility filter, bridge, gap, blind spells (§15.4) |
+| [`Core/Fuel/FuelStats.swift`](../../Packages/OpenCfMotoKit/Sources/OpenCfMotoCore/Fuel/FuelStats.swift) | Measured km/L from full-to-full fills, cost per km (§15.6) |
+| [`Core/Fuel/RangeEstimator.swift`](../../Packages/OpenCfMotoKit/Sources/OpenCfMotoCore/Fuel/RangeEstimator.swift) | The estimate and its states (§15.5) |
+| [`Core/Fuel/FuelVerdict.swift`](../../Packages/OpenCfMotoKit/Sources/OpenCfMotoCore/Fuel/FuelVerdict.swift) | "Do I get there?" for the route preview (§15.7) |
+| [`Core/Fuel/FuelAlertPolicy.swift`](../../Packages/OpenCfMotoKit/Sources/OpenCfMotoCore/Fuel/FuelAlertPolicy.swift), [`Core/Dash/DashFuelText.swift`](../../Packages/OpenCfMotoKit/Sources/OpenCfMotoCore/Dash/DashFuelText.swift) | The once-per-crossing dash alert and its EN / ES toast and voice lines (§15.8) |
+| [`Core/Fuel/FuelFormat.swift`](../../Packages/OpenCfMotoKit/Sources/OpenCfMotoCore/Fuel/FuelFormat.swift) | Units (km / mi, L / US gal, km/L / US mpg; storage is metric), range rounding, locale-aware price parsing |
+| [`Core/Fuel/FuelStore.swift`](../../Packages/OpenCfMotoKit/Sources/OpenCfMotoCore/Fuel/FuelStore.swift) | Persistence under scoped keys only (§15.10) |
+| [`AppModel/Fuel/FuelModel.swift`](../../Packages/OpenCfMotoKit/Sources/OpenCfMotoAppModel/Fuel/FuelModel.swift), [`FuelModelTypes.swift`](../../Packages/OpenCfMotoKit/Sources/OpenCfMotoAppModel/Fuel/FuelModelTypes.swift) | `@Observable` model: per-bike state, odometer feed, setup prompt, refuel writes, moving lock, route verdict, dash alert emission |
+| `AppModel/Ride/RideModel.swift` (`onLocationFix`, `announceFuel`, `retryPendingFuelAlert`), `Connection/ConnectionModel.swift` (`sessionBikeId`, `isFuelCountable`, `onFuelCountableChange`), `Garage/GarageModel.swift` (`observeRemoval`), `App/AppModel.swift` (`wireFuel`, Problem Report keys) | The seams FuelModel is wired through; TripRecorder and TripsModel are untouched |
+| [`AppModel/Testing/DemoFuel.swift`](../../Packages/OpenCfMotoKit/Sources/OpenCfMotoAppModel/Testing/DemoFuel.swift) | Demo fuel data for `-demoSeed` (modes `ok`, `low`, `aged`, `setup`) |
+| `App/Sources/UI/Fuel/` | Home card, «¿Cuál es tu moto?» picker, profile editor, «Cargué gasolina» sheet, «Corregir nivel» sheet, undo bar, Garage «Combustible» section, route verdict line (§15.9) |
+
+Tests: `Tests/OpenCfMotoCoreTests/` `FuelCatalogTests`, `BikeCandidatesTests`, `FuelProfileTests`,
+`RefuelLogTests`, `FuelOdometerTests`, `FuelStatsTests`, `RangeEstimatorTests`, `FuelVerdictTests`,
+`FuelAlertPolicyTests`, `FuelFormatTests`, `FuelStoreTests`, `DashFuelTextTests` (+ fuel states in
+`DashSafetyRulesTests`, 3 snapshots in `DashSnapshotTests`: `docs/screenshots/dash/land-fuel-low-es.png`,
+`land-fuel-reserve.png`, `clc450-544-fuel-low-es.png`); `Tests/OpenCfMotoAppModelTests/` `FuelModelTests`,
+`FuelSetupPromptTests`, `FuelOdometerFeedTests`, `FuelCountingTests`, `FuelDashAlertTests`,
+`FuelAlertDeferralTests`, `FuelMovingLockTests`, `FuelPersistenceTests`, `DemoFuelTests`.
+
+### 15.2 Which bike it is: catalog and «¿Cuál es tu moto?»
+
+The pairing QR's `modelid` identifies the **dash family**, not the model: 37416 (legacy CFDL16, 800×384,
+non-touch) is shared by the 450MT, 450SR, 450NK, 675NK, 675SR-R, 700MT and 300SR. The app resolves the family on
+its own and then asks the rider **once** per Garage bike, because a silently wrong tank is worse than one tap.
+
+**Family resolution** (`BikeCandidates.resolve`, first match wins):
+1. The learned canvas (`DashMemory`, rounded `& 0xFFF0`) when it decides on its own: width 720 and height 688…720
+   → `nkAdvanced`; 1280×576 → `cfdl26Landscape`; 800 wide and taller than wide → `cfdl26Portrait`; 544×512 →
+   `clc450`; 1024×464 → `morini`; 800×400 → `motoplayLandscape`. 800×384 (shared by legacy and others) and
+   1280×720 decide nothing.
+2. The running session's unrefined CLIENT_INFO winner, only when **corroborated**.
+3. The stored `GarageBike.profileHint`, only when corroborated by the QR model id (for `legacy`: or a `CFMOTO…`
+   SSID, or a live legacy marker); skipped when the bike has a profile override (the hint is then the override).
+4. A QR model id claimed by exactly one registry profile; `37426` without P2P stays ambiguous.
+5. The Moto Morini brand: SSID `MLN_…`, or `ML…` with model id 21333 / 00297, CLIENT_INFO `flavor` 51, or
+   "motomorini" in the stored QR.
+6. Nothing: no candidates (Voge, Zontes, Benelli, Kove, QJ, manual Wi-Fi pairing…): the picker opens on search
+   and manual entry.
+
+*Corroborated* = the QR model id is claimed by that family, or the live CLIENT_INFO carries one of its markers
+(HUName `CFDL16…` / sdk `0.9.29` / channel 37416 for legacy, HUID `CRCP…` for `nk800`, HUID `6KWV…` for
+`nkAdvanced`, channel 66660742 for `motoplayLandscape`, channel 66660736 or `48FB4C` for `clc450`, channel
+21333 / 21322, HUID `CARB…` or flavor 51 for `morini`, …; the table is in `BikeCandidates.liveMarkers`). CLIENT_INFO
+scoring alone is not trusted: an unknown sdk-1.x dash wins NkTouch and an unknown non-touch sdk-0.9.x dash wins
+MotoPlay-66 (`control-plane.md` §12.6 cases I–L). Whenever a rule yields `cfdl26Landscape` + `nkAdvanced`
+(37426 before its canvas is learned), the list is `BikeCandidates.ambiguous37426`. The 800NK Advanced first
+connect therefore shows the ambiguous list until REQ 16 teaches the 720×712 canvas; the picker re-resolves each
+time it opens.
+
+**Family → candidates** (`BikeCandidates.familyTable`; the smaller of two tank variants first, so a rider who taps
+the first row errs on the safe side):
+
+| Family | Candidates, in order | Preselected |
+|---|---|---|
+| `legacy` (37416, 800×384) | 450MT, 450SR, 450NK, 675NK, 675SR-R, 700MT 18 L, 700MT 20 L, 300SR | no |
+| `motoplayLandscape` (66660742, 800×400) | 450SR, 450NK, 450MT, 675NK, 675SR-R, 700MT 18 L, 700MT 20 L | no |
+| `clc450` (544×512) | 450CL-C | yes |
+| `nk800` (US 800NK, HUID `CRCP…`) | 800NK, 450NK | no |
+| `cfdl26Portrait` (37426 P2P, 800×944) | 800MT-X, 1000MT-X | no |
+| `cfdl26Landscape` (1280×576) | 800MT Explore, 800MT Sport / Touring | no |
+| `nkAdvanced` (720×704) | 800NK Advanced | yes |
+| `morini` | X-Cape 650, X-Cape 700, Seiemmezzo | no |
+| 37426 AP, canvas not learned yet | 800MT Explore, 800NK Advanced, 800MT, 800MT-X, 1000MT-X | no |
+
+The picker shows the first 4 rows, then «Ver más» / "Show more", «Copiar de {moto}» / "Copy from {bike}" (another
+Garage bike's profile — a replaced dash is a new Garage bike — profile only, never its log or counter), «Otra
+moto» / "Other bike" (catalog search, prefiltered by the guessed brand) and «Ingresar a mano» / "Enter by hand".
+"Preselected" only marks the row: saving always goes through the editor's «Guardar».
+
+**The prompt.** `FuelModel.setupPrompt` is non-nil for the bike Home follows when the dash answered CLIENT_INFO
+at least once (`GarageBike.profileHint != nil`), the bike has no fuel profile and the rider did not tap «Luego».
+It is a **non-modal Home card** («¿Cuál es tu moto?» · «Elige el modelo de {moto} para estimar su autonomía.»,
+«Elegir», «Luego»), never a sheet: `FuelModel.sheet` is set only by `present(_:)`, i.e. by a rider tap. «Luego»
+hides it for that bike for good (`fuel_setup_later_v1#<id>`); the Garage section still offers «Elegir moto».
+
+**Catalog** (19 rows: 16 CFMOTO, 3 Moto Morini). Every row cites a URL for its tank (`tankKind`: `official` =
+manufacturer or official importer, `published` = press or spec database); where sources disagree the row carries
+the **smaller** tank. The seed km/L is the lowest independent published figure, else the minimum of the claims and
+a class default (≤ 300 cc 22.0 · 400–500 cc twin 19.0 · 650–700 cc 17.0 · 800 cc 17.5 · 1000 cc 15.5 · unknown
+15.5 km/L), rounded **down** to 0.5 km/L; a class default is marked `consumptionKind: .estimate` and shown as
+«Rendimiento estimado». The real km/L is learned from the rider's fills (§15.6).
+
+| id | Model | Years | Tank L | Seed km/L | Tank source | Economy source |
+|---|---|---|---|---|---|---|
+| `cfmoto-450mt` | 450MT | 2024+ | 17.5 | 20.5 | official | published |
+| `cfmoto-450sr` | 450SR | 2023+ | 14 | 20.0 | official | published |
+| `cfmoto-450nk` | 450NK | 2023+ | 14 | 19.0 | official | published |
+| `cfmoto-450cl-c` | 450CL-C | 2024+ | 12 | 19.0 | official | estimate |
+| `cfmoto-675sr-r` | 675SR-R | 2025+ | 15 | 16.5 | official | published |
+| `cfmoto-675nk` | 675NK | 2025+ | 15 | 17.0 | official | estimate |
+| `cfmoto-700mt-18l` | 700MT | MY2023-2024 (18 L) | 18 | 17.0 | published | published |
+| `cfmoto-700mt-20l` | 700MT | MY2025+ (20 L) | 20 | 17.0 | official | published |
+| `cfmoto-700cl-x` | 700CL-X (search only) | 2021+ | 13 | 18.0 | official | published |
+| `cfmoto-800mt` | 800MT Sport / Touring | 2021+ | 19 | 17.5 | official | published |
+| `cfmoto-800mt-explore` | 800MT Explore | 2023+ | 19 | 17.5 | official | published |
+| `cfmoto-800mt-x` | 800MT-X | 2025+ | 22.5 | 17.5 | official | published |
+| `cfmoto-800nk` | 800NK | 2023+ | 15 | 17.5 | official | published |
+| `cfmoto-800nk-advanced` | 800NK Advanced | 2023+ | 15 | 17.5 | published | published |
+| `cfmoto-1000mt-x` | 1000MT-X | 2026+ | 22.5 | 15.5 | official | published |
+| `cfmoto-300sr` | 300SR | 2020+ | 12 | 22.0 | official | estimate |
+| `motomorini-x-cape-650` | X-Cape 650 | 2021-2024 | 18 | 20.0 | published | published |
+| `motomorini-x-cape-700` | X-Cape 700 | 2025+ | 17.5 | 19.5 | published | published |
+| `motomorini-seiemmezzo` | Seiemmezzo | 2022+ | 15 | 19.5 | published | published |
+
+The 450MT seeds at 20.5 km/L (published 4.5–4.8 L/100 km), not the optimistic 26 km/L other apps use. The
+figures were read from search-result text for each cited URL: spot-check the official URLs before a release that
+ships the catalog (release item in `docs/PRUEBA-EN-LA-MOTO.md`).
+
+**Search** (`FuelCatalog.search`): text folded (case, diacritics), split on spaces and `/`, brand words merged
+(`cf moto`, `cf-moto`, `cfmoto` → CFMOTO; `moto morini`, `morini` → Moto Morini; a brand typed by the rider
+replaces the picker's prefilter); a 4-digit word 1990…2099 filters by model year. Every remaining word must be
+covered, in order, by an **exact** entry token: a word's compact form (`1000MT-X` → `1000mtx`, `CL-C450` →
+`clc450`) or a whole model number of ≥ 3 digits (`450`); adjacent query words may join (`1000 MT X` →
+`1000mtx`). Never a prefix, substring or letter fragment: `800 MT` finds the two 800MT rows and never the 450MT;
+`450 NK` only the 450NK; `450` lists the four 450 rows; `45`, `mt`, `x` find nothing (the empty state says «Prueba
+solo con el número, como 450.»).
+
+### 15.3 Profile and refuel log
+
+**Profile** (`FuelProfile`, per bike): catalog id (nil = entered by hand), display name, tank 3…60 L, seed km/L
+5…60, `seedSource` (`catalog` while tank and seed match the row within 0.05; `edited` once the rider changes
+them; `manual`; `copied` from another bike), reserve 5…30 % (**default 12 %**), `preferLearned` (default on).
+Hand entry pre-fills 15.5 km/L. The learned km/L is never stored: it is recomputed from the log on every change.
+The editor keeps the metric value of every field the rider did not touch, so an imperial display never rewrites
+it. After «Guardar» on a bike with an empty log the app asks «¿Tienes el tanque lleno ahora?» («Sí, está lleno»
+logs a full refuel; «No sé»).
+
+**Refuel log** (`RefuelLog`, insertion order = chronological, at most 1000 entries, oldest dropped):
+
+| Kind | UI | Fields | Effect |
+|---|---|---|---|
+| `full` | «Cargué gasolina» ▸ «Lleno» (default) | litres?, price?, trip meter?, «¿Cargaste hace rato?» km? | Anchor: tank full |
+| `partial` | «Parcial» | litres?, «¿Cómo quedó el tanque?» ¼ / ½ / ¾ / «No sé», price?, trip meter? | With a level: anchor at that level. With litres: adds litres × km/L (capped at the tank). With neither: the range waits for the next full |
+| `level` | «Corregir nivel» ¼ / ½ / ¾ | none | Anchor at that level; not a refuel, ignored by the stats |
+
+Every entry stores its wall-clock time and the app's km counter at the real refuel (`odometerKm` = counter −
+«Km desde que cargaste», never below the previous entry), and `unseenSincePrev` when the counter saw a gap or a
+noGps spell since the previous entry. Prices are currency-free numbers: per litre, per US gallon or total (all
+three always offered; parsed for the locale, so es-CO «15.900» = 15 900). Valid ranges: litres 0 < x ≤ 100,
+prices 0…10 000 000, trip meter 0 < x ≤ 5000 km, late km 0…2000. **Undo**: «Carga registrada · Deshacer» for
+10 s after a write (`undoLastRefuel`); any entry can be deleted from «Historial de cargas» (with a confirm); a
+deleted entry hands its `unseenSincePrev` to the next one, so a gap never sneaks back into learning.
+
+### 15.4 The km counter (`FuelOdometer`)
+
+**Feed.** Every fix that reaches `RideModel.handleFix` is passed on through `RideModel.onLocationFix` to
+`FuelModel.ingest`. It does **not** use TripRecorder or its `onStats` / `onTripSaved` slots, so it works with
+"Log trips automatically" off and sums across legs, parks and sessions.
+
+**Counting window.** Km count only while the Connect / Mirror session is countable:
+`ConnectionModel.isFuelCountable` = session active, not parked, phase ∉ {`waitingForBike`, `error`}. The 180 s
+Wi-Fi grace (`reconnecting`) still counts (a Wi-Fi blip while riding must not lose km; at most ~180 s of walking
+is counted); once the session is parked waiting for the bike nothing counts (a bus, a car or a walk with the
+phone), and the transition ends the stream so the resume goes through rule G below. Phone-only previews, phone
+guidance and manual trip recordings without the dash count nothing. **Attribution**: the bike bound when Connect
+/ Mirror began (`ConnectionSession.bike`); changing the Garage selection mid-session moves nothing. **Only bikes
+with «Combustible» set up** (a profile or a log entry) count or store anything.
+
+**Filter** (in order; `d` = `TripGeodesy.androidDistance` metres, `dt` = fix-time delta, `v = d / dt`):
+
+| Rule | Constant | Result |
+|---|---|---|
+| Coordinates finite, \|lat\| ≤ 90, \|lon\| ≤ 180, not (0, 0) | — | else rejected |
+| Horizontal accuracy known and ≤ 50 m | `maxAccuracyM = 50` | else rejected (opens a blind spell) |
+| `dt ≤ 0` (duplicate, late batch, stale cached fix) | — | rejected, never double-counted |
+| `dt ≤ 120 s` and `v > 70 m/s` (252 km/h) | `maxPlausibleSpeedMs = 70` | rejected (implausible jump) |
+| `1 ms ≤ dt ≤ 5 s`, moving (`speed ?? v` ≥ 0.8 m/s) | TripRecorder's window and threshold | add `d` |
+| `5 s < dt ≤ 120 s`, `v ≥ 0.8` (iOS batching, a short tunnel) | `maxBridgeMs = 120 000` | add the chord |
+| `dt > 120 s`, or the first fix of a stream (session start, after a park, a relaunch) against the persisted anchor | rule G | see below |
+
+**Rule G** (the bike may have moved unseen): `v > 70 m/s` → rejected; chord `< 1 km` → resumed (nothing added);
+otherwise the chord is **always added** (a lower bound of the unseen ride) and it is a quiet **bridge** (not aged)
+when `dt ≤ 15 min`, `33 m/s × dt − chord ≤ 10 km` and (same stream or `v ≤ 40 m/s`); else a **gap**: the estimate
+is aged until the next anchor and the next refuel is stamped `unseenSincePrev`. Examples: a 3 min tunnel with a
+3 km chord → bridged; 6 min / 1.5 km → gap; a session restarted 5 min and 6 km later → bridged; 20 min → gap.
+**Re-anchor**: the 3rd consecutive implausible-jump / out-of-order rejection is accepted as a resume (nothing
+added), so one bad fix or a phone clock stepping back cannot freeze the counter; an out-of-order fix strikes only
+when it is more than 5 min (`reanchorBackstepMs`) older than the previous accepted one, so the cached fixes iOS
+re-delivers after a relaunch are rejected for good, never counted twice. The counter only grows.
+
+**Blind spells → aged `noGps`.** A spell opens at every transition to countable ("not measured yet"), on an
+inaccurate fix, and whenever the location permission is missing or only approximate (`isPrecise == false`:
+every fix is then ~1–5 km off and fails the 50 m rule). Any accepted fix closes it. Open for ≥ 2 min
+(`blindAfterMs`) → the estimate is aged `noGps` live; a spell ≥ 2 min still open when the stream ends is kept
+(`noGpsMs`) and ages the estimate until the next anchor. A spell < 2 min (connect, no fix yet, disconnect at
+home) is dropped.
+
+**Writes.** In memory per bike; persisted when the counter changed and ≥ 15 s of fix time passed
+(`persistIntervalMs`), on a gap, on any refuel write, when the session ends or stops counting, when the bike
+switches, when the app goes to the background and when a blind spell opens or closes. A crash loses ≤ 15 s of
+km (slightly optimistic). If the stored counter is ever behind the newest entry (a lost or unreadable document),
+FuelModel raises it to that entry and records a gap: the estimate shows aged instead of a silently full tank.
+
+### 15.5 The estimate (`RangeEstimator`)
+
+With T = tank L, k = effective km/L (§15.6), r = reserve % / 100, A = the newest anchor entry (full, partial with a
+level, or level):
+1. no profile → `unknown(noProfile)`; no anchor → `unknown(noRefuel)`;
+2. fuel = T (full) or level × T; then each later partial with litres: fuel = min(T, max(0, fuel − km since the
+   previous entry / k) + litres); a later partial without litres → `unknown(partialWithoutAmount)`;
+3. km to the reserve = (fuel − r × T) × k − km since the last entry; km to empty = fuel × k − the same km.
+
+| State | Rule (first match) | Home card |
+|---|---|---|
+| `unknown(noRefuel)` | no anchor | «Autonomía» · «Registra una carga para empezar.» |
+| `unknown(partialWithoutAmount)` | a partial with neither litres nor level after the anchor | «Autonomía sin calcular: tu última carga no tiene litros.» · «Al llenar el tanque se calcula de nuevo.» |
+| `checkRefuel` | km to empty < −10 % of T × k (for a full anchor: km since it > full nominal range × 1.1) | «¿Cargaste gasolina?» · «Toca para actualizar» (opens the refuel sheet; never reset by itself) |
+| `reserve` | km to the reserve ≤ 0 | «En reserva» · «Carga gasolina pronto» (red, with words) |
+| `low` | ≤ 80 km to the reserve (`lowThresholdKm`) | «Autonomía baja» · «~70 km hasta la reserva» or «Menos de 10 km hasta la reserva» (amber, with words) |
+| `ok` | otherwise | «~310 km hasta la reserva» · «Desde tu última carga: 120 km · ~20,5 km/L» |
+
+**Aged** (on any number state; the number turns secondary with `?`, «~250 km?», and «Corregir nivel» is offered):
+`old(days)` when the newest entry is > 30 days old («Tu última carga fue hace {n} días. Revisa el indicador de la
+moto.»); `noGps` («La app no pudo medir los km (sin GPS preciso). Revisa el indicador de la moto.»); `gap` («Puede
+que hayas rodado sin la app. Revisa el indicador de la moto.»). Only a **trustworthy** estimate (ok / low /
+reserve, not aged) may alert or say «Llegas». Display: `FuelFormat.range` rounds down to 10 km / 5 mi; under one
+step it says "under 10 km" («Menos de 10 km»). Comparisons use the raw values.
+
+### 15.6 Measured economy (`FuelStats`)
+
+An interval runs from a **full** entry to the next **full** one (`level` entries are skipped for litres and km but
+their `unseenSincePrev` counts). It is valid when the closing full and every partial in between have litres; the
+distance is the app's km, or the bike's trip meter when every fill in it carries one and Σ trip lies within
+[0.9 × app km, max(1.5 × app km, app km + 50)] and ≤ T × seed × 1.3 (a meter not reset, or a typo, is ignored);
+an app-distance interval with an unseen stamp inside is dropped; km ≥ 30, litres ≥ 1, 8…60 km/L; and the km/L
+lies within 0.6…1.4 × the seed **unless** another valid interval agrees within ±15 % (two fills beat a wrong
+seed). Learned km/L = Σ km / Σ litres over the newest 5 valid intervals. It replaces the seed from the first
+interval when «Usar el rendimiento medido» is on, **capped at seed × 1.15 while only one interval exists** (a
+«Lleno» that was not full must not promise 40 km/L). Cost per km = Σ cost / Σ km over the newest 5 intervals with
+a cost. Garage shows «Medido ~22,1 km/L de tus cargas (3)» or «Aún sin medir: registra dos llenos con litros.».
+
+### 15.7 Route verdict (`FuelVerdict`)
+
+For the route preview's selected route (`FuelModel.previewVerdict`), margin = km to the reserve − route km:
+
+| Verdict | Rule | Line in `NavigatePreviewCard` |
+|---|---|---|
+| `reaches` | margin ≥ 25 km (`FuelVerdictRule.marginKm`) and a trustworthy estimate | «Llegas con ~60 km antes de la reserva» |
+| `tight` | 0 ≤ margin < 25 km | «Justo: carga antes de salir» (amber) |
+| `needsRefuel(n)` | margin < 0; n = ⌈(route − remaining) / full range to the reserve⌉ | «Necesitas cargar gasolina en el camino» / «Necesitas cargar unas {n} veces en el camino» |
+| `unknown` | no refuel, a partial without litres, `checkRefuel`, or aged with margin ≥ 25 km | «Registra una carga para saber si llegas», «Llena el tanque para saber si llegas», «¿Cargaste gasolina? Actualízalo para saber si llegas», «Revisa el indicador de la moto: …» |
+
+No line without a profile, and none for a straight-line fallback (`Route.isDirectFallback`: label "Direct" or an
+"offline" step), whose chord under-states the road distance.
+
+### 15.8 Dash alert (zero input)
+
+**When.** `FuelAlertPolicy`: a latch per bike (`fuel_alert_v1#<id>`, persisted, so a relaunch mid-ride does not
+repeat it) holds the highest level already announced for the current tank (none < `low` < `reserve`). An alert
+fires only from `FuelModel.ingest` (a fix of a countable session for that bike) when a trustworthy estimate
+stands above the latch: **once** on the crossing into `low` and **once** at `reserve`. A refuel or an edit that
+lifts the estimate re-arms it (`latch = min(latch, level)`, ok → none); unknown, aged and `checkRefuel` estimates
+never fire and never re-arm; phone edits never alert by themselves (an edit that lowers the estimate is
+announced by the next fix of a connected session).
+
+**Delivery** (`RideModel.announceFuel`): one pending slot (a reserve alert replaces a pending low one), retried
+from `uiTick` (~10 Hz while the session runs). The **toast** (only while the own dash UI is projected; Mirror
+sessions get voice only) uses the existing transient toast path (`DashUIController.showToast`, drawn by
+`DashLayout.overlayPill` below the top chrome, ≤ 2 lines) for 6 s (`FuelAlertPolicy.toastSeconds`; default toasts
+2.5 s), and waits while a sheet (confirm card «¿Terminar la ruta?», menu, search, Music), the arrival card, a dash
+preview, the hold picture or **another toast** is up — it never replaces a navigation toast. The **voice** line
+(only with voice prompts on) waits until nothing is being spoken and no turn cue is within 500 m
+(`fuelVoiceTurnClearanceM`), so it never cuts a turn instruction. After 60 s (`fuelAlertMaxDeferral`) undelivered
+channels are dropped; if nothing was delivered the latch is restored so the next fix retries with a fresh number.
+A refuel while pending cancels it. No `DashModel` field, no new intent, hit region or focus target: the dash gains
+no input. Pinned by `DashSafetyRulesTests` (speed / limit never covered on the 8 canvases, hit regions and focus
+order identical with and without the toast) and `FuelAlertDeferralTests`.
+
+| | EN | ES |
+|---|---|---|
+| low toast | `Low range: ~70 km to reserve` | `Autonomía baja: ~70 km hasta la reserva` |
+| low toast, under a step | `Low range: under 10 km to reserve` | `Autonomía baja: menos de 10 km hasta la reserva` |
+| reserve toast | `On reserve: refuel soon` | `En reserva: carga gasolina pronto` |
+| low voice | `Low range. About 70 kilometers to reserve.` (`miles`) | `Autonomía baja. Unos 70 kilómetros hasta la reserva.` (`Unas 40 millas`) |
+| low voice, under a step | `Low range. Under 10 kilometers to reserve.` | `Autonomía baja. Menos de 10 kilómetros hasta la reserva.` |
+| reserve voice | `You're on reserve. Refuel soon.` | `Estás en reserva. Carga gasolina pronto.` |
+
+Spanish is neutral Latin-American («carga gasolina», «hasta la reserva»; never «repostar» or «depósito»).
+
+### 15.9 Phone screens and the moving lock
+
+Home: `FuelHomeCard` after Connect / Pocket mode (setup card, or the state of §15.5, the footer «El indicador de
+la moto manda», «Cargué gasolina», the undo bar). Garage bike detail: the «Combustible» section ("Fuel & range")
+with model, tank, seed km/L and its source («Dato oficial · {host}», «Dato publicado · {host}», «Estimado: se
+ajusta con tus cargas», «Ingresado a mano», «Editado por ti», «Copiado de otra moto»), measured km/L, «Usar el
+rendimiento medido», reserve stepper, cost per km, «Editar», «Cambiar moto», «Cargué gasolina», «Corregir nivel»
+and «Historial de cargas»; removing the bike says it forgets the fuel log too. Navigate: the verdict line (§15.7).
+Sheets («¿Cuál es tu moto?», editor, «Cargué gasolina», «Corregir nivel») are presented by RootView from
+`FuelModel.sheet`. Every value is entered on the phone; nothing is ever asked on the dash.
+
+**Moving lock** (the rider never types while riding): `FuelModel.canLogNow` = stopped, i.e. ≤ 5 km/h, or no fix
+fresher than 10 s (`LinkLossAlarmPolicy.isStopped`). While moving, `present(_:)` refuses every sheet and
+`saveProfile` / `logRefuel` / `logLevel` return `refusedWhileMoving`; the buttons are disabled and the card says
+«Detente para elegir tu moto» / «Detente para registrar la carga» / «Detente para editar»; a sheet already open
+disables its fields. Single taps stay available: reserve stepper, «Usar el rendimiento medido», «Deshacer»,
+delete with confirm, «Luego».
+
+### 15.10 Persistence, privacy and diagnostics
+
+`FuelStore` writes JSON documents (`"v": 1`, sorted keys, wall-clock times as epoch ms) straight to the
+`KeyValueStore`, under **scoped keys only**: there is never a global key and no scoped → global → default chain
+(a global value would leak one bike's tank into another); a key for an empty or odd bike id is refused.
+
+| Key | Content |
+|---|---|
+| `fuel_profile_v1#<bikeId>` | `FuelProfile` |
+| `fuel_log_v1#<bikeId>` | `RefuelLog` (removed when empty) |
+| `fuel_odo_v1#<bikeId>` | `FuelOdometerState`: total km, the last accepted fix **rounded to 3 decimals** (≈ 110 m) with its time (gap detection only), gap and noGps marks (≤ 20 each) |
+| `fuel_alert_v1#<bikeId>` | `"low"` / `"reserve"` (absent = armed) |
+| `fuel_setup_later_v1#<bikeId>` | `true` after «Luego» |
+| `ios_fuel_volume_unit_v1` | the pump's unit, `"L"` / `"gal"` — the one global value: a preference, no bike data; default US gallons for imperial units or the regions CO / EC / PE, else litres |
+
+- Nothing is written for a bike without fuel set-up (no counter, no rounded position).
+- A document that does not decode, or has `v > 1` (a downgrade), is read as absent, logged once, and overwritten
+  only by an explicit rider write.
+- **Removal**: every key ends in `#<id>`, so `Garage.remove(id)` / `Garage.clear()` delete them with the rest of
+  the bike (§4.2); `GarageModel.observeRemoval` makes FuelModel drop its caches and refuse late writes for that
+  id. The volume-unit preference survives (it is the pump's, not the bike's).
+- **Never exported**: not in `opencfmoto.settings` (SettingsBackup names its keys), `opencfmoto.map` or the
+  Android `bikes_json` import. They are in iCloud / computer backups like every App Group `UserDefaults` value.
+- **Logs** (tag `fuel`, `Log.i/w`): the chosen model (`catalog:<id>` / `manual`), refuel kind and yes/no flags
+  (`full, litres=yes, price=no, trip=yes, late=no, unseen=no`), state changes with the rounded display value,
+  alert fired / waiting / dropped, gap / bridge km rounded, blind spells, counting paused. **Never** coordinates
+  (rounded or not), station names, litres, prices, costs, trip-meter values or per-fix totals — LogRedactor has no
+  rule for them, so the fuel code never prints them (pinned by an AppModel test).
+- **Problem Report** (`AppModel.problemDiagnostics`) adds `modelId` (the stored QR's model id, `none` without
+  one), `huidPrefix` (the first 4 characters of the HUID, a family marker, only during a session) and `fuel`
+  (`catalog:<id>` / `manual` / `none`, plus `log <n>`), so field reports can promote catalog rows.
+
+### 15.11 Limits of the MVP
+
+- **Km ridden without the app are not seen.** Rule G turns a ≥ 1 km jump at the next countable fix into a chord
+  (bridged or aged); a ride that ends where it started stays invisible — the standing «El indicador de la moto
+  manda» and the 30-day age cover it. If iOS drops the bike Wi-Fi while riding, km after the 180 s grace count
+  only from the resume (chord added, aged when the unseen excess may exceed 10 km).
+- GPS slightly under-counts winding roads; the learned km/L absorbs that (it is computed from the same km).
+- The catalog's candidate lists are mostly guessed (confirmed: 450MT, 675SR-R, 450CL-C, US 800NK, 800NK Advanced,
+  800MT Explore, 800MT-X, 1000MT-X); a dash without model id or markers gets search and manual entry.
+- Imperial = US gallons / US mpg (UK riders see US gallons); economy is km/L or mpg (no km/gal).
+- Decisions kept for the owner's word: `450` alone lists the 450 rows; typed entry is refused while moving;
+  the learned km/L is capped at seed × 1.15 until a second interval; gallons by default for CO / EC / PE.
+- Known Core limitation outside the fuel path: a navigation toast (`NavEffect.toast`) can still draw over the
+  confirm card; the fuel toast always waits for it.

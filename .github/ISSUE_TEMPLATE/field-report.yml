@@ -17,6 +17,7 @@ body:
     id: bike
     attributes:
       label: Bike model and year / Moto y año
+      description: The exact model and year (the fuel catalog uses them). / El modelo exacto y el año (los usa el catálogo de combustible).
       placeholder: "CFMOTO 450MT 2025"
     validations:
       required: true
@@ -79,6 +80,12 @@ body:
       description: Steps, what you expected and what you saw. / Pasos, qué esperabas y qué viste.
     validations:
       required: true
+  - type: textarea
+    id: fuel
+    attributes:
+      label: Fuel range (optional) / Autonomía (opcional)
+      description: "Only if you used it: the model you picked under \"Which bike is it?\" and whether it was in the list, the Model ID in Garage ▸ your bike, and for each full tank the litres, the app's km and the bike's trip meter. No prices needed. / Solo si la usaste: el modelo que elegiste en «¿Cuál es tu moto?» y si estaba en la lista, el ID de modelo de Garaje ▸ tu moto y, en cada lleno, los litros, los km de la app y los del trip de la moto. Los precios no hacen falta."
+      placeholder: "450MT, first in the list · Model ID 37416 · 15.2 L, app 301 km, trip 312 km"
   - type: textarea
     id: log
     attributes:

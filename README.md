@@ -104,6 +104,12 @@ usando el protocolo **PXC** obtenido por ingeniería inversa. Es un port a Swift
   que una app vea lo que suena en Spotify, YouTube Music u otras.
 - **Viajes**: ordenador de viaje, registro automático de cada ruta mientras el tablero muestra el
   mapa, lista por días con miniaturas y exportación **GPX**.
+- **Autonomía estimada** (~km hasta la reserva) según tu moto, con tus cargas de gasolina: la app
+  reconoce la familia del tablero por el QR, te pregunta una vez «¿Cuál es tu moto?» y cuenta con el
+  GPS los km desde tu última carga; el rendimiento se ajusta con tus llenos. Avisa una vez en el
+  tablero (y por voz) cuando queda poca autonomía y al llegar a la reserva, y al preparar una ruta te
+  dice si llegas. Es una estimación: la moto no le envía a la app ningún dato de combustible y el
+  indicador de la moto manda.
 - **Garaje** con varias motos (cada una con sus propios ajustes), **conexión automática** y
   **recuperación** del enlace, **modo espejo** (toda la pantalla del iPhone en el tablero) y
   **registros** con informe de problemas (contraseñas y números de serie ocultos).
@@ -228,6 +234,10 @@ Sigue la guía paso a paso [docs/PRUEBA-EN-LA-MOTO.md](docs/PRUEBA-EN-LA-MOTO.md
   **Modo bolsillo** sigue siendo el modo fiable.
 - **Permiso de red local**: iOS lo pide la primera vez que la app busca el tablero; si lo
   deniegas, actívalo en Ajustes ▸ OpenCfMoto ▸ Red local.
+- **Autonomía**: la app solo ve los km que mide mientras está conectada a la moto. Si ruedas sin la
+  app, o con la ubicación aproximada, la cifra sale como dudosa («~250 km?») hasta tu próxima carga o
+  «Corregir nivel». El catálogo trae los CFMOTO y Moto Morini de los tableros compatibles; para otra
+  moto, ingresa el tanque y el rendimiento a mano.
 - **Botones del manillar**: solo llegan a la app que está «reproduciendo» (Now Playing). La
   opción es experimental y voluntaria: reproduce audio silencioso y **pausa la música de otras
   apps** mientras está activa; no todos los tableros envían esos botones; la pulsación larga de ★
@@ -262,7 +272,7 @@ App/Resources/                  Recursos; Localization/*.json → Localizable.xc
 MirrorExtension/                Extensión ReplayKit (modo espejo)
 Packages/OpenCfMotoKit/         Paquete Swift
   Sources/OpenCfMotoCore/         Swift puro: protocolo PXC, enlace, navegación, interfaz del
-                                  tablero, viajes, ajustes (compila y se prueba en Linux)
+                                  tablero, viajes, combustible, ajustes (compila y se prueba en Linux)
   Sources/OpenCfMotoAppModel/     Modelos @Observable de la app (también probados en Linux)
   Sources/OpenCfMotoApple/        Adaptadores de Apple: red, Wi-Fi, ubicación, voz, vídeo, mapa
   Tests/                          Pruebas XCTest
@@ -286,8 +296,8 @@ PRIVACY.md                      Privacidad: qué se queda en el iPhone y qué se
 swift test --package-path Packages/OpenCfMotoKit
 ```
 
-El núcleo y los modelos de la app se prueban en Linux y macOS: unas 1700 pruebas en Linux y unas
-1900 en macOS, que además prueba los adaptadores de Apple. En cada push, GitHub Actions
+El núcleo y los modelos de la app se prueban en Linux y macOS: unas 1950 pruebas en Linux y unas
+2100 en macOS, que además prueba los adaptadores de Apple. En cada push, GitHub Actions
 (`.github/workflows/ci.yml`) ejecuta las pruebas en Linux, las vuelve a ejecutar en macOS
 compilando los adaptadores de Apple, genera el proyecto con XcodeGen y compila la app para el
 Simulador de iOS y para iPhone (también con el Xcode más reciente). Además ensaya el flujo de
@@ -302,18 +312,18 @@ AltStore / SideStore leída de ese IPA. Las traducciones se reúnen con
 
 ## Privacidad
 
-Sin cuentas, sin anuncios y sin telemetría. Las motos, los viajes y los registros se quedan en el
-iPhone hasta que tú los compartes; las contraseñas Wi-Fi se guardan en el llavero y se ocultan en
-los registros. Las búsquedas, rutas y teselas consultan servicios de OpenStreetMap. Con **Apple
-Music en el tablero**, la canción se lee en el iPhone y OpenCfMoto no la envía a ningún sitio (ni
-títulos, ni artistas, ni identificadores de canciones en los registros: cada canción aparece con
-un código que cambia en cada arranque de la app); la portada de las canciones en streaming la carga
-MusicKit de Apple desde los servidores de Apple. Con la beta de TestFlight, TestFlight (de Apple) nos
-muestra los fallos de la app, cuántas veces la usas, el modelo de tu iPhone y su versión de iOS, y los
-comentarios que nos envíes, con datos del iPhone en ese momento (como la zona horaria y el operador); con
-el enlace público, sin tu nombre ni tu correo, salvo el correo que escribas en un comentario
-([detalle](PRIVACY.md#si-la-instalas-con-testflight)). Todo el detalle, servicio por servicio:
-[PRIVACY.md](PRIVACY.md).
+Sin cuentas, sin anuncios y sin telemetría. Las motos, los viajes, las cargas de gasolina y los
+registros se quedan en el iPhone hasta que tú los compartes; las contraseñas Wi-Fi se guardan en el
+llavero y se ocultan en los registros. Las búsquedas, rutas y teselas consultan servicios de
+OpenStreetMap. Con **Apple Music en el tablero**, la canción se lee en el iPhone y OpenCfMoto no la
+envía a ningún sitio (ni títulos, ni artistas, ni identificadores de canciones en los registros:
+cada canción aparece con un código que cambia en cada arranque de la app); la portada de las
+canciones en streaming la carga MusicKit de Apple desde los servidores de Apple. Con la beta de
+TestFlight, TestFlight (de Apple) nos muestra los fallos de la app, cuántas veces la usas, el modelo
+de tu iPhone y su versión de iOS, y los comentarios que nos envíes, con datos del iPhone en ese
+momento (como la zona horaria y el operador); con el enlace público, sin tu nombre ni tu correo,
+salvo el correo que escribas en un comentario ([detalle](PRIVACY.md#si-la-instalas-con-testflight)).
+Todo el detalle, servicio por servicio: [PRIVACY.md](PRIVACY.md).
 
 ## Preguntas frecuentes
 
@@ -418,6 +428,11 @@ the reverse-engineered **PXC** protocol. It is a Swift port of the Android app
   YouTube Music or other players play.
 - **Trips**: trip computer, automatic logging of every ride while the dash shows the map, a
   by-day list with route thumbnails and **GPX** export.
+- **Estimated fuel range** (~km to the reserve) for your bike, from your refuels: the app recognises
+  the dash family from the QR, asks once "Which bike is it?" and counts the GPS km since your last
+  refuel; the fuel economy adjusts to your full tanks. It warns once on the dash (and by voice) when
+  the range runs low and at the reserve, and the route preview tells you whether you get there. It is
+  an estimate: the bike sends no fuel data and your bike's fuel gauge has the final word.
 - **Garage** with several bikes (each with its own settings), **auto-connect** and **link
   recovery**, **mirror mode** (the whole iPhone screen on the dash) and **logs** with a problem
   report (passwords and serial numbers redacted).
@@ -534,6 +549,10 @@ no Wi-Fi or dash, and a demo GPS route so you can watch the dash UI on the phone
   which is not guaranteed while locked. **Pocket mode** remains the reliable mode.
 - **Local Network permission**: iOS asks for it the first time the app looks for the dash; if you
   deny it, turn it on in Settings ▸ OpenCfMoto ▸ Local Network.
+- **Fuel range**: the app only sees the km it measures while it is connected to the bike. If you ride
+  without the app, or with approximate location, the number shows as unsure ("~250 km?") until your
+  next refuel or "Correct level". The catalog holds the CFMOTO and Moto Morini models of the supported
+  dashes; for another bike, enter the tank and the fuel economy by hand.
 - **Handlebar buttons**: they only reach the app that is "playing" (Now Playing). The option is
   experimental and opt-in: it plays silent audio and **pauses other apps' music** while on; not
   every dash sends those buttons; a ★ long press cannot be detected on iOS; the ▲/▼ volume keys only
@@ -567,7 +586,7 @@ App/Resources/                  Resources; Localization/*.json → Localizable.x
 MirrorExtension/                ReplayKit broadcast upload extension (mirror mode)
 Packages/OpenCfMotoKit/         Swift package
   Sources/OpenCfMotoCore/         Pure Swift: PXC protocol, link, navigation, dash UI, trips,
-                                  settings (builds and is tested on Linux)
+                                  fuel, settings (builds and is tested on Linux)
   Sources/OpenCfMotoAppModel/     The app's @Observable models (tested on Linux too)
   Sources/OpenCfMotoApple/        Apple adapters: network, Wi-Fi, location, voice, video, tiles
   Tests/                          XCTest suites
@@ -591,8 +610,8 @@ PRIVACY.md                      Privacy: what stays on the iPhone and which serv
 swift test --package-path Packages/OpenCfMotoKit
 ```
 
-The core and the app models are tested on Linux and macOS: about 1,700 tests on Linux and about
-1,900 on macOS, which also tests the Apple adapters. On every push GitHub Actions
+The core and the app models are tested on Linux and macOS: about 1,950 tests on Linux and about
+2,100 on macOS, which also tests the Apple adapters. On every push GitHub Actions
 (`.github/workflows/ci.yml`) runs the tests on Linux, runs them again on macOS while compiling the
 Apple adapters, generates the project with XcodeGen and builds the app for the iOS Simulator and for
 iPhone (also with the newest Xcode). It also rehearses the TestFlight pipeline without credentials:
@@ -606,15 +625,15 @@ Translations are merged with `python3 tools/l10n/build_strings.py`.
 
 ## Privacy
 
-No accounts, no ads, no telemetry. Bikes, trips and logs stay on the iPhone until you share them;
-Wi-Fi passwords live in the Keychain and are redacted in logs. Search, routing and map tiles query
-OpenStreetMap services. With **Apple Music on the dash** the song is read on the iPhone and
+No accounts, no ads, no telemetry. Bikes, trips, refuels and logs stay on the iPhone until you share
+them; Wi-Fi passwords live in the Keychain and are redacted in logs. Search, routing and map tiles
+query OpenStreetMap services. With **Apple Music on the dash** the song is read on the iPhone and
 OpenCfMoto sends it nowhere (no titles, artists or song ids in logs: each song shows as a code that
 changes every time the app starts); the cover of streamed songs is loaded by Apple's MusicKit from
-Apple's servers. With the TestFlight beta, Apple's TestFlight shows us the app's crashes, how often you
-use it, your iPhone model and its iOS version, and any feedback you send us, with details of the iPhone
-at that moment (such as its time zone and carrier); through the public link, without your name or
-e-mail, unless you type your e-mail in your feedback
+Apple's servers. With the TestFlight beta, Apple's TestFlight shows us the app's crashes, how often
+you use it, your iPhone model and its iOS version, and any feedback you send us, with details of the
+iPhone at that moment (such as its time zone and carrier); through the public link, without your
+name or e-mail, unless you type your e-mail in your feedback
 ([details](PRIVACY.md#if-you-install-it-with-testflight)). Every detail, service by service:
 [PRIVACY.md](PRIVACY.md#english).
 
