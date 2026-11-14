@@ -8,15 +8,20 @@
 // - F0: full, no litres, 20 days ago, odo 4000;
 // - F1: full, 9 days ago, odo 4000 + 0.8·T·k, litres 0.8·T, 4.25 per litre («~(s+1) km/L de tus cargas (1)»);
 // - P: partial, 3 days ago, odo F1 + 120, litres 5; fuelP = min(T, T − 120/k + 5); rangeAtP = (fuelP − r·T)·k;
-// - the counter at P + 0.3 × rangeAtP (ok) or P + rangeAtP − 60 (low: ~60 km to the reserve);
-// - aged = ok with every entry 35 days older (the newest 38 days old).
+// - the counter at P + 0.3 × rangeAtP (ok), P + rangeAtP − 60 (low: ~60 km to the reserve), P + rangeAtP + 10
+//   (reserve: −10 km to the reserve, km to empty r·T·k − 10 stays above the check cap) or P + fuelP·k + 0.1·T·k
+//   + 20 (check: «¿Cargaste gasolina?»); the anchor is F1 (P has no level);
+// - aged = ok with every entry 35 days older (the newest 38 days old); gap / nogps = ok with a gap / noGps mark
+//   an hour ago (after F1: «Puede que hayas rodado sin la app» / «La app no pudo medir los km»);
+// - norefuel = the profile only (an empty log: «Registra una carga para empezar.»); partial = F0 then a partial
+//   without litres 30 km before the counter («Autonomía sin calcular»).
 // setup = no fuel data and the legacy profile hint: Home shows «¿Cuál es tu moto?».
 
 import Foundation
 import OpenCfMotoCore
 
 public enum DemoFuel {
-    public enum Mode: String, Sendable, CaseIterable { case ok, low, aged, setup }
+    public enum Mode: String, Sendable, CaseIterable { case ok, low, aged, setup, reserve, check, norefuel, partial, gap, nogps }
 
     /// The demo bike's catalog row.
     public static let catalogId = "cfmoto-675sr-r"
@@ -31,7 +36,7 @@ public enum DemoFuel {
         let profile = demoProfile(entry: FuelCatalog.entry(id: catalogId), nowMs: nowMs)
         let docs = documents(profile: profile, mode: mode, nowMs: nowMs)
         fuel.setProfile(profile, bikeId: bikeId)
-        fuel.setLog(docs.log, bikeId: bikeId)
+        if !docs.log.entries.isEmpty { fuel.setLog(docs.log, bikeId: bikeId) }
         fuel.setOdometer(docs.odometer, bikeId: bikeId)
     }
 
@@ -53,15 +58,35 @@ public enum DemoFuel {
         let pOdo = f1Odo + 120
         let fuelP = min(t, t - 120 / k + 5)
         let rangeAtP = (fuelP - r * t) * k
-        let sinceP = mode == .low ? rangeAtP - 60 : 0.3 * rangeAtP
+        let sinceP: Double
+        switch mode {
+        case .low: sinceP = rangeAtP - 60
+        case .reserve: sinceP = rangeAtP + 10
+        case .check: sinceP = fuelP * k + 0.1 * t * k + 20
+        default: sinceP = 0.3 * rangeAtP
+        }
+        let f0 = RefuelEntry(id: "demo-f0", atMs: nowMs - 20 * day - shift, kind: .full, odometerKm: f0Odo)
+        var odometer = FuelOdometerState()
+        switch mode {
+        case .norefuel:
+            odometer.totalKm = f0Odo
+            return (RefuelLog(), odometer)
+        case .partial:
+            odometer.totalKm = f0Odo + 150
+            return (RefuelLog(entries: [f0, RefuelEntry(id: "demo-p", atMs: nowMs - 2 * day, kind: .partial, odometerKm: f0Odo + 120)]),
+                    odometer)
+        default:
+            break
+        }
         let log = RefuelLog(entries: [
-            RefuelEntry(id: "demo-f0", atMs: nowMs - 20 * day - shift, kind: .full, odometerKm: f0Odo),
+            f0,
             RefuelEntry(id: "demo-f1", atMs: nowMs - 9 * day - shift, kind: .full, litres: 0.8 * t, pricePerLitre: 4.25,
                         odometerKm: f1Odo),
             RefuelEntry(id: "demo-p", atMs: nowMs - 3 * day - shift, kind: .partial, litres: 5, odometerKm: pOdo),
         ])
-        var odometer = FuelOdometerState()
         odometer.totalKm = pOdo + sinceP
+        if mode == .gap { odometer.gapsMs = [nowMs - 3_600_000] }
+        if mode == .nogps { odometer.noGpsMs = [nowMs - 3_600_000] }
         return (log, odometer)
     }
 }

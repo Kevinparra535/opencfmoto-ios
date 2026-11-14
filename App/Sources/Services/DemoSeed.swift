@@ -7,7 +7,7 @@
 // Everything goes to the in-memory stores / temp folders of `AppServices.preview`, so nothing
 // survives the process. Apple Music on the dash: `music(clock:store:)` is the fake Music app of the
 // demo and of the E2E run (`-e2eMusic`): three fictional songs with drawn covers, playing at 2:13.
-// Fuel MVP: the demo bike's fuel data (`-demoFuel ok|low|aged|setup`, DemoFuel in OpenCfMotoAppModel): a
+// Fuel MVP: the demo bike's fuel data (`-demoFuel <mode>`, DemoFuel.Mode in OpenCfMotoAppModel): a
 // catalog profile of the fictional 675 SR-R, three refuels and the km counter — or, for `setup`, none, so
 // Home asks «¿Cuál es tu moto?». Demo data only; no position is seeded.
 

@@ -33,6 +33,8 @@ struct FuelVerdictLine: View {
         let text: Text
         let icon: Color
         let words: Color
+        /// VoiceOver, when the visible words carry a «~» (read «Unos 60 km», never «tilde 60»).
+        var spoken: Text? = nil
     }
 
     private func row(_ line: Line, tappable: Bool) -> some View {
@@ -55,6 +57,15 @@ struct FuelVerdictLine: View {
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+        .modifier(SpokenLabel(text: line.spoken))
+    }
+
+    private struct SpokenLabel: ViewModifier {
+        let text: Text?
+        @ViewBuilder
+        func body(content: Content) -> some View {
+            if let text { content.accessibilityLabel(text) } else { content }
+        }
     }
 
     private func line(for verdict: FuelVerdict) -> Line? {
@@ -62,7 +73,8 @@ struct FuelVerdictLine: View {
         switch verdict {
         case let .reaches(margin):
             let d = FuelFormat.range(margin, units: units)
-            return Line(text: Text("You reach it with ~\(d.number) before the reserve"), icon: Theme.live, words: Theme.text)
+            return Line(text: Text("You reach it with ~\(d.number) before the reserve"), icon: Theme.live, words: Theme.text,
+                        spoken: Text("You reach it with about \(d.number) before the reserve"))
         case .tight:
             return Line(text: Text("Tight: refuel before you leave"), icon: Theme.busy, words: Theme.busy)
         case let .needsRefuel(stops):

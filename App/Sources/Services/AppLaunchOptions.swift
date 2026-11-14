@@ -18,7 +18,7 @@
 // | `-uiOrientation landscape`       | rotate the interface to landscape after launch                      |
 // | `-uiDashSheet music`             | with `-uiScreen dash`: open the dash's Music sheet once it shows music |
 // | `-uiSettingsAnchor music`        | with `-uiScreen settings`: scroll to "Apple Music on the dash"      |
-// | `-demoFuel ok\|low\|aged\|setup`   | with `-demoSeed`: the demo bike's fuel data (default `ok`; `setup` = no profile, Home asks «¿Cuál es tu moto?») |
+// | `-demoFuel <mode>`               | with `-demoSeed`: the demo bike's fuel data, `DemoFuel.Mode`: ok (default), low, aged, setup (no profile, Home asks «¿Cuál es tu moto?»), reserve, check, norefuel, partial, gap, nogps |
 // | `-demoStill`                     | demo: the GPS route player is not started (no fix: the rider is stopped, fuel sheets open) |
 //
 // Fuel MVP screens: `-uiScreen fuel` (Garage detail at «Combustible»), `refuel` («Cargué gasolina»),

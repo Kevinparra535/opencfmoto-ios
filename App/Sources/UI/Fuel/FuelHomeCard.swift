@@ -9,7 +9,7 @@
 // | unknown(noRefuel / partial…)  | «Autonomía» + why                                            | «Cargué gasolina»             |
 // | ok / low / reserve            | «~250 km hasta la reserva» (amber low, red reserve, words)   | «Cargué gasolina»             |
 // | checkRefuel                   | «¿Cargaste gasolina?» · «Toca para actualizar» (tappable)    | opens the late refuel sheet   |
-// | aged                          | «~250 km?» in grey + the reason                              | «Cargué gasolina», «Corregir nivel» |
+// | aged                          | «~250 km?» in grey + the reason (low / reserve keep their badge, grey) | «Cargué gasolina», «Corregir nivel» |
 // Footer on number states «El indicador de la moto manda»; the undo bar replaces it for 10 s after a refuel.
 // While the bike moves every button that opens a sheet is disabled and the card says «Detente para …».
 
@@ -85,6 +85,7 @@ private struct FuelRangeCard: View {
     let state: FuelBikeState
 
     @Environment(AppModel.self) private var model
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         let fuel = model.fuel
@@ -143,8 +144,11 @@ private struct FuelRangeCard: View {
         .accessibilityAddTraits(.updatesFrequently)
     }
 
+    /// «AUTONOMÍA» and, for low / reserve, the badge (grey when aged: the words stay). At accessibility text
+    /// sizes the badge takes its own line so the title is not squeezed.
+    @ViewBuilder
     private func header(_ e: FuelEstimate) -> some View {
-        HStack(alignment: .center, spacing: 8) {
+        let title = HStack(alignment: .center, spacing: 8) {
             Image(systemName: "fuelpump.fill")
                 .foregroundStyle(iconTint(e))
                 .accessibilityHidden(true)
@@ -152,14 +156,27 @@ private struct FuelRangeCard: View {
                 .font(.caption.weight(.bold))
                 .textCase(.uppercase)
                 .foregroundStyle(Theme.textSecondary)
-            Spacer(minLength: 8)
-            if e.aged == nil {
-                switch e.state {
-                case .low: FuelBadge(text: Text("Low range"), tint: Theme.busy)
-                case .reserve: FuelBadge(text: Text("On reserve"), tint: Theme.error)
-                default: EmptyView()
-                }
+        }
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 6) {
+                title
+                badge(e)
             }
+        } else {
+            HStack(alignment: .center, spacing: 8) {
+                title
+                Spacer(minLength: 8)
+                badge(e)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func badge(_ e: FuelEstimate) -> some View {
+        switch e.state {
+        case .low: FuelBadge(text: Text("Low range"), tint: e.aged == nil ? Theme.busy : Theme.idle)
+        case .reserve: FuelBadge(text: Text("On reserve"), tint: e.aged == nil ? Theme.error : Theme.idle)
+        default: EmptyView()
         }
     }
 
@@ -168,7 +185,7 @@ private struct FuelRangeCard: View {
         let aged = e.aged != nil
         switch e.state {
         case .unknown(.partialWithoutAmount):
-            Text("Range not calculated: your last refuel has no litres.")
+            Text("Range not calculated: your last refuel has no liters.")
                 .font(.headline)
                 .foregroundStyle(Theme.text)
                 .fixedSize(horizontal: false, vertical: true)
@@ -212,7 +229,7 @@ private struct FuelRangeCard: View {
                 if let aged = e.aged {
                     FuelUIText.agedReason(aged)
                 } else if let since = FuelUIText.sinceLastRefuel(e, units: units) {
-                    Text("Since your last refuel: \(since)")
+                    FuelUIText.sinceLine(since, lastEntry: state.log.last)
                         .monospacedDigit()
                 }
             case .reserve:
@@ -314,19 +331,19 @@ private struct FuelRangeCard: View {
         var parts = [String(localized: "Fuel range")]
         switch e.state {
         case .unknown(.partialWithoutAmount):
-            parts.append(String(localized: "Range not calculated: your last refuel has no litres."))
+            parts.append(String(localized: "Range not calculated: your last refuel has no liters."))
             parts.append(String(localized: "A full tank calculates it again."))
         case .unknown(.noProfile):
             parts.append(String(localized: "Tell us which bike it is to estimate its range."))
         case .unknown(.noRefuel):
             parts.append(String(localized: "Log a refuel to start."))
         case let .ok(km), let .low(km):
-            if case .low = e.state, e.aged == nil { parts.append(String(localized: "Low range")) }
+            if case .low = e.state { parts.append(String(localized: "Low range")) } // aged too: the words stay
             parts.append(FuelUIText.rangeSpoken(km, units: units))
             if let aged = e.aged {
                 parts.append(FuelUIText.agedReasonSpoken(aged))
             } else if let since = e.kmSinceLastEntry {
-                parts.append(String(localized: "Since your last refuel: \(FuelUIText.distance(since, units))"))
+                parts.append(FuelUIText.sinceSpoken(FuelUIText.distance(since, units), lastEntry: state.log.last))
             }
         case .reserve:
             parts.append(String(localized: "On reserve"))

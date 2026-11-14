@@ -108,6 +108,7 @@ struct GarageFuelSection: View {
             LabeledContent {
                 Text(verbatim: "~" + FuelUIText.economy(profile.seedKmPerL, units))
                     .monospacedDigit()
+                    .accessibilityLabel(Text("About \(FuelUIText.economy(profile.seedKmPerL, units))"))
             } label: {
                 Text("Fuel economy")
             }
@@ -115,14 +116,7 @@ struct GarageFuelSection: View {
         }
 
         FuelStackedRow(title: "Measured") {
-            if let learned = stats.learnedKmPerL, stats.learnedIntervalCount > 0 {
-                Text("~\(FuelUIText.economy(learned, units)) from your refuels (\(stats.learnedIntervalCount))")
-                    .monospacedDigit()
-                    .foregroundStyle(Theme.text)
-            } else {
-                Text("Not measured yet: log two full tanks with litres.")
-                    .foregroundStyle(Theme.textSecondary)
-            }
+            measuredLine(profile: profile, stats: stats, units: units)
         }
 
         if stats.learnedKmPerL != nil {
@@ -151,6 +145,38 @@ struct GarageFuelSection: View {
                 Text("Cost per \(FuelFormat.distanceUnit(units))")
             }
         }
+    }
+
+    /// «Medido ~22,1 km/L de tus cargas (3)»: the km/L the range uses — with one interval, capped at seed × 1.15
+    /// until the second refuel, and it says so (the raw single interval could read higher than Home's figure).
+    @ViewBuilder
+    private func measuredLine(profile: FuelProfile, stats: FuelStats, units: MapUnits) -> some View {
+        if stats.learnedKmPerL != nil, stats.learnedIntervalCount > 0 {
+            let (k, source) = Self.usedKmPerL(profile, stats)
+            let economy = FuelUIText.economy(k, units)
+            let n = stats.learnedIntervalCount
+            Group {
+                if source == .learnedCapped {
+                    Text("~\(economy) from your refuels (\(n)) · capped until your second refuel")
+                        .accessibilityLabel(Text("About \(economy) from your refuels (\(n)), capped until your second refuel"))
+                } else {
+                    Text("~\(economy) from your refuels (\(n))")
+                        .accessibilityLabel(Text("About \(economy) from your refuels (\(n))"))
+                }
+            }
+            .monospacedDigit()
+            .foregroundStyle(Theme.text)
+        } else {
+            Text("Not measured yet: log two full tanks with liters.")
+                .foregroundStyle(Theme.textSecondary)
+        }
+    }
+
+    /// The km/L the range uses once «Usar el rendimiento medido» is on (the single-interval cap applied).
+    private static func usedKmPerL(_ profile: FuelProfile, _ stats: FuelStats) -> (Double, FuelKmPerLSource) {
+        var p = profile
+        p.preferLearned = true
+        return RangeEstimator.effectiveKmPerL(profile: p, stats: stats)
     }
 
     /// The range, why it is unsure, and the actions.
@@ -262,7 +288,7 @@ private struct FuelStackedRow<Content: View>: View {
 // MARK: - History row
 
 /// One refuel: date, «Lleno | Parcial | Ajuste de nivel», litres, price, «+{km}» since the entry before.
-/// Swipe «Eliminar» asks first («¿Eliminar esta carga?»).
+/// Swipe «Eliminar» asks first («¿Eliminar esta carga?» / «¿Eliminar este ajuste de nivel?»).
 private struct FuelHistoryRow: View {
     let bikeID: String
     let entry: RefuelEntry
@@ -318,7 +344,8 @@ private struct FuelHistoryRow: View {
                 Label("Delete", systemImage: "trash")
             }
         }
-        .confirmationDialog("Delete this refuel?", isPresented: $confirmsDelete, titleVisibility: .visible) {
+        .confirmationDialog(entry.kind == .level ? Text("Delete this level correction?") : Text("Delete this refuel?"),
+                            isPresented: $confirmsDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
                 model.fuel.deleteRefuel(id: entry.id, for: bikeID)
             }

@@ -73,6 +73,20 @@ shoot es_fuel_edit 5 "${DEMO[@]}" -uiScreen fueledit -AppleLanguages "(es)" -App
 shoot es_fuel_level 5 "${DEMO[@]}" -uiScreen fuellevel -AppleLanguages "(es)" -AppleLocale es_ES
 shoot route_verdict 12 "${DEMO[@]}" -uiScreen routeverdict
 shoot es_route_verdict 12 "${DEMO[@]}" -uiScreen routeverdict -AppleLanguages "(es)" -AppleLocale es_ES
+# The riskier fuel states (Home card: reserve, «¿Cargaste gasolina?», no refuel yet, a partial without litres,
+# aged by a gap / no GPS), the Garage section without a profile, the gallon default of es_CO («Por galón»), an
+# accessibility text size, and the route verdict on reserve («Necesitas cargar gasolina en el camino»).
+for m in reserve check norefuel partial gap nogps; do
+  shoot "es_home_fuel_$m" 5 "${DEMO[@]}" -demoFuel "$m" -demoStill -AppleLanguages "(es)" -AppleLocale es_ES
+done
+shoot home_fuel_reserve 5 "${DEMO[@]}" -demoFuel reserve -demoStill
+shoot es_fuel_setup 6 "${DEMO[@]}" -demoFuel setup -uiScreen fuel -AppleLanguages "(es)" -AppleLocale es_ES
+shoot es_co_refuel 5 "${DEMO[@]}" -uiScreen refuel -AppleLanguages "(es)" -AppleLocale es_CO
+shoot es_co_fuel_picker 5 "${DEMO[@]}" -demoFuel setup -uiScreen fuelpicker -AppleLanguages "(es)" -AppleLocale es_CO
+AX=(-UIPreferredContentSizeCategoryName UICTContentSizeCategoryAccessibilityL)
+shoot es_home_fuel_low_ax 5 "${DEMO[@]}" -demoFuel low -demoStill "${AX[@]}" -AppleLanguages "(es)" -AppleLocale es_ES
+shoot es_fuel_picker_ax 5 "${DEMO[@]}" -demoFuel setup -uiScreen fuelpicker "${AX[@]}" -AppleLanguages "(es)" -AppleLocale es_ES
+shoot es_route_verdict_reserve 12 "${DEMO[@]}" -demoFuel reserve -uiScreen routeverdict -AppleLanguages "(es)" -AppleLocale es_ES
 # An opened GPX track shown as a preview over a running route (UI/UX P0, UX-17).
 shoot gpx_preview 9 "${DEMO[@]}" -uiScreen gpx
 shoot es_gpx_preview 9 "${DEMO[@]}" -uiScreen gpx -AppleLanguages "(es)" -AppleLocale es_ES

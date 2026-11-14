@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Fuel MVP: «Carga registrada · Deshacer», shown on Home and in the Garage section while
 // `FuelModel.undoOffer` is for this bike (10 s after a refuel was logged; the model clears it).
-// VoiceOver hears «Carga registrada. Puedes deshacerla.» when it appears. «Deshacer» is a single tap,
+// VoiceOver hears «Carga registrada. Puedes deshacerla.» («Nivel ajustado. Puedes deshacerlo.» after «Corregir
+// nivel») when it appears. «Deshacer» is a single tap,
 // allowed while moving (no typing).
 
 import SwiftUI
@@ -47,7 +48,8 @@ struct FuelUndoBar: View {
             .background(Theme.surfaceHigh, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .onAppear {
                 UIAccessibility.post(notification: .announcement,
-                                     argument: String(localized: "Refuel logged. You can undo it."))
+                                     argument: isLevel ? String(localized: "Level corrected. You can undo it.")
+                                         : String(localized: "Refuel logged. You can undo it."))
             }
             .id(offer.entryId)
         }

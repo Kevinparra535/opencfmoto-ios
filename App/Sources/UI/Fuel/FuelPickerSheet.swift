@@ -41,8 +41,10 @@ struct FuelPickerSheet: View {
                     VStack(alignment: .leading, spacing: 8) {
                         if entries.isEmpty {
                             Text("We couldn't tell the model from the dash. Search for it or enter it by hand.")
+                        } else if entries.count == 1 {
+                            Text("Your bike's dash matches this model. Check it and save.")
                         } else {
-                            Text("Its dash fits these models. Pick yours: the tank changes between models.")
+                            Text("Your bike's dash fits these models. Pick yours: the tank changes between models.")
                         }
                     }
                     .font(.subheadline)
@@ -170,14 +172,12 @@ struct FuelCatalogRow: View {
                     .monospacedDigit()
                     .foregroundStyle(Theme.text)
                     .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityLabel(Text("Tank \(tank), about \(economy)"))
                 if entry.tankKind == .official || entry.consumptionKind == .estimate {
-                    HStack(spacing: 6) {
-                        if entry.tankKind == .official {
-                            FuelBadge(text: Text("Official tank"), tint: Theme.live)
-                        }
-                        if entry.consumptionKind == .estimate {
-                            FuelBadge(text: Text("Estimated economy"), tint: Theme.idle)
-                        }
+                    // Side by side when they fit, stacked at large text sizes (never past the chevron).
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 6) { badges }
+                        VStack(alignment: .leading, spacing: 4) { badges }
                     }
                 }
             }
@@ -192,6 +192,16 @@ struct FuelCatalogRow: View {
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isPreselected ? .isSelected : [])
+    }
+
+    @ViewBuilder
+    private var badges: some View {
+        if entry.tankKind == .official {
+            FuelBadge(text: Text("Official tank"), tint: Theme.live)
+        }
+        if entry.consumptionKind == .estimate {
+            FuelBadge(text: Text("Estimated economy"), tint: Theme.idle)
+        }
     }
 }
 
@@ -223,6 +233,7 @@ private struct FuelCopyRow: View {
                 .font(.subheadline)
                 .monospacedDigit()
                 .foregroundStyle(Theme.text)
+                .accessibilityLabel(Text("Tank \(tank), about \(economy)"))
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)

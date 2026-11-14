@@ -47,12 +47,15 @@ final class DemoFuelTests: XCTestCase {
         for entry in [FuelCatalog.entry(id: DemoFuel.catalogId), nil] {
             let p = DemoFuel.demoProfile(entry: entry, nowMs: nowMs)
             XCTAssertTrue(p.isComplete)
-            for mode in [DemoFuel.Mode.ok, .low, .aged] {
+            for mode in DemoFuel.Mode.allCases where mode != .setup {
                 let tag = "\(entry?.id ?? "manual") \(mode)"
                 let (e, log, odo) = estimate(p, mode)
                 for l in log.entries.compactMap(\.litres) { XCTAssertLessThanOrEqual(l, p.tankL, tag) }
-                XCTAssertGreaterThan(e.kmSinceLastEntry ?? 0, 0, "\(tag): never «0 km» since the last refuel")
+                if mode != .norefuel, mode != .partial {
+                    XCTAssertGreaterThan(e.kmSinceLastEntry ?? 0, 0, "\(tag): never «0 km» since the last refuel")
+                }
                 XCTAssertNil(odo.last, "\(tag): no position seeded")
+                XCTAssertTrue(log.entries.allSatisfy { $0.atMs < nowMs }, tag)
                 switch mode {
                 case .ok:
                     guard case let .ok(km) = e.state else { XCTFail("\(tag) \(e.state)"); continue }
@@ -64,6 +67,22 @@ final class DemoFuelTests: XCTestCase {
                     XCTAssertTrue(e.isTrustworthy, tag)
                 case .aged:
                     guard case .old = e.aged else { XCTFail("\(tag) \(String(describing: e.aged))"); continue }
+                case .reserve:
+                    XCTAssertEqual(e.state, .reserve, tag)
+                    XCTAssertTrue(e.isTrustworthy, tag)
+                case .check:
+                    guard case .checkRefuel = e.state else { XCTFail("\(tag) \(e.state)"); continue }
+                case .norefuel:
+                    XCTAssertEqual(e.state, .unknown(.noRefuel), tag)
+                    XCTAssertTrue(log.entries.isEmpty, tag)
+                case .partial:
+                    XCTAssertEqual(e.state, .unknown(.partialWithoutAmount), tag)
+                case .gap:
+                    guard case .ok = e.state else { XCTFail("\(tag) \(e.state)"); continue }
+                    XCTAssertEqual(e.aged, .gap, tag)
+                case .nogps:
+                    guard case .ok = e.state else { XCTFail("\(tag) \(e.state)"); continue }
+                    XCTAssertEqual(e.aged, .noGps, tag)
                 case .setup:
                     break
                 }
@@ -97,6 +116,19 @@ final class DemoFuelTests: XCTestCase {
                 guard case .low? = again.fuel.current?.estimate.state else { XCTFail("low"); continue }
             case .aged:
                 guard case .old? = again.fuel.current?.estimate.aged else { XCTFail("aged"); continue }
+            case .reserve:
+                XCTAssertEqual(again.fuel.current?.estimate.state, .reserve)
+            case .check:
+                guard case .checkRefuel? = again.fuel.current?.estimate.state else { XCTFail("check"); continue }
+            case .norefuel:
+                XCTAssertEqual(again.fuel.current?.estimate.state, .unknown(.noRefuel))
+                XCTAssertNil(env.kv.data(forKey: "fuel_log_v1#\(env.bike.id)"), "no empty log document")
+            case .partial:
+                XCTAssertEqual(again.fuel.current?.estimate.state, .unknown(.partialWithoutAmount))
+            case .gap:
+                XCTAssertEqual(again.fuel.current?.estimate.aged, .gap)
+            case .nogps:
+                XCTAssertEqual(again.fuel.current?.estimate.aged, .noGps)
             }
             XCTAssertNil(again.storedOdometer()?.last, "no position")
             // re-seeding replaces (the demo store persists between launches)

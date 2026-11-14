@@ -1,16 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Fuel MVP: «Cargué gasolina». «Lleno» (default) | «Parcial»; the pump's unit «L | gal» (remembered,
 // independent of km / mi: Colombia sells by the gallon with km); litres, price and the bike's trip meter
-// are optional; a partial fill may say how full the tank is now (¼ ½ ¾ / «No sé»). «¿Cargaste hace rato?»
-// takes the km ridden since the real refuel (open from «¿Cargaste gasolina?»). Every value is metric when
+// are optional; a partial fill may say how full the tank is now (reserve ¼ ½ ¾ / «No sé»). «¿Cargaste hace
+// rato?» takes the km ridden since the real refuel (open from «¿Cargaste gasolina?»). Every value is metric when
 // handed to `FuelModel.logRefuel` (FuelFormat converts); prices are currency-free and grouping-aware
-// (es-CO «15.900» = 15 900). Refused while moving (the rider never types while riding); after a refuel is
-// logged the sheet closes and Home / Garage offer «Deshacer» for 10 s.
+// (es-CO «15.900» = 15 900: the price field offers «.» and «,» and says what it will save). A partial larger than
+// the tank is refused with «Más de lo que cabe en el tanque (…). ¿Litros o galones?»; in gallons the field
+// echoes the litres. Refused while moving (the rider never types while riding); after a refuel is logged the
+// sheet closes and Home / Garage offer «Deshacer» for 10 s.
 //
-// «Corregir nivel» (FuelLevelSheet, below): the rider did NOT refuel but reads the gauge (¼ ½ ¾); not a refuel,
-// it does not count toward the measured economy.
+// «Corregir nivel» (FuelLevelSheet, below): the rider did NOT refuel but reads the gauge (reserve ¼ ½ ¾); not a
+// refuel, it does not count toward the measured economy.
 
 import SwiftUI
+import UIKit
 import OpenCfMotoCore
 import OpenCfMotoAppModel
 
@@ -33,6 +36,8 @@ struct RefuelSheet: View {
     @State private var lateExpanded: Bool
     @State private var lateText = ""
     @State private var invalid: RefuelInput.Field? = nil
+    /// The litres are more than the tank holds (a missed comma, gallons typed as litres).
+    @State private var overTank = false
     @FocusState private var focus: RefuelInput.Field?
 
     init(bikeId: String, late: Bool, volumeUnit: FuelVolumeUnit) {
@@ -77,31 +82,35 @@ struct RefuelSheet: View {
                         Text(verbatim: "L / gal")
                     }
                     .pickerStyle(.segmented)
-                    numberField(volumeUnit == .litre ? "Litres (optional)" : "Gallons (optional)", text: $litresText,
+                    numberField(volumeUnit == .litre ? "Liters (optional)" : "Gallons (optional)", text: $litresText,
                                 unit: FuelFormat.volumeUnit(volumeUnit), field: .litres)
                 } footer: {
-                    invalidHint(.litres)
+                    VStack(alignment: .leading, spacing: 4) {
+                        if invalid == .litres, overTank, let tank = fuel.state(for: bikeId).profile?.tankL {
+                            Text("More than the tank holds (\(FuelUIText.volume(tank, volumeUnit))). Liters or gallons?")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(Theme.error)
+                        } else {
+                            invalidHint(.litres)
+                        }
+                        // Gallons: the litres they make, so a unit slip shows before «Guardar».
+                        if volumeUnit == .usGallon, case let .value(v) = Self.parse(litresText) {
+                            Text(verbatim: "= " + FuelUIText.volume(FuelFormat.litres(fromDisplay: v, unit: .usGallon), .litre))
+                                .monospacedDigit()
+                        }
+                    }
                 }
                 .featureRowBackground()
 
                 if kind == .partial {
                     Section {
-                        Picker(selection: $level) {
-                            ForEach(TankLevel.allCases, id: \.self) { l in
-                                Text(verbatim: FuelUIText.levelSegment(l))
-                                    .accessibilityLabel(Text(verbatim: FuelUIText.level(l)))
-                                    .tag(TankLevel?.some(l))
-                            }
-                            Text("Not sure").tag(TankLevel?.none)
-                        } label: {
-                            Text("How full is it now?")
-                        }
-                        .pickerStyle(.segmented)
+                        FuelLevelChoice(selection: $level, allowsNotSure: true, isEnabled: canLog)
+                            .accessibilityLabel(Text("How full is it now?"))
                     } header: {
                         Text("How full is it now?")
                     } footer: {
                         if litresText.trimmingCharacters(in: .whitespaces).isEmpty, level == nil {
-                            Text("Without litres or a level, the range waits for your next full tank.")
+                            Text("Without liters or a level, the range waits for your next full tank.")
                         }
                     }
                     .featureRowBackground()
@@ -109,18 +118,24 @@ struct RefuelSheet: View {
 
                 Section {
                     Picker(selection: $priceMode) {
-                        Text("Per litre").tag(FuelPriceMode.perLitre)
+                        Text("Per liter").tag(FuelPriceMode.perLitre)
                         Text("Per gallon").tag(FuelPriceMode.perGallon)
                         Text("Total").tag(FuelPriceMode.total)
                     } label: {
                         Text("Price (optional)")
                     }
                     .pickerStyle(.segmented)
-                    numberField("Price (optional)", text: $priceText, unit: nil, field: .price)
+                    // «.» and «,» both: es-CO prices group thousands with «.» (15.900), the decimal pad has only «,».
+                    numberField("Price (optional)", text: $priceText, unit: nil, field: .price, keyboard: .numbersAndPunctuation)
                 } header: {
                     Text("Price (optional)")
                 } footer: {
-                    invalidHint(.price)
+                    VStack(alignment: .leading, spacing: 4) {
+                        invalidHint(.price)
+                        if invalid != .price, case let .value(v) = Self.parse(priceText, price: true) {
+                            priceEcho(v).monospacedDigit()
+                        }
+                    }
                 }
                 .featureRowBackground()
 
@@ -131,7 +146,11 @@ struct RefuelSheet: View {
                 } footer: {
                     VStack(alignment: .leading, spacing: 4) {
                         invalidHint(.tripMeter)
-                        Text("What the trip meter showed before you reset it: the \(distanceUnit) since your previous refuel. It makes the measured economy exact.")
+                        if units == .metric {
+                            Text("What the trip meter showed before you reset it: the km since your previous refuel. It makes the measured economy exact.")
+                        } else {
+                            Text("What the trip meter showed before you reset it: the miles since your previous refuel. It makes the measured economy exact.")
+                        }
                     }
                 }
                 .featureRowBackground()
@@ -198,15 +217,16 @@ struct RefuelSheet: View {
     }
 
     private func numberField(_ title: LocalizedStringKey, text: Binding<String>, unit: String?,
-                             field: RefuelInput.Field) -> some View {
+                             field: RefuelInput.Field, keyboard: UIKeyboardType = .decimalPad) -> some View {
         let isInvalid = invalid == field
         let canLog = model.fuel.canLogNow
         return HStack(spacing: 8) {
             TextField(title, text: Binding(get: { text.wrappedValue }, set: { value in
                 text.wrappedValue = value
                 if invalid == field { invalid = nil }
+                if field == .litres { overTank = false }
             }))
-            .keyboardType(.decimalPad)
+            .keyboardType(keyboard)
             .font(.body.monospacedDigit())
             .foregroundStyle(isInvalid ? Theme.error : Theme.text)
             .focused($focus, equals: field)
@@ -222,6 +242,16 @@ struct RefuelSheet: View {
             }
         }
         .disabled(!canLog)
+    }
+
+    /// «Se guarda: 15.900 por galón» — what the price field will save, in the locale's format.
+    private func priceEcho(_ v: Double) -> Text {
+        let amount = FuelUIText.amount(v)
+        switch priceMode {
+        case .perLitre: return Text("Saved as \(amount) per liter")
+        case .perGallon: return Text("Saved as \(amount) per gallon")
+        case .total: return Text("Saved as a total of \(amount)")
+        }
     }
 
     @ViewBuilder
@@ -285,8 +315,15 @@ struct RefuelSheet: View {
         let field: RefuelInput.Field
     }
 
+    /// A partial larger than the tank (FuelModel refuses it too: it would read as a full tank).
+    private func exceedsTank(_ i: RefuelInput) -> Bool {
+        guard i.kind == .partial, let l = i.litres, let t = model.fuel.state(for: bikeId).profile?.tankL else { return false }
+        return l > t * FuelModel.maxFillOverTank
+    }
+
     private func save() {
         focus = nil
+        overTank = false
         switch input() {
         case let .failure(error):
             invalid = error.field
@@ -295,11 +332,17 @@ struct RefuelSheet: View {
                 invalid = field
                 return
             }
+            if exceedsTank(i) {
+                invalid = .litres
+                overTank = true
+                return
+            }
             switch model.fuel.logRefuel(i, for: bikeId) {
             case .logged:
                 model.fuel.dismissSheet()
             case let .invalid(field):
                 invalid = field
+                overTank = field == .litres && exceedsTank(i)
             case .refusedWhileMoving:
                 break // the moving line already says why
             case .noSuchBike:
@@ -329,17 +372,8 @@ struct FuelLevelSheet: View {
                     }
                 }
                 Section {
-                    Picker(selection: $level) {
-                        ForEach(TankLevel.allCases, id: \.self) { l in
-                            Text(verbatim: FuelUIText.levelSegment(l))
-                                .accessibilityLabel(Text(verbatim: FuelUIText.level(l)))
-                                .tag(TankLevel?.some(l))
-                        }
-                    } label: {
-                        Text("What does the gauge show?")
-                    }
-                    .pickerStyle(.segmented)
-                    .disabled(!canLog)
+                    FuelLevelChoice(selection: $level, allowsNotSure: false, isEnabled: canLog)
+                        .accessibilityLabel(Text("What does the gauge show?"))
                 } header: {
                     Text("What does the gauge show?")
                 } footer: {
@@ -386,6 +420,53 @@ struct FuelLevelSheet: View {
         case .refusedWhileMoving, .invalid:
             break
         }
+    }
+}
+
+// MARK: - Level choice
+
+/// The tank-level choices as one row of segment-like buttons («Reserva» 1/4 1/2 3/4 [«No sé»]). Each speaks
+/// words («Un cuarto de tanque», «En reserva»), never «1/4», and carries the selected trait: a segmented Picker
+/// turns its content into plain segment titles and drops a per-segment accessibility label.
+struct FuelLevelChoice: View {
+    @Binding var selection: TankLevel?
+    let allowsNotSure: Bool
+    let isEnabled: Bool
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(TankLevel.allCases, id: \.self) { l in
+                segment(FuelUIText.levelSegment(l), spoken: FuelUIText.levelSpoken(l), selected: selection == l) {
+                    selection = l
+                }
+            }
+            if allowsNotSure {
+                segment(Text("Not sure"), spoken: Text("Not sure"), selected: selection == nil) { selection = nil }
+            }
+        }
+        .padding(2)
+        .background(Theme.surfaceHigh, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.5)
+        .accessibilityElement(children: .contain)
+    }
+
+    private func segment(_ title: Text, spoken: Text, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            title
+                .font(.subheadline.weight(.semibold))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .foregroundStyle(selected ? Theme.onAccent : Theme.text)
+                .padding(.horizontal, 4)
+                .frame(maxWidth: .infinity, minHeight: 36)
+                .background(selected ? Theme.brand : Color.clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(spoken)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 }
 

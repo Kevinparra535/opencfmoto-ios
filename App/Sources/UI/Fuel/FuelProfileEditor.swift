@@ -4,10 +4,13 @@
 // Pushed by «¿Cuál es tu moto?» and opened by the Garage «Editar».
 //
 // Dirty fields: the editor keeps the metric draft and converts a field's text back to metric ONLY when
-// the rider edited it, so a catalog 20.5 km/L shown as «48,2 mpg» and saved untouched stays 20.5 and
-// `.catalog` (FuelModel.saveProfile applies the seedSource rule with its 0.05 tolerance).
+// the rider changed it — a field is dirty while its text differs from what it showed for the metric value, so
+// retyping the shown «4,6» gal keeps the catalog's 17.5 L — and a catalog 20.5 km/L shown as «48,2 mpg» and saved
+// untouched stays 20.5 and `.catalog` (FuelModel.saveProfile applies the seedSource rule with its 0.05 tolerance).
+// The tank section has the pump's «L | gal» switch (the same global preference as «Cargué gasolina»).
 // «Guardar» → `saveProfile` (refused while moving, like every typed write) → when the bike has no refuel
-// yet, «¿Tienes el tanque lleno ahora?» [«Sí, está lleno» logs a full refuel | «No sé»] → the sheet closes.
+// yet, «¿Tienes el tanque lleno ahora?» [«Sí, está lleno» logs a full refuel and closes; refused while moving,
+// the editor stays open and asks again once stopped | «No sé»] → the sheet closes.
 
 import SwiftUI
 import OpenCfMotoCore
@@ -16,18 +19,23 @@ import OpenCfMotoAppModel
 struct FuelProfileEditor: View {
     let bikeId: String
     let draft: FuelProfile
-    let volumeUnit: FuelVolumeUnit
     let units: MapUnits
     /// The root of its own sheet (Garage «Editar»): «Cancelar» in the toolbar.
     var isSheetRoot = false
 
     @Environment(AppModel.self) private var model
     @State private var tankText: String
+    /// What the tank field showed for `tankBaseL` (in the unit shown): the field is dirty only when it differs.
+    @State private var tankSeedText: String
+    /// The metric litres behind `tankSeedText` (the draft's, or the rider's after a unit switch).
+    @State private var tankBaseL: Double
+    @State private var shownUnit: FuelVolumeUnit
     @State private var economyText: String
-    @State private var tankDirty = false
-    @State private var economyDirty = false
+    @State private var economySeedText: String
     @State private var reservePct: Int
     @State private var asksFullTank = false
+    /// «Sí, está lleno» was refused while moving: ask again once stopped.
+    @State private var fullTankPending = false
     @FocusState private var focus: Field?
 
     private enum Field: Hashable { case tank, economy }
@@ -35,14 +43,23 @@ struct FuelProfileEditor: View {
     init(bikeId: String, draft: FuelProfile, volumeUnit: FuelVolumeUnit, units: MapUnits, isSheetRoot: Bool = false) {
         self.bikeId = bikeId
         self.draft = draft
-        self.volumeUnit = volumeUnit
         self.units = units
         self.isSheetRoot = isSheetRoot
-        _tankText = State(initialValue: FuelUIText.fieldNumber(FuelFormat.displayVolume(litres: draft.tankL, unit: volumeUnit)))
-        _economyText = State(initialValue: FuelUIText.fieldNumber(FuelFormat.displayEconomy(kmPerL: draft.seedKmPerL, units: units)))
+        let tank = FuelUIText.fieldNumber(FuelFormat.displayVolume(litres: draft.tankL, unit: volumeUnit))
+        _tankText = State(initialValue: tank)
+        _tankSeedText = State(initialValue: tank)
+        _tankBaseL = State(initialValue: draft.tankL)
+        _shownUnit = State(initialValue: volumeUnit)
+        let economy = FuelUIText.fieldNumber(FuelFormat.displayEconomy(kmPerL: draft.seedKmPerL, units: units))
+        _economyText = State(initialValue: economy)
+        _economySeedText = State(initialValue: economy)
         _reservePct = State(initialValue: min(max(draft.reservePct, FuelProfile.reservePctRange.lowerBound),
                                               FuelProfile.reservePctRange.upperBound))
     }
+
+    private var volumeUnit: FuelVolumeUnit { shownUnit }
+    private var tankDirty: Bool { tankText != tankSeedText }
+    private var economyDirty: Bool { economyText != economySeedText }
 
     var body: some View {
         let canLog = model.fuel.canLogNow
@@ -68,7 +85,16 @@ struct FuelProfileEditor: View {
             }
 
             Section {
-                numberField(text: tankBinding, unit: FuelFormat.volumeUnit(volumeUnit), field: .tank,
+                Picker(selection: unitBinding) {
+                    Text(verbatim: FuelFormat.volumeUnit(.litre)).tag(FuelVolumeUnit.litre)
+                    Text(verbatim: FuelFormat.volumeUnit(.usGallon)).tag(FuelVolumeUnit.usGallon)
+                } label: {
+                    Text(verbatim: "L / gal")
+                }
+                .pickerStyle(.segmented)
+                .disabled(!canLog)
+                numberField(text: $tankText, unit: FuelFormat.volumeUnit(volumeUnit), field: .tank,
+                            label: Text("Tank (\(FuelFormat.volumeUnit(volumeUnit)))"),
                             isInvalid: tankL == nil && !tankText.isEmpty)
             } header: {
                 // No upper-casing: the unit keeps its case («L», «km/L», «mpg»).
@@ -79,7 +105,7 @@ struct FuelProfileEditor: View {
                     rangeHint(FuelProfile.tankRange.lowerBound, FuelProfile.tankRange.upperBound,
                               toDisplay: { FuelFormat.displayVolume(litres: $0, unit: volumeUnit) },
                               unit: FuelFormat.volumeUnit(volumeUnit))
-                } else if let entry, entry.tankKind == .official, !(tankDirty && edited(tankL, draft.tankL)) {
+                } else if let entry, entry.tankKind == .official, !edited(tankL, draft.tankL) {
                     Label {
                         Text("Official tank")
                     } icon: {
@@ -92,7 +118,8 @@ struct FuelProfileEditor: View {
             .featureRowBackground()
 
             Section {
-                numberField(text: economyBinding, unit: FuelFormat.economyUnit(units), field: .economy,
+                numberField(text: $economyText, unit: FuelFormat.economyUnit(units), field: .economy,
+                            label: Text("Fuel economy (\(FuelFormat.economyUnit(units)))"),
                             isInvalid: kmPerL == nil && !economyText.isEmpty)
             } header: {
                 Text("Fuel economy (\("~" + FuelFormat.economyUnit(units)))")
@@ -163,11 +190,22 @@ struct FuelProfileEditor: View {
         }
         .onChange(of: canLog) { _, can in
             if !can { focus = nil }
+            // «Sí, está lleno» was refused while moving: ask again once stopped (no anchor was logged).
+            if can, fullTankPending, model.fuel.state(for: bikeId).log.isEmpty {
+                fullTankPending = false
+                asksFullTank = true
+            }
+        }
+        .onChange(of: model.fuel.volumeUnit) { _, unit in
+            switchTankUnit(to: unit)
         }
         .confirmationDialog("Is the tank full now?", isPresented: $asksFullTank, titleVisibility: .visible) {
             Button("Yes, it's full") {
-                model.fuel.logRefuel(RefuelInput(kind: .full), for: bikeId)
-                model.fuel.dismissSheet()
+                if case .logged = model.fuel.logRefuel(RefuelInput(kind: .full), for: bikeId) {
+                    model.fuel.dismissSheet()
+                } else {
+                    fullTankPending = true // the editor stays open («Detente para editar»)
+                }
             }
             Button("Not sure", role: .cancel) {
                 model.fuel.dismissSheet()
@@ -177,19 +215,28 @@ struct FuelProfileEditor: View {
 
     // MARK: Fields
 
-    private var tankBinding: Binding<String> {
-        Binding(get: { tankText }, set: { tankText = $0; tankDirty = true })
+    private var unitBinding: Binding<FuelVolumeUnit> {
+        Binding(get: { model.fuel.volumeUnit }, set: { model.fuel.volumeUnit = $0 })
     }
 
-    private var economyBinding: Binding<String> {
-        Binding(get: { economyText }, set: { economyText = $0; economyDirty = true })
+    /// The pump's unit changed: the tank field shows the same litres in the new unit. Untouched, it stays the
+    /// draft's exact value; typed, the typed value carries over.
+    private func switchTankUnit(to unit: FuelVolumeUnit) {
+        guard unit != shownUnit else { return }
+        let litres = tankL ?? tankBaseL
+        if tankDirty, tankL != nil { tankBaseL = litres }
+        shownUnit = unit
+        let text = FuelUIText.fieldNumber(FuelFormat.displayVolume(litres: tankBaseL, unit: unit))
+        tankSeedText = text
+        tankText = text
     }
 
-    private func numberField(text: Binding<String>, unit: String, field: Field, isInvalid: Bool) -> some View {
+    private func numberField(text: Binding<String>, unit: String, field: Field, label: Text, isInvalid: Bool) -> some View {
         let canLog = model.fuel.canLogNow
         return HStack(spacing: 8) {
+            // The label is what VoiceOver says («Tanque (L)», «Rendimiento (km/L)»), not the bare unit.
             TextField(text: text, prompt: Text(verbatim: "0")) {
-                Text(verbatim: unit)
+                label
             }
             .keyboardType(.decimalPad)
             .font(.title3.weight(.semibold).monospacedDigit())
@@ -214,7 +261,7 @@ struct FuelProfileEditor: View {
 
     @ViewBuilder
     private func sourceLine(entry: FuelCatalogEntry?) -> some View {
-        let changed = (tankDirty && edited(tankL, draft.tankL)) || (economyDirty && edited(kmPerL, draft.seedKmPerL))
+        let changed = edited(tankL, draft.tankL) || (economyDirty && edited(kmPerL, draft.seedKmPerL))
         let source: FuelUIText.Source = {
             if changed {
                 return draft.catalogId == nil && draft.seedSource != .copied ? .manual : .edited
@@ -246,7 +293,7 @@ struct FuelProfileEditor: View {
             guard let v = FuelFormat.parseDecimal(tankText) else { return nil }
             litres = FuelFormat.litres(fromDisplay: v, unit: volumeUnit)
         } else {
-            litres = draft.tankL
+            litres = tankBaseL
         }
         return FuelProfile.tankRange.contains(litres) ? litres : nil
     }

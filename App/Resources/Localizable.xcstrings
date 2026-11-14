@@ -191,6 +191,36 @@
         }
       }
     },
+    "About %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unos %@"
+          }
+        }
+      }
+    },
+    "About %@ from your refuels (%lld)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unos %@ de tus cargas (%lld)"
+          }
+        }
+      }
+    },
+    "About %@ from your refuels (%lld), capped until your second refuel": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unos %@ de tus cargas (%lld), limitado hasta tu segunda carga"
+          }
+        }
+      }
+    },
     "About %@ to reserve": {
       "localizations": {
         "es": {
@@ -1601,6 +1631,16 @@
         }
       }
     },
+    "Delete this level correction?": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Eliminar este ajuste de nivel?"
+          }
+        }
+      }
+    },
     "Delete this refuel?": {
       "localizations": {
         "es": {
@@ -2421,6 +2461,16 @@
         }
       }
     },
+    "Half tank": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medio tanque"
+          }
+        }
+      }
+    },
     "Handlebar buttons": {
       "localizations": {
         "es": {
@@ -2811,16 +2861,6 @@
         }
       }
     },
-    "Its dash fits these models. Pick yours: the tank changes between models.": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Su tablero encaja con estos modelos. Elige el tuyo: el tanque cambia entre modelos."
-          }
-        }
-      }
-    },
     "Join the bike Wi-Fi": {
       "localizations": {
         "es": {
@@ -2971,6 +3011,16 @@
         }
       }
     },
+    "Level corrected. You can undo it.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nivel ajustado. Puedes deshacerlo."
+          }
+        }
+      }
+    },
     "Level correction": {
       "localizations": {
         "es": {
@@ -3041,7 +3091,7 @@
         }
       }
     },
-    "Litres (optional)": {
+    "Liters (optional)": {
       "localizations": {
         "es": {
           "stringUnit": {
@@ -3521,6 +3571,16 @@
         }
       }
     },
+    "More than the tank holds (%@). Liters or gallons?": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Más de lo que cabe en el tanque (%@). ¿Litros o galones?"
+          }
+        }
+      }
+    },
     "Moto Morini SoftAP (experimental)": {
       "localizations": {
         "es": {
@@ -3801,7 +3861,7 @@
         }
       }
     },
-    "Not measured yet: log two full tanks with litres.": {
+    "Not measured yet: log two full tanks with liters.": {
       "localizations": {
         "es": {
           "stringUnit": {
@@ -4341,7 +4401,7 @@
         }
       }
     },
-    "Per litre": {
+    "Per liter": {
       "localizations": {
         "es": {
           "stringUnit": {
@@ -4621,7 +4681,17 @@
         }
       }
     },
-    "Range not calculated: your last refuel has no litres.": {
+    "Quarter tank": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un cuarto de tanque"
+          }
+        }
+      }
+    },
+    "Range not calculated: your last refuel has no liters.": {
       "localizations": {
         "es": {
           "stringUnit": {
@@ -5087,6 +5157,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Guardar clave de enrutamiento"
+          }
+        }
+      }
+    },
+    "Saved as %@ per gallon": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se guarda: %@ por galón"
+          }
+        }
+      }
+    },
+    "Saved as %@ per liter": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se guarda: %@ por litro"
+          }
+        }
+      }
+    },
+    "Saved as a total of %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se guarda: %@ en total"
           }
         }
       }
@@ -5651,6 +5751,16 @@
         }
       }
     },
+    "Since your last entry: %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desde tu último registro: %@"
+          }
+        }
+      }
+    },
     "Since your last refuel: %@": {
       "localizations": {
         "es": {
@@ -5991,6 +6101,16 @@
         }
       }
     },
+    "Tank %@, about %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tanque %@, unos %@"
+          }
+        }
+      }
+    },
     "Tank (%@)": {
       "localizations": {
         "es": {
@@ -6277,6 +6397,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Este iPhone no permite el acceso a la cámara (Tiempo de uso o un perfil). Importa el QR desde una foto o introduce el Wi-Fi manualmente."
+          }
+        }
+      }
+    },
+    "Three quarters of a tank": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tres cuartos de tanque"
           }
         }
       }
@@ -6831,12 +6961,22 @@
         }
       }
     },
-    "What the trip meter showed before you reset it: the %@ since your previous refuel. It makes the measured economy exact.": {
+    "What the trip meter showed before you reset it: the km since your previous refuel. It makes the measured economy exact.": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Lo que marcaba el trip antes de reiniciarlo: los %@ desde tu carga anterior. Hace exacto el rendimiento medido."
+            "value": "Lo que marcaba el trip antes de reiniciarlo: los km desde tu carga anterior. Hace exacto el rendimiento medido."
+          }
+        }
+      }
+    },
+    "What the trip meter showed before you reset it: the miles since your previous refuel. It makes the measured economy exact.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lo que marcaba el trip antes de reiniciarlo: las millas desde tu carga anterior. Hace exacto el rendimiento medido."
           }
         }
       }
@@ -6961,7 +7101,7 @@
         }
       }
     },
-    "Without litres or a level, the range waits for your next full tank.": {
+    "Without liters or a level, the range waits for your next full tank.": {
       "localizations": {
         "es": {
           "stringUnit": {
@@ -7011,6 +7151,16 @@
         }
       }
     },
+    "You reach it with about %@ before the reserve": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Llegas con unos %@ antes de la reserva"
+          }
+        }
+      }
+    },
     "You reach it with ~%@ before the reserve": {
       "localizations": {
         "es": {
@@ -7047,6 +7197,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Todo listo"
+          }
+        }
+      }
+    },
+    "Your bike's dash fits these models. Pick yours: the tank changes between models.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El tablero de tu moto encaja con estos modelos. Elige el tuyo: el tanque cambia entre modelos."
+          }
+        }
+      }
+    },
+    "Your bike's dash matches this model. Check it and save.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El tablero de tu moto corresponde a este modelo. Revísalo y guarda."
           }
         }
       }
@@ -7231,12 +7401,32 @@
         }
       }
     },
+    "reserve": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "reserva"
+          }
+        }
+      }
+    },
     "~%@ from your refuels (%lld)": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "~%@ de tus cargas (%lld)"
+          }
+        }
+      }
+    },
+    "~%@ from your refuels (%lld) · capped until your second refuel": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "~%@ de tus cargas (%lld) · limitado hasta tu segunda carga"
           }
         }
       }

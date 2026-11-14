@@ -44,23 +44,34 @@ enum FuelUIText {
         return v.formatted(.number.precision(.fractionLength(0 ... 2)))
     }
 
-    /// "¼" | "½" | "¾" (shown verbatim: not words).
+    /// «reserva» | "¼" | "½" | "¾" (the fractions shown verbatim: not words) — the history row's level.
     static func level(_ l: TankLevel) -> String {
         switch l {
+        case .reserve: return String(localized: "reserve")
         case .quarter: return "\u{00BC}"
         case .half: return "\u{00BD}"
         case .threeQuarters: return "\u{00BE}"
         }
     }
 
-    /// "1/4" | "1/2" | "3/4": the segment titles of the level pickers. A segmented control ignores `.font`,
-    /// and the ¼ ½ ¾ glyphs come out a few points tall there; plain digits stay legible. VoiceOver still
-    /// gets the fraction glyph (`level(_:)`), read as a fraction rather than a date.
-    static func levelSegment(_ l: TankLevel) -> String {
+    /// «Reserva» | "1/4" | "1/2" | "3/4": the titles of the level choices (plain digits stay legible at any
+    /// size; the ¼ ½ ¾ glyphs come out a few points tall in a segmented control).
+    static func levelSegment(_ l: TankLevel) -> Text {
         switch l {
-        case .quarter: return "1/4"
-        case .half: return "1/2"
-        case .threeQuarters: return "3/4"
+        case .reserve: return Text("Reserve")
+        case .quarter: return Text(verbatim: "1/4")
+        case .half: return Text(verbatim: "1/2")
+        case .threeQuarters: return Text(verbatim: "3/4")
+        }
+    }
+
+    /// VoiceOver for a level choice: words, never «1/4» (read as a date or «uno barra cuatro»).
+    static func levelSpoken(_ l: TankLevel) -> Text {
+        switch l {
+        case .reserve: return Text("On reserve")
+        case .quarter: return Text("Quarter tank")
+        case .half: return Text("Half tank")
+        case .threeQuarters: return Text("Three quarters of a tank")
         }
     }
 
@@ -120,7 +131,23 @@ enum FuelUIText {
         return detail
     }
 
-    /// One line for the «Autonomía» row of the Garage section (the same words as the Home card).
+    /// «Desde tu última carga: …», or «Desde tu último registro: …» when the last entry is a level correction
+    /// (not a refuel).
+    static func sinceLine(_ detail: String, lastEntry: RefuelEntry?) -> Text {
+        lastEntry?.kind == .level ? Text("Since your last entry: \(detail)") : Text("Since your last refuel: \(detail)")
+    }
+
+    static func sinceSpoken(_ detail: String, lastEntry: RefuelEntry?) -> String {
+        lastEntry?.kind == .level ? String(localized: "Since your last entry: \(detail)")
+            : String(localized: "Since your last refuel: \(detail)")
+    }
+
+    /// The colour of the low / reserve words: amber / red, grey when the estimate is aged (the words stay).
+    static func lowTint(_ e: FuelEstimate) -> Color { e.aged == nil ? Theme.busy : Theme.textSecondary }
+    static func reserveTint(_ e: FuelEstimate) -> Color { e.aged == nil ? Theme.error : Theme.textSecondary }
+
+    /// One line for the «Autonomía» row of the Garage section (the same words as the Home card: «Autonomía
+    /// baja · ~60 km hasta la reserva» in amber, «En reserva» in red; aged keeps the words in grey).
     static func summary(_ e: FuelEstimate, units: MapUnits) -> Text {
         switch e.state {
         case .unknown(.noProfile):
@@ -128,13 +155,17 @@ enum FuelUIText {
         case .unknown(.noRefuel):
             return Text("Log a refuel to start.")
         case .unknown(.partialWithoutAmount):
-            return Text("Range not calculated: your last refuel has no litres.")
+            return Text("Range not calculated: your last refuel has no liters.")
         case .checkRefuel:
             return Text("Did you refuel?")
         case .reserve:
-            return e.aged == nil ? Text("On reserve") : Text("On reserve") + Text(verbatim: "?")
-        case let .ok(km), let .low(km):
+            let words = Text("On reserve").foregroundStyle(reserveTint(e))
+            return e.aged == nil ? words : words + Text(verbatim: "?").foregroundStyle(reserveTint(e))
+        case let .ok(km):
             return rangeHeadline(km, units: units, aged: e.aged != nil, numberFont: .body.weight(.semibold))
+        case let .low(km):
+            return Text("Low range").foregroundStyle(lowTint(e)) + Text(verbatim: " \u{00B7} ").foregroundStyle(lowTint(e))
+                + rangeHeadline(km, units: units, aged: e.aged != nil, numberFont: .body.weight(.semibold)).foregroundStyle(lowTint(e))
         }
     }
 
@@ -143,10 +174,11 @@ enum FuelUIText {
         switch e.state {
         case .unknown(.noProfile): return String(localized: "Tell us which bike it is to estimate its range.")
         case .unknown(.noRefuel): return String(localized: "Log a refuel to start.")
-        case .unknown(.partialWithoutAmount): return String(localized: "Range not calculated: your last refuel has no litres.")
+        case .unknown(.partialWithoutAmount): return String(localized: "Range not calculated: your last refuel has no liters.")
         case .checkRefuel: return String(localized: "Did you refuel?")
         case .reserve: return String(localized: "On reserve")
-        case let .ok(km), let .low(km): return rangeSpoken(km, units: units)
+        case let .ok(km): return rangeSpoken(km, units: units)
+        case let .low(km): return String(localized: "Low range") + ". " + rangeSpoken(km, units: units)
         }
     }
 
@@ -297,7 +329,8 @@ struct FuelPrimaryButtonStyle: ButtonStyle {
     }
 }
 
-/// A small filled badge with dark words (amber «Autonomía baja», red «En reserva», «Tanque oficial»).
+/// A small filled badge with dark words (amber «Autonomía baja», red «En reserva», «Tanque oficial»). It wraps
+/// instead of running past its row at large text sizes.
 struct FuelBadge: View {
     let text: Text
     let tint: Color
@@ -306,9 +339,10 @@ struct FuelBadge: View {
         text
             .font(.caption.weight(.bold))
             .foregroundStyle(Theme.onAccent)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
-            .background(tint, in: Capsule())
-            .fixedSize()
+            .background(tint, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
     }
 }
